@@ -333,6 +333,44 @@ public class RpcServiceAnalyzerTests
         Assert.Single(diagnostics, d => d.Id == "NOF201");
     }
 
+    [Theory]
+    [InlineData("/items/{id}", "Guid", "Id", null)]
+    [InlineData("/items/{id}", "Guid", "OrderId", "publicly readable and writable request property")]
+    [InlineData("/items/{id}", "string", "Id", "int, long, or Guid")]
+    [InlineData("/items/{id?}", "Guid", "Id", "unique, required parameter name")]
+    [InlineData("/items/{id}/{ID}", "Guid", "Id", "unique, required parameter name")]
+    public async Task ControllerRoute_ValidatesPathBindings(string route, string type, string property, string? error)
+    {
+        var source = $$"""
+            using System;
+            using NOF.Contract;
+
+            public sealed class UpdateItemRequest
+            {
+                public {{type}} {{property}} { get; init; }
+                public string Name { get; set; } = "";
+            }
+
+            [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
+            public interface IItemService : IRpcService
+            {
+                [HttpEndpoint(HttpVerb.Put, "{{route}}")]
+                Result Update(UpdateItemRequest request);
+            }
+            """;
+
+        var diagnostics = await GetDiagnosticsAsync(source);
+        if (error is null)
+        {
+            Assert.Empty(diagnostics);
+        }
+        else
+        {
+            var diagnostic = Assert.Single(diagnostics, item => item.Id == "NOF217");
+            Assert.Contains(error, diagnostic.GetMessage());
+        }
+    }
+
     [Fact]
     public async Task ClassWithoutParameterlessCtor_ReportsNOF202()
     {

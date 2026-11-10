@@ -23,7 +23,7 @@ public interface IUserService : IRpcService
 - Method overloading is not supported.
 - `void` return types are not supported.
 - Server-streaming methods return `StreamingResult<T>` on the contract surface.
-- Route parameters are not supported for RPC HTTP endpoints; put the input data on the request object instead.
+- Controller RPC operation templates can bind a path segment such as `{id}` to the request's `Id` property.
 
 ## Application Implementation Model
 
@@ -117,7 +117,7 @@ JSON-RPC supports unary calls and streaming calls with object `params`. Streamin
 Current RPC analyzer diagnostics include:
 
 - `NOF200`: `[HttpEndpoint]` request type must be a reference type.
-- `NOF201`: route parameters are not supported.
+- `NOF201`: legacy class-level HTTP endpoint metadata does not support route parameters.
 - `NOF202`: class request with explicit constructors must include a public parameterless constructor.
 - `NOF207`: invalid RPC method signature.
 - `NOF208`: service method overloads are not supported.
@@ -128,4 +128,5 @@ Current RPC analyzer diagnostics include:
 - `NOF214`: an RPC service contract must declare a `TransportOverAttribute` implementation.
 - `NOF215`: an HTTP RPC route prefix is invalid.
 - `NOF216`: methods on an in-memory RPC contract must not declare `[HttpEndpoint]`.
+- `NOF217`: a Controller RPC path template cannot be bound to its request object.
 - `NOF300`: a class inheriting `RpcServer<TService>` must be `partial`.

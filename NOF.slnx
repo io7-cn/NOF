@@ -63,6 +63,7 @@
     <Project Path="tests/NOF.Domain.Tests/NOF.Domain.Tests.csproj" />
     <Project Path="tests/NOF.Hosting.Tests/NOF.Hosting.Tests.csproj" />
     <Project Path="tests/NOF.Hosting.AspNetCore.Tests/NOF.Hosting.AspNetCore.Tests.csproj" />
+    <Project Path="tests/NOF.Hosting.AspNetCore.AotSmoke/NOF.Hosting.AspNetCore.AotSmoke.csproj" />
     <Project Path="tests/NOF.Infrastructure.Tests/NOF.Infrastructure.Tests.csproj" />
     <Project Path="tests/NOF.Test.Tests/NOF.Test.Tests.csproj" />
     <Project Path="tests/NOF.UI.Tests/NOF.UI.Tests.csproj" />

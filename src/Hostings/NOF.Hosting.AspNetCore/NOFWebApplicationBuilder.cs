@@ -36,7 +36,10 @@ public class NOFWebApplicationBuilder : IHostApplicationBuilder
 
     public static NOFWebApplicationBuilder Create(string[] args)
     {
-        var builder = new NOFWebApplicationBuilder(args, Assembly.GetCallingAssembly());
+        var applicationAssembly = RuntimeFeature.IsDynamicCodeSupported
+            ? Assembly.GetCallingAssembly()
+            : Assembly.GetEntryAssembly();
+        var builder = new NOFWebApplicationBuilder(args, applicationAssembly);
         builder.AddNOFInfrastructure();
         builder.Services.ConfigureHttpJsonOptions(options =>
         {

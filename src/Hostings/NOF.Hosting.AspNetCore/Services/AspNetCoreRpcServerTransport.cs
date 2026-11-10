@@ -37,7 +37,11 @@ public sealed class AspNetCoreRpcServerTransport : IRpcServerTransport
         }
         else if (transport is null or TransportOverHttpAttribute)
         {
-            NOFHostingAspNetCoreExtensions.MapHttpEndpoint(routeBuilder, registration.ImplementationType);
+            var mappedOperations = GeneratedHttpRpcEndpoint.Map(routeBuilder, registration);
+            if (mappedOperations.Count == 0 || mappedOperations.Count != registration.HandlerMappings?.Count)
+            {
+                NOFHostingAspNetCoreExtensions.MapHttpEndpoint(routeBuilder, registration.ImplementationType, mappedOperations);
+            }
         }
 
         return Task.CompletedTask;

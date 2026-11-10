@@ -39,7 +39,8 @@ public static partial class NOFHostingAspNetCoreExtensions
     [RequiresDynamicCode("Endpoint mapping uses reflection on delegate signatures and service contracts.")]
     internal static IEndpointRouteBuilder MapHttpEndpoint(
         IEndpointRouteBuilder app,
-        Type rpcServerType)
+        Type rpcServerType,
+        IReadOnlySet<string>? generatedOperations = null)
     {
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(rpcServerType);
@@ -73,7 +74,8 @@ public static partial class NOFHostingAspNetCoreExtensions
             CreateHttpEndpointMappingKey(rpcServerType, routePrefix),
             serviceType,
             handlerMappings,
-            routePrefix);
+            routePrefix,
+            generatedOperations);
     }
 
     private static IEndpointRouteBuilder MapHttpEndpointCore(
@@ -81,7 +83,8 @@ public static partial class NOFHostingAspNetCoreExtensions
         string mappingKey,
         Type serviceType,
         IReadOnlyDictionary<string, RpcHandlerMapping> handlerMappings,
-        string? prefix)
+        string? prefix,
+        IReadOnlySet<string>? generatedOperations)
     {
         var mappingState = app.ServiceProvider.GetService<HttpEndpointMappingState>();
         if (mappingState is not null && !mappingState.TryMarkMapped(mappingKey))
@@ -91,6 +94,11 @@ public static partial class NOFHostingAspNetCoreExtensions
 
         foreach (var (operationName, handlerMapping) in handlerMappings)
         {
+            if (generatedOperations?.Contains(operationName) == true)
+            {
+                continue;
+            }
+
             var method = serviceType.GetMethod(operationName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                 ?? throw new InvalidOperationException($"RPC contract method '{serviceType.FullName}.{operationName}' was not found.");
             var isStream = TryGetStreamItemType(handlerMapping.ReturnType, out var streamItemType);

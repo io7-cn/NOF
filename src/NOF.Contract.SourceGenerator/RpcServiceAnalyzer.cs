@@ -27,6 +27,14 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Error,
         true);
 
+    private static readonly DiagnosticDescriptor InvalidRouteBinding = new(
+        "NOF217",
+        "Invalid HTTP route binding",
+        "HttpEndpoint route '{0}' cannot be bound: {1}",
+        "HttpEndpoint",
+        DiagnosticSeverity.Error,
+        true);
+
     public static readonly DiagnosticDescriptor ClassMustHaveParameterlessCtor = new(
         "NOF202",
         "Class request must have a parameterless constructor",
@@ -127,6 +135,7 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
     [
         RequestMustBeReferenceType,
         RouteParametersNotSupported,
+        InvalidRouteBinding,
         ClassMustHaveParameterlessCtor,
         QueryPropertyMustBeParsable,
         InvalidServiceMethodSignature,
@@ -344,19 +353,27 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
             if (requestType != null)
             {
                 ValidateRequestPayloadShape(context, requestType, methodLocation);
-                ValidateQueryBoundProperties(context, requestType, methodHttpEndpointAttrs, methodLocation);
-
+                ValidateQueryBoundProperties(context, requestType, methodHttpEndpointAttrs.Where(static attr =>
+                    attr.ConstructorArguments.Length <= 1
+                    || attr.ConstructorArguments[1].Value is not string route
+                    || !RpcServiceHelpers.ContainsRouteParameters(route)), methodLocation);
                 foreach (var methodHttpEndpointAttr in methodHttpEndpointAttrs)
                 {
                     var route = methodHttpEndpointAttr.ConstructorArguments.Length > 1
                         ? methodHttpEndpointAttr.ConstructorArguments[1].Value as string
                         : null;
-                    if (string.IsNullOrWhiteSpace(route))
+                    if (route is null || !RpcServiceHelpers.ContainsRouteParameters(route))
                     {
                         continue;
                     }
 
-                    ValidateRoute(context, route!, methodLocation);
+                    var verb = (HttpVerb)(int)methodHttpEndpointAttr.ConstructorArguments[0].Value!;
+                    if (HttpRpcRouteBinding.Create(method, requestType, verb, route, out var error) is null)
+                    {
+                        var location = methodHttpEndpointAttr.ApplicationSyntaxReference
+                            ?.GetSyntax(context.CancellationToken).GetLocation() ?? methodLocation;
+                        context.ReportDiagnostic(Diagnostic.Create(InvalidRouteBinding, location, route, error));
+                    }
                 }
             }
         }

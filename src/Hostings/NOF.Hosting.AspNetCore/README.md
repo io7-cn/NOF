@@ -79,12 +79,42 @@ public interface IOrderService : IRpcService
 }
 ```
 
-Route parameters such as `"{id}"` are not supported for RPC HTTP endpoints. Put input data on the request object instead.
-
 For example, a contract prefix `/api/orders` and operation route `/get` produce
 `/api/orders/get?Id=...` for GET. GET and DELETE bind request properties from query;
-POST, PUT and PATCH bind the request from a JSON body. OpenAPI uses these fixed paths.
+POST, PUT and PATCH bind the request from a JSON body.
 Generated clients use relative URIs; end a reverse-proxy `BaseAddress` path with `/`.
+
+### Path parameters
+
+A unary Controller RPC operation can declare one endpoint with a required path segment
+such as `/{id}`. NOF matches the segment to a public request property by CLR name,
+ignoring case. Path properties support `int`, `long`, and `Guid`.
+
+```csharp
+[TransportOverHttp(HttpRpcStyle.ControllerRpc, "/api/orders")]
+public interface IOrderService : IRpcService
+{
+    [HttpEndpoint(HttpVerb.Put, "/{id}")]
+    Result<OrderDto> Update(UpdateOrderRequest request);
+}
+
+public sealed class UpdateOrderRequest
+{
+    public required Guid Id { get; init; }
+    public required string Status { get; init; }
+}
+```
+
+`PUT /api/orders/{id}` takes `{"status":"shipped"}` as its JSON body. The path is the
+source for `Id`. The other properties go in the body for POST, PUT, and PATCH, or in
+the query for GET and DELETE. The request needs a public parameterless constructor.
+Bound properties need public getters and public `set` or `init` accessors. Use
+`required` for init-only body properties whose values must be supplied in JSON.
+
+The contract generator emits a private body shape, JSON metadata, and a binder.
+For Native AOT, register a source-generated `JsonSerializerContext` for the result
+and any body member types that need application metadata using
+`JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(...)`.
 
 ## HTTP failures and Result
 

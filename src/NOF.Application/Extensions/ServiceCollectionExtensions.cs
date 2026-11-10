@@ -27,7 +27,10 @@ public static partial class NOFApplicationExtensions
             services.TryAddScoped<TRpcServer>();
             var registry = services.GetOrAddSingleton<RpcServerRegistry>();
             registry.RemoveWhere(existing => existing.ServiceType == TRpcServer.ServiceType);
-            registry.Add(new RpcServerRegistration(TRpcServer.ServiceType, typeof(TRpcServer)));
+            registry.Add(new RpcServerRegistration(TRpcServer.ServiceType, typeof(TRpcServer))
+            {
+                HandlerMappings = TRpcServer.HandlerMappings
+            });
             return services;
         }
 

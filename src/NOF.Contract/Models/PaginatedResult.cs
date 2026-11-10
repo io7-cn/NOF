@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json.Serialization;
 
@@ -26,8 +27,10 @@ public static class PaginatedResult
 /// <typeparam name="T">The type of the paginated items.</typeparam>
 public sealed record PaginatedResult<T> : Result<T[]>, IResult<PaginatedResult<T>>
 {
+    /// <summary>Constructs a paginated result from source-generated JSON metadata.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     [JsonConstructor]
-    internal PaginatedResult(bool isSuccess, string? errorCode, string? message, T[]? value, IDictionary<string, string>? extra = null)
+    public PaginatedResult(bool isSuccess, string? errorCode, string? message, T[]? value, IDictionary<string, string>? extra = null)
         : base(isSuccess, errorCode, message, value, extra)
     {
     }

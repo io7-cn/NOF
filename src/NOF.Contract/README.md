@@ -140,7 +140,7 @@ No HTTP client is generated for a memory-only contract. Each server transport de
 - JSON-RPC contracts use the service route prefix and operation names; when the prefix is omitted, the endpoint is `/`
 - JSON-RPC methods must not declare `[HttpEndpoint]`
 - JSON-RPC streaming methods use SSE; each event carries a JSON-RPC response envelope for one stream item
-- Route parameters such as `"{id}"` are not supported for RPC HTTP endpoints; put input data on the request object instead
+- Controller RPC operation routes support required path segments such as `{id}`. They match request properties by CLR name, ignoring case. Other properties are bound from the query or JSON body according to the HTTP verb
 - Streaming HTTP endpoints use server-sent events when hosted by `NOF.Hosting.AspNetCore`
 - **`[RequirePermission]`** - declares required permissions for an endpoint
 - **`[Summary]`** - adds summary documentation to generated endpoints

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json.Serialization;
@@ -7,12 +8,14 @@ namespace NOF.Contract;
 /// <summary>
 /// Represents the result of an operation that does not return a value.
 /// Contains information about whether the operation succeeded and, if not, the error details.
-/// Instances must be created via <see cref="Success()"/>, <see cref="Success{T}(T)"/>, or <see cref="Fail(string, string)"/>.
+/// Use <see cref="Success()"/>, <see cref="Success{T}(T)"/>, or <see cref="Fail(string, string)"/> to construct results in application code.
 /// </summary>
 public record Result : IResult<Result>
 {
+    /// <summary>Constructs a result from source-generated JSON metadata.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     [JsonConstructor]
-    internal Result(bool isSuccess, string? errorCode, string? message, IDictionary<string, string>? extra = null)
+    public Result(bool isSuccess, string? errorCode, string? message, IDictionary<string, string>? extra = null)
     {
         IsSuccess = isSuccess;
         ErrorCode = errorCode ?? string.Empty;
@@ -215,13 +218,15 @@ public record FailResult : IResult<FailResult>
 /// <summary>
 /// Represents the result of an operation that returns a value of type <typeparamref name="T"/>.
 /// Encapsulates either a success with a value or a failure with error details.
-/// Instances must be created via <see cref="Result.Success{T}(T)"/> or <see cref="Result.Fail(string, string)"/>.
+/// Use <see cref="Result.Success{T}(T)"/> or <see cref="Result.Fail(string, string)"/> to construct results in application code.
 /// </summary>
 /// <typeparam name="T">The type of the value returned on success.</typeparam>
 public record Result<T> : IResult<Result<T>>
 {
+    /// <summary>Constructs a result from source-generated JSON metadata.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     [JsonConstructor]
-    internal Result(bool isSuccess, string? errorCode, string? message, T? value, IDictionary<string, string>? extra = null)
+    public Result(bool isSuccess, string? errorCode, string? message, T? value, IDictionary<string, string>? extra = null)
     {
         if (isSuccess && value is null)
         {
