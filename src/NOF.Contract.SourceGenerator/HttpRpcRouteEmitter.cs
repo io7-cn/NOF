@@ -23,12 +23,25 @@ public static class HttpRpcRouteEmitter
                 var value = $"(({requestType})currentRequest).@{property.Name}";
                 var formatted = property.Type.ToDisplayString() == "System.Guid"
                     ? value + ".ToString(\"D\")"
-                    : value + ".ToString(global::System.Globalization.CultureInfo.InvariantCulture)";
-                return $"global::System.Uri.EscapeDataString({formatted})";
+                    : HttpRpcClientGenerator.FormatValueExpression(value, property.Type, invariant: true);
+                return $"__EncodeNofPathSegment({formatted}, {Literal(property.Name)})";
             }
 
             return Literal(segment);
         }));
+    }
+
+    internal static void EmitClientPathEncoder(StringBuilder sb)
+    {
+        sb.AppendLine("        private static string __EncodeNofPathSegment(string? value, string propertyName)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (string.IsNullOrEmpty(value) || value is \".\" or \"..\" || value.Contains('/') || value.Contains('\\\\'))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                throw new global::System.ArgumentException(\"The value must be a non-empty URL path segment without slashes or dot segments.\", propertyName);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
     }
 
     public static void Emit(
@@ -49,9 +62,9 @@ public static class HttpRpcRouteEmitter
         sb.AppendLine($"            public override global::NOF.Contract.HttpVerb Verb => global::NOF.Contract.HttpVerb.{endpoint.Method};");
         sb.AppendLine("            public override global::System.Collections.Generic.IReadOnlyList<global::NOF.Contract.HttpRpcRouteParameter> Parameters { get; } =");
         sb.AppendLine("            [");
-        foreach (var (parameter, property) in binding.Path)
+        foreach (var (parameter, property, _) in binding.Path)
         {
-            sb.AppendLine($"                new({Literal(parameter)}, typeof({TypeName(property.Type)}), IsPath: true, IsRequired: true),");
+            sb.AppendLine($"                new({Literal(parameter)}, typeof({GetPathSchemaTypeName(property.Type)}), IsPath: true, IsRequired: true),");
         }
 
         if (usesQuery)
@@ -89,9 +102,8 @@ public static class HttpRpcRouteEmitter
         sb.AppendLine("            {");
         for (var i = 0; i < binding.Path.Count; i++)
         {
-            var (parameter, property) = binding.Path[i];
-            sb.AppendLine($"                if (!TryParse<{TypeName(property.Type)}>(getPath({Literal(parameter)}), out var path{i}))");
-            EmitInvalid(sb, 16, invalid);
+            var (parameter, property, staticParser) = binding.Path[i];
+            EmitPathRead(sb, parameter, property.Type, staticParser, i, invalid);
         }
 
         if (usesQuery)
@@ -144,6 +156,51 @@ public static class HttpRpcRouteEmitter
         sb.AppendLine(binding.HasBody ? "                return request;" : "                return new(request);");
         sb.AppendLine("            }");
         sb.AppendLine();
+    }
+
+    private static void EmitPathRead(StringBuilder sb, string parameter, ITypeSymbol type, IMethodSymbol? staticParser, int index, string invalid)
+    {
+        var value = $"path{index}";
+        var text = type.SpecialType == SpecialType.System_String ? value : $"pathText{index}";
+        var condition = $"getPath({Literal(parameter)}) is not {{ Length: > 0 }} {text}";
+        if (type.SpecialType != SpecialType.System_String)
+        {
+            var typeName = TypeName(type.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+            var parser = type switch
+            {
+                { TypeKind: TypeKind.Enum } => $"global::System.Enum.TryParse<{typeName}>({text}, ignoreCase: true, out var {value})",
+                { SpecialType: SpecialType.System_DateTime } => $"global::System.DateTime.TryParse({text}, global::System.Globalization.CultureInfo.InvariantCulture, global::System.Globalization.DateTimeStyles.RoundtripKind, out var {value})",
+                _ => $"TryParse<{typeName}>({text}, out var {value})"
+            };
+            if (staticParser is not null)
+            {
+                var provider = staticParser.Parameters.Length == 3
+                    ? "(global::System.IFormatProvider)global::System.Globalization.CultureInfo.InvariantCulture, "
+                    : "";
+                parser = $"{typeName}.TryParse({text}, {provider}out {typeName}{(type.IsReferenceType ? "?" : "")} {value})";
+            }
+
+            condition += $" || !{parser}";
+            if (type.IsReferenceType)
+            {
+                condition += $" || {value} is null";
+            }
+        }
+
+        sb.AppendLine($"                if ({condition})");
+        EmitInvalid(sb, 16, invalid);
+    }
+
+    private static string GetPathSchemaTypeName(ITypeSymbol type)
+    {
+        // Use the framework JSON context's scalar types for the OpenAPI wire schema.
+        return type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_Int16
+                or SpecialType.System_Int32 or SpecialType.System_Int64 or SpecialType.System_Single
+                or SpecialType.System_Double or SpecialType.System_Decimal
+            || type.ToDisplayString() is "System.Guid" or "System.DateTime" or "System.DateTimeOffset"
+                or "System.DateOnly" or "System.TimeOnly" or "System.TimeSpan"
+            ? TypeName(type)
+            : "string";
     }
 
     private static void EmitQueryRead(StringBuilder sb, IPropertySymbol property, int index)

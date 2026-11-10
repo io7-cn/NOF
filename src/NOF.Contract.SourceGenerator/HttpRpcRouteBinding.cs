@@ -8,7 +8,7 @@ namespace NOF.Contract.SourceGenerator;
 /// <summary>Shares the binding rules for parameterized Controller RPC routes.</summary>
 public sealed class HttpRpcRouteBinding
 {
-    public List<(string Name, IPropertySymbol Property)> Path { get; } = new();
+    public List<(string Name, IPropertySymbol Property, IMethodSymbol? StaticParser)> Path { get; } = new();
     public List<IPropertySymbol> Remaining { get; } = new();
     public bool HasBody { get; private set; }
 
@@ -81,14 +81,17 @@ public sealed class HttpRpcRouteBinding
             }
 
             var property = matches[0];
-            if (property.Type.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_Int64)
-                && property.Type.ToDisplayString() != "System.Guid")
+            var type = property.Type;
+            var hasScalarParser = CanParseScalar(type);
+            var staticParser = hasScalarParser ? null : FindStaticPathParser(type);
+            if (type is not INamedTypeSymbol { IsRefLikeType: false }
+                || (!hasScalarParser && staticParser is null))
             {
-                error = $"path property '{property.Name}' must have type int, long, or Guid";
+                error = $"path property '{property.Name}' must be a string, enum, or a type that implements IParsable<TSelf> or declares a compatible public static TryParse";
                 return null;
             }
 
-            binding.Path.Add((name, property));
+            binding.Path.Add((name, property, staticParser));
         }
 
         var bodyMethod = verb is HttpVerb.Post or HttpVerb.Put or HttpVerb.Patch;
@@ -161,13 +164,39 @@ public sealed class HttpRpcRouteBinding
             && property.SetMethod?.DeclaredAccessibility == Accessibility.Public;
 
     private static bool CanParseQuery(ITypeSymbol type)
-    {
-        type = GetQueryValueType(type);
-        return type.SpecialType == SpecialType.System_String
+        => CanParseScalar(GetQueryValueType(type));
+
+    private static bool CanParseScalar(ITypeSymbol type)
+        => type.SpecialType == SpecialType.System_String
             || type.TypeKind == TypeKind.Enum
-            || type is INamedTypeSymbol namedType && namedType.AllInterfaces.Any(candidate =>
-                candidate.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.ParsableFqn
-                && SymbolEqualityComparer.Default.Equals(candidate.TypeArguments[0], namedType));
+            || type is INamedTypeSymbol { TypeKind: not TypeKind.Interface } namedType
+                && namedType.AllInterfaces.Any(candidate =>
+                    candidate.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.ParsableFqn
+                    && SymbolEqualityComparer.Default.Equals(candidate.TypeArguments[0], namedType));
+
+    private static IMethodSymbol? FindStaticPathParser(ITypeSymbol type)
+    {
+        return type.GetMembers("TryParse").OfType<IMethodSymbol>()
+            .Where(method => method is
+            {
+                MethodKind: MethodKind.Ordinary,
+                DeclaredAccessibility: Accessibility.Public,
+                IsStatic: true,
+                IsAbstract: false,
+                IsVirtual: false,
+                IsGenericMethod: false,
+                IsVararg: false,
+                RefKind: RefKind.None,
+                ReturnType.SpecialType: SpecialType.System_Boolean,
+                Parameters.Length: 2 or 3
+            }
+                && method.Parameters[0] is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_String }
+                && (method.Parameters.Length == 2 || (method.Parameters[1].RefKind == RefKind.None
+                    && method.Parameters[1].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.IFormatProvider"))
+                && method.Parameters[method.Parameters.Length - 1].RefKind == RefKind.Out
+                && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 1].Type, type))
+            .OrderByDescending(static method => method.Parameters.Length)
+            .FirstOrDefault();
     }
 
     private static bool IsUnsupportedJsonAttribute(INamedTypeSymbol? attributeType)

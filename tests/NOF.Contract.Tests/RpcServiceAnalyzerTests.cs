@@ -336,7 +336,11 @@ public class RpcServiceAnalyzerTests
     [Theory]
     [InlineData("/items/{id}", "Guid", "Id", null)]
     [InlineData("/items/{id}", "Guid", "OrderId", "publicly readable and writable request property")]
-    [InlineData("/items/{id}", "string", "Id", "int, long, or Guid")]
+    [InlineData("/items/{id}", "string", "Id", null)]
+    [InlineData("/items/{id}", "DayOfWeek", "Id", null)]
+    [InlineData("/items/{id}", "DateOnly", "Id", null)]
+    [InlineData("/items/{id}", "Guid?", "Id", "compatible public static TryParse")]
+    [InlineData("/items/{id}", "IncompatibleParser", "Id", "compatible public static TryParse")]
     [InlineData("/items/{id?}", "Guid", "Id", "unique, required parameter name")]
     [InlineData("/items/{id}/{ID}", "Guid", "Id", "unique, required parameter name")]
     public async Task ControllerRoute_ValidatesPathBindings(string route, string type, string property, string? error)
@@ -349,6 +353,15 @@ public class RpcServiceAnalyzerTests
             {
                 public {{type}} {{property}} { get; init; }
                 public string Name { get; set; } = "";
+            }
+
+            public struct IncompatibleParser
+            {
+                public static bool TryParse(string text, int style, out IncompatibleParser result)
+                {
+                    result = default;
+                    return true;
+                }
             }
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc)]

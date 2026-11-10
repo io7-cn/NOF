@@ -88,7 +88,11 @@ Generated clients use relative URIs; end a reverse-proxy `BaseAddress` path with
 
 A unary Controller RPC operation can declare one endpoint with a required path segment
 such as `/{id}`. NOF matches the segment to a public request property by CLR name,
-ignoring case. Path properties support `int`, `long`, and `Guid`.
+ignoring case. Path properties support `string`, enums, `IParsable<TSelf>`, and
+types declaring a public static `bool TryParse(string, out T)` or
+`bool TryParse(string, IFormatProvider, out T)`. NOF prefers the overload with
+the format provider when both static overloads are available. Enums are parsed
+case-insensitively. A matched path with an unparseable value returns HTTP 400.
 
 ```csharp
 [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/api/orders")]
@@ -112,6 +116,10 @@ Bound properties need public getters and public `set` or `init` accessors. Use
 `required` for init-only body properties whose values must be supplied in JSON.
 
 The contract generator emits a private body shape, JSON metadata, and a binder.
+Generated clients format path values with the invariant culture when the type
+supports it, then URL-escape each segment. A custom type's `IFormattable` or
+`ToString()` output must round-trip through its parser. Clients reject null,
+empty, slash-containing, backslash-containing, and `.` or `..` path values.
 For Native AOT, register a source-generated `JsonSerializerContext` for the result
 and any body member types that need application metadata using
 `JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(...)`.

@@ -23,7 +23,7 @@ public interface IUserService : IRpcService
 - Method overloading is not supported.
 - `void` return types are not supported.
 - Server-streaming methods return `StreamingResult<T>` on the contract surface.
-- Controller RPC operation templates can bind a path segment such as `{id}` to the request's `Id` property.
+- Controller RPC operation templates can bind a required path segment such as `{id}` to the request's `Id` property. Supported property types include `string`, enums, `IParsable<TSelf>`, and types with a compatible public static `TryParse`.
 
 ## Application Implementation Model
 

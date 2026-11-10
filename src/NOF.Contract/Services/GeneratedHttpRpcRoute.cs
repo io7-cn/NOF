@@ -22,6 +22,10 @@ public sealed class GeneratedHttpRpcRouteAttribute<TRoute> : GeneratedHttpRpcRou
 }
 
 /// <summary>Describes a parameter bound by a generated Controller RPC route.</summary>
+/// <param name="Name">The parameter name in the HTTP request.</param>
+/// <param name="Type">The CLR type used to describe the parameter's wire schema.</param>
+/// <param name="IsPath">Whether the parameter comes from the path.</param>
+/// <param name="IsRequired">Whether the parameter is required.</param>
 public sealed record HttpRpcRouteParameter(string Name, Type Type, bool IsPath, bool IsRequired);
 
 /// <summary>Provides the HTTP transport shape and serialization for one Controller RPC operation.</summary>

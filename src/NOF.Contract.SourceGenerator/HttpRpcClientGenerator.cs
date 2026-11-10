@@ -106,6 +106,11 @@ public sealed class HttpRpcClientGenerator : IIncrementalGenerator
         sb.AppendLine("            => _jsonOptions.GetRequiredTypeInfo<T>();");
         sb.AppendLine();
 
+        if (routedMethods.Any(static binding => binding is not null))
+        {
+            HttpRpcRouteEmitter.EmitClientPathEncoder(sb);
+        }
+
         for (var i = 0; i < methods.Count; i++)
         {
             var method = methods[i];
