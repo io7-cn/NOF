@@ -531,20 +531,18 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
         var candidateStates = await dbContext.Set<NOFInboxOrderState>()
             .AsNoTracking()
-            .Join(
-                dbContext.Set<NOFInboxMessage>()
-                    .AsNoTracking()
-                    .Where(message => message.Status == InboxMessageStatus.Pending &&
-                                      message.RetryCount < _options.MaxRetryCount &&
-                                      (message.ClaimedBy == null ||
-                                       message.ClaimExpiresAtUtc == null ||
-                                       message.ClaimExpiresAtUtc <= now)),
-                state => new { state.Route, state.OrderKey, Sequence = (long?)state.NextSequence },
-                message => new { message.Route, OrderKey = message.OrderKey!, message.Sequence },
-                (state, _) => state)
             .Where(state => state.CompletedAtUtc == null &&
                             state.BlockedSequence == null &&
-                            (state.ClaimedBy == null || state.ClaimExpiresAtUtc == null || state.ClaimExpiresAtUtc <= now))
+                            (state.ClaimedBy == null || state.ClaimExpiresAtUtc == null || state.ClaimExpiresAtUtc <= now) &&
+                            dbContext.Set<NOFInboxMessage>().Any(message =>
+                                message.Route == state.Route &&
+                                message.OrderKey == state.OrderKey &&
+                                message.Sequence == state.NextSequence &&
+                                message.Status == InboxMessageStatus.Pending &&
+                                message.RetryCount < _options.MaxRetryCount &&
+                                (message.ClaimedBy == null ||
+                                 message.ClaimExpiresAtUtc == null ||
+                                 message.ClaimExpiresAtUtc <= now)))
             .OrderBy(state => state.UpdatedAtUtc)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
