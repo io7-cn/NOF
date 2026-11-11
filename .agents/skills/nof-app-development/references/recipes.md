@@ -117,10 +117,12 @@ await dbContext.SaveChangesAsync(cancellationToken);
 
 Deferred messages are inserted into the current `IDbContext`; saving that same context is the transaction boundary.
 
-## Generated Client Call
+## Server Operation Call
 
 ```csharp
-var result = await orderServiceClient.GetOrderAsync(request, context, cancellationToken);
+var result = await OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken);
 ```
 
-HTTP and local implementations share the generated client interface and explicit `Context` parameter.
+This generated server entry runs authorization, tenant and invocation-scope policies.
+No client interface or HTTP/Local Client is generated. Remote callers maintain their
+own HTTP integration, as demonstrated by the sample UI API ports/adapters.

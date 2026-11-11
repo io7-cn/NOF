@@ -15,7 +15,7 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
 
-Application services use AddApplicationService<TService>() and application-part initialization for generated operation implementations. Local and HTTP clients share the existing policy pipeline; undecorated contracts expose no HTTP routes. See the [migration guide](../../docs/en/design/application-requests.md).
+Application services use AddApplicationService<TService>() and application-part initialization for generated operation implementations. Generated Service.Operation.InvokeAsync uses the existing policy pipeline; no client interfaces or implementations are generated, and undecorated contracts expose no HTTP routes. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Usage
 
@@ -154,21 +154,29 @@ on protected operations through `RequirePermission` or the strict tenant policy.
 Map external tenant and permission claims to the NOF conventions in the trusted
 identity source. OAuth scope claims are not automatically converted to permissions.
 
-## Local RPC Clients
+## Server operation invocation
 
-The Infrastructure source generator discovers `ApplicationService<TService>` implementations in the host and referenced application assemblies. For a server named `OrderService`, it generates a public `LocalOrderServiceClient` implementing the canonical client interface generated beside the service contract:
+Register the application service once and call the generated server operation entry:
 
 ```csharp
-public partial class OrderService : ApplicationService<IOrderService>;
-
-builder.Services.ReplaceOrAddScoped<IOrderServiceClient, LocalOrderServiceClient>();
+builder.AddApplicationService<OrderService>();
+var order = await OrderService.GetOrder.InvokeAsync(services, request, context, ct);
 ```
 
-No `LocalApplicationServiceClientAttribute` or user-authored empty partial client class is required. Both the Contract and Infrastructure generators derive `IOrderServiceClient` independently from `IOrderService`; the Infrastructure generator never reads Contract generator output.
+`IApplicationServiceInvoker` is registered as scoped infrastructure. Static operation
+entries delegate to it; no client interfaces or Local/HTTP Client implementations are
+generated. Invocation opens and asynchronously disposes a fresh scope for daemon
+services, inbound policies and the handler. Context items flow directly and the
+caller's identity is copied as an isolated snapshot; persistence dependencies are
+not shared. Local identity is already verified, so token authentication is skipped
+while application authorization and tenant policies still run. Authorization and tenant normalization precede
+handler resolution. Inject the invoker directly when an adapter must match the
+`ServiceCompleted`/`ServiceRejected` outcome instead of using typed `InvokeAsync`.
 
-Local calls preserve the same request boundary as a remote RPC for dependency-injection lifetimes. The outbound pipeline runs in the caller's scope. Its terminal dispatch creates and asynchronously disposes a new scope for RPC server resolution, daemon-service activation, the inbound pipeline, and the handler. Scoped dependencies such as `DbContext` are therefore not shared between the caller and handler, while headers produced by outbound middleware cross the boundary.
-
-Contracts marked with `[TransportOverMemory]` use the same local client path. Their server registrations remain available to `ApplicationServiceInvoker`. The transport initialization step stays transport-agnostic and passes every registration to every `IApplicationServiceTransport`; each transport inspects the contract metadata and decides whether it applies. The built-in HTTP transport ignores memory-only contracts.
+Undecorated and `[TransportOverMemory]` contracts remain local. Each
+`IApplicationServiceTransport` checks metadata independently; the built-in HTTP
+transport maps only explicitly HTTP-decorated services. HTTP binding and serializer
+metadata generation remains server-only. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## RPC Server Transport Extension Point
 

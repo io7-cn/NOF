@@ -38,6 +38,11 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("class Count : global::NOF.Application.ServiceOperation<global::App.Query, int?>", code);
         Assert.Equal(2, code.Split("public override bool AllowsNullResponse => true;").Length - 1);
         Assert.DoesNotContain("IRpcResponse", code);
+        Assert.Contains("Task<global::App.Dto?> InvokeAsync(", code);
+        Assert.Contains("nameof(global::App.IOrders.Find)", code);
+        Assert.Contains("execution.Require<global::App.Dto?>(allowNull: true)", code);
+        Assert.Contains("execution.Require<global::App.Dto>(allowNull: false)", code);
+        Assert.DoesNotContain("ServiceClient", code);
     }
 
     [Fact]
@@ -92,5 +97,6 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("nameof(global::App.IMyService.Ping)] = new global::NOF.Application.ServiceOperationMapping(typeof(Ping), typeof(global::App.PingRequest), typeof(global::NOF.Contract.Result))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Get)] = new global::NOF.Application.ServiceOperationMapping(typeof(Get), typeof(global::App.GetRequest), typeof(global::NOF.Contract.Result<global::App.MyDto>))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Contract.Result))", generatedCode);
+        Assert.Contains("static failure => global::NOF.Contract.Result<global::App.MyDto>.CreateFailure(failure)", generatedCode);
     }
 }

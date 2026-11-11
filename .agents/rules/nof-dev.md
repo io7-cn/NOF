@@ -30,16 +30,20 @@ Use this file when contributing to the NOF framework itself.
 
 - Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-- RPC: `IApplicationService`, optional `[TransportOverHttp(...)]` or `[TransportOverMemory]` metadata, `ApplicationService<TService>`, generated clients, and `AddApplicationService<TServer>()`.
+- RPC: `IApplicationService`, optional `[TransportOverHttp(...)]` or `[TransportOverMemory]` metadata, `ApplicationService<TService>`, generated server operation entries, and `AddApplicationService<TServer>()`.
 - Messaging: plain payload types plus `CommandHandler<T>` / `NotificationHandler<T>`; all handler and dispatch APIs receive `Context`.
 - In-memory events: `InMemoryEventHandler<T>`, `IEventPublisher`, and optional `PublishAsEvent()` ambient convenience.
 - Transactional outbox: asynchronous `DeferSendAsync(...)` / `DeferPublishAsync(...)`, plus ordered variants, followed by `IDbContext.SaveChangesAsync()`.
 - Persistence: application-facing `IDbContext`, `IDbContextFactory`, and `IRepository<T>`; EF Core and NHibernate adapters live in provider packages.
 - Initialization: `IApplicationInitializationStep` instances are registered in `IServiceCollection` and ordered by `Compare(...)` returning `TopologyComparison`.
-- Source generation: `[AutoInject]`, `[Failure]`, `[Mappable<TSource, TDestination>]`, `[NewableValueObject]`, `IValueObject<T>`, handler registration, and RPC client/server generation.
+- Source generation: `[AutoInject]`, `[Failure]`, `[Mappable<TSource, TDestination>]`, `[NewableValueObject]`, `IValueObject<T>`, handler registration, and server operation/HTTP metadata generation (no client generation).
 - Application parts: `AddApplicationPart(assembly)` runs generated `AssemblyInitializeAttribute` initializers against the current `IServiceCollection`.
 - Registries: `EventHandlerRegistry`, `MappingRegistry`, `CommandHandlerRegistry`, `NotificationHandlerRegistry`, and `ApplicationServiceRegistry` are singleton instances stored in DI and freeze on first read. Do not reintroduce a process-wide type registry.
 - Ambient helpers: `Mapper`, `IdGenerator`, and `EventPublisher` are scoped through daemon-service resolution; `Context.Current` follows the current async execution flow. Explicit APIs remain the primary runtime contracts.
+
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. Optional HTTP annotations generate server metadata only. Dedicated REST endpoint-module APIs remain future work.
+
+Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 
 ## Coding Rules
 

@@ -7,6 +7,7 @@ Application service contracts inherit IApplicationService and keep generated Ser
 NOF RPC contracts are interface-first and method-based.
 
 ```csharp
+[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
 public interface IUserService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/users/get")]
@@ -36,20 +37,17 @@ public partial class UserService : ApplicationService<IUserService>;
 
 public class GetUser : UserService.GetUser
 {
-    public override Task<Result<UserDto>> HandleAsync(GetUserRequest request, CancellationToken cancellationToken)
+    public override Task<Result<UserDto>> HandleAsync(GetUserRequest request, Context context, CancellationToken cancellationToken)
     {
         return Task.FromResult(Result.Success(new UserDto(request.Id, "Alice")));
     }
 }
 ```
 
-The generated client contract explicitly records its service relationship:
-
-```csharp
-public interface IUserServiceClient : IApplicationServiceClient<IUserService>;
-```
-
-When `NOF.Infrastructure` discovers `UserService : ApplicationService<IUserService>`, it uses this generic relationship to generate `LocalUserServiceClient`. No local-client attribute or empty partial client declaration is needed.
+Call `UserService.GetUser.InvokeAsync(services, request, context, ct)` on the server.
+This generated operation entry executes application pipelines through
+`IApplicationServiceInvoker`. NOF generates no client interface, HTTP Client or Local
+Client. Remote callers maintain their own HTTP integrations.
 
 Streaming methods are implemented with the same generated handler model:
 
@@ -89,7 +87,7 @@ transport setup and endpoint mapping.
 
 OpenAPI service registration happens during builder creation. Call `app.MapOpenApi()` explicitly when you want to expose the document.
 
-When the mapped RPC method returns `Result<IAsyncEnumerable<T>>`, `NOF.Hosting.AspNetCore` exposes it as an SSE endpoint and generated HTTP clients consume it as `Task<Result<IAsyncEnumerable<T>>>`.
+When the mapped RPC method returns `Result<IAsyncEnumerable<T>>`, `NOF.Hosting.AspNetCore` exposes it as an SSE endpoint and application-owned HTTP callers consume the stream.
 
 ## RPC Transport Declaration
 
@@ -100,13 +98,15 @@ An application service contract is local by default. It may explicitly choose on
 public interface IUserService : IApplicationService;
 ```
 
-Use `[TransportOverMemory]` instead when the contract is only consumed by an in-process UI such as Blazor Server. It still gets the protocol-neutral client interface and a generated local client, but it gets no HTTP client and the built-in HTTP transport does not map it. Transport initialization remains transport-agnostic; each `IApplicationServiceTransport` decides whether it applies by inspecting the contract's transport metadata.
+Use `[TransportOverMemory]` or omit transport metadata for in-process use. Neither
+exposes automatic HTTP routes. Server invocation remains available through the
+generated operation; each `IApplicationServiceTransport` independently checks metadata.
 
-`TransportOverAttribute` is abstract and belongs to `NOF.Contract`, so callers and implementations read the same transport metadata from the RPC service interface. The analyzer rejects missing or multiple transport declarations, as well as transport attributes placed on interfaces that do not inherit `IApplicationService`. The route prefix is optional. During automatic endpoint registration, `ControllerRpc` prepends it to each operation route, while `JsonRpc` uses it as the single JSON-RPC endpoint route. A JSON-RPC contract without a route prefix is mapped at `/`.
+`TransportOverAttribute` is abstract and belongs to `NOF.Contract`, so callers and implementations read the same transport metadata from the RPC service interface. The analyzer rejects multiple transport declarations, as well as transport attributes placed on interfaces that do not inherit `IApplicationService`. The route prefix is optional. During automatic endpoint registration, `ControllerRpc` prepends it to each operation route, while `JsonRpc` uses it as the single JSON-RPC endpoint route. A JSON-RPC contract without a route prefix is mapped at `/`.
 
 Registering the server through `AddApplicationService<UserService>()` exposes it using the transport style and route prefix declared by the contract.
 
-The same declaration generates both `IUserServiceClient` and a public partial `HttpUserServiceClient` in the contract assembly. The HTTP client constructor requires `HttpClient` and accepts `IRequestOutboundPipelineExecutor` optionally. This keeps the transport choice and usable client together: hosts with an outbound pipeline get middleware execution through DI, while lightweight callers can use the generated client without referencing `NOF.Hosting`.
+The declaration generates server HTTP binding metadata only; it supplies no network proxy.
 
 Because the endpoint is bound to one RPC server, the JSON-RPC method key is only the contract operation name, such as `GetUser`. Request inbound middleware continues to run before the handler. Business `IResult` values are encoded as the JSON-RPC `result`; protocol failures are encoded as `error`.
 
@@ -127,7 +127,6 @@ Current RPC analyzer diagnostics include:
 - `NOF211`: a transport attribute can only be declared on an interface inheriting `IApplicationService`.
 - `NOF212`: an RPC service contract cannot declare multiple `TransportOverAttribute` implementations.
 - `NOF213`: methods on a JSON-RPC contract must not declare `[HttpEndpoint]`.
-- `NOF214`: an RPC service contract must declare a `TransportOverAttribute` implementation.
 - `NOF215`: an HTTP RPC route prefix is invalid.
 - `NOF216`: methods on an in-memory RPC contract must not declare `[HttpEndpoint]`.
 - `NOF217`: a Controller RPC path template cannot be bound to its request object.

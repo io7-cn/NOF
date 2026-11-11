@@ -82,10 +82,11 @@ Native AOT 应用需要在 JSON 上下文中注册具体结果和数据类型；
 `PaginatedResult<T>` 改为 `Result<Page<T>>`，成功值有显式 `Items` 和可选的
 `TotalCount`。`StreamingResult<T>` 改为 `Result<IAsyncEnumerable<T>>`。
 流需要成功消息时声明 `Result<Success<IAsyncEnumerable<T>>>`。
-两种形式都生成流式客户端和 SSE 端点，客户端返回对应的 `Task<Result<...>>`。
+两种形式都支持服务端 SSE 端点，服务端调用返回对应的 `Task<Result<...>>`。
+HTTP 调用方自行维护 SSE 读取逻辑，不再生成客户端。
 
 ```csharp
-var result = await client.WatchAsync(request, Context.Empty, cancellationToken);
+var result = await OrderService.Watch.InvokeAsync(services, request, Context.Empty, cancellationToken);
 switch (result)
 {
     case IAsyncEnumerable<OrderEvent> events:
@@ -103,7 +104,7 @@ switch (result)
 ```
 
 开始传输前失败时返回普通 Failure JSON。显式包装的成功流通过
-`X-NOF-Result-Message` 响应头传递消息，编码为 Base64 UTF-8；生成客户端将其
+`X-NOF-Result-Message` 响应头传递消息，编码为 Base64 UTF-8；应用自己维护的 HTTP 读取器可将其
 还原为 `Success<IAsyncEnumerable<T>>`。跨域浏览器应用需要通过
 `WithExposedHeaders(StreamingResponseMetadata.MessageHeader)` 暴露该响应头。
 裸流仍然返回裸流。枚举期间的异常属于流传输失败，初始成功并不保证整个流完成。

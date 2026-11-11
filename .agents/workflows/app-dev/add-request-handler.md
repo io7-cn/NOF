@@ -1,5 +1,5 @@
 ---
-description: Add a Context-aware request/response operation with NOF RPC contracts, generated clients, and explicit server registration
+description: Add a Context-aware request/response operation with NOF RPC contracts, generated server operations, and explicit service registration
 ---
 
 # Add a Request-Response Operation
@@ -24,7 +24,7 @@ An application service contract is local by default and may opt into one transpo
 
 For JSON-RPC, use `[TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc/orders")]` and remove method-level `[HttpEndpoint]`. For in-process-only calls, use `[TransportOverMemory]` and remove `[HttpEndpoint]`.
 
-## 2. Define the RPC Server Container
+## 2. Define the Application Service Container
 
 ```csharp
 using NOF.Application;
@@ -60,10 +60,14 @@ var app = await builder.BuildAsync();
 
 `AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the server and its transport metadata. During `BuildAsync()`, ASP.NET Core automatically maps controller/JSON-RPC endpoints; memory contracts are not exposed.
 
-## 5. Call through the Generated Client
+## 5. Invoke the Server Operation
 
 ```csharp
-var result = await orderServiceClient.GetOrderAsync(request, context, cancellationToken);
+var result = await OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken);
 ```
 
-The contract package generates `IOrderServiceClient` and, for HTTP transport, `HttpOrderServiceClient`. The infrastructure generator creates the local client for a registered server. Both implementations use the same client interface and explicit `Context`.
+The generated static entry resolves IApplicationServiceInvoker and preserves shared
+policies and the fresh inbound scope. No client interface, HTTP Client or Local Client
+is generated. Native HTTP endpoints call this entry and return ASP.NET Core results;
+remote consumers maintain their own HTTP integrations. For tests, use
+CallAsync<TResult>((services, context, ct) => OrderService.GetOrder.InvokeAsync(...)).

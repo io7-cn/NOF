@@ -9,15 +9,14 @@ using System.Diagnostics.CodeAnalysis;
 namespace NOF.Hosting.AspNetCore;
 
 /// <summary>
-/// Adapts an inbound HTTP request into the NOF request inbound pipeline
-/// without first going through the request outbound pipeline.
+/// Adapts an inbound HTTP request into the application policy pipeline.
 /// </summary>
 public sealed class HttpRequestInboundAdapter(
     ApplicationServiceInvocationResolver invocationResolver,
     RequestInboundPipelineExecutor inboundPipeline,
-    IOptions<HttpHeaderOutboundOptions> httpHeaderOptions)
+    IOptions<HttpRequestHeaderOptions> httpHeaderOptions)
 {
-    private readonly HttpHeaderOutboundOptions _httpHeaderOptions = httpHeaderOptions.Value;
+    private readonly HttpRequestHeaderOptions _httpHeaderOptions = httpHeaderOptions.Value;
 
     public async Task<RequestInboundContext> InvokeAsync<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,

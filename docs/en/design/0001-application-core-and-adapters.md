@@ -25,7 +25,7 @@ Domain IRepository exposes LINQ, tracking and attachment operations. Merely movi
 these types into an Abstraction assembly does not make their contracts neutral.
 
 The transition must preserve tenant isolation, authorization, cancellation,
-transaction/outbox consistency, current RPC clients, generated invocation and Native
+transaction/outbox consistency, generated server invocation and Native
 AOT. Existing releases and tags are immutable. Work depending on unmerged changes
 must identify that prerequisite and must not bypass protected-main review gates.
 
@@ -41,6 +41,12 @@ must identify that prerequisite and must not bypass protected-main review gates.
    retain its native facilities and lets business handlers run without a web server.
 
 ## Decision
+
+Client generation is completely removed: retain proto-style contracts and generated
+server operations, including static InvokeAsync entries. No interface/HTTP/Local Client
+is emitted. HTTP metadata is optional and server-only. Consumers own remote HTTP
+integrations; the sample has explicit UI ports/adapters. The native endpoint-module
+design remains future work, not an implemented framework API.
 
 Choose option 3. A use case accepts a typed request and execution context and returns
 its declared business response. Responses may be DTOs, nullable values, Result<T>,
@@ -78,6 +84,11 @@ Failure returned by a handler is not an authentication or policy rejection. A va
 null business response is distinct from an uninitialized execution outcome. Handler
 resolution happens after policies so rejected calls do not construct or invoke the
 business handler and context normalization can precede scoped dependency resolution.
+
+Request/response outbound pipelines are removed with client generation. Local calls
+carry Context and an isolated caller-identity snapshot directly into the inbound
+application policies. Remote HTTP behavior belongs to native DelegatingHandler and
+.NET tracing. Command/Notification outbound delivery pipelines remain supported.
 
 ### Responsibility profile
 
@@ -136,7 +147,7 @@ File/conditional/stream response details remain in the HTTP adapter.
 Each phase must have an executable vertical slice and meaningful regression tests.
 Verify DTO, Result/union and nullable returns, cancellation, scoped handler lifetimes,
 context propagation, policy ordering, rejection before handler construction, tenant
-isolation and authorization. Verify generated HTTP/local clients and native AOT
+isolation and authorization. Verify server HTTP metadata, explicit caller adapters and native AOT
 when their paths change. Keep domain tests independent of HTTP/database/broker hosts.
 
 Roll out entry points incrementally. Keep supported RPC adapters working while new

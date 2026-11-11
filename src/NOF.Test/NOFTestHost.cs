@@ -54,12 +54,11 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
         return await scenario(scope);
     }
 
-    public async Task<TResult> CallAsync<TClient, TResult>(
-        Func<TClient, Context, CancellationToken, Task<TResult>> invocation,
+    public async Task<TResult> CallAsync<TResult>(
+        Func<IServiceProvider, Context, CancellationToken, Task<TResult>> invocation,
         Action<NOFTestScope>? configure = null,
         Context? context = null,
         CancellationToken cancellationToken = default)
-        where TClient : notnull
     {
         ArgumentNullException.ThrowIfNull(invocation);
 

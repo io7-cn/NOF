@@ -16,11 +16,12 @@ The current generator inputs are:
 | Application | `MappableGenerator` | User mapping declaration, attributes, and mapped source/destination types |
 | Application | `ApplicationServiceGenerator` | User `ApplicationService<TService>` and RPC service contract |
 | Application | `ApplicationServiceAutoInjectGenerator` | User `Server.Operation` base-type syntax, `ApplicationService<TService>`, and RPC service contract |
-| Contract | `ApplicationServiceClientGenerator` | User RPC service contract |
-| Contract | `HttpRpcClientGenerator` | User RPC service contract and its transport metadata |
-| Infrastructure | `LocalApplicationServiceClientGenerator` | User or referenced `ApplicationService<TService>` and RPC service contract |
+| Contract | `HttpServiceEndpointGenerator` | User service contract and optional HTTP server metadata |
 
-RPC client names are maintained in one shared source-generator convention. Contract, HTTP, and Local generators all calculate their output from the service/server names without inspecting each other's generated symbols. The generated client interface still implements `IApplicationServiceClient<TService>`, so the C# compiler verifies the service-to-client relationship in the final compilation.
+`ApplicationServiceGenerator` emits server operation bases, mappings and typed static
+`Service.Operation.InvokeAsync` entry points. `HttpServiceEndpointGenerator` emits
+only server binding/serialization metadata. Client-interface, HTTP-client and
+Local-client generators and their shared naming conventions have been removed.
 
 The regression suite runs every generator together in one compilation in both normal and reversed order. This represents a monolithic application that references every NOF package and prevents generator ordering from becoming an implicit contract.
 

@@ -6,13 +6,11 @@ using System.Diagnostics;
 
 namespace NOF.Infrastructure;
 
-public sealed class TracingOutboundMiddleware : ICommandOutboundMiddleware, INotificationOutboundMiddleware, IRequestOutboundMiddleware
+public sealed class TracingOutboundMiddleware : ICommandOutboundMiddleware, INotificationOutboundMiddleware
 {
     public TopologyComparison Compare(ICommandOutboundMiddleware other) => TopologyComparison.DoesNotMatter;
 
     public TopologyComparison Compare(INotificationOutboundMiddleware other) => TopologyComparison.DoesNotMatter;
-
-    public TopologyComparison Compare(IRequestOutboundMiddleware other) => TopologyComparison.DoesNotMatter;
 
     private readonly IHostEnvironment _hostEnvironment;
 
@@ -81,32 +79,4 @@ public sealed class TracingOutboundMiddleware : ICommandOutboundMiddleware, INot
         }
     }
 
-    public async ValueTask InvokeAsync(RequestOutboundContext context, object request, RequestOutboundHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        var rpcMethod = $"{context.ServiceType.DisplayName}.{context.MethodInfo.Name}";
-        using var activity = NOFHostingConstants.Outbound.Source.StartActivity(
-            $"Outbound: {rpcMethod}",
-            ActivityKind.Producer);
-        activity?.SetServiceDeploymentTags(_hostEnvironment);
-
-        var currentActivity = Activity.Current;
-        context.Headers[NOFAbstractionConstants.Transport.Headers.TraceParent] = currentActivity?.ToTraceParent();
-
-        try
-        {
-            await next(context, request, cancellationToken);
-
-            context.Headers.TryGetValue(NOFAbstractionConstants.Transport.Headers.MessageId, out var messageId);
-            activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageId, messageId);
-            activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageType, rpcMethod);
-            context.Headers.TryGetValue(NOFAbstractionConstants.Transport.Headers.TenantId, out var tenantId);
-            activity?.SetTag(NOFHostingConstants.Outbound.Tags.TenantId, tenantId);
-            activity?.SetStatus(ActivityStatusCode.Ok);
-        }
-        catch (Exception ex)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
-        }
-    }
 }

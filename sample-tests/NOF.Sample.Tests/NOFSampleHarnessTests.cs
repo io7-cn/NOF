@@ -11,12 +11,12 @@ namespace NOF.Sample.Tests;
 public sealed class NOFSampleHarnessTests
 {
     [Fact]
-    public async Task LocalRpcHarness_ShouldCreateRootNode_AndQueryItBack()
+    public async Task ServerInvocationHarness_ShouldCreateRootNode_AndQueryItBack()
     {
         await using var host = await CreateHostAsync();
 
-        var createResult = await host.CallAsync<INOFSampleServiceClient, Result>(
-            static (client, context, cancellationToken) => client.CreateConfigNodeAsync(
+        var createResult = await host.CallAsync<Result>(
+            static (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "root-a" },
                 context,
                 cancellationToken),
@@ -26,8 +26,8 @@ public sealed class NOFSampleHarnessTests
 
         Assert.NotNull(createResult.ExpectSuccess());
 
-        var roots = await host.CallAsync<INOFSampleServiceClient, GetRootConfigNodesResponse>(
-            static (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
+        var roots = await host.CallAsync<GetRootConfigNodesResponse>(
+            static (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
                 new GetRootConfigNodesRequest(),
                 context,
                 cancellationToken),
@@ -42,7 +42,7 @@ public sealed class NOFSampleHarnessTests
     }
 
     [Fact]
-    public async Task LocalRpcHarness_ShouldPersistTenantData_AndTriggerInMemoryProjection()
+    public async Task ServerInvocationHarness_ShouldPersistTenantData_AndTriggerInMemoryProjection()
     {
         await using var host = await CreateHostAsync();
 
@@ -51,22 +51,22 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var createParent = await scope.CallAsync<INOFSampleServiceClient, Result>(
-                (client, context, cancellationToken) => client.CreateConfigNodeAsync(
+            var createParent = await scope.CallAsync<Result>(
+                (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
                     cancellationToken));
             Assert.NotNull(createParent.ExpectSuccess());
 
-            var roots = await scope.CallAsync<INOFSampleServiceClient, GetRootConfigNodesResponse>(
-                (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
+            var roots = await scope.CallAsync<GetRootConfigNodesResponse>(
+                (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
                     new GetRootConfigNodesRequest(),
                     context,
                     cancellationToken));
             var root = Assert.Single(roots.Nodes);
 
-            var createChild = await scope.CallAsync<INOFSampleServiceClient, Result>(
-                (client, context, cancellationToken) => client.CreateConfigNodeAsync(
+            var createChild = await scope.CallAsync<Result>(
+                (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,
                     cancellationToken));
@@ -80,8 +80,8 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var parent = await scope.CallAsync<INOFSampleServiceClient, Result<GetConfigNodeByIdResponse>>(
-                (client, context, cancellationToken) => client.GetConfigNodeByIdAsync(
+            var parent = await scope.CallAsync<Result<GetConfigNodeByIdResponse>>(
+                (services, context, cancellationToken) => NOFSampleService.GetConfigNodeById.InvokeAsync(services,
                     new GetConfigNodeByIdRequest { Id = parentId },
                     context,
                     cancellationToken));
@@ -102,10 +102,9 @@ public sealed class NOFSampleHarnessTests
     {
         var builder = NOFTestAppBuilder.Create()
             .AddApplicationPartOf<NOFSampleService>()
-            .AddApplicationPartOf<LocalNOFSampleServiceClient>()
+            .AddApplicationPart(typeof(SampleHarnessMappings).Assembly)
             .AddApplicationService<NOFSampleService>()
-            .AddInMemoryPersistence()
-            .AddLocalApplicationServiceClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
+            .AddInMemoryPersistence();
 
         return await builder.BuildTestHostAsync();
     }

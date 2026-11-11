@@ -115,9 +115,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
             new ApplicationServiceGenerator().AsSourceGenerator(),
-            new ApplicationServiceClientGenerator().AsSourceGenerator(),
-            new HttpRpcClientGenerator().AsSourceGenerator(),
-            new LocalApplicationServiceClientGenerator().AsSourceGenerator()
+            new HttpServiceEndpointGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {
@@ -131,9 +129,8 @@ public sealed class AllSourceGeneratorsMonolithTests
         Assert.Empty(outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
-        Assert.Contains("interface IDemoServiceClient : global::NOF.Contract.IApplicationServiceClient<global::Monolith.IDemoService>", generatedCode);
-        Assert.Contains("partial class HttpDemoServiceClient : IDemoServiceClient", generatedCode);
-        Assert.Contains("class LocalDemoServerClient : global::Monolith.IDemoServiceClient", generatedCode);
+        Assert.DoesNotContain("ServiceClient", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::NOF.Contract.Result> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
     }
 }

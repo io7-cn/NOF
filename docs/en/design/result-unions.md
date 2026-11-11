@@ -88,11 +88,12 @@ also included in NOF's built-in context.
 Replace `PaginatedResult<T>` with `Result<Page<T>>`; successful `Page<T>` has typed
 `Items` and optional `TotalCount`. Replace `StreamingResult<T>` with
 `Result<IAsyncEnumerable<T>>`. If a stream needs a successful message, declare
-`Result<Success<IAsyncEnumerable<T>>>`. Both forms generate streaming clients and
-SSE endpoints, with corresponding `Task<Result<...>>` client return types.
+`Result<Success<IAsyncEnumerable<T>>>`. Both forms support server SSE endpoints and corresponding
+`Task<Result<...>>` server invocation return types. HTTP callers maintain their own
+SSE reader; no client is generated.
 
 ```csharp
-var result = await client.WatchAsync(request, Context.Empty, cancellationToken);
+var result = await OrderService.Watch.InvokeAsync(services, request, Context.Empty, cancellationToken);
 switch (result)
 {
     case IAsyncEnumerable<OrderEvent> events:
@@ -110,8 +111,7 @@ switch (result)
 ```
 
 A pre-stream failure uses ordinary Failure JSON. An explicitly wrapped successful
-stream sends its message in `X-NOF-Result-Message` (Base64 UTF-8), which generated
-clients decode into `Success<IAsyncEnumerable<T>>`. Cross-origin browser applications
+stream sends its message in `X-NOF-Result-Message` (Base64 UTF-8), which an application-owned HTTP reader can decode into `Success<IAsyncEnumerable<T>>`. Cross-origin browser applications
 must expose that header using `WithExposedHeaders(StreamingResponseMetadata.MessageHeader)`.
 Bare streams remain bare. Exceptions during enumeration remain stream failures;
 an initial successful value does not promise successful completion of the stream.

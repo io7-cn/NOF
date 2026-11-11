@@ -14,7 +14,7 @@ description: Add or modify a NOF Roslyn incremental generator/analyzer without d
 
 A generator may inspect only user-authored declarations and stable types from referenced runtime assemblies. It must not require another generator's emitted symbols, members, attributes, interfaces, or base types to appear in Roslyn input.
 
-Generated names and signatures may reference other generated artifacts only when both sides derive them independently from the same user-authored declaration. This is how RPC contract, HTTP client, server, auto-inject, and local-client generators remain order-independent.
+Generated names and signatures may reference other generated artifacts only when both sides derive them independently from the same user-authored declaration. This is how server operation, HTTP endpoint metadata, and auto-inject generators remain order-independent.
 
 ## 3. Wire the Parent Package
 

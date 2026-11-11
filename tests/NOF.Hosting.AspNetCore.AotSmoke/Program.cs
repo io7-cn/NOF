@@ -5,6 +5,7 @@ using NOF.Contract;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -22,7 +23,6 @@ builder.Services.AddScoped<OrderServer.ReadWithMessage, ReadOrderWithMessageHand
 builder.Services.AddScoped<OrderServer.ReadProtected, ReadProtectedOrderHandler>();
 builder.Services.AddScoped<OrderServer.Lookup, LookupOrderHandler>();
 builder.Services.AddApplicationService<PlainOrderService>();
-builder.Services.AddScoped<LocalOrderServerClient>();
 builder.Services.AddRequestInboundMiddleware<ValidateReadOrder>();
 
 await using var app = await builder.BuildAsync();
@@ -31,15 +31,13 @@ app.MapGet("/native/orders/{id}", NativeReadOrderAsync);
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
-    var localClient = new LocalOrderServerClient(scope.ServiceProvider);
-    var preview = await localClient.PreviewAsync(new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
+    var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
     Expect(preview.Label == "preview", "Service operations sharing input/output models did not retain separate identities");
-    var plain = new LocalPlainOrderServiceClient(scope.ServiceProvider);
-    var plainValue = await plain.ReadAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    var plainValue = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
     Expect(plainValue.Label == "local", "A service without a transport declaration could not run locally");
-    Expect(await plain.FindAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
+    Expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
         "A nullable local service response was rejected");
-    var decision = await plain.DecideAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    var decision = await PlainOrderService.Decide.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
     Expect(decision is Failure businessFailure && businessFailure.Code == "order.missing",
         "A business union without an RPC response interface could not run locally");
 }
@@ -49,30 +47,29 @@ using var http = new HttpClient(new InspectBodyHandler(new HttpClientHandler()))
 {
     BaseAddress = new Uri(app.Urls.Single())
 };
-var client = new HttpOrderServiceClient(http);
 var id = Guid.NewGuid();
-var updated = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "shipped" }, Context.Empty);
+var updated = await PutOrderAsync(http, id, "shipped");
 Expect(updated is OrderDto updatedSuccess && updatedSuccess == new OrderDto(id, "shipped", "default"), "Generated PUT did not bind the path and body");
 
-var read = await client.ReadAsync(new ReadOrderRequest { Id = id, Page = 7 }, Context.Empty);
+var read = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=7");
 Expect(read is OrderDto readSuccess && readSuccess == new OrderDto(id, "7", "read"), "Generated GET did not bind the path and query");
 
-var withMessage = await client.ReadWithMessageAsync(new ReadOrderRequest { Id = id }, Context.Empty);
+var withMessage = await GetOutcomeAsync<Result<Success<OrderDto>>>(http, $"/orders/{id}/with-message");
 Expect(withMessage is Success<OrderDto> messagePayload && messagePayload.Data.Id == id && messagePayload.Message == "Read from cache",
     "The optional success wrapper did not retain its data and message");
 
 using var raw = new HttpClient { BaseAddress = http.BaseAddress };
 using var unexposed = await raw.PostAsync("/Decide", new StringContent("{}", Encoding.UTF8, "application/json"));
 Expect(unexposed.StatusCode == HttpStatusCode.NotFound, "A service without HTTP opt-in was exposed over HTTP");
-var value = await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = 7 }, Context.Empty);
-Expect(value == new OrderDto(id, "7", "read"), "Generated HTTP client did not support a plain DTO");
-Expect(await client.FindAsync(new ReadOrderRequest { Id = id }, Context.Empty) is null, "Generated HTTP client did not preserve a nullable response");
-var businessDecision = await client.DecideAsync(new ReadOrderRequest { Id = id }, Context.Empty);
+var value = await GetValueAsync<OrderDto>(http, $"/orders/{id}/value?page=7");
+Expect(value == new OrderDto(id, "7", "read"), "HTTP endpoint did not support a plain DTO");
+Expect(await GetValueAsync<OrderDto?>(http, $"/orders/{id}/nullable", allowNull: true) is null, "HTTP endpoint did not preserve a nullable response");
+var businessDecision = await GetValueAsync<PlainDecision>(http, $"/orders/{id}/decision");
 Expect(businessDecision is Failure decisionFailure && decisionFailure.Code == "order.missing",
     "HTTP did not preserve a business union without IRpcResponse");
 try
 {
-    await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = -1 }, Context.Empty);
+    await GetValueAsync<OrderDto>(http, $"/orders/{id}/value?page=-1");
     throw new InvalidOperationException("A plain DTO operation accepted rejected input");
 }
 catch (ServiceRejectedException rejection)
@@ -85,7 +82,7 @@ var nativeOrder = await JsonSerializer.DeserializeAsync(await native.Content.Rea
 Expect(nativeOrder == new OrderDto(id, "7", "read"), "Native HTTP did not return the use case's plain DTO");
 using var nativeDenied = await raw.GetAsync($"/native/orders/{id}?page=-1");
 Expect(nativeDenied.StatusCode == HttpStatusCode.BadRequest, "Native HTTP did not map an application policy rejection");
-var rpcDenied = await client.ReadAsync(new ReadOrderRequest { Id = id, Page = -1 }, Context.Empty);
+var rpcDenied = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=-1");
 Expect(rpcDenied is Failure readFailure && readFailure.Code == "order.page", "RPC did not map the same use case policy rejection");
 using var forged = await raw.PutAsync($"/orders/{id}",
     new StringContent($$"""{"id":"{{Guid.NewGuid()}}","state":"raw"}""", Encoding.UTF8, "application/json"));
@@ -112,9 +109,9 @@ var culture = CultureInfo.CurrentCulture;
 try
 {
     CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-    var result = await client.LookupAsync(lookup, Context.Empty);
+    var result = await GetOutcomeAsync<Result<string>>(http, "/orders/lookup/" + Uri.EscapeDataString(lookup.Slug!) + "/Shipped/2026-04-10/2026-04-10T09:15:00.0001234Z/12.5/w-17/45/9.75");
     Expect(result is string lookupSuccess && lookupSuccess == "café #1?|Shipped|2026-04-10|2026-04-10T09:15:00.0001234Z|12.5|17|45|9.75",
-        "Generated GET did not round-trip scalar and custom path values");
+        "Server binding did not read scalar and custom path values");
 }
 finally
 {
@@ -128,18 +125,6 @@ Expect(badEnum.StatusCode == HttpStatusCode.BadRequest, "An invalid enum path va
 using var badLegacy = await raw.GetAsync("/orders/lookup/slug/shipped/2026-04-10/2026-04-10T09:15:00Z/12.5/w-17/invalid/9.75");
 Expect(badLegacy.StatusCode == HttpStatusCode.BadRequest, "An invalid static TryParse path value was accepted");
 
-foreach (var invalidSlug in new string?[] { null, "", ".", "..", "a/b", "a\\b" })
-{
-    try
-    {
-        await client.LookupAsync(lookup with { Slug = invalidSlug }, Context.Empty);
-        throw new InvalidOperationException("The generated client accepted an invalid path segment");
-    }
-    catch (ArgumentException exception) when (exception.ParamName == nameof(LookupOrderRequest.Slug))
-    {
-    }
-}
-
 using var badBody = await raw.PutAsync($"/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
 Expect(badBody.StatusCode == HttpStatusCode.BadRequest, "A required body field was omitted");
 
@@ -147,7 +132,7 @@ using var denied = await raw.GetAsync($"/orders/{id}/protected");
 Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count > 0,
     "Generated route did not preserve NOF authorization");
 
-var failure = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "fail" }, Context.Empty);
+var failure = await PutOrderAsync(http, id, "fail");
 Expect(failure is Failure rejected && rejected.Code == "order.rejected", "Generated route did not serialize the business failure");
 
 using var openApi = JsonDocument.Parse(await raw.GetStringAsync("/openapi/v1.json"));
@@ -178,11 +163,11 @@ static void Expect(bool condition, string message)
 }
 
 static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync(
-    Guid id, int? page, LocalOrderServerClient client, CancellationToken cancellationToken)
+    Guid id, int? page, IServiceProvider services, CancellationToken cancellationToken)
 {
     try
     {
-        return TypedResults.Ok(await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken));
+        return TypedResults.Ok(await OrderServer.ReadValue.InvokeAsync(services, new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken));
     }
     catch (ServiceRejectedException rejected)
     {
@@ -190,6 +175,28 @@ static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync
             title: rejected.Failure.Code, detail: rejected.Failure.Message);
     }
 }
+
+static async Task<T> GetValueAsync<T>(HttpClient http, string uri, bool allowNull = false)
+{
+    using var response = await http.GetAsync(uri);
+    return await HttpRpcTransportResultReader.ReadValueAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), default, allowNull);
+}
+
+static async Task<T> GetOutcomeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(HttpClient http, string uri)
+    where T : IRpcResponse<T>
+{
+    using var response = await http.GetAsync(uri);
+    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), default);
+}
+
+static async Task<Result<OrderDto>> PutOrderAsync(HttpClient http, Guid id, string state)
+{
+    using var response = await http.PutAsync($"/orders/{id}", new StringContent(
+        JsonSerializer.Serialize(new UpdateBody(state), JsonSerializerOptions.NOF.GetRequiredTypeInfo<UpdateBody>()), Encoding.UTF8, "application/json"));
+    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<OrderDto>>(), default);
+}
+
+public sealed record UpdateBody(string State);
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/orders")]
 public interface IOrderService : IApplicationService
@@ -430,7 +437,7 @@ public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : Delega
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             if (body.RootElement.TryGetProperty("id", out _) || !body.RootElement.TryGetProperty("state", out _))
             {
-                throw new InvalidOperationException("The generated client sent an unexpected JSON body");
+                throw new InvalidOperationException("The explicit HTTP request sent an unexpected JSON body");
             }
         }
 
@@ -440,6 +447,7 @@ public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : Delega
 
 [JsonSerializable(typeof(Result))]
 [JsonSerializable(typeof(OrderDto))]
+[JsonSerializable(typeof(UpdateBody))]
 [JsonSerializable(typeof(PlainDecision))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 [JsonSerializable(typeof(Result<Success<OrderDto>>))]

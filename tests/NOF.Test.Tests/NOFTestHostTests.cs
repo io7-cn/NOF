@@ -106,14 +106,14 @@ public class NOFTestHostTests
     }
 
     [Fact]
-    public async Task CallAsync_ShouldUseScopeContextAndConfiguredClient()
+    public async Task CallAsync_ShouldUseScopeContextAndServiceProvider()
     {
-        var builder = NOFTestAppBuilder.Create()
-            .AddLocalApplicationServiceClient<ITestClient, TestClient>();
+        var builder = NOFTestAppBuilder.Create();
+        builder.Services.AddScoped<ITestClient, TestClient>();
 
         await using var host = await builder.BuildTestHostAsync();
-        var result = await host.CallAsync<ITestClient, string>(
-            (client, context, cancellationToken) => client.EchoAsync(context, cancellationToken),
+        var result = await host.CallAsync<string>(
+            (services, context, cancellationToken) => services.GetRequiredService<ITestClient>().EchoAsync(context, cancellationToken),
             configure: scope => scope.SetContextItem("case", "host-call"));
 
         Assert.Equal("host-call", result);

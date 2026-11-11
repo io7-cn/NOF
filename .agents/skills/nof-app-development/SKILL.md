@@ -22,7 +22,11 @@ Application code should remain provider-neutral by using `IDbContext` and `IRepo
 
 - Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI, calling generated local service clients. There is no separate IRequestHandler/IRequestExecutor API or RPC forwarding class. ServiceExecution is an internal invocation outcome, not a wire envelope. Preserve application authorization and tenant policies across entry points.
+Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI, calling Service.Operation.InvokeAsync(services, request, context, ct). There is no separate IRequestHandler/IRequestExecutor API or RPC forwarding class. ServiceExecution is an internal invocation outcome, not a wire envelope. Preserve application authorization and tenant policies across entry points.
+
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. Optional HTTP annotations generate server metadata only. Dedicated REST endpoint-module APIs remain future work.
+
+Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 
 ## Message and RPC Types
 
@@ -39,7 +43,7 @@ All generated RPC handlers, command handlers, notification handlers, and in-memo
 
 | Interface | Method | Use |
 |---|---|---|
-| Generated RPC client | `OperationAsync(request, context, ct)` | transport-selected request/response or stream |
+| Generated server operation | `Service.Operation.InvokeAsync(services, request, context, ct)` | policy-controlled in-process invocation; remote callers own HTTP integration |
 | `ICommandSender` | `SendAsync(command, context, ct)` | immediate command dispatch |
 | `ICommandSender` | `DeferSendAsync(command, context, ct)` | stage a command in the current outbox |
 | `ICommandSender` | `DeferSendOrderedAsync(command, orderKey, context, ..., ct)` | stage ordered command delivery |
@@ -63,7 +67,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 | `[Failure(...)]` | generates static `Failure` members |
 | `[Mappable<TSource, TDestination>]` | generates expression mapping registration on a `partial static` class |
 | `[TransportOverHttp(style, prefix)]` | selects controller RPC or JSON-RPC HTTP transport |
-| `[TransportOverMemory]` | limits a contract to generated in-process clients |
+| `[TransportOverMemory]` | limits a contract to in-process server invocation |
 | `[HttpEndpoint]` | declares controller-style HTTP verb and operation route |
 
 ## Decision Guide
@@ -72,7 +76,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 |---|---|
 | expose controller-style HTTP RPC | `[TransportOverHttp(HttpRpcStyle.ControllerRpc)]`, method `[HttpEndpoint]`, `AddApplicationService<T>()` |
 | expose JSON-RPC | `[TransportOverHttp(HttpRpcStyle.JsonRpc, routePrefix)]`, no method `[HttpEndpoint]` |
-| keep RPC in process | `[TransportOverMemory]` and generated local client |
+| keep RPC in process | no transport attribute (or `[TransportOverMemory]`) and Service.Operation.InvokeAsync |
 | persist application data | `IDbContext` / `IRepository<T>`; choose EF Core or NHibernate in the host |
 | cache data | `CacheKey<T>` + `ICacheService`; optionally replace the memory rider with Redis |
 | send cross-boundary work | `ICommandSender` / `INotificationPublisher`, passing the current `Context` |

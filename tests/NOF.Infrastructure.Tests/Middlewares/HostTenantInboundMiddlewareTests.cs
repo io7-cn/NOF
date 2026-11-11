@@ -68,24 +68,6 @@ public sealed class HostTenantInboundMiddlewareTests
         Assert.Equal("caller", Context.Current.TenantId);
     }
 
-    [Theory]
-    [InlineData(nameof(IHostTenantTestService.Host), "host")]
-    [InlineData(nameof(IHostTenantTestService.MetadataHost), "host")]
-    [InlineData(nameof(IHostTenantTestService.Regular), "existing")]
-    [InlineData(nameof(IHostTenantTestService.Disabled), "existing")]
-    public async Task Outbound_ShouldOverrideTenantHeaderOnlyForHostMethods(string method, string expectedTenant)
-    {
-        var context = new RequestOutboundContext(Context.Empty.WithTenantId("explicit"))
-        {
-            ServiceType = typeof(IHostTenantTestService),
-            MethodInfo = typeof(IHostTenantTestService).GetMethod(method)!
-        };
-        context.Headers[NOFAbstractionConstants.Transport.Headers.TenantId] = "existing";
-        await new TenantHeaderOutboundMiddleware().InvokeAsync(context, new Empty(),
-            static (_, _, _) => ValueTask.CompletedTask, default);
-        Assert.Equal(expectedTenant, context.Headers[NOFAbstractionConstants.Transport.Headers.TenantId]);
-    }
-
     private static ServiceProvider CreateProvider(bool authenticated)
     {
         var builder = NOFTestAppBuilder.Create();
@@ -101,7 +83,6 @@ public sealed class HostTenantInboundMiddlewareTests
         builder.Services.AddSingleton<TenantProbe>();
         builder.Services.AddScoped<TenantDependency>();
         builder.Services.AddScoped<TenantProbeHandler>();
-        builder.Services.AddScoped<IRequestOutboundPipelineExecutor, RequestOutboundPipelineExecutor>();
         builder.Services.AddScoped<HostTenantTestServer>();
         var registry = new ApplicationServiceRegistry();
         registry.Add(new ApplicationServiceRegistration(typeof(IHostTenantTestService), typeof(HostTenantTestServer)));
@@ -126,7 +107,7 @@ public interface IHostTenantTestService : IApplicationService
     Result Disabled(Empty request);
 }
 
-public interface IHostTenantTestServiceClient : IApplicationServiceClient<IHostTenantTestService>;
+
 
 public sealed class TenantProbe
 {

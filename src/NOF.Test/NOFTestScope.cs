@@ -109,20 +109,13 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
             roleType: ClaimTypes.Role)));
     }
 
-    public TClient GetRpcClient<TClient>() where TClient : notnull
-    {
-        return GetRequiredService<TClient>();
-    }
-
-    public Task<TResult> CallAsync<TClient, TResult>(
-        Func<TClient, Context, CancellationToken, Task<TResult>> invocation,
-        Context? context = null,
-        CancellationToken cancellationToken = default)
-        where TClient : notnull
+    /// <summary>Executes a server operation using this scope's service provider and explicit context.</summary>
+    public Task<TResult> CallAsync<TResult>(
+        Func<IServiceProvider, Context, CancellationToken, Task<TResult>> invocation,
+        Context? context = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(invocation);
-
-        return invocation(GetRpcClient<TClient>(), context ?? Context, cancellationToken);
+        return invocation(_scope.ServiceProvider, context ?? Context, cancellationToken);
     }
 
     public Task SendAsync<TCommand>(TCommand command, Context? context = null, CancellationToken cancellationToken = default)

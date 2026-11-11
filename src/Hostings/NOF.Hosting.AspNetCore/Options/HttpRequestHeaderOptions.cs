@@ -3,12 +3,12 @@ using NOF.Abstraction;
 namespace NOF.Hosting.AspNetCore;
 
 /// <summary>
-/// Configuration options for propagating selected inbound HTTP headers to outbound RPC requests.
+/// Selects HTTP request headers admitted into the application execution context.
 /// </summary>
-public class HttpHeaderOutboundOptions
+public class HttpRequestHeaderOptions
 {
     /// <summary>
-    /// Gets the inbound HTTP header name patterns that can be propagated to outbound requests.
+    /// Gets the inbound HTTP header name patterns available to application policies.
     /// The asterisk character matches any sequence of characters.
     /// </summary>
     public List<string> AllowedHeaders { get; set; } =

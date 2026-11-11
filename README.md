@@ -98,12 +98,13 @@ See the [Result Union migration guide](docs/en/design/result-unions.md) ([简体
 
 ## Streaming RPC
 
-NOF RPC contracts can expose server-streaming operations by returning `Result<IAsyncEnumerable<T>>` from the contract surface. Generated clients normalize those methods to `Task<Result<IAsyncEnumerable<T>>>`.
+NOF RPC contracts can expose server-streaming operations by returning `Result<IAsyncEnumerable<T>>` from the contract surface. Generated server operation entries return `Task<Result<IAsyncEnumerable<T>>>`. Client generation is completely removed; remote HTTP integration is maintained by callers.
 
 ```csharp
 public record WatchOrdersRequest(Guid CustomerId);
 public record OrderEvent(Guid OrderId, string Status);
 
+[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
 public interface IOrderService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
@@ -111,10 +112,10 @@ public interface IOrderService : IApplicationService
 }
 ```
 
-Client usage stays result-first:
+Server invocation stays result-first:
 
 ```csharp
-var result = await orderClient.WatchAsync(new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
+var result = await OrderService.Watch.InvokeAsync(services, new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
 if (result is IAsyncEnumerable<OrderEvent> events)
 {
     await foreach (var item in events.WithCancellation(cancellationToken))

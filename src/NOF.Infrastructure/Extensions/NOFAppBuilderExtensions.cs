@@ -50,6 +50,7 @@ public static partial class NOFInfrastructureExtensions
                 builder.Environment.InstanceId)));
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
             builder.Services.TryAddScoped<ApplicationServiceInvocationResolver>();
+            builder.Services.TryAddScoped<IApplicationServiceInvoker, ApplicationServiceInvocation>();
 
             builder.Services.TryAddSingleton<MemoryCacheServiceRiderState>();
             builder.Services.TryAddSingleton<CacheServiceLocalLockState>();
@@ -114,12 +115,10 @@ public static partial class NOFInfrastructureExtensions
             #region Outbound Middlewares
             builder.Services.AddCommandOutboundMiddleware<TenantHeaderOutboundMiddleware>();
             builder.Services.AddNotificationOutboundMiddleware<TenantHeaderOutboundMiddleware>();
-            builder.Services.AddRequestOutboundMiddleware<TenantHeaderOutboundMiddleware>();
             builder.Services.AddCommandOutboundMiddleware<MessageIdOutboundMiddleware>();
             builder.Services.AddNotificationOutboundMiddleware<MessageIdOutboundMiddleware>();
             builder.Services.AddCommandOutboundMiddleware<TracingOutboundMiddleware>();
             builder.Services.AddNotificationOutboundMiddleware<TracingOutboundMiddleware>();
-            builder.Services.AddRequestOutboundMiddleware<TracingOutboundMiddleware>();
             #endregion
 
             #region Inbound Middlewares

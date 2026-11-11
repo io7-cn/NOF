@@ -42,7 +42,7 @@ public interface IOrderService : IApplicationService;
 
 `TransportOverAttribute` is abstract and defined in `NOF.Contract`, allowing callers and implementations to discover the same transport choice from the service interface. The RPC service analyzer ensures that transport attributes are only placed on interfaces inheriting `IApplicationService` and that a contract declares at most one transport; no declaration means local-only and never implicitly exposes HTTP. HTTP route prefixes must be application-relative paths; a leading `/` is optional, while absolute URIs, route parameters, query strings, fragments, empty path segments, and path traversal segments are rejected. `AddApplicationService<TApplicationService>()` selects the endpoint mapper from `HttpRpcStyle`: `ControllerRpc` prepends the optional prefix to operation routes, and `JsonRpc` maps one JSON-RPC endpoint at that route. When a JSON-RPC prefix is omitted, the endpoint is mapped at `/`.
 
-`[TransportOverMemory]` contracts are ignored by the ASP.NET Core transport and are never mapped to endpoints. They remain callable through their generated local clients inside the host process and must not declare `[HttpEndpoint]`.
+`[TransportOverMemory]` contracts are ignored by the ASP.NET Core transport and are never mapped to endpoints. They remain callable through Service.Operation.InvokeAsync inside the host process and must not declare `[HttpEndpoint]`.
 
 ASP.NET Core endpoint mapping is implemented as an `IApplicationServiceTransport` registered in DI. The framework-level initialization step lives in `NOF.Infrastructure`; this package owns only the HTTP-specific contract inspection and endpoint mapping behavior.
 

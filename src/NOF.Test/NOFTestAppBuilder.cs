@@ -68,14 +68,6 @@ public sealed class NOFTestAppBuilder : IHostApplicationBuilder
         return this;
     }
 
-    public NOFTestAppBuilder AddLocalApplicationServiceClient<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>()
-        where TService : class
-        where TImplementation : class, TService
-    {
-        Services.ReplaceOrAddScoped<TService, TImplementation>();
-        return this;
-    }
-
     private void ConfigureDefaultTestServices()
     {
         this.AddNOFInfrastructure();

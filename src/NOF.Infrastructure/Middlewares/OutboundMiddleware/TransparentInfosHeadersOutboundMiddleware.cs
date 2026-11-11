@@ -9,17 +9,13 @@ namespace NOF.Infrastructure;
 /// </summary>
 public sealed class TenantHeaderOutboundMiddleware :
     ICommandOutboundMiddleware,
-    INotificationOutboundMiddleware,
-    IRequestOutboundMiddleware
+    INotificationOutboundMiddleware
 {
     public TopologyComparison Compare(ICommandOutboundMiddleware other)
         => other is MessageIdOutboundMiddleware ? TopologyComparison.Before : TopologyComparison.DoesNotMatter;
 
     public TopologyComparison Compare(INotificationOutboundMiddleware other)
         => other is MessageIdOutboundMiddleware ? TopologyComparison.Before : TopologyComparison.DoesNotMatter;
-
-    public TopologyComparison Compare(IRequestOutboundMiddleware other)
-        => TopologyComparison.DoesNotMatter;
 
     public ValueTask InvokeAsync(CommandOutboundContext context, object message, CommandOutboundHandlerDelegate next, CancellationToken cancellationToken)
     {
@@ -31,20 +27,6 @@ public sealed class TenantHeaderOutboundMiddleware :
     {
         ApplyTenantHeader(context);
         return next(context, message, cancellationToken);
-    }
-
-    public ValueTask InvokeAsync(RequestOutboundContext context, object request, RequestOutboundHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        if (UseHostTenantAttribute.IsRequired(context.MethodInfo))
-        {
-            context.Headers[NOFAbstractionConstants.Transport.Headers.TenantId] = NOFAbstractionConstants.Tenant.HostId;
-        }
-        else
-        {
-            ApplyTenantHeader(context);
-        }
-
-        return next(context, request, cancellationToken);
     }
 
     private void ApplyTenantHeader(Context context)
@@ -59,9 +41,6 @@ public sealed class TenantHeaderOutboundMiddleware :
                     break;
                 case NotificationOutboundContext notificationContext when !notificationContext.Headers.ContainsKey(NOFAbstractionConstants.Transport.Headers.TenantId):
                     notificationContext.Headers[NOFAbstractionConstants.Transport.Headers.TenantId] = tenantId;
-                    break;
-                case RequestOutboundContext requestContext when !requestContext.Headers.ContainsKey(NOFAbstractionConstants.Transport.Headers.TenantId):
-                    requestContext.Headers[NOFAbstractionConstants.Transport.Headers.TenantId] = tenantId;
                     break;
             }
         }

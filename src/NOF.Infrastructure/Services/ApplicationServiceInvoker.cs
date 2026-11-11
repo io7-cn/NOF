@@ -22,34 +22,28 @@ public static class ApplicationServiceInvoker
         ArgumentNullException.ThrowIfNull(serviceMethodInfo);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out _))
+        {
+            context = context.WithTenantId(Context.Current.TenantId);
+        }
+        var callerUser = callerServiceProvider.GetRequiredService<IUserContext>();
+        var identities = callerUser.User.Identities.Select(static identity => identity.Clone()).ToArray();
+        await using var inboundScope = callerServiceProvider.CreateAsyncScope();
+        var inboundUser = inboundScope.ServiceProvider.GetRequiredService<IUserContext>();
+        if (!ReferenceEquals(callerUser, inboundUser))
+        {
+            inboundUser.Logout();
+            inboundUser.User.AddIdentities(identities);
+        }
+        inboundScope.ServiceProvider.ResolveDaemonServices();
         var operationName = serviceMethodInfo.Name;
-
-        var outboundPipeline = callerServiceProvider.GetRequiredService<IRequestOutboundPipelineExecutor>();
-        var outboundContext = new RequestOutboundContext(context)
-        {
-            ServiceType = typeof(TService),
-            MethodInfo = serviceMethodInfo
-        };
-
-        await outboundPipeline.ExecuteAsync(outboundContext, request, async (currentContext, currentRequest, ct) =>
-        {
-            await using var inboundScope = callerServiceProvider.CreateAsyncScope();
-            inboundScope.ServiceProvider.ResolveDaemonServices();
-
-            var invocationResolver = inboundScope.ServiceProvider.GetRequiredService<ApplicationServiceInvocationResolver>();
-            var resolution = invocationResolver.Resolve<TService>(operationName);
-            var inboundPipeline = inboundScope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>();
-            var inboundContext = await inboundPipeline.ExecuteAsync(
-                currentRequest,
-                resolution.HandlerMapping.HandlerType,
-                resolution.HandlerMapping.ReturnType,
-                typeof(TService),
-                operationName,
-                currentContext.Headers,
-                ct).ConfigureAwait(false);
-            currentContext.Execution = inboundContext.Execution;
-        }, cancellationToken).ConfigureAwait(false);
-
-        return outboundContext.Execution;
+        var resolution = inboundScope.ServiceProvider.GetRequiredService<ApplicationServiceInvocationResolver>()
+            .Resolve<TService>(operationName);
+        var inboundPipeline = inboundScope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>();
+        var execution = await inboundPipeline.ExecuteAsync(
+            request, resolution.HandlerMapping.HandlerType, resolution.HandlerMapping.ReturnType,
+            typeof(TService), operationName, null, cancellationToken, context).ConfigureAwait(false);
+        return execution.Execution;
     }
 }

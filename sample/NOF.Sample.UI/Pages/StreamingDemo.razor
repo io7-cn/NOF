@@ -1,7 +1,7 @@
 @page "/streaming-demo"
 @implements IDisposable
 @inject IMessageService Message
-@inject INOFSampleServiceClient NOFService
+@inject ISampleApi NOFService
 
 <PageTitle>流式传输 Demo</PageTitle>
 
@@ -46,7 +46,7 @@
 
             <Alert Type="@AlertType.Info" ShowIcon="true">
                 <ChildContent>
-                    这个页面通过 `INOFSampleServiceClient` 调用 `WatchSampleStreamAsync`，
+                    这个页面通过 `ISampleApi` 调用 `WatchSampleStreamAsync`，
                     成功时走 `StreamingResult&lt;SampleStreamEvent&gt;` + HTTP SSE 链路，
                     勾选“返回失败 JSON”后会改为演示服务端返回 JSON failure 的 fallback 路径。
                 </ChildContent>

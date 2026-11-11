@@ -6,16 +6,16 @@ Application operations use generated ApplicationService<TService> containers ind
 
 ## Current Invocation Model
 
-- RPC operations: call `IApplicationService` methods through generated RPC clients or local server dispatch.
+- RPC operations: call `IApplicationService` methods through generated Service.Operation.InvokeAsync server entry points.
 - Command sending: use `ICommandSender`.
 - Notification publishing: use `INotificationPublisher`.
 - Deferred dispatch: await `ICommandSender.DeferSendAsync(message, context, cancellationToken)` and `INotificationPublisher.DeferPublishAsync(message, context, cancellationToken)` to stage outbox messages before saving the same `IDbContext`. With an explicit transaction, durability requires `CommitAsync()` after `SaveChangesAsync()`.
-- Streaming RPC operations use `Result<IAsyncEnumerable<T>>` at the contract layer, `Task<Result<IAsyncEnumerable<T>>>` at the client layer, and `IAsyncEnumerable<T>` inside application handlers.
+- Streaming operations use `Result<IAsyncEnumerable<T>>` in the contract and `Task<Result<IAsyncEnumerable<T>>>` in server handlers and generated invocation entries.
 
 ## Notes
 
 - HTTP exposure for RPC services is registered through `builder.AddApplicationService<TApplicationService>()` or `builder.Services.AddApplicationService<TApplicationService>()` and mapped automatically during application initialization.
 - OpenAPI registration is always enabled by `NOFWebApplicationBuilder.Create(args)`, but `app.MapOpenApi()` remains an explicit host decision.
-- Application service operations directly implement business logic; native HTTP adapters call generated local clients and use ASP.NET Core response types.
-- `ApplicationService<TService>` discovery generates `Local{ApplicationServiceName}Client`; the client interface is selected through `IApplicationServiceClient<TService>` rather than a naming convention or marker attribute.
+- Application service operations directly implement business logic; native HTTP adapters call generated server operation entries and use ASP.NET Core response types.
+- No client interfaces, HTTP Clients or Local Clients are generated. Remote integrations are maintained by their calling applications.
 - ASP.NET Core hosting maps streaming RPC HTTP endpoints to .NET 11 server-sent events.

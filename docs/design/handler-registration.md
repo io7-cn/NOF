@@ -1,40 +1,36 @@
 # Handler Registration
 
-## Current Model (Sample-Aligned)
-
-NOF no longer depends on calling `AddAllHandlers()` or `Add*AutoInjectServices()` from user code.
-
-The runtime model is:
-
-1. Source generators emit assembly-level initializers (`[assembly: AssemblyInitializeAttribute<...>]`).
-2. Initializers write metadata into the builder-owned `Registry`:
-- `Registry.AutoInjectRegistry`
-- `Registry.RequestHandlerRegistry`
-- `Registry.CommandHandlerRegistry`
-- `Registry.NotificationHandlerRegistry`
-- `Registry.EventHandlerRegistry`
-- `MappingRegistry`
-3. At startup, `builder.AddApplicationPart(assembly)` executes those initializers.
-4. Registry collections freeze on first read; indexed registries build their indexes when frozen.
-5. Registration steps wire the runtime:
-- `AutoInjectServiceRegistrationStep`
-- `RequestHandlerServiceRegistrationStep`
-- `HandlerServiceRegistrationStep`
-
-This is the same pattern used by the sample app:
+Source generators emit assembly-level `AssemblyInitializeAttribute` initializers.
+`builder.AddApplicationPart(assembly)` runs them against the current IServiceCollection.
+Initializers add native DI descriptors and update collection-local registries; there is
+no process-wide Registry, AddAllHandlers call or service-registration-step pipeline.
 
 ```csharp
-builder.AddApplicationPart(typeof(NOFSampleService).Assembly)
-    .AddApplicationPart(typeof(TokenAuthorityService).Assembly);
+builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
+builder.AddApplicationService<NOFSampleService>();
 ```
 
-## Practical Guidance
+ApplicationServiceAutoInjectGenerator derives each scoped operation registration from
+the user-authored Service.Operation base syntax and service contract. It does not read
+another generator's output. AddApplicationService registers the service container and
+its mappings in ApplicationServiceRegistry; no per-operation host registration is needed.
+Operation identity is service contract plus operation name, so operations may share
+request/response types. Call the generated server entry:
 
-- If handlers or mappers are not discovered, first check that the assembly containing them is added via `AddApplicationPart(...)`.
-- Keep RPC contracts (`IApplicationService`) and their implementations in assemblies that are loaded as application parts.
-- Transport integrations such as RabbitMQ consume the frozen handler registries, so stale or missing application parts will prevent consumer registration.
-- `AutoInjectRegistry` stores native `ServiceDescriptor` instances; there is no separate `AutoInjectServiceRegistration` model anymore.
+```csharp
+var response = await NOFSampleService.GetRootConfigNodes.InvokeAsync(
+    services, request, context, cancellationToken);
+```
 
-## Application service operations
+No client interfaces, HTTP Clients or Local Clients are generated. Server invocation
+preserves authorization, tenant normalization and scoped execution policies.
 
-Declare a partial ApplicationService<TService> container and implement its generated Service.Operation base. ApplicationServiceAutoInjectGenerator registers operation implementations as scoped services through AddApplicationPart. Register the service container with AddApplicationService<TService>(); no per-operation registration is needed. Identity is the service contract plus operation name, so different operations can share input/output models. See the [migration guide](../en/design/application-requests.md).
+CommandHandlerRegistry, NotificationHandlerRegistry, EventHandlerRegistry,
+MappingRegistry and ApplicationServiceRegistry are DI-owned singleton instances and
+freeze on first read. Register application parts before execution/transport initialization.
+If handlers or mappings are missing, add the assembly containing their generated
+initializers, including test-local mappings. NOF hosts already add the calling assembly;
+add a separate Application assembly explicitly. Concrete messaging adapters consume
+their applicable frozen registries during initialization.
+
+See the [application service migration guide](../en/design/application-requests.md).

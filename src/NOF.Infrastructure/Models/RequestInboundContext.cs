@@ -22,6 +22,9 @@ public sealed class RequestInboundContext : Context
 
     public IDictionary<string, string?> ResponseHeaders => _state.ResponseHeaders;
 
+    /// <summary>Whether identity was copied from the caller's trusted local scope rather than an HTTP token.</summary>
+    public bool IsLocalInvocation { get; set; }
+
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public required Type ServiceType { get; init; }
 
@@ -54,6 +57,7 @@ public sealed class RequestInboundContext : Context
         HandlerMethodInfo = source.HandlerMethodInfo;
         RequestType = source.RequestType;
         ResponseType = source.ResponseType;
+        IsLocalInvocation = source.IsLocalInvocation;
     }
 
     public RequestInboundContext()

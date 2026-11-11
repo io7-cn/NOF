@@ -62,6 +62,11 @@ public sealed class AuthenticationResourceServerInboundMiddleware :
 
     public async ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
     {
+        if (context.IsLocalInvocation)
+        {
+            await next(context, request, cancellationToken);
+            return;
+        }
         var executionContext = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
         await next(executionContext, request, cancellationToken);
     }

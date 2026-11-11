@@ -1,121 +1,35 @@
 # NOF.Test
 
-Testing harness for applications built with the [NOF Framework](https://github.com/XmmShp/NOF).
-
-## Overview
-
-`NOF.Test` is designed for application developers using NOF who want to test Domain/Application/Infrastructure behavior with the same DI, middleware, tenant, user, and local RPC semantics used by the real app.
-
-It helps you write:
-
-- Handler and service tests with a lightweight NOF-aware host
-- Local RPC scenario tests without booting a full web server
-- Integration-style tests that exercise tenant, user, tracing, caching, persistence, and in-memory event flows
-
-## What It Provides
-
-### `NOFTestAppBuilder`
-
-Creates a lightweight host builder for tests while still going through the NOF registration pipeline.
-
-Object storage uses `MemoryObjectStorageRider` by default, with state isolated per test host. To test durable local storage, explicitly call `builder.Services.AddFileSystemObjectStorage(options => options.RootPath = testDirectory)`.
-
-```csharp
-var builder = NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<MyApplicationService>()
-    .AddApplicationService<MyApplicationService>()
-    .AddInMemoryPersistence()
-    .AddLocalApplicationServiceClient<IMyServiceClient, LocalMyApplicationServiceClient>();
-
-await using var host = await builder.BuildTestHostAsync();
-```
-
-Common builder helpers:
-
-- `ConfigureServices(...)`
-- `AddApplicationPartOf<TMarker>()`
-- `AddApplicationPart(Assembly)`
-- `AddApplicationService<TApplicationService>()`
-- `AddInMemoryPersistence()`
-- `AddLocalApplicationServiceClient<TService, TImplementation>()`
-
-`LocalMyApplicationServiceClient` is generated from `MyApplicationService : ApplicationService<IMyService>`; tests do not declare a `LocalApplicationServiceClientAttribute` or an empty partial client class.
-
-### `NOFTestHost`
-
-Wraps the built `IHost` and provides convenient helpers for application tests:
-
-- `CreateScope()`
-- `CreateScope(configure => ...)`
-- `GetRequiredService<T>()`
-- `ExecuteAsync(scope => ...)`
-- `CallAsync<TClient, TResult>(...)`
-- `SendAsync<TCommand>(...)`
-- `PublishAsync<TNotification>(...)`
-
-### `NOFTestScope`
-
-Represents a scoped test execution context. It makes it easy to configure execution context before invoking application logic:
-
-- `SetTenant(...)`
-- `SetTracing(...)`
-- `SetUser(...)`
-- `SetAnonymousUser()`
-- `SetContext(...)`
-- `SetContextItem(...)`
-- `SetContextItems(...)`
-- `RemoveContextItem(...)`
-- `GetRpcClient<TClient>()`
-- `CallAsync<TClient, TResult>(...)`
-- `SendAsync(...)`
-- `PublishAsync(...)`
-
-When a test scope is configured, it binds its execution context to `Context.Current`. NOF also activates scoped daemon services so ambient conveniences such as `Mapper`, `IdGenerator`, and `EventPublisher` behave the same way they do in normal NOF execution scopes. Use explicit overloads when a test needs to provide a specific context, mapper, or publisher.
-
-```csharp
-using var scope = host.CreateScope();
-
-scope.SetTenant("tenant-a")
-    .SetUser("user-1", "Alice", ["orders.read"]);
-
-var result = await scope.CallAsync<IOrdersServiceClient, Result<GetOrderResponse>>(
-    (client, context, cancellationToken) => client.GetOrderAsync(
-        new GetOrderRequest { Id = orderId },
-        context,
-        cancellationToken));
-```
-
-You can also keep the full Arrange-Act-Assert flow inside a single scope:
+Test hosting helpers for NOF application services, messaging and in-memory persistence.
 
 ```csharp
 await using var host = await NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<NOFSampleService>()
-    .AddApplicationService<NOFSampleService>()
+    .AddApplicationPartOf<OrderService>()
+    .AddApplicationService<OrderService>()
     .AddInMemoryPersistence()
-    .AddLocalApplicationServiceClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>()
     .BuildTestHostAsync();
 
-var roots = await host.ExecuteAsync(async scope =>
-{
-    scope.SetTenant("tenant-a")
-        .SetUser("user-1", "Alice")
-        .SetContextItem("case", "create-root");
-
-    await scope.CallAsync<INOFSampleServiceClient, Result>(
-        (client, context, cancellationToken) => client.CreateConfigNodeAsync(
-            new CreateConfigNodeRequest { Name = "root-a" },
-            context,
-            cancellationToken));
-
-    return await scope.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
-        (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
-            new GetRootConfigNodesRequest(),
-            context,
-            cancellationToken));
-});
+var result = await host.CallAsync<Result<OrderDto>>(
+    (services, context, ct) => OrderService.Get.InvokeAsync(
+        services, new GetOrderRequest(orderId), context, ct),
+    configure: scope => scope.SetTenant("tenant-a").SetUser("user-1", "Alice"));
 ```
 
-See [`sample-tests/NOF.Sample.Tests`](file:///Users/bytedance/Workspace/koala-dir/NOF/sample-tests/NOF.Sample.Tests) for a runnable sample harness project.
+`CallAsync<TResult>` accepts `(IServiceProvider, Context, CancellationToken)` and
+returns the operation's task. Client generation, `AddLocalApplicationServiceClient`
+and `GetRpcClient` have been removed. Add every assembly with generated initializers
+explicitly, including test assemblies declaring mappings.
+
+`NOFTestHost` exposes CreateScope, ExecuteAsync, CallAsync, SendAsync and PublishAsync.
+Inside ExecuteAsync, configure the scope with SetTenant, SetUser, SetAnonymousUser,
+SetTracing, SetContext, SetContextItem, SetContextItems or RemoveContextItem; resolve
+dependencies with GetRequiredService. Scope CallAsync uses the configured Context.
+Daemon services and Context.Current are bound for scoped ambient conveniences.
+Server invocation still creates its own policy-controlled inbound scope; use explicit
+context and dependency APIs when tests need to observe those boundaries.
+
+See [sample harness tests](../../sample-tests/NOF.Sample.Tests/NOFSampleHarnessTests.cs)
+and the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Installation
 

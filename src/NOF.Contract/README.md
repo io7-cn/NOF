@@ -42,7 +42,7 @@ public interface IPlatformUserService : IApplicationService
 
 The default NOF request pipeline authorizes the caller normally, then selects the host tenant before resolving the handler and its dependencies. This applies to HTTP and in-process RPC. The method's explicit `Context` and `Context.Current` both use the host tenant; the caller's context is restored after the invocation. The attribute selects execution tenancy and does not grant host permissions or bypass authorization.
 
-The built-in tenant-header outbound middleware sends the host tenant for marked methods. Custom client tenant selectors can check `UseHostTenantAttribute.IsRequired(methodInfo)`. The metadata key is `nof.tenant.use_host`; `[Metadata(UseHostTenantAttribute.MetadataKey, "true")]` is equivalent. Unmarked methods retain normal tenant selection.
+Host-tenant selection runs in the application inbound policy for both local and HTTP calls. The metadata key is `nof.tenant.use_host`; `[Metadata(UseHostTenantAttribute.MetadataKey, "true")]` is equivalent. Unmarked methods retain normal tenant selection.
 
 ### Result Type
 
@@ -63,7 +63,7 @@ result projections have been removed. See the [migration guide](https://github.c
 
 ### Streaming Result Type
 
-Use `Result<IAsyncEnumerable<T>>` when an RPC method returns a server-side stream. This keeps the contract surface synchronous while still allowing generated clients to return `Task<Result<IAsyncEnumerable<T>>>`.
+Use `Result<IAsyncEnumerable<T>>` when an RPC method returns a server-side stream. This keeps the contract surface synchronous while generated server invocation returns `Task<Result<IAsyncEnumerable<T>>>`. No client is generated.
 
 ```csharp
 public record WatchOrdersRequest(Guid CustomerId);
@@ -107,42 +107,23 @@ public interface IOrderService : IApplicationService
 }
 ```
 
-Declaring `TransportOverHttp` also generates the transport client next to the contract. For the example above, NOF generates the protocol-neutral `IOrderServiceClient : IApplicationServiceClient<IOrderService>` interface and a public partial `HttpOrderServiceClient` implementation. The generic `IApplicationServiceClient<TService>` base is the explicit relationship between service and client contracts; transport and local-client generators do not need to infer that relationship from type names.
+`TransportOverHttp` supplies server adapter metadata only. NOF generates no client
+interfaces, HTTP proxies or Local Clients. Remote callers maintain their own HTTP
+integration; referencing Contract alone does not supply a network client.
 
-```csharp
-builder.Services.AddHttpClient<IOrderServiceClient, HttpOrderServiceClient>(client =>
-    client.BaseAddress = new Uri("https://orders.example/"));
-```
+For in-process services, omit transport attributes or explicitly use
+`[TransportOverMemory]`. Register `builder.AddApplicationService<OrderService>()`
+and call `OrderService.Get.InvokeAsync(services, request, context, ct)` through the
+generated server operation. HTTP annotations are not required for this path.
 
-Generated HTTP request URIs are relative to `HttpClient.BaseAddress`. This preserves path prefixes such as `https://webui.example/bff/orders/` when the client is routed through a BFF or reverse proxy. When `BaseAddress` contains a path prefix, end it with `/` so standard URI resolution treats the complete path as a directory.
-
-The generated constructor accepts `IRequestOutboundPipelineExecutor` as an optional dependency. When a hosting package registers it, outbound middleware participates in the call; when it is absent, the client sends the HTTP request directly.
-
-For RPC contracts that must remain inside one process, use `TransportOverMemory` and omit `HttpEndpoint` metadata:
-
-```csharp
-[TransportOverMemory]
-public interface IBackOfficeService : IApplicationService
-{
-    Result<DashboardDto> GetDashboard(GetDashboardRequest request);
-}
-```
-
-NOF still generates `IBackOfficeServiceClient`, and `NOF.Infrastructure` generates the corresponding local client from its `ApplicationService<IBackOfficeService>` implementation. Register the server and local client in a Blazor Server or other in-process host:
-
-```csharp
-builder.AddApplicationService<BackOfficeService>();
-builder.Services.ReplaceOrAddScoped<IBackOfficeServiceClient, LocalBackOfficeServiceClient>();
-```
-
-No HTTP client is generated for a memory-only contract. Each server transport decides whether a registration applies to it from the contract's `TransportOverAttribute`; the built-in HTTP transport ignores `TransportOverMemory`, so no HTTP endpoint is mapped.
+See the [application service migration guide](../../docs/en/design/application-requests.md).
 
 ### Other Annotations
 
 - **`[HttpEndpoint]`** - declares HTTP verb and route metadata for RPC methods
 - Application service contracts may declare at most one `TransportOverAttribute` implementation; without one they remain local-only
-- **`[TransportOverHttp]`** - declares the HTTP RPC style and an optional contract-level route prefix, and generates the matching `Http...Client`
-- **`[TransportOverMemory]`** - declares that the RPC service is intended for its generated local client; the built-in HTTP transport does not expose it, and methods must not declare `[HttpEndpoint]`
+- **`[TransportOverHttp]`** - declares the HTTP RPC style and an optional contract-level route prefix; emits server binding metadata only
+- **`[TransportOverMemory]`** - declares that the RPC service is intended for in-process server invocation; the built-in HTTP transport does not expose it, and methods must not declare `[HttpEndpoint]`
 - HTTP route prefixes are application-relative paths. A leading `/` is optional and one trailing `/` is normalized away; empty or whitespace values, absolute URIs, query strings, fragments, route parameters, escaped characters, backslashes, empty path segments, and `.` or `..` segments are rejected at compile time
 - JSON-RPC contracts use the service route prefix and operation names; when the prefix is omitted, the endpoint is `/`
 - JSON-RPC methods must not declare `[HttpEndpoint]`

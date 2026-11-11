@@ -6,55 +6,23 @@ using System.Text;
 
 namespace NOF.Contract.SourceGenerator;
 
-/// <summary>Emits the server-side binder and JSON body codec beside a generated HTTP client.</summary>
+/// <summary>Emits server-only HTTP binding and JSON body metadata.</summary>
 public static class HttpRpcRouteEmitter
 {
     public static string GetName(ServiceMethodInfo method, int index)
         => $"__NofHttpRoute_{method.OperationName}_{index}";
-
-    public static string BuildClientUri(string route, HttpRpcRouteBinding binding, string requestType)
-    {
-        var segments = route.Split('/');
-        return string.Join(" + \"/\" + ", segments.Select(segment =>
-        {
-            if (segment.Length > 2 && segment[0] == '{' && segment[segment.Length - 1] == '}')
-            {
-                var property = binding.Path.First(item => item.Name == segment.Substring(1, segment.Length - 2)).Property;
-                var value = $"(({requestType})currentRequest).@{property.Name}";
-                var formatted = property.Type.ToDisplayString() == "System.Guid"
-                    ? value + ".ToString(\"D\")"
-                    : HttpRpcClientGenerator.FormatValueExpression(value, property.Type, invariant: true);
-                return $"__EncodeNofPathSegment({formatted}, {Literal(property.Name)})";
-            }
-
-            return Literal(segment);
-        }));
-    }
-
-    internal static void EmitClientPathEncoder(StringBuilder sb)
-    {
-        sb.AppendLine("        private static string __EncodeNofPathSegment(string? value, string propertyName)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            if (string.IsNullOrEmpty(value) || value is \".\" or \"..\" || value.Contains('/') || value.Contains('\\\\'))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                throw new global::System.ArgumentException(\"The value must be a non-empty URL path segment without slashes or dot segments.\", propertyName);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-    }
 
     public static void Emit(
         StringBuilder sb, ServiceMethodInfo method, EndpointInfo endpoint, HttpRpcRouteBinding binding, string name, string route)
     {
         var service = TypeName(method.Method.ContainingType);
         var request = TypeName(method.RequestType!);
-        var response = method.ReturnInfo.ClientResponseTypeDisplay;
+        var response = method.ReturnInfo.ResponseTypeDisplay;
         var body = $"__NofHttpBody_{method.OperationName}";
         var usesQuery = endpoint.Method is HttpVerb.Get or HttpVerb.Delete;
 
-        sb.AppendLine("        // Assembly-local so the generated wire codec cannot become a consumer API.");
-        sb.AppendLine($"        internal sealed class {name} : global::NOF.Contract.GeneratedHttpRpcRoute<{service}, {response}>");
+        sb.AppendLine("        /// <summary>Provides generated server route binding and wire metadata.</summary>");
+        sb.AppendLine($"        public sealed class {name} : global::NOF.Contract.GeneratedHttpRpcRoute<{service}, {response}>");
         sb.AppendLine("        {");
         sb.AppendLine($"            public {name}() {{ }}");
         sb.AppendLine($"            public override string OperationName => nameof({service}.@{method.OperationName});");
@@ -256,19 +224,6 @@ public static class HttpRpcRouteEmitter
 
         sb.AppendLine("            }");
         sb.AppendLine($"            private static readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<global::System.Text.Json.JsonSerializerOptions, global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{body}>> __NofBodyMetadata = new();");
-        sb.AppendLine();
-        sb.AppendLine($"            public static global::System.Net.Http.HttpContent CreateBody({request} request, global::System.Text.Json.JsonSerializerOptions options)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var body = new {body}");
-        sb.AppendLine("                {");
-        for (var i = 0; i < binding.Remaining.Count; i++)
-        {
-            sb.AppendLine($"                    Value{i} = request.@{binding.Remaining[i].Name},");
-        }
-
-        sb.AppendLine("                };");
-        sb.AppendLine("                return global::System.Net.Http.Json.JsonContent.Create(body, GetJsonBody(options));");
-        sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine($"            private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{body}> GetJsonBody(global::System.Text.Json.JsonSerializerOptions options)");
         sb.AppendLine("                => __NofBodyMetadata.GetValue(options, static settings =>");

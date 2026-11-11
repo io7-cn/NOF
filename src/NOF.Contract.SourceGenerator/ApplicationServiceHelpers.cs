@@ -1,10 +1,8 @@
 using Microsoft.CodeAnalysis;
-using NOF.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
 
 namespace NOF.Contract.SourceGenerator;
 /// <summary>Analyzes RPC service declarations for source generation.</summary>
@@ -66,12 +64,6 @@ public static class ApplicationServiceHelpers
         return route.IndexOf('{') >= 0 || route.IndexOf('}') >= 0;
     }
 
-    public static string GetHttpClientName(string interfaceName)
-        => ServiceContractConventions.GetHttpClientName(interfaceName);
-
-    public static string GetClientInterfaceName(string interfaceName)
-        => ServiceContractConventions.GetClientInterfaceName(interfaceName);
-
     public static bool TryGetHttpTransport(INamedTypeSymbol serviceInterface, out HttpTransportInfo transport)
     {
         var attribute = serviceInterface.GetAttributes()
@@ -94,13 +86,6 @@ public static class ApplicationServiceHelpers
     public static bool HasMemoryTransport(INamedTypeSymbol serviceInterface)
         => serviceInterface.GetAttributes()
             .Any(static attr => attr.AttributeClass?.ToDisplayString() == TransportOverMemoryAttributeFqn);
-
-    public static string GetOperationName(string methodName)
-    {
-        return methodName.EndsWith("Async", StringComparison.Ordinal)
-            ? methodName.Substring(0, methodName.Length - 5)
-            : methodName;
-    }
 
     public static bool IsCancellationToken(ITypeSymbol typeSymbol)
         => typeSymbol.ToDisplayString() == "System.Threading.CancellationToken";
@@ -145,12 +130,6 @@ public static class ApplicationServiceHelpers
         return true;
     }
 
-    public static bool ImplementsResultContract(ITypeSymbol type)
-    {
-        return type.ToDisplayString() == ResultInterfaceFqn
-               || type.AllInterfaces.Any(i => i.OriginalDefinition.ToDisplayString() == ResultInterfaceFqn);
-    }
-
     public static string GetFullNamespace(INamespaceSymbol ns)
     {
         var parts = new List<string>();
@@ -161,34 +140,6 @@ public static class ApplicationServiceHelpers
         }
 
         return string.Join(".", parts);
-    }
-
-    public static string GetTypeParameterList(ImmutableArray<ITypeParameterSymbol> typeParameters)
-    {
-        if (typeParameters.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        return "<" + string.Join(", ", typeParameters.Select(static parameter => parameter.Name)) + ">";
-    }
-
-    public static void AppendTypeParameterConstraints(StringBuilder sb, INamedTypeSymbol symbol, int indentLevel)
-    {
-        foreach (var typeParameter in symbol.TypeParameters)
-        {
-            var constraints = BuildTypeParameterConstraints(typeParameter);
-            if (constraints.Count == 0)
-            {
-                continue;
-            }
-
-            sb.Append(' ', indentLevel * 4);
-            sb.Append("where ");
-            sb.Append(typeParameter.Name);
-            sb.Append(" : ");
-            sb.AppendLine(string.Join(", ", constraints));
-        }
     }
 
     public static EndpointInfo ExtractEndpointInfo(ServiceMethodInfo method)
@@ -242,35 +193,6 @@ public static class ApplicationServiceHelpers
             .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == attributeFqn)
             ?.ConstructorArguments.FirstOrDefault().Value as string;
 
-    private static List<string> BuildTypeParameterConstraints(ITypeParameterSymbol typeParameter)
-    {
-        var constraints = new List<string>();
-        if (typeParameter.HasReferenceTypeConstraint)
-        {
-            constraints.Add(typeParameter.ReferenceTypeConstraintNullableAnnotation == NullableAnnotation.Annotated ? "class?" : "class");
-        }
-        else if (typeParameter.HasValueTypeConstraint)
-        {
-            constraints.Add("struct");
-        }
-        else if (typeParameter.HasUnmanagedTypeConstraint)
-        {
-            constraints.Add("unmanaged");
-        }
-        else if (typeParameter.HasNotNullConstraint)
-        {
-            constraints.Add("notnull");
-        }
-
-        constraints.AddRange(typeParameter.ConstraintTypes.Select(static type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
-
-        if (typeParameter.HasConstructorConstraint)
-        {
-            constraints.Add("new()");
-        }
-
-        return constraints;
-    }
 
 }
 /// <summary>Describes an RPC service method for source generation.</summary>
@@ -330,12 +252,10 @@ public readonly struct ServiceReturnInfo
 
     public ITypeSymbol? StreamItemType => IsStream ? ((INamedTypeSymbol)StreamSequenceType!).TypeArguments[0] : null;
 
-    public string ClientResponseTypeDisplay
+    public string ResponseTypeDisplay
         => ValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
             SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
 
-    public string ClientTaskReturnTypeDisplay
-        => $"global::System.Threading.Tasks.Task<{ClientResponseTypeDisplay}>";
 }
 /// <summary>Represents HTTP verbs while analyzing RPC declarations.</summary>
 

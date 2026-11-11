@@ -6,6 +6,7 @@ using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
 using NOF.Sample.Services;
+using NOF.Sample.UI.Services;
 
 var builder = NOFWebApplicationBuilder.Create(args);
 var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
@@ -53,13 +54,14 @@ builder.UseDbContext<ConfigurationDbContext>()
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
     .MigrateOnInitialize();
 
-builder.Services.ReplaceOrAddScoped<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
-builder.Services.ReplaceOrAddScoped<IOAuthChainDemoServiceClient, LocalOAuthChainDemoServiceClient>();
+builder.Services.ReplaceOrAddScoped<ISampleApi, ServerSampleApi>();
+builder.Services.ReplaceOrAddScoped<IOAuthDemoApi, ServerOAuthDemoApi>();
 builder.Services.AddScoped<IOAuthAuthorizeEndpoint, SampleOAuthAuthorizeEndpoint>();
 builder.Services.AddScoped<IOAuthSubjectService, SampleOAuthSubjectService>();
 builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin));
-builder.Services.AddRequestOutboundMiddleware<OAuthChainDemoAccessTokenOutboundMiddleware>();
-builder.Services.AddHttpClient<IDemoDownstreamServiceClient, HttpDemoDownstreamServiceClient>(client => client.BaseAddress = new Uri(sampleOrigin));
+builder.Services.AddTransient<OAuthChainDemoAccessTokenHandler>();
+builder.Services.AddHttpClient<IDemoDownstreamApi, DownstreamApi>(client => client.BaseAddress = new Uri(sampleOrigin))
+    .AddHttpMessageHandler<OAuthChainDemoAccessTokenHandler>();
 
 builder.Services.AddAntDesign();
 

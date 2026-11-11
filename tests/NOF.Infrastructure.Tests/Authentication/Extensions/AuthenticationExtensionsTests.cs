@@ -1776,9 +1776,6 @@ public sealed class AuthenticationExtensionsTests
         });
 
         await using var host = await builder.BuildTestHostAsync();
-        Assert.DoesNotContain(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(IRequestOutboundMiddleware) &&
-            descriptor.ImplementationType?.FullName == "NOF.Hosting.AccessTokenPropagationOutboundMiddleware");
         Assert.Contains(builder.Services, descriptor =>
             descriptor.ServiceType == typeof(IRequestInboundMiddleware) &&
             descriptor.ImplementationType == typeof(AuthenticationResourceServerInboundMiddleware));
@@ -1788,9 +1785,6 @@ public sealed class AuthenticationExtensionsTests
         Assert.Contains(builder.Services, descriptor =>
             descriptor.ServiceType == typeof(INotificationInboundMiddleware) &&
             descriptor.ImplementationType == typeof(AuthenticationResourceServerInboundMiddleware));
-        Assert.DoesNotContain(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(IRequestOutboundMiddleware) &&
-            descriptor.ImplementationType?.Name.Contains("JwtTokenPropagationOutboundMiddleware", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(builder.Services, descriptor =>
             descriptor.ServiceType == typeof(ICommandOutboundMiddleware) &&
             descriptor.ImplementationType?.Name.Contains("JwtTokenPropagationOutboundMiddleware", StringComparison.Ordinal) == true);

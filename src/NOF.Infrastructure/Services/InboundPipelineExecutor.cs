@@ -206,12 +206,18 @@ public sealed class RequestInboundPipelineExecutor
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
         string methodName,
         IEnumerable<KeyValuePair<string, string?>>? headers,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Context? localContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var middlewares = new DependencyGraph<IRequestInboundMiddleware>(
             _serviceProvider.GetServices<IRequestInboundMiddleware>()).GetExecutionOrder();
         var context = CreateContext(request, handlerType, responseType, serviceType, methodName, headers);
+        if (localContext is not null)
+        {
+            context = (RequestInboundContext)context.WithItems(localContext.Items);
+            context.IsLocalInvocation = true;
+        }
         RequestHandlerDelegate terminal = (currentContext, currentRequest, ct)
             => ExecuteRequestHandlerAsync(_serviceProvider, handlerType, currentContext, currentRequest, ct);
         RequestHandlerDelegate pipeline = terminal;

@@ -61,7 +61,7 @@ public sealed class ExchangeTokenHandler(OAuthChainDemoBackend backend) : OAuthC
     }
 }
 
-public sealed class CallDownstreamHandler(IDemoDownstreamServiceClient downstreamClient) : OAuthChainDemoService.CallDownstream
+public sealed class CallDownstreamHandler(IDemoDownstreamApi downstreamClient) : OAuthChainDemoService.CallDownstream
 {
     public override Task<Result<ConsumeDemoAccessTokenResponse>> HandleAsync(
         CallDemoDownstreamRequest request,
@@ -129,21 +129,18 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
     }
 }
 
-public sealed class OAuthChainDemoAccessTokenOutboundMiddleware : IRequestOutboundMiddleware
+/// <summary>Adds the demo's per-call access token to its downstream HTTP request.</summary>
+public sealed class OAuthChainDemoAccessTokenHandler : DelegatingHandler
 {
-    public TopologyComparison Compare(IRequestOutboundMiddleware other) => TopologyComparison.DoesNotMatter;
-
-    public ValueTask InvokeAsync(RequestOutboundContext context, object request, RequestOutboundHandlerDelegate next, CancellationToken cancellationToken)
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        _ = request;
-        if (context.TryGetItem(OAuthChainDemoContextKeys.AccessToken, out var tokenObject)
-            && tokenObject is string token
-            && !string.IsNullOrWhiteSpace(token)
-            && !context.Headers.ContainsKey(NOFAbstractionConstants.Transport.Headers.Authorization))
+        if (request.Headers.Authorization is null
+            && request.Options.TryGetValue(NOF.Sample.UI.Services.SampleHttpApi.ContextKey, out var context)
+            && context.TryGetItem(OAuthChainDemoContextKeys.AccessToken, out var tokenObject)
+            && tokenObject is string token && !string.IsNullOrWhiteSpace(token))
         {
-            context.Headers[NOFAbstractionConstants.Transport.Headers.Authorization] = $"Bearer {token}";
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
-
-        return next(context, request, cancellationToken);
+        return base.SendAsync(request, cancellationToken);
     }
 }

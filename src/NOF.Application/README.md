@@ -14,7 +14,7 @@ Commands and notifications are plain payload types. Handler discovery comes from
 
 ## Application services
 
-IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> has no RPC response constraint. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Generated local and HTTP clients preserve OperationAsync(request, context, ct). See the [migration guide](../../docs/en/design/application-requests.md).
+IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> has no RPC response constraint. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 
@@ -50,7 +50,7 @@ public sealed class GetOrder : OrderService.GetOrder
 }
 ```
 
-When a host references `NOF.Infrastructure`, the same `OrderService` declaration also causes a `LocalOrderServiceClient` to be generated in the server namespace. Its service/client contract relationship comes from `IOrderServiceClient : IApplicationServiceClient<IOrderService>`, not from matching interface names.
+Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IApplicationServiceInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
 
 Streaming RPC handlers use the same generated nested `ServiceOperation<TRequest, Result<IAsyncEnumerable<T>>>` model:
 

@@ -59,7 +59,7 @@ public class NOFWebApplicationBuilder : IHostApplicationBuilder
         builder.Services.AddHealthChecks().AddCheck("self", static () => HealthCheckResult.Healthy(), ["live"]);
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<HttpRequestInboundAdapter>();
-        builder.Services.AddOptions<HttpHeaderOutboundOptions>();
+        builder.Services.AddOptions<HttpRequestHeaderOptions>();
         builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddAspNetCoreInstrumentation());
         builder.Services.ConfigureOpenTelemetryTracerProvider(tracing =>
             tracing.AddAspNetCoreInstrumentation(options =>
