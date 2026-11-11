@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -67,7 +68,7 @@ public abstract class GeneratedHttpRpcRoute
     /// <summary>Writes the result using source-generated JSON metadata.</summary>
     public abstract Task WriteResponseAsync(
         Stream body,
-        IResult response,
+        IUnion response,
         JsonSerializerOptions options,
         CancellationToken cancellationToken);
 }
@@ -77,7 +78,7 @@ public abstract class GeneratedHttpRpcRoute<
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
     TResponse> : GeneratedHttpRpcRoute
     where TService : class, IRpcService
-    where TResponse : IResult
+    where TResponse : IRpcResponse<TResponse>
 {
     /// <inheritdoc />
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
@@ -94,15 +95,10 @@ public abstract class GeneratedHttpRpcRoute<
     /// <inheritdoc />
     public override Task WriteResponseAsync(
         Stream body,
-        IResult response,
+        IUnion response,
         JsonSerializerOptions options,
         CancellationToken cancellationToken)
     {
-        if (response is TResponse typed)
-        {
-            return JsonSerializer.SerializeAsync(body, typed, options.GetRequiredTypeInfo<TResponse>(), cancellationToken);
-        }
-
-        return JsonSerializer.SerializeAsync(body, Result.From(response), options.GetRequiredTypeInfo<Result>(), cancellationToken);
+        return JsonSerializer.SerializeAsync(body, RpcResponse.Require<TResponse>(response), options.GetRequiredTypeInfo<TResponse>(), cancellationToken);
     }
 }

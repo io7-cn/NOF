@@ -599,6 +599,7 @@ public class RpcServiceAnalyzerTests
     public async Task ServiceMethod_WithCustomResultImplementation_NoNOF210()
     {
         const string source = """
+            using NOF.Abstraction;
             using NOF.Contract;
             using System.Collections.Generic;
 
@@ -606,7 +607,11 @@ public class RpcServiceAnalyzerTests
 
             public record Query(string Value);
 
-            public sealed record CustomResult(bool IsSuccess, string ErrorCode, string Message, object? Value, IDictionary<string, string> Extra) : IResult;
+            public union CustomResult(Success, Failure) : IRpcResponse<CustomResult>
+            {
+                public static CustomResult CreateFailure(Failure failure) => failure;
+                public static CustomResult CreateEmptyResponse() => new Success();
+            }
 
             public partial interface IMyService : IRpcService
             {

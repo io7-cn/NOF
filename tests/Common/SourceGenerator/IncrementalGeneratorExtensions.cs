@@ -20,7 +20,7 @@ internal static class IncrementalGeneratorExtensions
 
         public GeneratorDriverRunResult GetResult(CSharpCompilation compilation)
         {
-            var driver = CSharpGeneratorDriver.Create(generator);
+            var driver = CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
             driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 
@@ -43,7 +43,7 @@ internal static class IncrementalGeneratorExtensions
             var extraReferences = types.Select(type => type.ToMetadataReference()).ToArray();
             var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
 
-            var driver = CSharpGeneratorDriver.Create(generator);
+            var driver = CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
             driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(
                 compilation, out var outputCompilation, out _);

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using System.Security.Cryptography;
@@ -99,12 +100,17 @@ public sealed class CacheOAuthDeviceGrantService(
         CancellationToken cancellationToken = default)
     {
         var sessionLookup = await ResolveSessionByUserCodeAsync(userCode, cancellationToken).ConfigureAwait(false);
-        if (!sessionLookup.IsSuccess)
+        if (sessionLookup is not ValueTuple<OidcDeviceUserCodeCacheKey, OidcDeviceAuthorizationCacheKey> sessionLookupSuccess)
         {
-            return Result.Fail(sessionLookup.ErrorCode, sessionLookup.Message);
+            var sessionLookupFailure = sessionLookup switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return Result.Fail(sessionLookupFailure.Code, sessionLookupFailure.Message);
         }
 
-        var (userCodeKey, deviceCodeKey) = sessionLookup.Value;
+        var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;
         await using var sessionLock = await cacheService
             .AcquireLockAsync(deviceCodeKey, LockExpiration, cancellationToken)
             .ConfigureAwait(false);
@@ -290,12 +296,17 @@ public sealed class CacheOAuthDeviceGrantService(
         CancellationToken cancellationToken)
     {
         var sessionLookup = await ResolveSessionByUserCodeAsync(userCode, cancellationToken).ConfigureAwait(false);
-        if (!sessionLookup.IsSuccess)
+        if (sessionLookup is not ValueTuple<OidcDeviceUserCodeCacheKey, OidcDeviceAuthorizationCacheKey> sessionLookupSuccess)
         {
-            return Result.Fail(sessionLookup.ErrorCode, sessionLookup.Message);
+            var sessionLookupFailure = sessionLookup switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return Result.Fail(sessionLookupFailure.Code, sessionLookupFailure.Message);
         }
 
-        var (userCodeKey, deviceCodeKey) = sessionLookup.Value;
+        var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;
         await using var sessionLock = await cacheService
             .AcquireLockAsync(deviceCodeKey, LockExpiration, cancellationToken)
             .ConfigureAwait(false);

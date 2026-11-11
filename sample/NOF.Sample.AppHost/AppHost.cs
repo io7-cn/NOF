@@ -6,8 +6,7 @@ var rabbitMqUserName = builder.AddParameter("rabbitMqUserName", "guest");
 var rabbitMqPassword = builder.AddParameter("rabbitMqPassword", "guest");
 var rabbitMq = builder.AddRabbitMQ("rabbitmq", rabbitMqUserName, rabbitMqPassword)
     .WithManagementPlugin(15672)
-    .WithLifetime(ContainerLifetime.Persistent)
-    .PublishAsConnectionString();
+    .WithLifetime(ContainerLifetime.Persistent);
 rabbitMqUserName.WithParentRelationship(rabbitMq);
 rabbitMqPassword.WithParentRelationship(rabbitMq);
 
@@ -20,8 +19,7 @@ var postgresUserName = builder.AddParameter("postgresUserName", "postgres");
 var postgresPassword = builder.AddParameter("postgresPassword", "123456");
 var postgres = builder.AddPostgres("postgres", postgresUserName, postgresPassword)
     .WithPgAdmin(pgAdmin => pgAdmin.WithLifetime(ContainerLifetime.Persistent))
-    .WithLifetime(ContainerLifetime.Persistent)
-    .PublishAsConnectionString();
+    .WithLifetime(ContainerLifetime.Persistent);
 postgresUserName.WithParentRelationship(postgres);
 postgresPassword.WithParentRelationship(postgres);
 var database = postgres.AddDatabase("db2");

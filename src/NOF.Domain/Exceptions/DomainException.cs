@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 namespace NOF.Domain;
 
 /// <summary>
@@ -10,14 +11,14 @@ public class DomainException : Exception
 
     /// <summary>Initializes a new instance from a <see cref="Failure"/>.</summary>
     /// <param name="failure">The failure descriptor.</param>
-    public DomainException(Failure failure) : this(failure.ErrorCode, failure.Message)
+    public DomainException(Failure failure) : this(failure.Code, failure.Message)
     {
     }
 
     /// <summary>Initializes a new instance from a <see cref="Failure"/> with an inner exception.</summary>
     /// <param name="failure">The failure descriptor.</param>
     /// <param name="innerException">The inner exception.</param>
-    public DomainException(Failure failure, Exception innerException) : this(failure.ErrorCode, failure.Message, innerException)
+    public DomainException(Failure failure, Exception innerException) : this(failure.Code, failure.Message, innerException)
     {
     }
 

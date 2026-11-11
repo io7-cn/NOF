@@ -139,3 +139,7 @@ dotnet add package NOF.Domain
 ## License
 
 Apache-2.0
+
+Domain and RPC failures share `NOF.Abstraction.Failure(code, message)`. The failure
+generator emits that value directly. `failure.Throw()` remains a Domain extension
+that raises DomainException; Abstraction has no dependency on Domain.

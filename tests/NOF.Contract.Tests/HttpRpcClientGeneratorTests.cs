@@ -23,10 +23,33 @@ public class HttpRpcClientGeneratorTests
         typeof(JsonRpcHttpClient),
         typeof(Result),
         typeof(Result<>),
-        typeof(StreamingResult<>),
+        typeof(IAsyncEnumerable<>),
         typeof(TransportOverHttpAttribute),
         typeof(TransportOverMemoryAttribute)
     ];
+
+    [Theory]
+    [InlineData("ControllerRpc")]
+    [InlineData("JsonRpc")]
+    public void OptionalMessageWrapper_StreamsRemainStreaming(string style)
+    {
+        var source = $$"""
+            using NOF.Contract;
+            using System.Collections.Generic;
+            namespace App;
+            public record WatchRequest(string Name);
+            public record Progress(int Count);
+            [TransportOverHttp(HttpRpcStyle.{{style}})]
+            public interface IMyService : IRpcService
+            {
+                Result<Success<IAsyncEnumerable<Progress>>> Watch(WatchRequest request);
+            }
+            """;
+        var code = GetGeneratedHttpClientCode(RunGenerators(source));
+        Assert.Contains("Task<global::NOF.Contract.Result<global::NOF.Contract.Success<global::System.Collections.Generic.IAsyncEnumerable<global::App.Progress>>>>", code);
+        Assert.Contains(style == "JsonRpc" ? "SendStreamingWithMessageAsync" : "Result.WithMessage", code);
+        Assert.Contains("global::App.Progress", code);
+    }
 
     [Fact]
     public void TransportOverControllerRpc_GeneratesPublicHttpClientBesideContract()
@@ -56,7 +79,7 @@ public class HttpRpcClientGeneratorTests
         Assert.Contains("if (_outboundPipeline is null)", code);
         Assert.Contains("await dispatch(outboundContext, request, cancellationToken)", code);
         Assert.Contains("await _outboundPipeline.ExecuteAsync(outboundContext, request, dispatch, cancellationToken)", code);
-        Assert.Contains("ResultProjection.RequireCompatible<global::NOF.Contract.Result>", code);
+        Assert.Contains("RpcResponse.Require<global::NOF.Contract.Result>", code);
         Assert.DoesNotContain("global::NOF.Contract.JsonRpcHttpClient.SendAsync", code);
         Assert.DoesNotContain("global::NOF.Hosting", code);
     }
@@ -99,7 +122,7 @@ public class HttpRpcClientGeneratorTests
             public interface IMyService : IRpcService
             {
                 [HttpEndpoint(HttpVerb.Get, "/events")]
-                StreamingResult<StreamEvent> Stream(QueryRequest request);
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(QueryRequest request);
             }
             """;
 
@@ -235,7 +258,7 @@ public class HttpRpcClientGeneratorTests
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "/stream-rpc")]
             public interface IMyService : IRpcService
             {
-                StreamingResult<StreamEvent> Stream(StreamRequest request);
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(StreamRequest request);
             }
             """;
 

@@ -14,7 +14,7 @@ public class RpcServiceClientGeneratorTests
         typeof(IRpcService),
         typeof(Result),
         typeof(Result<>),
-        typeof(StreamingResult<>)
+        typeof(IAsyncEnumerable<>)
     ];
 
     [Fact]
@@ -61,14 +61,14 @@ public class RpcServiceClientGeneratorTests
 
             public partial interface IMyService : IRpcService
             {
-                StreamingResult<StreamEvent> Stream(StreamRequest request);
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(StreamRequest request);
             }
             """;
 
         var runResult = new RpcServiceClientGenerator().GetResult(source, _refs);
         var code = runResult.GeneratedTrees.Single().GetRoot().ToFullString();
 
-        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.StreamingResult<global::App.StreamEvent>> StreamAsync", code);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<global::App.StreamEvent>>> StreamAsync", code);
     }
 
     [Fact]

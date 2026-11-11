@@ -11,7 +11,7 @@ public interface IUserService : IRpcService
     Result<UserDto> GetUser(GetUserRequest request);
 
     [HttpEndpoint(HttpVerb.Get, "/api/users/watch")]
-    StreamingResult<UserEvent> WatchUsers(WatchUsersRequest request);
+    Result<IAsyncEnumerable<UserEvent>> WatchUsers(WatchUsersRequest request);
 }
 ```
 
@@ -22,7 +22,7 @@ public interface IUserService : IRpcService
 - Service methods are synchronous on the contract surface: no `Task`, no `ValueTask`, no `CancellationToken`.
 - Method overloading is not supported.
 - `void` return types are not supported.
-- Server-streaming methods return `StreamingResult<T>` on the contract surface.
+- Server-streaming methods return `Result<IAsyncEnumerable<T>>` on the contract surface.
 - Controller RPC operation templates can bind a required path segment such as `{id}` to the request's `Id` property. Supported property types include `string`, enums, `IParsable<TSelf>`, and types with a compatible public static `TryParse`.
 
 ## Application Implementation Model
@@ -54,9 +54,9 @@ Streaming methods are implemented with the same generated handler model:
 ```csharp
 public class WatchUsers : UserService.WatchUsers
 {
-    public override Task<StreamingResult<UserEvent>> HandleAsync(WatchUsersRequest request, CancellationToken cancellationToken)
+    public override Task<Result<IAsyncEnumerable<UserEvent>>> HandleAsync(WatchUsersRequest request, Context context, CancellationToken cancellationToken)
     {
-        return Task.FromResult(StreamingResult.Success(Stream()));
+        return Task.FromResult(Result.Stream(Stream()));
 
         async IAsyncEnumerable<UserEvent> Stream()
         {
@@ -87,7 +87,7 @@ transport setup and endpoint mapping.
 
 OpenAPI service registration happens during builder creation. Call `app.MapOpenApi()` explicitly when you want to expose the document.
 
-When the mapped RPC method returns `StreamingResult<T>`, `NOF.Hosting.AspNetCore` exposes it as an SSE endpoint and generated HTTP clients consume it as `Task<StreamingResult<T>>`.
+When the mapped RPC method returns `Result<IAsyncEnumerable<T>>`, `NOF.Hosting.AspNetCore` exposes it as an SSE endpoint and generated HTTP clients consume it as `Task<Result<IAsyncEnumerable<T>>>`.
 
 ## RPC Transport Declaration
 

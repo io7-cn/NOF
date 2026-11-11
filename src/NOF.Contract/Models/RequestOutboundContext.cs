@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace NOF.Contract;
 
@@ -9,7 +10,7 @@ public sealed class RequestOutboundContext : Context
 {
     public IDictionary<string, string?> Headers { get; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-    public IResult? Response { get; set; }
+    public IUnion? Response { get; set; }
 
     public required Type ServiceType { get; init; }
 

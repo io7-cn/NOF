@@ -1,5 +1,7 @@
 - name: Overview
   href: index.md
+- name: .NET 11 and Union Types
+  href: net11-migration.md
 - name: Handler Registration
   href: handler-registration.md
 - name: Mapper
@@ -16,3 +18,7 @@
   href: step.md
 - name: Value Object
   href: value-object.md
+- name: Result Union migration (English)
+  href: ../en/design/result-unions.md
+- name: Result 联合类型迁移
+  href: ../zh-CN/design/result-unions.md

@@ -18,8 +18,8 @@ public static class RpcServiceHelpers
     public const string TransportOverMemoryAttributeFqn = "NOF.Contract.TransportOverMemoryAttribute";
     public const string SummaryAttributeFqn = "NOF.Contract.SummaryAttribute";
     public const string RpcServiceInterfaceFqn = "NOF.Contract.IRpcService";
-    public const string ResultInterfaceFqn = "NOF.Contract.IResult";
-    public const string StreamingResultFqn = "NOF.Contract.StreamingResult<T>";
+    public const string ResultInterfaceFqn = "NOF.Contract.IRpcResponse<TSelf>";
+    public const string StreamingResultFqn = "System.Collections.Generic.IAsyncEnumerable<T>";
     public const string ResultFqn = "NOF.Contract.Result";
     public const string GenericResultFqn = "NOF.Contract.Result<T>";
     public const string EmptyFqn = "NOF.Contract.Empty";
@@ -154,7 +154,7 @@ public static class RpcServiceHelpers
     public static bool ImplementsResultContract(ITypeSymbol type)
     {
         return type.ToDisplayString() == ResultInterfaceFqn
-               || type.AllInterfaces.Any(i => i.ToDisplayString() == ResultInterfaceFqn);
+               || type.AllInterfaces.Any(i => i.OriginalDefinition.ToDisplayString() == ResultInterfaceFqn);
     }
 
     public static string GetFullNamespace(INamespaceSymbol ns)
@@ -323,14 +323,18 @@ public readonly struct ServiceReturnInfo
         => ValueType is INamedTypeSymbol { IsGenericType: true } namedType
            && namedType.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.GenericResultFqn;
 
-    public bool IsStream
-        => ValueType is INamedTypeSymbol { IsGenericType: true } namedType
-           && namedType.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.StreamingResultFqn;
+    public ITypeSymbol? PayloadType => IsGenericResult ? ((INamedTypeSymbol)ValueType).TypeArguments[0] : null;
 
-    public ITypeSymbol? StreamItemType
-        => ValueType is INamedTypeSymbol { IsGenericType: true } namedType && namedType.TypeArguments.Length == 1
-            ? namedType.TypeArguments[0]
-            : null;
+    public bool HasSuccessWrapper => PayloadType is INamedTypeSymbol { IsGenericType: true } payload
+        && payload.OriginalDefinition.ToDisplayString() == "NOF.Contract.Success<T>";
+
+    private ITypeSymbol? StreamSequenceType => HasSuccessWrapper
+        ? ((INamedTypeSymbol)PayloadType!).TypeArguments[0] : PayloadType;
+
+    public bool IsStream => StreamSequenceType is INamedTypeSymbol { IsGenericType: true } sequence
+        && sequence.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.StreamingResultFqn;
+
+    public ITypeSymbol? StreamItemType => IsStream ? ((INamedTypeSymbol)StreamSequenceType!).TypeArguments[0] : null;
 
     public string ClientResponseTypeDisplay
         => ValueType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

@@ -4,7 +4,7 @@ Contract layer package for the [NOF Framework](https://github.com/XmmShp/NOF).
 
 ## Overview
 
-Defines the messaging contracts and shared models that form the public API surface of your application. This package contains `Result<T>`, `StreamingResult<T>`, `Empty`, HTTP endpoint annotations, and other shared attributes used by source generators and hosts.
+Defines the messaging contracts and shared models that form the public API surface of your application. This package contains `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Empty`, HTTP endpoint annotations, and other shared attributes used by source generators and hosts.
 
 `Context` remains a generic execution-context carrier for explicit metadata passing across boundaries.
 
@@ -54,9 +54,16 @@ return Result.Success(orderDto);
 return Result.Fail("404", "Order not found");
 ```
 
+`Result<T>` is a native `union (T, NOF.Abstraction.Failure)`: successful values are
+returned and matched directly. `Success<T>` is optional; use `Result<Success<T>>`
+or `Result.WithMessage(data, message)` when a successful response needs a message.
+`Failure(code, message)` is shared with Domain. IsSuccess, Extra and reflective
+result projections have been removed. See the [migration guide](https://github.com/io7-cn/NOF/blob/main/docs/en/design/result-unions.md)
+([简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/design/result-unions.md)).
+
 ### Streaming Result Type
 
-Use `StreamingResult<T>` when an RPC method returns a server-side stream. This keeps the contract surface synchronous while still allowing generated clients to return `Task<StreamingResult<T>>`.
+Use `Result<IAsyncEnumerable<T>>` when an RPC method returns a server-side stream. This keeps the contract surface synchronous while still allowing generated clients to return `Task<Result<IAsyncEnumerable<T>>>`.
 
 ```csharp
 public record WatchOrdersRequest(Guid CustomerId);
@@ -66,14 +73,14 @@ public record OrderEvent(Guid OrderId, string Status);
 public interface IOrderService : IRpcService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
-    StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);
+    Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
 }
 ```
 
 ### RPC Contracts
 
 RPC service methods use a strict single-request signature, do not accept `CancellationToken` on the contract surface,
-do not end with `Async`, and must return a non-Task `IResult` implementation. Use `Result<T>` for a payload and `Result` when no response payload is needed. `Empty` can be a request type but is not an RPC return type. Streaming methods must return `StreamingResult<T>`.
+do not end with `Async`, and must return a non-Task union implementing `IRpcResponse<TSelf>`. Use `Result<T>` for a payload and `Result` when no response payload is needed. `Empty` can be a request type but is not an RPC return type. Streaming methods must return `Result<IAsyncEnumerable<T>>`.
 
 ```csharp
 public record GetOrderRequest(Guid Id);
@@ -96,7 +103,7 @@ public interface IOrderService : IRpcService
 
     [Summary("Watch order events")]
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
-    StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);
+    Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
 }
 ```
 

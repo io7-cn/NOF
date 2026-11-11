@@ -20,7 +20,7 @@ public sealed record GetOrderRequest(string Id);
 public sealed record GetOrderResponse(string Id, string Name);
 ```
 
-An RPC contract must declare exactly one transport. Every method takes one reference-type request and returns a non-task type implementing `IResult`. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
+An RPC contract must declare exactly one transport. Every method takes one reference-type request and returns a non-task union implementing `IRpcResponse<TSelf>`. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
 
 For JSON-RPC, use `[TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc/orders")]` and remove method-level `[HttpEndpoint]`. For in-process-only calls, use `[TransportOverMemory]` and remove `[HttpEndpoint]`.
 

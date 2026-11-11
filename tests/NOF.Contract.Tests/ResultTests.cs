@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using System.Text.Json;
 using Xunit;
 
@@ -5,549 +6,161 @@ namespace NOF.Contract.Tests;
 
 public class ResultTests
 {
-    #region Result.Success()
-
     [Fact]
-    public void Success_ReturnsSuccessResult()
-    {
-        var result = Result.Success();
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Empty(
-        result.ErrorCode);
-        Assert.Empty(
-        result.Message);
-    }
-
-    #endregion
-
-    #region Result.Success<T>()
-
-    [Fact]
-    public void SuccessT_ReturnsSuccessResultWithValue()
-    {
-        var result = Result.Success("hello");
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Empty(
-        result.ErrorCode);
-        Assert.Empty(
-        result.Message);
-        Assert.Equal("hello",
-        result.Value);
-    }
-
-    [Fact]
-    public void SuccessT_WithComplexType_ReturnsValue()
-    {
-        var dto = new TestDto { Id = 42, Name = "test" };
-        var result = Result.Success(dto);
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Same(dto, result.Value);
-    }
-
-    [Fact]
-    public void SuccessT_WithNullValue_Throws()
-    {
-        Assert.Throws<ArgumentNullException>(() => Result.Success<string>(null!));
-    }
-
-    [Fact]
-    public void ResultT_SuccessJsonRoundTrip_WithNullValue_Throws()
-    {
-        var json = """{"IsSuccess":true,"ErrorCode":"","Message":"","Value":null,"Extra":{}}""";
-
-        Assert.Throws<InvalidOperationException>(() => JsonSerializer.Deserialize<Result<string>>(json));
-    }
-
-    #endregion
-
-    #region Result.Fail()
-
-    [Fact]
-    public void Fail_ReturnsFailResult()
-    {
-        var fail = Result.Fail("404", "Not found");
-        Assert.Equal("404",
-
-        fail.ErrorCode);
-        Assert.Equal("Not found",
-        fail.Message);
-    }
-
-    #endregion
-
-    #region FailResult implicit conversion to Result
-
-    [Fact]
-    public void FailResult_ImplicitConversion_ToResult()
-    {
-        FailResult fail = Result.Fail("500", "Server error");
-
-        Result result = fail;
-        Assert.False(
-
-        result.IsSuccess);
-        Assert.Equal("500",
-        result.ErrorCode);
-        Assert.Equal("Server error",
-        result.Message);
-    }
-
-    [Fact]
-    public void FailResult_ImplicitConversion_ToResult_InMethodReturn()
-    {
-        var result = ReturnResultFromFail();
-        Assert.False(
-
-        result.IsSuccess);
-        Assert.Equal("403",
-        result.ErrorCode);
-        Assert.Equal("Forbidden",
-        result.Message);
-    }
-
-    private static Result ReturnResultFromFail()
-    {
-        return Result.Fail("403", "Forbidden");
-    }
-
-    #endregion
-
-    #region FailResult implicit conversion to Result<T>
-
-    [Fact]
-    public void FailResult_ImplicitConversion_ToResultT()
-    {
-        FailResult fail = Result.Fail("400", "Bad request");
-
-        Result<string> result = fail;
-        Assert.False(
-
-        result.IsSuccess);
-        Assert.Equal("400",
-        result.ErrorCode);
-        Assert.Equal("Bad request",
-        result.Message);
-        Assert.Null(
-        result.Value);
-    }
-
-    [Fact]
-    public void FailResult_ImplicitConversion_ToResultT_InMethodReturn()
-    {
-        var result = ReturnResultTFromFail();
-        Assert.False(
-
-        result.IsSuccess);
-        Assert.Equal("401",
-        result.ErrorCode);
-        Assert.Equal("Unauthorized",
-        result.Message);
-        Assert.Null(
-        result.Value);
-    }
-
-    private static Result<TestDto> ReturnResultTFromFail()
-    {
-        return Result.Fail("401", "Unauthorized");
-    }
-
-    #endregion
-
-    #region FailResult runtime cast 閳?the actual bug scenario
-
-    [Fact]
-    public void FailResult_DirectRuntimeCast_ToResult_Throws()
-    {
-        object response = Result.Fail("500", "Internal server error");
-
-        var act = () => (Result)response;
-        Assert.Throws<InvalidCastException>(act);
-    }
-
-    [Fact]
-    public void FailResult_DirectRuntimeCast_ToResultT_Throws()
-    {
-        object response = Result.Fail("500", "Internal server error");
-
-        var act = () => (Result<string>)response;
-        Assert.Throws<InvalidCastException>(act);
-    }
-
-    #endregion
-
-    #region StreamingResult.From
-
-    [Fact]
-    public void StreamingResultFrom_WithFailResult_ReturnsFailedStreamingResult()
-    {
-        IResult response = Result.Fail("500", "Internal server error");
-
-        var result = StreamingResult<string>.From(response);
-        Assert.False(result.IsSuccess);
-        Assert.Equal("500", result.ErrorCode);
-        Assert.Equal("Internal server error", result.Message);
-        Assert.Null(result.Value);
-    }
-
-    [Fact]
-    public void StreamingResultFrom_WithDeserializedFailedResult_ReturnsFailedStreamingResult()
-    {
-        Result original = Result.Fail("409", "Conflict", new Dictionary<string, string>
-        {
-            ["requestId"] = "abc"
-        });
-        var json = JsonSerializer.Serialize(original);
-        IResult response = JsonSerializer.Deserialize<Result>(json)!;
-
-        var result = StreamingResult<string>.From(response);
-        Assert.False(result.IsSuccess);
-        Assert.Equal("409", result.ErrorCode);
-        Assert.Equal("Conflict", result.Message);
-        Assert.Equal("abc", result.Extra["requestId"]);
-        Assert.Null(result.Value);
-    }
-
-    [Fact]
-    public void RequireCompatible_WithFailResult_UsesStaticFromProjection()
-    {
-        IResult response = Result.Fail("422", "Validation failed", new Dictionary<string, string>
-        {
-            ["field"] = "name"
-        });
-
-        var result = ResultProjection.RequireCompatible<CustomProjectedResult>(response);
-        Assert.False(result.IsSuccess);
-        Assert.Equal("422", result.ErrorCode);
-        Assert.Equal("Validation failed", result.Message);
-        Assert.Equal("name", result.Extra["field"]);
-    }
-
-    [Fact]
-    public void PaginatedResultFrom_WithFailResult_ReturnsFailedPaginatedResult()
-    {
-        IResult response = Result.Fail("409", "Conflict", new Dictionary<string, string>
-        {
-            ["requestId"] = "abc"
-        });
-
-        var result = PaginatedResult<string>.From(response);
-        Assert.False(result.IsSuccess);
-        Assert.Equal("409", result.ErrorCode);
-        Assert.Equal("Conflict", result.Message);
-        Assert.Equal("abc", result.Extra["requestId"]);
-        Assert.Null(result.Value);
-    }
-
-    [Fact]
-    public void RequireCompatible_WithPaginatedArrayPayload_ProjectsToPaginatedResult()
-    {
-        var result = ResultProjection.RequireCompatible<PaginatedResult<int>>(
-            Result.Success(new[] { 11, 12 }, new Dictionary<string, string> { ["totalCount"] = "25" }));
-        Assert.True(result.IsSuccess);
-        Assert.Equal(25, result.TotalCount);
-        Assert.Equal([11, 12], result.Value);
-    }
-
-    [Fact]
-    public void PaginatedResultFrom_WithEnumerablePayload_ProjectsToPaginatedResult()
-    {
-        IResult response = new CustomPayloadResult<IEnumerable<int>>([1, 2, 3]);
-
-        var result = PaginatedResult<int>.From(response);
-        Assert.True(result.IsSuccess);
-        Assert.Equal([1, 2, 3], result.Value);
-    }
-
-    [Fact]
-    public void PaginatedResultFrom_WithSingleValuePayload_ProjectsToPaginatedResult()
-    {
-        IResult response = new CustomPayloadResult<int>(7);
-
-        var result = PaginatedResult<int>.From(response);
-        Assert.True(result.IsSuccess);
-        Assert.Equal([7], result.Value);
-    }
-
-    [Fact]
-    public void PaginatedResultSuccess_WithTotalCount_WritesMetadataToExtra()
-    {
-        var result = PaginatedResult.Success(["a", "b"], 88);
-
-        Assert.Equal("88", result.Extra["totalCount"]);
-        Assert.Equal(88, result.TotalCount);
-        Assert.NotNull(result.Value);
-        Assert.Equal(["a", "b"], result.Value);
-    }
-
-    [Fact]
-    public void PaginatedResult_Serialization_DoesNotEmitComputedTotalCountProperty()
-    {
-        var result = PaginatedResult.Success(["a", "b"], 88);
-
-        var json = JsonSerializer.Serialize(result);
-        Assert.Contains("\"Extra\":", json);
-        Assert.Contains("\"totalCount\":\"88\"", json);
-        Assert.DoesNotContain("\"TotalCount\":", json);
-    }
-
-    #endregion
-
-    #region T implicit conversion to Result<T>
-
-    [Fact]
-    public void Value_ImplicitConversion_ToResultT()
+    public void OrdinarySuccess_IsThePayloadItself()
     {
         Result<int> result = 42;
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Equal(42,
-        result.Value);
+        Assert.IsType<int>(result.Value);
+        Assert.Equal(42, result.ExpectSuccess());
+        Assert.Equal("hello", Result.Success<string>("hello").ExpectSuccess());
+        Result<bool> falseValue = false;
+        Assert.False(falseValue.ExpectSuccess());
     }
 
     [Fact]
-    public void StringValue_ImplicitConversion_ToResultT()
+    public void SuccessWrapper_IsExplicitAndRetainsMessage()
     {
-        Result<string> result = "hello";
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Equal("hello",
-        result.Value);
-    }
-
-    #endregion
-
-    #region JSON serialization round-trip
-
-    [Fact]
-    public void Result_Success_JsonRoundTrip()
-    {
-        var original = Result.Success();
-        var json = JsonSerializer.Serialize(original);
-        var deserialized = JsonSerializer.Deserialize<Result>(json);
-        Assert.NotNull(
-
-        deserialized);
-        Assert.True(
-        deserialized.IsSuccess);
-        Assert.Empty(
-        deserialized.ErrorCode);
+        Result<Success<int>> result = new Success<int>(42, "Loaded from cache");
+        var (data, message) = result.ExpectSuccess();
+        Assert.Equal((42, "Loaded from cache"), (data, message));
+        Assert.Equal("Saved", Result.Success("Saved").ExpectSuccess().Message);
+        Assert.Equal("Loaded", Result.WithMessage(42, "Loaded").ExpectSuccess().Message);
     }
 
     [Fact]
-    public void Result_Fail_JsonRoundTrip()
+    public void Failure_IsOneSharedAbstractionType()
     {
-        Result original = Result.Fail("404", "Not found");
-        var json = JsonSerializer.Serialize(original);
-        var deserialized = JsonSerializer.Deserialize<Result>(json);
-        Assert.NotNull(
-
-        deserialized);
-        Assert.False(
-        deserialized.IsSuccess);
-        Assert.Equal("404",
-        deserialized.ErrorCode);
-        Assert.Equal("Not found",
-        deserialized.Message);
+        var failure = new Failure("not_found", "Missing");
+        Result untyped = failure;
+        Result<int> typed = failure;
+        Assert.Same(failure, untyped.ExpectFailure());
+        Assert.Same(failure, typed.ExpectFailure());
+        Assert.Same(failure, Result.Fail(failure));
+        Assert.Equal("NOF.Abstraction", typeof(Failure).Assembly.GetName().Name);
+        Assert.Null(typeof(Result).Assembly.GetType("NOF.Contract.Failure"));
     }
 
     [Fact]
-    public void ResultT_Success_JsonRoundTrip()
+    public void Construction_RejectsMissingDataAndFailureDetails()
     {
-        var original = Result.Success("hello");
-        var json = JsonSerializer.Serialize(original);
-        var deserialized = JsonSerializer.Deserialize<Result<string>>(json);
-        Assert.NotNull(
-
-        deserialized);
-        Assert.True(
-        deserialized.IsSuccess);
-        Assert.Equal("hello",
-        deserialized.Value);
+        Assert.Throws<ArgumentNullException>(() => Result.Success<string>(null!));
+        Assert.Throws<ArgumentNullException>(() => new Success<string>(null!));
+        Assert.Throws<ArgumentNullException>(() => new Success(null!));
+        Assert.Throws<ArgumentException>(() => new Failure("", "Missing"));
+        Assert.Throws<ArgumentNullException>(() => new Failure("invalid", null!));
     }
 
     [Fact]
-    public void ResultT_Fail_JsonRoundTrip()
+    public void Page_IsAnOrdinaryTypedPayload()
     {
-        Result<string> original = Result.Fail("500", "Error");
-        var json = JsonSerializer.Serialize(original);
-        var deserialized = JsonSerializer.Deserialize<Result<string>>(json);
-        Assert.NotNull(
-
-        deserialized);
-        Assert.False(
-        deserialized.IsSuccess);
-        Assert.Equal("500",
-        deserialized.ErrorCode);
-        Assert.Equal("Error",
-        deserialized.Message);
-        Assert.Null(
-        deserialized.Value);
+        var page = Result.Page([1, 2], 5).ExpectSuccess();
+        Assert.Equal([1, 2], page.Items);
+        Assert.Equal(5, page.TotalCount);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Page<int>([], -1));
+        var wrapped = Result.WithMessage(page, "Page loaded").ExpectSuccess();
+        Assert.Same(page, wrapped.Data);
     }
 
     [Fact]
-    public void ResultT_ComplexType_JsonRoundTrip()
+    public async Task Stream_IsBareUnlessMessageWrapperIsSelected()
     {
-        var dto = new TestDto { Id = 1, Name = "test" };
-        var original = Result.Success(dto);
-        var json = JsonSerializer.Serialize(original);
-        var deserialized = JsonSerializer.Deserialize<Result<TestDto>>(json);
-        Assert.NotNull(
-
-        deserialized);
-        Assert.True(
-        deserialized.IsSuccess);
-        Assert.NotNull(
-        deserialized.Value);
-        Assert.Equal(1,
-        deserialized.Value.Id);
-        Assert.Equal("test",
-        deserialized.Value.Name);
-    }
-
-    #endregion
-
-    #region Edge cases
-
-    [Fact]
-    public void FailResult_IsIResult()
-    {
-        var fail = Result.Fail("400", "Bad");
-        Assert.True(
-        (fail is IResult));
-    }
-
-    [Fact]
-    public void Result_IsIResult()
-    {
-        var result = Result.Success();
-        Assert.True(
-        (result is IResult));
-    }
-
-    [Fact]
-    public void ResultT_IsIResult()
-    {
-        var result = Result.Success(42);
-        Assert.True(
-        (result is IResult));
-    }
-
-    [Fact]
-    public void FailResult_Record_Equality()
-    {
-        var a = Result.Fail("404", "Not found");
-        var b = Result.Fail("404", "Not found");
-        Assert.Equal(b.ErrorCode, a.ErrorCode);
-        Assert.Equal(b.Message, a.Message);
-        Assert.Equal(b.IsSuccess, a.IsSuccess);
-        Assert.Empty(a.Extra);
-        Assert.Empty(b.Extra);
-        Assert.NotSame(b.Extra, a.Extra);
-    }
-
-    [Fact]
-    public void FailResult_Record_Inequality()
-    {
-        var a = Result.Fail("404", "Not found");
-        var b = Result.Fail("500", "Server error");
-        Assert.NotEqual(b,
-
-        a);
-    }
-
-    [Fact]
-    public void Result_Properties_AreImmutable()
-    {
-        var result = Result.Success();
-
-        // Properties have private init and cannot be changed after creation.
-        Assert.True(result.IsSuccess);
-        Assert.Empty(
-        result.ErrorCode);
-        Assert.Empty(
-        result.Message);
-    }
-
-    [Fact]
-    public void ResultT_Properties_AreImmutable()
-    {
-        var result = Result.Success("value");
-        Assert.True(
-
-        result.IsSuccess);
-        Assert.Equal("value",
-        result.Value);
-        Assert.Empty(
-        result.ErrorCode);
-        Assert.Empty(
-        result.Message);
-    }
-
-    [Fact]
-    public void ResultFrom_WithFailResult_ReturnsFailedResult()
-    {
-        IResult response = Result.Fail("401", "Unauthorized");
-
-        var result = Result.From(response);
-        Assert.False(result.IsSuccess);
-        Assert.Equal("401", result.ErrorCode);
-        Assert.Equal("Unauthorized", result.Message);
-    }
-
-    [Fact]
-    public void ResultTFrom_WithSuccessPayload_ProjectsValue()
-    {
-        IResult response = new CustomPayloadResult<int>(7);
-
-        var result = Result<int>.From(response);
-        Assert.True(result.IsSuccess);
-        Assert.Equal(7, result.Value);
-    }
-
-    #endregion
-
-    private class TestDto
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-    }
-
-    private sealed record CustomProjectedResult(
-        bool IsSuccess,
-        string ErrorCode,
-        string Message,
-        object? Value,
-        IDictionary<string, string> Extra) : IResult<CustomProjectedResult>
-    {
-        public static CustomProjectedResult From(IResult other)
+        var stream = Items();
+        var bare = Result.Stream(stream);
+        Assert.Same(stream, bare.ExpectSuccess());
+        var wrapped = Result.WithMessage(stream, "Stream opened").ExpectSuccess();
+        Assert.Equal("Stream opened", wrapped.Message);
+        var items = new List<int>();
+        await foreach (var item in wrapped.Data)
         {
-            return new CustomProjectedResult(other.IsSuccess, other.ErrorCode, other.Message, other.Value, new Dictionary<string, string>(other.Extra));
+            items.Add(item);
         }
+        Assert.Equal([1, 2], items);
     }
 
-    private sealed record CustomPayloadResult<T>(T Payload) : IResult<CustomPayloadResult<T>>
+    [Fact]
+    public void Boundary_PreservesFailureAndRejectsEmptyOrWrongSuccessType()
     {
-        public bool IsSuccess => true;
+        Result result = Result.Fail("forbidden", "Denied");
+        Assert.Same(result.ExpectFailure(), RpcResponse.Require<Result<string>>(result).ExpectFailure());
+        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(Result.Success()));
+        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(default(Result<string>)));
+        Assert.Throws<InvalidOperationException>(() => Result<int>.CreateEmptyResponse());
+    }
 
-        public string ErrorCode => string.Empty;
+    [Fact]
+    public void Json_PlainSuccess_DoesNotAddAWrapper()
+    {
+        Assert.Equal("42", JsonSerializer.Serialize<Result<int>>(42, JsonSerializerOptions.NOF));
+        Assert.Equal(42, JsonSerializer.Deserialize<Result<int>>("42", JsonSerializerOptions.NOF).ExpectSuccess());
+        var value = new Dictionary<string, int> { ["answer"] = 42 };
+        var json = JsonSerializer.Serialize(Result.Success(value), JsonSerializerOptions.NOF);
+        Assert.Equal("{\"answer\":42}", json);
+        Assert.Equal(42, JsonSerializer.Deserialize<Result<Dictionary<string, int>>>(json, JsonSerializerOptions.NOF).ExpectSuccess()["answer"]);
+    }
 
-        public string Message => string.Empty;
+    [Theory]
+    [InlineData("Saved")]
+    [InlineData("")]
+    [InlineData("保存成功\r\nMore detail")]
+    public void Json_OptionalWrapper_RoundTripsMessage(string message)
+    {
+        var json = JsonSerializer.Serialize(Result.WithMessage(42, message), JsonSerializerOptions.NOF);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(42, document.RootElement.GetProperty("data").GetInt32());
+        Assert.Equal(message, document.RootElement.GetProperty("message").GetString());
+        Assert.False(document.RootElement.TryGetProperty("kind", out _));
+        var success = JsonSerializer.Deserialize<Result<Success<int>>>(json, JsonSerializerOptions.NOF).ExpectSuccess();
+        Assert.Equal(42, success.Data);
+        Assert.Equal(message, success.Message);
+    }
 
-        public object? Value => Payload;
+    [Fact]
+    public void Json_Failure_RoundTripsAcrossUnrelatedPayloadTypes()
+    {
+        Result<int> result = Result.Fail("not_found", "Missing");
+        var json = JsonSerializer.Serialize(result, JsonSerializerOptions.NOF);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("failure", document.RootElement.GetProperty("$kind").GetString());
+        Assert.Equal("not_found", document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(result.ExpectFailure(), JsonSerializer.Deserialize<Result<Dictionary<string, string>>>(json, JsonSerializerOptions.NOF).ExpectFailure());
+        Assert.Equal(result.ExpectFailure(), JsonSerializer.Deserialize<Result>(json, JsonSerializerOptions.NOF).ExpectFailure());
+    }
 
-        public IDictionary<string, string> Extra { get; } = new Dictionary<string, string>();
+    [Fact]
+    public void Json_CodeAndMessageInPayload_DoNotBecomeFailure()
+    {
+        const string json = """{"code":"abc","message":"A successful DTO"}""";
+        var value = JsonSerializer.Deserialize<Result<Dictionary<string, string>>>(json, JsonSerializerOptions.NOF).ExpectSuccess();
+        Assert.Equal("abc", value["code"]);
+    }
 
-        public static CustomPayloadResult<T> From(IResult other)
-        {
-            throw new NotSupportedException();
-        }
+    [Theory]
+    [InlineData("{\"$kind\":\"success\",\"code\":\"bad\",\"message\":\"Invalid\"}")]
+    [InlineData("{\"$kind\":42,\"code\":\"bad\",\"message\":\"Invalid\"}")]
+    [InlineData("{\"$kind\":\"failure\",\"code\":\"bad\",\"message\":\"Invalid\",\"data\":42}")]
+    public void Json_InvalidFailureMarkerOrMixedCases_AreRejected(string json)
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Result<int>>(json, JsonSerializerOptions.NOF));
+    }
+
+    [Fact]
+    public void Json_SourceGeneratedMetadata_SupportsRawWrappedPageAndFailureCases()
+    {
+        var context = new ResultTestJsonContext(new JsonSerializerOptions(JsonSerializerOptions.NOF));
+        var plain = JsonSerializer.Serialize<Result<int>>(42, context.ResultInt32);
+        Assert.Equal(42, JsonSerializer.Deserialize(plain, context.ResultInt32).ExpectSuccess());
+        var wrapped = JsonSerializer.Serialize(Result.WithMessage(42, "Loaded"), context.ResultSuccessInt32);
+        Assert.Equal("Loaded", JsonSerializer.Deserialize(wrapped, context.ResultSuccessInt32).ExpectSuccess().Message);
+        var page = JsonSerializer.Serialize(Result.Page([1, 2], 5), context.ResultPageInt32);
+        Assert.Equal(5, JsonSerializer.Deserialize(page, context.ResultPageInt32).ExpectSuccess().TotalCount);
+        var failureJson = JsonSerializer.Serialize<Result<int>>(Result.Fail("bad", "Invalid"), context.ResultInt32);
+        Assert.Equal("bad", JsonSerializer.Deserialize(failureJson, context.ResultInt32).ExpectFailure().Code);
+    }
+
+    private static async IAsyncEnumerable<int> Items()
+    {
+        await Task.Yield();
+        yield return 1;
+        yield return 2;
     }
 }

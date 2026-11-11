@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Infrastructure;
 using System.Buffers;
@@ -9,10 +10,10 @@ namespace NOF.Hosting.AspNetCore;
 /// <summary>Writes an RPC result as an HTTP response.</summary>
 
 public sealed class RpcHttpResult(
-    Contract.IResult rpcResult,
+    System.Runtime.CompilerServices.IUnion rpcResult,
     int statusCode = StatusCodes.Status200OK) : Microsoft.AspNetCore.Http.IResult
 {
-    private readonly Contract.IResult _rpcResult = rpcResult ?? throw new ArgumentNullException(nameof(rpcResult));
+    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult ?? throw new ArgumentNullException(nameof(rpcResult));
 
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Transport response bodies are framework-controlled runtime payloads.")]
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Transport response bodies are framework-controlled runtime payloads.")]
@@ -33,13 +34,19 @@ public sealed class RpcHttpResult(
 [RequiresUnreferencedCode("Streaming HTTP response writing may require runtime JSON serialization for transport bodies.")]
 [RequiresDynamicCode("Streaming HTTP response writing may require runtime JSON serialization for transport bodies.")]
 public sealed class RpcStreamingHttpResult<TItem>(
-    StreamingResult<TItem> rpcResult,
+    System.Runtime.CompilerServices.IUnion rpcResult,
     int statusCode) : Microsoft.AspNetCore.Http.IResult
 {
-    private readonly StreamingResult<TItem> _rpcResult = rpcResult ?? throw new ArgumentNullException(nameof(rpcResult));
+    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult;
 
     /// <summary>Creates a streaming response with the default HTTP success status.</summary>
-    public RpcStreamingHttpResult(StreamingResult<TItem> rpcResult)
+    public RpcStreamingHttpResult(Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> rpcResult)
+        : this(rpcResult, StatusCodes.Status200OK)
+    {
+    }
+
+    /// <summary>Creates a streaming response with an explicitly wrapped successful message.</summary>
+    public RpcStreamingHttpResult(Result<Success<IAsyncEnumerable<TItem>>> rpcResult)
         : this(rpcResult, StatusCodes.Status200OK)
     {
     }
@@ -48,19 +55,22 @@ public sealed class RpcStreamingHttpResult<TItem>(
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        if (!_rpcResult.IsSuccess)
+        if (_rpcResult.Value is Failure)
         {
             return new RpcHttpResult(_rpcResult, statusCode).ExecuteAsync(httpContext);
         }
 
+        var success = RpcStreamResponse.Unwrap<TItem>(_rpcResult);
+
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
-        return TypedResults.ServerSentEvents(_rpcResult.Value!).ExecuteAsync(httpContext);
+        httpContext.Response.Headers[StreamingResponseMetadata.MessageHeader] = StreamingResponseMetadata.EncodeMessage(success.Message);
+        return TypedResults.ServerSentEvents(success.Data).ExecuteAsync(httpContext);
     }
 }
 /// <summary>Writes a streaming RPC result using JSON-RPC.</summary>
 
 public sealed class JsonRpcStreamingHttpResult<TItem>(
-    StreamingResult<TItem> rpcResult,
+    System.Runtime.CompilerServices.IUnion rpcResult,
     ReadOnlyMemory<byte> requestId,
     IObjectSerializer serializer) : Microsoft.AspNetCore.Http.IResult
 {
@@ -68,7 +78,7 @@ public sealed class JsonRpcStreamingHttpResult<TItem>(
     private static readonly ReadOnlyMemory<byte> _dataPrefix = "data: "u8.ToArray();
     private static readonly ReadOnlyMemory<byte> _eventSeparator = "\n\n"u8.ToArray();
     private static readonly ReadOnlyMemory<byte> _errorEvent = "event: error\n"u8.ToArray();
-    private readonly StreamingResult<TItem> _rpcResult = rpcResult ?? throw new ArgumentNullException(nameof(rpcResult));
+    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult;
     private readonly ReadOnlyMemory<byte> _requestId = requestId;
     private readonly IObjectSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
@@ -76,13 +86,16 @@ public sealed class JsonRpcStreamingHttpResult<TItem>(
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
+        var success = RpcStreamResponse.Unwrap<TItem>(_rpcResult);
+
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
         httpContext.Response.ContentType = "text/event-stream";
         httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers[StreamingResponseMetadata.MessageHeader] = StreamingResponseMetadata.EncodeMessage(success.Message);
 
         try
         {
-            await foreach (var item in _rpcResult.Value!.WithCancellation(httpContext.RequestAborted).ConfigureAwait(false))
+            await foreach (var item in success.Data.WithCancellation(httpContext.RequestAborted).ConfigureAwait(false))
             {
                 var itemPayload = item is null
                     ? "null"u8.ToArray()

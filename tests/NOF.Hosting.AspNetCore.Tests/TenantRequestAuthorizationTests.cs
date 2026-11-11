@@ -93,14 +93,14 @@ public sealed class TenantRequestAuthorizationTests
         if (expectedTenant is null)
         {
             Assert.Empty(resolvedTenants);
-            Assert.False((await response.Content.ReadFromJsonAsync<Result>())!.IsSuccess);
+            Assert.NotNull((await response.Content.ReadFromJsonAsync<Result>()).ExpectFailure());
         }
         else
         {
             Assert.Equal(expectedTenant, Assert.Single(resolvedTenants));
             var result = await response.Content.ReadFromJsonAsync<Result<string>>();
-            Assert.True(result!.IsSuccess);
-            Assert.Equal(expectedTenant, result.Value);
+            Assert.NotNull(result.ExpectSuccess());
+            Assert.Equal(expectedTenant, result.ExpectSuccess());
         }
 
         var endpoint = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
@@ -130,7 +130,7 @@ public sealed class TenantRequestAuthorizationTests
 
         [RequirePermission]
         [HttpEndpoint(HttpVerb.Post, "/stream")]
-        StreamingResult<string> Stream(Empty request);
+        Result<global::System.Collections.Generic.IAsyncEnumerable<string>> Stream(Empty request);
     }
 
     public sealed class TenantServer : RpcServer<ITenantService>, IRpcServer
@@ -140,7 +140,7 @@ public sealed class TenantRequestAuthorizationTests
             {
                 [nameof(ITenantService.Tenant)] = new(typeof(TenantHandler), typeof(Empty), typeof(Result<string>)),
                 [nameof(ITenantService.Host)] = new(typeof(TenantHandler), typeof(Empty), typeof(Result<string>)),
-                [nameof(ITenantService.Stream)] = new(typeof(StreamHandler), typeof(Empty), typeof(StreamingResult<string>))
+                [nameof(ITenantService.Stream)] = new(typeof(StreamHandler), typeof(Empty), typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<string>>))
             };
 
         protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
@@ -149,12 +149,12 @@ public sealed class TenantRequestAuthorizationTests
     public sealed class TenantHandler : RpcHandler<Empty, Result<string>>
     {
         public override Task<Result<string>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
-            => Task.FromResult(Result.Success(context.TenantId));
+            => Task.FromResult(Result.Success<string>(context.TenantId));
     }
 
-    public sealed class StreamHandler : RpcHandler<Empty, StreamingResult<string>>
+    public sealed class StreamHandler : RpcHandler<Empty, Result<global::System.Collections.Generic.IAsyncEnumerable<string>>>
     {
-        public override Task<StreamingResult<string>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+        public override Task<Result<global::System.Collections.Generic.IAsyncEnumerable<string>>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Unauthorized streaming handlers must not run");
     }
 

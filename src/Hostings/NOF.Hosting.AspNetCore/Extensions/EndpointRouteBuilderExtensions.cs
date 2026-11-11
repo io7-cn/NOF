@@ -262,12 +262,12 @@ public static partial class NOFHostingAspNetCoreExtensions
     [RequiresUnreferencedCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     [RequiresDynamicCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     private static Http.IResult CreateStreamingResult<TItem>(
-        NOF.Contract.IResult? response,
+        System.Runtime.CompilerServices.IUnion? response,
         HttpContext httpContext)
     {
-        if (response is StreamingResult<TItem> streamingResult)
+        if (response?.Value is IAsyncEnumerable<TItem> or Success<IAsyncEnumerable<TItem>>)
         {
-            return new RpcStreamingHttpResult<TItem>(streamingResult, GetHttpStatusCode(httpContext));
+            return new RpcStreamingHttpResult<TItem>(response, GetHttpStatusCode(httpContext));
         }
 
         if (response is not null)
@@ -275,18 +275,18 @@ public static partial class NOFHostingAspNetCoreExtensions
             return new RpcHttpResult(response, GetHttpStatusCode(httpContext));
         }
 
-        throw new InvalidOperationException($"Streaming RPC endpoints must return '{typeof(StreamingResult<TItem>).FullName}'.");
+        throw new InvalidOperationException($"Streaming RPC endpoints must return '{typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>).FullName}'.");
     }
 
     [RequiresUnreferencedCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     [RequiresDynamicCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     private static Http.IResult CreateHttpResponse<TResponse>(
-        NOF.Contract.IResult? transportResult,
+        System.Runtime.CompilerServices.IUnion? transportResult,
         HttpContext httpContext)
     {
         if (transportResult is TResponse result)
         {
-            return new RpcHttpResult((NOF.Contract.IResult)(object)result!, GetHttpStatusCode(httpContext));
+            return new RpcHttpResult((System.Runtime.CompilerServices.IUnion)(object)result!, GetHttpStatusCode(httpContext));
         }
 
         if (transportResult is not null)
@@ -304,17 +304,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             : StatusCodes.Status200OK;
 
     private static bool TryGetStreamItemType(Type returnType, [NotNullWhen(true)] out Type? streamItemType)
-    {
-        if (returnType.IsGenericType
-            && returnType.GetGenericTypeDefinition() == typeof(StreamingResult<>))
-        {
-            streamItemType = returnType.GetGenericArguments()[0];
-            return true;
-        }
-
-        streamItemType = null;
-        return false;
-    }
+        => RpcStreamResponse.TryGetItemType(returnType, out streamItemType);
 
     private static IEnumerable<(HttpVerb Verb, string Route)> GetHttpEndpoints(MethodInfo method, string defaultRoute)
     {

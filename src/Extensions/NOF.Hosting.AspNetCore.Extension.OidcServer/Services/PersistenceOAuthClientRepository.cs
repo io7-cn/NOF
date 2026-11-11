@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using System.IdentityModel.Tokens.Jwt;
@@ -341,19 +342,24 @@ public sealed class PersistenceOAuthClientRepository(
                 request with { ClientId = clientId },
                 (registrationSalt, registrationHash),
                 cancellationToken).ConfigureAwait(false);
-            if (createResult.IsSuccess)
+            if (createResult is OAuthClientSecretDescriptor createResultSuccess)
             {
                 return Result.Success(new OAuthClientRegistrationSecretDescriptor
                 {
-                    Client = createResult.Value.Client,
-                    ClientSecret = createResult.Value.ClientSecret,
+                    Client = createResultSuccess.Client,
+                    ClientSecret = createResultSuccess.ClientSecret,
                     RegistrationAccessToken = registrationToken
                 });
             }
 
-            if (!string.Equals(createResult.ErrorCode, "conflict", StringComparison.Ordinal))
+            var failure = createResult switch
             {
-                return Result.Fail(createResult.ErrorCode, createResult.Message);
+                Failure value => value,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            if (!string.Equals(failure.Code, "conflict", StringComparison.Ordinal))
+            {
+                return failure;
             }
         }
 

@@ -12,8 +12,8 @@ model configuration, migrations, provider options, and `UseDbContext<AppDbContex
 Concrete ORM dependencies belong in Host infrastructure implementations of
 application-owned interfaces, including native SQL and locking operations.
 
-See the existing [sample handler](../../sample/NOF.Sample.Application/RequestHandlers/GetConfigNodeChildren.cs)
-for provider-neutral queries and the [EF Core setup](../../src/Infrastructures/NOF.Infrastructure.EntityFrameworkCore/README.md)
+See the existing [sample handler](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Application/RequestHandlers/GetConfigNodeChildren.cs)
+for provider-neutral queries and the [EF Core setup](https://github.com/io7-cn/NOF/blob/main/src/Infrastructures/NOF.Infrastructure.EntityFrameworkCore/README.md)
 for Host configuration. These sources participate in the sample build.
 
 ## Transactional messages
@@ -22,12 +22,12 @@ Await `DeferPublishAsync(message, context, cancellationToken)` or
 `DeferSendAsync(message, context, cancellationToken)`, then save the **same** scoped
 `IDbContext` that tracks the business changes. Deferred dispatch stages outbox rows;
 it does not immediately deliver messages. Pass the current handler's explicit
-`Context`, subject to the [tenant trust rules](../../src/NOF.Infrastructure/README.md#tenant-authorization).
+`Context`, subject to the [tenant trust rules](https://github.com/io7-cn/NOF/blob/main/src/NOF.Infrastructure/README.md#tenant-authorization).
 
 The following source is compiled as part of `NOF.Sample.Application`; keep the
 example there so API changes break the sample build:
 
-[!code-csharp[](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs)]
+[!code-csharp[](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Application/Integration/TransactionalMessages.cs)]
 
 Without an explicit transaction, the relational provider's save transaction commits
 the staged business and outbox rows together. With an explicit transaction,

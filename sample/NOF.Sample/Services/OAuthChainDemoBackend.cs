@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
 using System.Net;
@@ -39,20 +40,24 @@ public sealed class OAuthChainDemoBackend(
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (!createResult.IsSuccess)
+        if (createResult is not OAuthClientSecretDescriptor success)
         {
-            return Result.Fail(createResult.ErrorCode, createResult.Message);
+            return createResult switch
+            {
+                NOF.Abstraction.Failure failure => failure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
         }
 
-        if (string.IsNullOrWhiteSpace(createResult.Value.ClientSecret))
+        if (string.IsNullOrWhiteSpace(success.ClientSecret))
         {
             return Result.Fail("500", "Created OAuth client did not return a client secret.");
         }
 
         return new CreateDemoOAuthClientResponse
         {
-            ClientId = createResult.Value.Client.ClientId,
-            ClientSecret = createResult.Value.ClientSecret,
+            ClientId = success.Client.ClientId,
+            ClientSecret = success.ClientSecret,
             AllowedScopes = AllowedScopes
         };
     }

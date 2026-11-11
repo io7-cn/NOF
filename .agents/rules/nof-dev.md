@@ -21,7 +21,7 @@ Use this file when contributing to the NOF framework itself.
 
 ## Tech Stack
 
-- .NET 10 and current C# (`extension` blocks are used throughout the repository).
+- .NET 11 and C# 15 (`extension` blocks are used throughout the repository).
 - Central Package Management through root `Directory.Packages.props`; `sample/Directory.Packages.props` imports it for sample-only versions.
 - Roslyn incremental generators and analyzers targeting `netstandard2.0`.
 - xUnit and Moq.

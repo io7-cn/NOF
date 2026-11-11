@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed record OAuthClientCredentialsValidationRequest(
@@ -10,12 +11,17 @@ public sealed record OAuthClientCredentialsValidationRequest(
     string? Audience = null,
     string? GrantType = null);
 
-public abstract record OAuthClientCredentialsValidationResult
+/// <summary>Contains validated client credentials or an OAuth authentication failure.</summary>
+public union OAuthClientCredentialsValidationResult(
+    OAuthClientCredentialsValidationResult.Success,
+    OAuthClientCredentialsValidationResult.Failure)
 {
+    /// <summary>Contains the authenticated subject, granted scopes, and access token claims.</summary>
     public sealed record Success(
         string Subject,
         IReadOnlySet<string> Scopes,
-        IReadOnlyList<KeyValuePair<string, string>> AccessTokenClaims) : OAuthClientCredentialsValidationResult;
+        IReadOnlyList<KeyValuePair<string, string>> AccessTokenClaims);
 
-    public sealed record Failure(string Error, string ErrorDescription) : OAuthClientCredentialsValidationResult;
+    /// <summary>Contains the OAuth error returned when client authentication fails.</summary>
+    public sealed record Failure(string Error, string ErrorDescription);
 }

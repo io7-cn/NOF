@@ -212,7 +212,7 @@ public class FailureGenerator : IIncrementalGenerator
             sb.AppendLine("        /// <summary>");
             sb.AppendLine($"        /// {error.Message}");
             sb.AppendLine("        /// </summary>");
-            sb.AppendLine($"        public static readonly global::NOF.Domain.Failure {error.Name} = new(\"{error.Message}\", \"{error.FailureCode}\");");
+            sb.AppendLine($"        public static readonly global::NOF.Abstraction.Failure {error.Name} = new(\"{error.FailureCode}\", \"{error.Message}\");");
             sb.AppendLine();
         }
 

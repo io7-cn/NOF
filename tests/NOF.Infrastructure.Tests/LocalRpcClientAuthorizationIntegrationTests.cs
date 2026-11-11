@@ -21,9 +21,9 @@ public sealed class LocalRpcClientAuthorizationIntegrationTests
         Result<GetFleetOverviewResponse> result = await client.GetFleetOverviewAsync(new Empty(), Context.Empty);
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("401", result.ErrorCode);
-        Assert.Equal("Please login first", result.Message);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("401", result.ExpectFailure().Code);
+        Assert.Equal("Please login first", result.ExpectFailure().Message);
         Assert.Equal(0, recorder.Count);
     }
 
@@ -40,9 +40,9 @@ public sealed class LocalRpcClientAuthorizationIntegrationTests
         Result<GetFleetOverviewResponse> result = await client.GetFleetOverviewAsync(new Empty(), Context.Empty);
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Value);
-        Assert.Equal("fleet", result.Value.Name);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal("fleet", result.ExpectSuccess().Name);
         Assert.Equal(1, recorder.Count);
     }
 
@@ -60,8 +60,8 @@ public sealed class LocalRpcClientAuthorizationIntegrationTests
         var secondResult = await client.CheckScopeAsync(new ScopeCheckRequest(dbContext, marker), Context.Empty);
         var probe = callerScope.ServiceProvider.GetRequiredService<LocalScopeProbe>();
 
-        Assert.True(firstResult.IsSuccess);
-        Assert.True(secondResult.IsSuccess);
+        Assert.NotNull(firstResult.ExpectSuccess());
+        Assert.NotNull(secondResult.ExpectSuccess());
         Assert.True(probe.OutboundUsedCallerScopeMarker);
         Assert.False(probe.HandlerUsedCallerScopeDbContext);
         Assert.False(probe.HandlerUsedCallerScopeMarker);

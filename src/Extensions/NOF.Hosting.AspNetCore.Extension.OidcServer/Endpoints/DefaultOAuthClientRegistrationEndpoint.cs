@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using System.Text.Json;
 using AspNetResult = Microsoft.AspNetCore.Http.IResult;
@@ -26,31 +27,46 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var authorization = await initialAccessTokenHandler
             .HandleAsync(httpRequest, cancellationToken)
             .ConfigureAwait(false);
-        if (!authorization.IsSuccess)
+        if (authorization is not Success authorizationSuccess)
         {
-            var statusCode = string.Equals(authorization.ErrorCode, "insufficient_scope", StringComparison.Ordinal)
+            var authorizationFailure = authorization switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            var statusCode = string.Equals(authorizationFailure.Code, "insufficient_scope", StringComparison.Ordinal)
                 ? StatusCodes.Status403Forbidden
                 : StatusCodes.Status401Unauthorized;
-            return CreateError(httpRequest, authorization.ErrorCode, authorization.Message, statusCode);
+            return CreateError(httpRequest, authorizationFailure.Code, authorizationFailure.Message, statusCode);
         }
 
         var normalized = Normalize(request);
-        if (!normalized.IsSuccess)
+        if (normalized is not CreateOAuthClientRequest normalizedSuccess)
         {
-            return CreateError(httpRequest, normalized.ErrorCode, normalized.Message);
+            var normalizedFailure = normalized switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateError(httpRequest, normalizedFailure.Code, normalizedFailure.Message);
         }
 
         var result = await registrationRepository
-            .RegisterAsync(normalized.Value, cancellationToken)
+            .RegisterAsync(normalizedSuccess, cancellationToken)
             .ConfigureAwait(false);
-        if (!result.IsSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            return CreateRepositoryError(httpRequest, result.ErrorCode, result.Message);
+            var resultFailure = result switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
         }
 
         SetNoStore(httpRequest);
         return Results.Json(
-            CreateResponse(result.Value),
+            CreateResponse(resultSuccess),
             statusCode: StatusCodes.Status201Created);
     }
 
@@ -72,13 +88,18 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var result = await registrationRepository
             .GetAsync(clientId, registrationAccessToken, cancellationToken)
             .ConfigureAwait(false);
-        if (!result.IsSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            return CreateRepositoryError(httpRequest, result.ErrorCode, result.Message);
+            var resultFailure = result switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
         }
 
         SetNoStore(httpRequest);
-        return Results.Json(CreateResponse(result.Value));
+        return Results.Json(CreateResponse(resultSuccess));
     }
 
     public async Task<AspNetResult> UpdateAsync(
@@ -103,12 +124,17 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         var normalized = Normalize(request);
-        if (!normalized.IsSuccess)
+        if (normalized is not CreateOAuthClientRequest normalizedSuccess)
         {
-            return CreateError(httpRequest, normalized.ErrorCode, normalized.Message);
+            var normalizedFailure = normalized switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateError(httpRequest, normalizedFailure.Code, normalizedFailure.Message);
         }
 
-        var createRequest = normalized.Value;
+        var createRequest = normalizedSuccess;
         var updateRequest = new UpdateOAuthClientRequest
         {
             DisplayName = createRequest.DisplayName,
@@ -138,13 +164,18 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             request.ClientSecret,
             updateRequest,
             cancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            return CreateRepositoryError(httpRequest, result.ErrorCode, result.Message);
+            var resultFailure = result switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
         }
 
         SetNoStore(httpRequest);
-        return Results.Json(CreateResponse(result.Value));
+        return Results.Json(CreateResponse(resultSuccess));
     }
 
     public async Task<AspNetResult> DeleteAsync(
@@ -165,9 +196,14 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var result = await registrationRepository
             .DeleteAsync(clientId, registrationAccessToken, cancellationToken)
             .ConfigureAwait(false);
-        if (!result.IsSuccess)
+        if (result is not Success resultSuccess)
         {
-            return CreateRepositoryError(httpRequest, result.ErrorCode, result.Message);
+            var resultFailure = result switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
         }
 
         SetNoStore(httpRequest);

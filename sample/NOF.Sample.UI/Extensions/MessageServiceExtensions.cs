@@ -1,116 +1,75 @@
+using NOF.Abstraction;
+using NOF.Contract;
+
 namespace AntDesign;
 
 public static class NOFSampleWebUIExtensions
 {
-    /// <param name="messageService">The message service to use.</param>
     extension(IMessageService messageService)
     {
-        /// <summary>
-        /// Displays a success or error message based on the outcome of a <see cref="NOF.Contract.Result"/>.
-        /// Failure messages are always shown. Success messages can be suppressed.
-        /// </summary>
+        /// <summary>Displays a payload-free result's selected message.</summary>
         public void ShowMessage(NOF.Contract.Result result, string? successMessage = null, bool showSuccess = false)
         {
-            ArgumentNullException.ThrowIfNull(messageService);
-            ArgumentNullException.ThrowIfNull(result);
-
-            if (result.IsSuccess)
+            switch (result)
             {
-                if (showSuccess)
-                {
-                    messageService.Success(successMessage ?? result.Message);
-                }
-            }
-            else
-            {
-                messageService.Error(result.Message);
+                case Success success:
+                    if (showSuccess)
+                    {
+                        messageService.Success(successMessage ?? success.Message);
+                    }
+                    break;
+                case Failure failure:
+                    messageService.Error(failure.Message);
+                    break;
+                case null:
+                    throw new InvalidOperationException("The response contains no outcome case.");
             }
         }
 
-        /// <summary>
-        /// Displays a success or error message based on the outcome of a <see cref="NOF.Contract.Result{T}"/>,
-        /// then returns the underlying value if successful, or <see langword="default"/> on failure.
-        /// Failure messages are always shown. Success messages can be suppressed.
-        /// </summary>
-        /// <typeparam name="T">The type of the result value.</typeparam>
-        /// <param name="result">The operation result.</param>
-        /// <param name="successMessage">Optional custom success message.</param>
-        /// <param name="showSuccess">If <see langword="false"/>, success message is not displayed.</param>
-        /// <returns>The value if successful; otherwise, <see langword="default(T)"/>.</returns>
-        public T? UnwrapWithMessage<T>(NOF.Contract.Result<T> result, string? successMessage = null, bool showSuccess = false)
+        /// <summary>Displays an error or caller-provided success message and returns the successful value.</summary>
+        public T? UnwrapWithMessage<T>(Result<T> result, string? successMessage = null, bool showSuccess = false)
         {
-            ArgumentNullException.ThrowIfNull(messageService);
-            ArgumentNullException.ThrowIfNull(result);
-
-            if (result.IsSuccess)
+            switch (result)
             {
-                if (showSuccess)
-                {
-                    messageService.Success(successMessage ?? result.Message);
-                }
-                return result.Value;
+                case Failure failure:
+                    messageService.Error(failure.Message);
+                    return default;
+                case T value:
+                    if (showSuccess && successMessage is not null)
+                    {
+                        messageService.Success(successMessage);
+                    }
+                    return value;
+                case null:
+                    throw new InvalidOperationException("The response contains no outcome case.");
             }
-
-            messageService.Error(result.Message);
-            return default;
         }
 
-        public T? UnwrapWithMessage<T>(NOF.Contract.Result<NOF.Contract.Result<T>> result, string? successMessage = null, bool showSuccess = false)
+        /// <summary>Unwraps successful data with explicitly selected message metadata.</summary>
+        public T? UnwrapWithMessage<T>(Result<Success<T>> result, string? successMessage = null, bool showSuccess = false)
         {
-            ArgumentNullException.ThrowIfNull(messageService);
-            ArgumentNullException.ThrowIfNull(result);
-
-            if (!result.IsSuccess)
+            switch (result)
             {
-                messageService.Error(result.Message);
-                return default;
+                case Success<T> success:
+                    if (showSuccess)
+                    {
+                        messageService.Success(successMessage ?? success.Message);
+                    }
+                    return success.Data;
+                case Failure failure:
+                    messageService.Error(failure.Message);
+                    return default;
+                case null:
+                    throw new InvalidOperationException("The response contains no outcome case.");
             }
-
-            return messageService.UnwrapWithMessage(result.Value, successMessage, showSuccess);
         }
 
-        /// <summary>
-        /// Displays a success message built from the result value (if successful), or an error message on failure,
-        /// then returns the underlying value if successful, or <see langword="default"/> on failure.
-        /// </summary>
-        /// <typeparam name="T">The type of the result value.</typeparam>
-        /// <param name="result">The operation result.</param>
-        /// <param name="successMessageFactory">Function to generate a success message from the result value.</param>
-        /// <param name="showSuccess">If <see langword="false"/>, success message is not displayed.</param>
-        /// <returns>The value if successful; otherwise, <see langword="default(T)"/>.</returns>
-        public T? UnwrapWithMessage<T>(NOF.Contract.Result<T> result, Func<T, string> successMessageFactory, bool showSuccess = false)
+        /// <summary>Builds a message from a successful value.</summary>
+        public T? UnwrapWithMessage<T>(Result<T> result, Func<T, string> successMessageFactory, bool showSuccess = false)
         {
-            ArgumentNullException.ThrowIfNull(messageService);
-            ArgumentNullException.ThrowIfNull(result);
             ArgumentNullException.ThrowIfNull(successMessageFactory);
-
-            if (result.IsSuccess)
-            {
-                var message = successMessageFactory(result.Value);
-                if (showSuccess)
-                {
-                    messageService.Success(message);
-                }
-                return result.Value;
-            }
-
-            messageService.Error(result.Message);
-            return default;
-        }
-
-        public T? UnwrapWithMessage<T>(NOF.Contract.Result<NOF.Contract.Result<T>> result, Func<T, string> successMessageFactory, bool showSuccess = false)
-        {
-            ArgumentNullException.ThrowIfNull(messageService);
-            ArgumentNullException.ThrowIfNull(result);
-            ArgumentNullException.ThrowIfNull(successMessageFactory);
-
-            if (!result.IsSuccess)
-            {
-                messageService.Error(result.Message);
-                return default;
-            }
-
-            return messageService.UnwrapWithMessage(result.Value, successMessageFactory, showSuccess);
+            return messageService.UnwrapWithMessage(result,
+                result is T value ? successMessageFactory(value) : null, showSuccess);
         }
     }
 }

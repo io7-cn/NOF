@@ -48,7 +48,7 @@ public class HttpEndpointReflectionTests
         Result DeleteUser(DeleteUserRequest request);
 
         [HttpEndpoint(HttpVerb.Get, "/rpc/StreamUsers")]
-        StreamingResult<UserDto> StreamUsers(StreamUsersRequest request);
+        Result<global::System.Collections.Generic.IAsyncEnumerable<UserDto>> StreamUsers(StreamUsersRequest request);
 
         Result Ping(GetUserRequest request);
 
@@ -81,7 +81,7 @@ public class HttpEndpointReflectionTests
     [Fact]
     public void CreateEndpointHandler_WhenStreamingGet_ReturnsIResult()
     {
-        var handler = CreateHandler(nameof(IAppService.StreamUsers), HttpVerb.Get, typeof(StreamUsersRequest), typeof(StreamingResult<UserDto>));
+        var handler = CreateHandler(nameof(IAppService.StreamUsers), HttpVerb.Get, typeof(StreamUsersRequest), typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<UserDto>>));
 
         Assert.Equal(typeof(Task<Microsoft.AspNetCore.Http.IResult>), handler.Method.ReturnType);
         var requestParameter = handler.Method.GetParameters()[0];

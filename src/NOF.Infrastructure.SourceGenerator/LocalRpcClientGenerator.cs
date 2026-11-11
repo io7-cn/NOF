@@ -222,8 +222,6 @@ public sealed class LocalRpcClientGenerator : IIncrementalGenerator
         var returnType = method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var serviceType = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        sb.AppendLine($"{indent}[global::System.Diagnostics.CodeAnalysis.RequiresDynamicCode(\"Local RPC failure projection may require generic instantiation at runtime.\")]");
-        sb.AppendLine($"{indent}[global::System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(\"Local RPC failure projection may require reflective access to generic result helpers.\")]");
         sb.AppendLine($"{indent}public async global::System.Threading.Tasks.Task<{returnType}> {method.Name}Async({requestType} request, global::NOF.Contract.Context context, global::System.Threading.CancellationToken cancellationToken = default)");
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    global::System.ArgumentNullException.ThrowIfNull(context);");
@@ -237,7 +235,7 @@ public sealed class LocalRpcClientGenerator : IIncrementalGenerator
     {
         var requiredResultExpression = BuildRequiredResultExpression(valueExpression);
         var returnTypeDisplay = returnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        return $"global::NOF.Contract.ResultProjection.RequireCompatible<{returnTypeDisplay}>({requiredResultExpression})";
+        return $"global::NOF.Contract.RpcResponse.Require<{returnTypeDisplay}>({requiredResultExpression})";
     }
 
     private static string BuildRequiredResultExpression(string valueExpression)

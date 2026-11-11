@@ -24,14 +24,15 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 - In-process events: `InMemoryEventHandler<T>`, `IEventPublisher`, `PublishAsEvent()`.
 - Persistence: `IDbContext`, `IDbContextFactory`, `IRepository<T>`, provider-neutral async LINQ extensions.
 - Caching and mapping: `ICacheService`, `CacheKey<T>`, `IMapper`, `ProjectTo<TDestination>()`.
-- Results and request models: `Result`, `Result<T>`, `StreamingResult<T>`, `Optional<T>`.
+- Match the successful `T` itself or shared `NOF.Abstraction.Failure`. `Success<T>` is optional: use `Result<Success<T>>` only when successful message metadata is needed. Do not use removed `IsSuccess`, `Extra` or reflective result projections. See `docs/en/design/result-unions.md`.
+- Results and request models: `Result`, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>`.
 
 Commands and notifications are plain payload objects; inheriting the corresponding handler base opts a handler into generated registration.
 
 ## RPC Rules
 
 - Every RPC contract inherits `IRpcService` and declares exactly one transport: `[TransportOverHttp(...)]` or `[TransportOverMemory]`.
-- A contract method takes exactly one reference-type request and returns a non-task `IResult` implementation. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
+- A contract method takes exactly one reference-type request and returns a non-task union implementing `IRpcResponse<TSelf>`. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
 - Controller-style HTTP methods use `[HttpEndpoint]`; JSON-RPC and memory contracts must not.
 - A generated server container is a `partial` class inheriting `RpcServer<TService>`.
 - Register each server with `builder.AddRpcServer<TServer>()`; the host maps applicable transports during `BuildAsync()`.

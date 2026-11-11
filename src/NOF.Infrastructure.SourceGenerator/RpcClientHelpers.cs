@@ -11,7 +11,7 @@ namespace NOF.Infrastructure.SourceGenerator;
 public static class RpcClientHelpers
 {
     public const string RpcServiceInterfaceFqn = "NOF.Contract.IRpcService";
-    public const string ResultInterfaceFqn = "NOF.Contract.IResult";
+    public const string ResultInterfaceFqn = "NOF.Contract.IRpcResponse<TSelf>";
     public const string RpcServerFqn = "NOF.Application.RpcServer<TRpcService>";
 
     public static bool IsRpcServiceInterface(INamedTypeSymbol symbol)
@@ -43,7 +43,7 @@ public static class RpcClientHelpers
 
     public static bool ImplementsResultContract(ITypeSymbol type)
         => type.ToDisplayString() == ResultInterfaceFqn
-           || type.AllInterfaces.Any(static i => i.ToDisplayString() == ResultInterfaceFqn);
+           || type.AllInterfaces.Any(static i => i.OriginalDefinition.ToDisplayString() == ResultInterfaceFqn);
 
     public static string GetRpcClientInterfaceTypeName(INamedTypeSymbol serviceInterface)
     {

@@ -160,11 +160,8 @@ public sealed class NotificationDispatchIntegrationTests
             var probe = host.Services.GetRequiredService<NotificationDispatchProbe>();
             await WaitUntilAsync(() => probe.FirstConcreteCount == 1 && probe.SecondConcreteCount == 1, timeout.Token);
 
-            using var verificationScope = host.Services.CreateScope();
-            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IDbContext>();
-            var inboxMessages = await dbContext.Set<NOFInboxMessage>()
-                .OrderBy(static message => message.Route)
-                .ToListAsync(timeout.Token);
+            // Handler probes are signaled before the inbox transaction commits.
+            var inboxMessages = await WaitForProcessedInboxMessagesAsync(host.Services, 2, timeout.Token);
 
             Assert.Equal(2, inboxMessages.Count);
             Assert.Single(inboxMessages.Select(static message => message.Id).Distinct());
@@ -368,6 +365,29 @@ public sealed class NotificationDispatchIntegrationTests
         while (!condition())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(10, cancellationToken);
+        }
+    }
+
+    private static async Task<List<NOFInboxMessage>> WaitForProcessedInboxMessagesAsync(
+        IServiceProvider services,
+        int expectedCount,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var scope = services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var messages = await dbContext.Set<NOFInboxMessage>()
+                .AsNoTracking()
+                .OrderBy(static message => message.Route)
+                .ToListAsync(cancellationToken);
+            if (messages.Count == expectedCount && messages.All(static message => message.Status == InboxMessageStatus.Processed))
+            {
+                return messages;
+            }
+
             await Task.Delay(10, cancellationToken);
         }
     }

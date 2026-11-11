@@ -1,12 +1,14 @@
+using NOF.Abstraction;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
 namespace NOF.Contract;
 
 public static class HttpRpcTransportResultReader
 {
-    public static async Task<StreamingResult<TItem>> ReadStreamingFallbackAsync<TItem>(
+    public static async Task<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>> ReadStreamingFallbackAsync<TItem>(
         HttpResponseMessage response,
         JsonTypeInfo<Result> fallbackTypeInfo,
         CancellationToken cancellationToken)
@@ -15,14 +17,14 @@ public static class HttpRpcTransportResultReader
         ArgumentNullException.ThrowIfNull(fallbackTypeInfo);
 
         var fallbackResult = await ReadAsync(response, fallbackTypeInfo, cancellationToken).ConfigureAwait(false);
-        return ResultProjection.RequireCompatible<StreamingResult<TItem>>(fallbackResult);
+        return RpcResponse.Require<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(fallbackResult);
     }
 
     public static async Task<T> ReadAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(
         HttpResponseMessage response,
         JsonTypeInfo<T> successTypeInfo,
         CancellationToken cancellationToken)
-        where T : IResult
+        where T : IRpcResponse<T>
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(successTypeInfo);
@@ -31,11 +33,16 @@ public static class HttpRpcTransportResultReader
         {
             if (IsBodyEmpty(response))
             {
-                return ConvertResult<T>(ResultProjection.CreateSuccess(typeof(T)));
+                return T.CreateEmptyResponse();
             }
 
             var payload = await HttpContentJsonExtensions.ReadFromJsonAsync(response.Content, successTypeInfo, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"HTTP RPC response body for '{typeof(T).FullName}' is empty.");
+            if (payload.Value is null)
+            {
+                throw new InvalidOperationException("The HTTP RPC response contains no outcome case.");
+            }
+
             return payload;
         }
 
@@ -45,12 +52,12 @@ public static class HttpRpcTransportResultReader
     public static async Task<T> ReadFailureAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
-        where T : IResult
+        where T : IRpcResponse<T>
     {
         ArgumentNullException.ThrowIfNull(response);
 
         var failure = await CreateTransportFailureAsync(response, cancellationToken).ConfigureAwait(false);
-        return ConvertResult<T>(failure);
+        return T.CreateFailure(failure);
     }
 
     private static bool IsBodyEmpty(HttpResponseMessage response)
@@ -68,17 +75,33 @@ public static class HttpRpcTransportResultReader
         return string.IsNullOrWhiteSpace(body) ? null : body;
     }
 
-    private static async Task<IResult> CreateTransportFailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<Failure> CreateTransportFailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var body = await ReadTransportBodyAsync(response, cancellationToken).ConfigureAwait(false);
+        if (body is not null)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                if (root.ValueKind == JsonValueKind.Object
+                    && root.EnumerateObject().Count() == 3
+                    && root.TryGetProperty("$kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.ValueEquals("failure")
+                    && root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(code.GetString())
+                    && root.TryGetProperty("message", out var description) && description.ValueKind == JsonValueKind.String)
+                {
+                    return new Failure(code.GetString()!, description.GetString()!);
+                }
+            }
+            catch (JsonException)
+            {
+                // A non-contract HTTP error body remains diagnostic text for the transport failure.
+            }
+        }
+
         var message = body ?? response.ReasonPhrase ?? "HTTP RPC transport failure.";
         return Result.Fail(((int)response.StatusCode).ToString(), message);
     }
 
-    private static T ConvertResult<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(IResult result)
-        where T : IResult
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        return ResultProjection.RequireCompatible<T>(result);
-    }
 }

@@ -16,7 +16,8 @@ builder.AddRpcServer<NOFSampleService>();
 builder.AddRpcServer<OAuthChainDemoService>();
 builder.AddRpcServer<DemoDownstreamService>();
 
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis"));
+builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
+    ?? throw new InvalidOperationException("Connection string 'redis' is required."));
 
 builder.AddOidcServer(o =>
 {

@@ -19,7 +19,7 @@ public class LocalRpcClientGeneratorTests
         typeof(IRpcService),
         typeof(Result),
         typeof(Result<>),
-        typeof(StreamingResult<>),
+        typeof(IAsyncEnumerable<>),
         typeof(TransportOverMemoryAttribute)
     ];
 
@@ -57,7 +57,7 @@ public class LocalRpcClientGeneratorTests
         var code = GetGeneratedCode(runResult);
 
         Assert.Contains(
-            "global::NOF.Contract.ResultProjection.RequireCompatible<global::NOF.Contract.Result<global::MyApp.GetFleetOverviewResponse>>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
+            "global::NOF.Contract.RpcResponse.Require<global::NOF.Contract.Result<global::MyApp.GetFleetOverviewResponse>>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
             code);
         Assert.Contains("public sealed class LocalDroneOpsServerClient : global::MyApp.IDroneOpsServiceClient", code);
         Assert.Contains("private static readonly global::System.Reflection.MethodInfo __GetFleetOverviewMethodInfo_0 =", code);
@@ -89,12 +89,12 @@ public class LocalRpcClientGeneratorTests
 
                                   public partial interface IDroneOpsService : IRpcService
                                   {
-                                      StreamingResult<DroneEvent> StreamEvents(Empty request);
+                                      Result<global::System.Collections.Generic.IAsyncEnumerable<DroneEvent>> StreamEvents(Empty request);
                                   }
 
                                   public partial interface IDroneOpsServiceClient : IRpcClient<IDroneOpsService>
                                   {
-                                      global::System.Threading.Tasks.Task<StreamingResult<DroneEvent>> StreamEventsAsync(
+                                      global::System.Threading.Tasks.Task<Result<global::System.Collections.Generic.IAsyncEnumerable<DroneEvent>>> StreamEventsAsync(
                                           Empty request,
                                           Context context,
                                           global::System.Threading.CancellationToken cancellationToken = default);
@@ -107,9 +107,9 @@ public class LocalRpcClientGeneratorTests
         var runResult = new LocalRpcClientGenerator().GetResultPostGen(source, _extraRefs);
         var code = GetGeneratedCode(runResult);
 
-        Assert.Contains("Task<global::NOF.Contract.StreamingResult<global::MyApp.DroneEvent>> StreamEventsAsync", code);
+        Assert.Contains("Task<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<global::MyApp.DroneEvent>>> StreamEventsAsync", code);
         Assert.Contains(
-            "global::NOF.Contract.ResultProjection.RequireCompatible<global::NOF.Contract.StreamingResult<global::MyApp.DroneEvent>>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
+            "global::NOF.Contract.RpcResponse.Require<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<global::MyApp.DroneEvent>>>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
             code);
     }
 
@@ -117,6 +117,7 @@ public class LocalRpcClientGeneratorTests
     public void CustomResult_ReturnType_UsesDirectResult()
     {
         const string source = """
+                              using NOF.Abstraction;
                               using NOF.Contract;
                               using NOF.Application;
                               using NOF.Infrastructure;
@@ -125,13 +126,10 @@ public class LocalRpcClientGeneratorTests
                               namespace MyApp
                               {
                                   public sealed record Empty;
-                                  public sealed record FleetOverviewResult(string Name) : IResult
+                                  public union FleetOverviewResult(Success<string>, Failure) : IRpcResponse<FleetOverviewResult>
                                   {
-                                      public bool IsSuccess => true;
-                                      public string ErrorCode => string.Empty;
-                                      public string Message => string.Empty;
-                                      public object? Value => Name;
-                                      public IDictionary<string, string> Extra { get; } = new Dictionary<string, string>();
+                                      public static FleetOverviewResult CreateFailure(Failure failure) => failure;
+                                      public static FleetOverviewResult CreateEmptyResponse() => throw new System.InvalidOperationException();
                                   }
 
                                   public partial interface IDroneOpsService : IRpcService
@@ -156,7 +154,7 @@ public class LocalRpcClientGeneratorTests
 
         Assert.Contains("Task<global::MyApp.FleetOverviewResult> GetFleetOverviewAsync", code);
         Assert.Contains(
-            "global::NOF.Contract.ResultProjection.RequireCompatible<global::MyApp.FleetOverviewResult>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
+            "global::NOF.Contract.RpcResponse.Require<global::MyApp.FleetOverviewResult>(result ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"))",
             code);
     }
 
