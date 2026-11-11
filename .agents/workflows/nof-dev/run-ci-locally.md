@@ -15,6 +15,8 @@ dotnet build src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj -t:InstallAnd
 
 The project files use non-MAUI stubs on Linux. macOS builds use the MAUI targets and therefore also require the applicable workload.
 
+On Linux, run `dotnet workload restore NOF.slnx -p:Configuration=Release` once to install the pinned workload-set metadata even though MAUI uses stubs.
+
 ## CI Sequence
 
 ```bash

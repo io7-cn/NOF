@@ -27,6 +27,10 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    - name: Restore pinned workload set
+      if: runner.os == 'Linux'
+      run: dotnet workload restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
+
     - name: Install MAUI workload
       if: runner.os == 'Windows'
       run: dotnet workload install maui

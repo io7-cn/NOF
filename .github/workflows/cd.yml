@@ -41,6 +41,10 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    - name: Restore pinned workload set
+      if: runner.os == 'Linux'
+      run: dotnet workload restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
+
     - name: Install MAUI workload
       if: runner.os == 'Windows'
       run: dotnet workload install maui
@@ -157,6 +161,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore pinned workload set
+      if: runner.os == 'Linux'
+      run: dotnet workload restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 
     - name: Install MAUI workload
       run: dotnet workload install maui
@@ -294,6 +302,10 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore pinned workload set
+      if: runner.os == 'Linux'
+      run: dotnet workload restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 
     # Build first so DocFX can read pre-built DLLs instead of .csproj files.
     # Workaround for modern C# support: https://github.com/dotnet/docfx/issues/10808
