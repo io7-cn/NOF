@@ -5,6 +5,7 @@ using NOF.Hosting.AspNetCore.Extension.OidcServer;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
+using NOF.Sample.Application.RequestHandlers;
 using NOF.Sample.Services;
 
 var builder = NOFWebApplicationBuilder.Create(args);
@@ -13,6 +14,7 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddRpcServer<NOFSampleService>();
+builder.Services.AddRequestHandler<GetRootConfigNodesRequest, GetRootConfigNodesResponse, GetRootConfigNodesUseCase>();
 builder.AddRpcServer<OAuthChainDemoService>();
 builder.AddRpcServer<DemoDownstreamService>();
 

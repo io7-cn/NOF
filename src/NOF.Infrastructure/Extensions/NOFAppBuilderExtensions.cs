@@ -36,6 +36,7 @@ public static partial class NOFInfrastructureExtensions
         {
             builder.ConfigureNOFHostEnvironment();
             builder.Services.AddNOFApplication();
+            builder.Services.AddNOFRequests();
             builder.Services.AddInMemoryPersistence();
             builder.Services.TryAddInitializationStep(new RpcServerTransportInitializationStep());
             AddOpenTelemetry(builder);

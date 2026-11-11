@@ -12,6 +12,10 @@ This package does not define runtime outbound authentication directives.
 
 Commands and notifications are plain payload types. Handler discovery comes from the `CommandHandler<T>` and `NotificationHandler<T>` base classes rather than marker interfaces on the message types.
 
+## Application use cases
+
+IRequestHandler<TRequest,TResponse> and RequestHandler<TRequest,TResponse> have no RPC response constraint. IRequestExecutor separates completed business responses from policy rejections and resolves handlers after policies allow execution. See the [application request guide](../../docs/en/design/application-requests.md).
+
 ## Key Abstractions
 
 ### RPC Servers

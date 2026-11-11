@@ -4,7 +4,9 @@ NOF keeps its runtime surface small by moving repetitive framework work into sou
 
 - [.NET 11 migration](net11-migration.md) — runtime requirements, compatibility, and union type decisions.
 - [Result Union migration](../en/design/result-unions.md) ([简体中文](../zh-CN/design/result-unions.md)) — cases, successful messages, JSON, streaming and coordinated upgrades.
+- [Application core and adapters](../en/design/0001-application-core-and-adapters.md) ([简体中文](../zh-CN/design/0001-application-core-and-adapters.md)) — responsibilities and phased architecture decision.
 - [Request dispatch](request-dispatch.md) — how requests are routed through the framework.
+- [Application requests](../en/design/application-requests.md) ([简体中文](../zh-CN/design/application-requests.md)) — explicit registration, execution policies and native adapters.
 - [Handler registration](handler-registration.md) — compile-time discovery and dependency registration.
 - [Source generators](source-generators.md) — generated infrastructure and diagnostics.
 - [Repository and unit of work](repository-uow.md) — persistence boundaries and transaction flow.

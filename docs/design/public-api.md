@@ -2,6 +2,8 @@
 
 ## Current Model
 
+Application use cases can implement `IRequestHandler<TRequest,TResponse>` independently of RPC. See the [application request guide](../en/design/application-requests.md). The interface rules below describe the RPC adapter surface.
+
 NOF RPC contracts are interface-first and method-based.
 
 ```csharp

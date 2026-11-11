@@ -15,6 +15,8 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
 
+For application execution alone, call AddNOFRequests() or AddRequestHandler<TRequest,TResponse,THandler>(). This registers only the executor, without automatic authentication, transactions or other policies. See the [guide](../../docs/en/design/application-requests.md).
+
 ## Usage
 
 Add a single reference to `NOF.Infrastructure` in host or infrastructure-adapter projects.

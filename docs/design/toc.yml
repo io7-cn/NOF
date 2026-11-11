@@ -22,3 +22,7 @@
   href: ../en/design/result-unions.md
 - name: Result 联合类型迁移
   href: ../zh-CN/design/result-unions.md
+- name: Application core and adapters
+  href: ../en/design/0001-application-core-and-adapters.md
+- name: Application request guide
+  href: ../en/design/application-requests.md

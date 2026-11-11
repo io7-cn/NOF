@@ -18,6 +18,12 @@ MyApp/             host and concrete persistence/transport configuration
 
 Application code should remain provider-neutral by using `IDbContext` and `IRepository<T>`; concrete EF Core or NHibernate types belong in the host.
 
+## Application use cases
+
+- Application use cases: explicitly register `IRequestHandler<TRequest,TResponse>` with `AddRequestHandler<TRequest,TResponse,THandler>()` and invoke `IRequestExecutor`. DTO, nullable and business-union responses need no RPC constraint. Policies use `IRequestMiddleware<,>` in registration order; configure security explicitly. See `docs/en/design/application-requests.md`.
+
+Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI. Existing RPC handlers can bridge plain business values through ExecuteUseCaseAsync. Application handlers are explicitly registered; AddApplicationPart does not discover them. Do not serialize RequestExecution or assume AddNOFRequests installs authentication/transactions.
+
 ## Message and RPC Types
 
 | Concern | Declaration | Handler / registration |

@@ -1,8 +1,10 @@
+using Microsoft.Extensions.DependencyInjection;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Infrastructure;
 using NOF.Sample.Application;
 using NOF.Sample.Application.Entities;
+using NOF.Sample.Application.RequestHandlers;
 using NOF.Test;
 using Xunit;
 
@@ -107,6 +109,7 @@ public sealed class NOFSampleHarnessTests
             .AddInMemoryPersistence()
             .AddLocalRpcClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
 
+        builder.Services.AddRequestHandler<GetRootConfigNodesRequest, GetRootConfigNodesResponse, GetRootConfigNodesUseCase>();
         return await builder.BuildTestHostAsync();
     }
 }

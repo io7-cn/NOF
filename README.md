@@ -32,6 +32,8 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 - `Mapper`, `IdGenerator`, and `EventPublisher` expose ambient async-flow convenience APIs while still supporting explicit dependency paths.
 - Built-in in-memory cache state is isolated per host through DI singletons rather than process-wide mutable `static` fields.
 
+Application use cases can return DTOs, nullable values or business unions through IRequestHandler and IRequestExecutor. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [usage guide](docs/en/design/application-requests.md).
+
 ## Packages
 
 | Package                                                                                                                           | Description                                                                                                             |

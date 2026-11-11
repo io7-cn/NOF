@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
@@ -18,9 +19,12 @@ builder.Services.AddScoped<OrderServer.Read, ReadOrderHandler>();
 builder.Services.AddScoped<OrderServer.ReadWithMessage, ReadOrderWithMessageHandler>();
 builder.Services.AddScoped<OrderServer.ReadProtected, ReadProtectedOrderHandler>();
 builder.Services.AddScoped<OrderServer.Lookup, LookupOrderHandler>();
+builder.Services.AddRequestHandler<ReadOrderRequest, OrderDto, ReadOrderUseCase>();
+builder.Services.AddScoped<IRequestMiddleware<ReadOrderRequest, OrderDto>, ValidateReadOrder>();
 
 await using var app = await builder.BuildAsync();
 app.MapOpenApi();
+app.MapGet("/native/orders/{id}", NativeReadOrderAsync);
 app.Urls.Add("http://127.0.0.1:0");
 await app.StartAsync();
 
@@ -41,6 +45,14 @@ Expect(withMessage is Success<OrderDto> messagePayload && messagePayload.Data.Id
     "The optional success wrapper did not retain its data and message");
 
 using var raw = new HttpClient { BaseAddress = http.BaseAddress };
+using var native = await raw.GetAsync($"/native/orders/{id}?page=7");
+native.EnsureSuccessStatusCode();
+var nativeOrder = await JsonSerializer.DeserializeAsync(await native.Content.ReadAsStreamAsync(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
+Expect(nativeOrder == new OrderDto(id, "7", "read"), "Native HTTP did not return the use case's plain DTO");
+using var nativeDenied = await raw.GetAsync($"/native/orders/{id}?page=-1");
+Expect(nativeDenied.StatusCode == HttpStatusCode.BadRequest, "Native HTTP did not map an application policy rejection");
+var rpcDenied = await client.ReadAsync(new ReadOrderRequest { Id = id, Page = -1 }, Context.Empty);
+Expect(rpcDenied is Failure readFailure && readFailure.Code == "order.page", "RPC did not map the same use case policy rejection");
 using var forged = await raw.PutAsync($"/orders/{id}",
     new StringContent($$"""{"id":"{{Guid.NewGuid()}}","state":"raw"}""", Encoding.UTF8, "application/json"));
 forged.EnsureSuccessStatusCode();
@@ -129,6 +141,25 @@ static void Expect(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync(
+    Guid id, int? page, IRequestExecutor executor, CancellationToken cancellationToken)
+{
+    var execution = await executor.ExecuteAsync<ReadOrderRequest, OrderDto>(
+        new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken);
+    return execution switch
+    {
+        RequestCompleted<OrderDto> completed => TypedResults.Ok(completed.Response),
+        RequestRejected rejected => TypedResults.Problem(
+            statusCode: rejected.Kind switch
+            {
+                RequestRejectionKind.AuthenticationRequired => StatusCodes.Status401Unauthorized,
+                RequestRejectionKind.Forbidden => StatusCodes.Status403Forbidden,
+                _ => StatusCodes.Status400BadRequest
+            }, title: rejected.Failure.Code, detail: rejected.Failure.Message),
+        null => throw new InvalidOperationException("Missing execution outcome")
+    };
 }
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/orders")]
@@ -251,11 +282,28 @@ public sealed class UpdateOrderHandler : OrderServer.Update
             : Result.Success(new OrderDto(request.Id, request.Status, request.Label)));
 }
 
-public sealed class ReadOrderHandler : OrderServer.Read
+public sealed class ReadOrderHandler(IRequestExecutor executor) : OrderServer.Read
 {
     public override Task<Result<OrderDto>> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read")));
+        => ExecuteUseCaseAsync<OrderDto>(executor, request, context, static dto => Result.Success(dto), cancellationToken);
+}
+
+public sealed class ReadOrderUseCase : RequestHandler<ReadOrderRequest, OrderDto>
+{
+    public override Task<OrderDto> HandleAsync(
+        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
+}
+
+public sealed class ValidateReadOrder : IRequestMiddleware<ReadOrderRequest, OrderDto>
+{
+    public Task<RequestExecution<OrderDto>> InvokeAsync(ReadOrderRequest request, Context context,
+        RequestExecutionDelegate<ReadOrderRequest, OrderDto> next, CancellationToken cancellationToken)
+        => request.Page < 0
+            ? Task.FromResult<RequestExecution<OrderDto>>(new RequestRejected(RequestRejectionKind.ValidationFailed,
+                new Failure("order.page", "Page must be nonnegative")))
+            : next(request, context, cancellationToken);
 }
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
@@ -297,6 +345,8 @@ public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : Delega
 }
 
 [JsonSerializable(typeof(Result))]
+[JsonSerializable(typeof(OrderDto))]
+[JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 [JsonSerializable(typeof(Result<Success<OrderDto>>))]
 [JsonSerializable(typeof(Result<OrderDto>))]
 [JsonSerializable(typeof(Result<string>))]

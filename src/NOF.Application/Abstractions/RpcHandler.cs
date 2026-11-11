@@ -52,6 +52,28 @@ public abstract class RpcHandler<TRequest, [DynamicallyAccessedMembers(Dynamical
         string message)
         => TResponse.CreateFailure(Result.Fail(errorCode, message));
 
+    /// <summary>Adapts a transport-independent use case into this RPC operation's response contract.</summary>
+    /// <remarks>Existing RPC transport authentication and tenant policies still execute before this bridge.</remarks>
+    protected static async Task<TResponse> ExecuteUseCaseAsync(
+        IRequestExecutor executor, TRequest request, Context context, CancellationToken cancellationToken)
+        => await ExecuteUseCaseAsync<TResponse>(executor, request, context, static response => response, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Projects a use case's business value into the RPC contract without coupling the use case to RPC.</summary>
+    protected static async Task<TResponse> ExecuteUseCaseAsync<TBusinessResponse>(
+        IRequestExecutor executor, TRequest request, Context context,
+        Func<TBusinessResponse, TResponse> projectResponse, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executor);
+        ArgumentNullException.ThrowIfNull(projectResponse);
+        var execution = await executor.ExecuteAsync<TRequest, TBusinessResponse>(request, context, cancellationToken).ConfigureAwait(false);
+        return execution switch
+        {
+            RequestCompleted<TBusinessResponse> completed => projectResponse(completed.Response),
+            RequestRejected rejected => TResponse.CreateFailure(rejected.Failure),
+            null => throw new InvalidOperationException("The application executor returned no outcome.")
+        };
+    }
+
     /// <summary>
     /// Executes the handler using the strongly typed request.
     /// </summary>

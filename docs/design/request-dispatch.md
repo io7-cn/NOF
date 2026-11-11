@@ -2,7 +2,7 @@
 
 ## Decision
 
-NOF keeps generic command and notification dispatch, but RPC-style request handling is centered on strongly typed `IRpcService` contracts and `RpcServer<TService>` implementations.
+Application use cases use IRequestHandler and IRequestExecutor independently of transport; see [ADR 0001](../en/design/0001-application-core-and-adapters.md) and the [implementation guide](../en/design/application-requests.md). RPC adapters continue to use IRpcService and RpcServer<TService>.
 
 ## Current Invocation Model
 
@@ -16,6 +16,6 @@ NOF keeps generic command and notification dispatch, but RPC-style request handl
 
 - HTTP exposure for RPC services is registered through `builder.AddRpcServer<TRpcServer>()` or `builder.Services.AddRpcServer<TRpcServer>()` and mapped automatically during application initialization.
 - OpenAPI registration is always enabled by `NOFWebApplicationBuilder.Create(args)`, but `app.MapOpenApi()` remains an explicit host decision.
-- Application implementations are built around `RpcServer<TService>` rather than ad-hoc request-dispatch APIs.
+- RPC handlers may delegate to application use cases through ExecuteUseCaseAsync; native HTTP adapters use ASP.NET Core response types.
 - `RpcServer<TService>` discovery generates `Local{RpcServerName}Client`; the client interface is selected through `IRpcClient<TService>` rather than a naming convention or marker attribute.
 - ASP.NET Core hosting maps streaming RPC HTTP endpoints to .NET 11 server-sent events.

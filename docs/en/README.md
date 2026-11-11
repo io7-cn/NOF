@@ -42,3 +42,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 [security reporting](https://github.com/io7-cn/NOF/blob/main/SECURITY.md), and the [Apache 2.0 license](https://github.com/io7-cn/NOF/blob/main/LICENSE).
 
 - [Result Union migration](design/result-unions.md)
+- [Application core and adapters (ADR 0001)](design/0001-application-core-and-adapters.md)
+- [Application request implementation guide](design/application-requests.md)
