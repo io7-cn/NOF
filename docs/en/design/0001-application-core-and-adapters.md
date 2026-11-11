@@ -45,9 +45,26 @@ must identify that prerequisite and must not bypass protected-main review gates.
 Choose option 3. A use case accepts a typed request and execution context and returns
 its declared business response. Responses may be DTOs, nullable values, Result<T>,
 or business-specific unions; no RPC response interface is required by the core.
-The concrete use case type identifies execution and its policies. Different use cases
-may share request/response types without ambiguity. Source-generated application-part
-registration avoids a per-use-case host registration list.
+### Developer-facing service model
+
+Retain service contracts, generated operation bases and the existing
+`XxxService.DoSomething` override workflow. A use case is the application operation
+represented by that model, not a second public handler hierarchy beside RPC.
+Evolve RPC-centered service/server/handler contracts into transport-independent
+application service equivalents. Ordinary DTOs and business unions must not require
+IRpcResponse or a mandatory transport declaration. RPC becomes an adapter.
+
+Operation identity is the service contract plus operation, not the request/response
+pair. Different operations may share those models while retaining distinct behavior
+and policies. Source-generated application-part registration remains the default.
+The execution/policy machinery can remain behind generated invocation; applications
+should not need a second use-case class, thin RPC forwarding class, or a separate
+public executor API to express one service operation.
+
+The current IRequestHandler/IRequestExecutor implementation in draft PR #5 is an
+execution prototype validating response freedom, rejection, context and AOT. Its
+parallel public programming model is provisional and must be consolidated into the
+service model before this architecture is considered implemented.
 
 The application policy pipeline handles application authorization, validation,
 tenant boundaries, transaction policies and idempotency. Authentication mechanisms,

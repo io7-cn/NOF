@@ -1,5 +1,7 @@
 # Transport-independent application requests
 
+> Prototype status: this guide documents the current draft implementation, not the final developer API. ADR 0001 retains the generated service/operation override model and requires consolidating this parallel execution surface before merge.
+
 [简体中文](../../zh-CN/design/application-requests.md) · [Architecture decision](0001-application-core-and-adapters.md)
 
 ADR 0001 phase 1 adds a scoped executor. NOF.Application owns the contracts;

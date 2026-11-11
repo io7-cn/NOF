@@ -1,5 +1,7 @@
 # 传输无关的应用请求
 
+> 原型状态：本文记录当前草稿实现，不代表最终开发者 API。ADR 0001 保留生成式服务操作与 override 模型，合并前需要将这套并行执行入口收敛回服务模型。
+
 [English](../../en/design/application-requests.md) · [架构决策](0001-application-core-and-adapters.md)
 
 ADR 0001 第一阶段引入作用域级执行器。契约位于 NOF.Application，执行与注册位于
