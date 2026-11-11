@@ -667,29 +667,33 @@ public static partial class NOFOidcServerExtensions
                 ParseScopes(request.Scope)),
             cancellationToken).ConfigureAwait(false);
 
-        if (exchangeResult is OAuthTokenExchangeResult.Failure failure)
+        return exchangeResult switch
         {
-            return Fail(failure.Error, failure.ErrorDescription);
+            OAuthTokenExchangeResult.Failure failure => Fail(failure.Error, failure.ErrorDescription),
+            OAuthTokenExchangeResult.Success success => await IssueExchangedTokenAsync(success).ConfigureAwait(false),
+            null => Fail("server_error", "The token exchange handler returned an uninitialized result.")
+        };
+
+        async Task<Result<OAuthTokenEndpointResponse>> IssueExchangedTokenAsync(OAuthTokenExchangeResult.Success success)
+        {
+            var response = await IssueTokenResponseAsync(
+                subjectService,
+                tokenService,
+                signingKeyService,
+                oauthOptions,
+                success.Subject,
+                string.Join(' ', success.Scopes.OrderBy(static value => value, StringComparer.Ordinal)),
+                authenticatedClient.ClientId,
+                idTokenAudience: null,
+                nonce: null,
+                additionalAccessClaims: success.AccessTokenClaims,
+                issueRefreshToken: false,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            return response is null
+                ? Fail("invalid_grant", "subject_token subject is invalid.")
+                : Result.Success(response);
         }
-
-        var success = (OAuthTokenExchangeResult.Success)exchangeResult;
-        var response = await IssueTokenResponseAsync(
-            subjectService,
-            tokenService,
-            signingKeyService,
-            oauthOptions,
-            success.Subject,
-            string.Join(' ', success.Scopes.OrderBy(static value => value, StringComparer.Ordinal)),
-            authenticatedClient.ClientId,
-            idTokenAudience: null,
-            nonce: null,
-            additionalAccessClaims: success.AccessTokenClaims,
-            issueRefreshToken: false,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        return response is null
-            ? Fail("invalid_grant", "subject_token subject is invalid.")
-            : Result.Success(response);
     }
     internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromClientCredentialsAsync(
         HttpRequest httpRequest,
@@ -1134,7 +1138,7 @@ public static partial class NOFOidcServerExtensions
         {
             OAuthClientCredentialsValidationResult.Success => null,
             OAuthClientCredentialsValidationResult.Failure failure => CreateOAuthError(failure.Error, failure.ErrorDescription),
-            _ => CreateOAuthError("invalid_client", "client credentials are invalid.")
+            null => CreateOAuthError("invalid_client", "client credentials are invalid.")
         };
     }
 
@@ -1217,7 +1221,7 @@ public static partial class NOFOidcServerExtensions
             OAuthClientCredentialsValidationResult.Success => (null, clientCredentials.ClientId),
             OAuthClientCredentialsValidationResult.Failure failure =>
                 (CreateOAuthError(failure.Error, failure.ErrorDescription), string.Empty),
-            _ => (CreateOAuthError("invalid_client", "client credentials are invalid."), string.Empty)
+            null => (CreateOAuthError("invalid_client", "client credentials are invalid."), string.Empty)
         };
     }
 

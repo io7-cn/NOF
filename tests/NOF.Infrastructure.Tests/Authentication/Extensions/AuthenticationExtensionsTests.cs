@@ -365,7 +365,7 @@ public sealed class AuthenticationExtensionsTests
         Assert.Equal("Bootstrap Confidential Client", client.Value.DisplayName);
         Assert.Equal(["jobs.read", "jobs.write"], client.Value.AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
         Assert.Equal(["https://confidential.local/callback"], client.Value.RedirectUris);
-        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation);
+        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation.Value);
     }
 
     [Fact]
@@ -1003,7 +1003,7 @@ public sealed class AuthenticationExtensionsTests
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal("provided-secret", result.Value.ClientSecret);
-        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation);
+        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation.Value);
     }
 
     [Fact]
@@ -1139,8 +1139,8 @@ public sealed class AuthenticationExtensionsTests
                 GrantType: OAuthGrantTypes.AuthorizationCode),
             CancellationToken.None);
 
-        Assert.IsType<OAuthClientCredentialsValidationResult.Failure>(oldCredentials);
-        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(rotatedCredentials);
+        Assert.IsType<OAuthClientCredentialsValidationResult.Failure>(oldCredentials.Value);
+        Assert.IsType<OAuthClientCredentialsValidationResult.Success>(rotatedCredentials.Value);
     }
 
     [Fact]

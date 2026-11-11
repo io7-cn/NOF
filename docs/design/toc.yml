@@ -1,5 +1,7 @@
 - name: Overview
   href: index.md
+- name: .NET 11 and Union Types
+  href: net11-migration.md
 - name: Handler Registration
   href: handler-registration.md
 - name: Mapper

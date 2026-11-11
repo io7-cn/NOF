@@ -7,6 +7,11 @@
 
 ## Features
 
+The next major version targets **.NET 11 and C# 15**. See the
+[migration and union type guide](docs/design/net11-migration.md) for requirements,
+breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains the
+.NET 10 release baseline.
+
 - **Clean Architecture** - layered packages (`Domain`, `Contract`, `Application`, `Infrastructure`) enforce separation of concerns
 - **CQRS & Messaging** - first-class `IRpcService`, typed command/notification dispatch, handler pipelines, and streaming RPC support
 - **Source Generators** - compile-time code generation for RPC servers, HTTP endpoint mapping, DI registration, mapping registration, and failure definitions
@@ -113,7 +118,7 @@ if (result.IsSuccess)
 }
 ```
 
-When the service is exposed through `NOF.Hosting.AspNetCore`, NOF uses .NET 10 server-sent events for HTTP streaming endpoints.
+When the service is exposed through `NOF.Hosting.AspNetCore`, NOF uses .NET 11 server-sent events for HTTP streaming endpoints.
 
 ## Architecture
 

@@ -4,7 +4,7 @@ ASP.NET Core hosting package for the [NOF Framework](https://github.com/XmmShp/N
 
 ## Overview
 
-Provides the ASP.NET Core host integration for NOF applications, including HTTP endpoint mapping from registered RPC servers, OpenAPI service registration, JSON serialization configuration, middleware pipeline, .NET 10 SSE streaming integration, and a NOF-oriented `IHostApplicationBuilder` implementation for web applications.
+Provides the ASP.NET Core host integration for NOF applications, including HTTP endpoint mapping from registered RPC servers, OpenAPI service registration, JSON serialization configuration, middleware pipeline, .NET 11 SSE streaming integration, and a NOF-oriented `IHostApplicationBuilder` implementation for web applications.
 
 ## Features
 
@@ -12,7 +12,7 @@ Provides the ASP.NET Core host integration for NOF applications, including HTTP 
 - **OpenAPI Registration** - built-in OpenAPI service registration; endpoint mapping stays explicit in the host application
 - **Infrastructure Defaults** - `Create()` applies `NOF.Infrastructure` defaults for typical server-side hosts
 - **JSON Configuration** - pre-configured `System.Text.Json` options with sensible defaults
-- **Streaming RPC over SSE** - `StreamingResult<T>` endpoints are exposed as server-sent events via ASP.NET Core's .NET 10 SSE support
+- **Streaming RPC over SSE** - `StreamingResult<T>` endpoints are exposed as server-sent events via ASP.NET Core's .NET 11 SSE support
 - **Invocation Context Middleware** - propagates tenant ID and other context through the request pipeline
 - **`[AutoInject]` Support** - bundled source generators for automatic DI registration
 

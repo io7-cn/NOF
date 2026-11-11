@@ -10,6 +10,54 @@ namespace NOF.Infrastructure.Tests.Middlewares;
 public sealed class AuthorizationInboundMiddlewareTests
 {
     [Theory]
+    [InlineData(InboundAuthorizationKind.Request)]
+    [InlineData(InboundAuthorizationKind.Command)]
+    [InlineData(InboundAuthorizationKind.Notification)]
+    public async Task InvokeAsync_UninitializedAuthorizationResult_ShouldNeverExecuteHandler(InboundAuthorizationKind kind)
+    {
+        var middleware = CreateMiddleware(new UserContext(), new UninitializedAuthorizationHandler());
+        var nextCalled = false;
+
+        async Task InvokeAsync()
+        {
+            switch (kind)
+            {
+                case InboundAuthorizationKind.Request:
+                    await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.AllowAnonymousMethod)), new TestRequest(), (_, _, _) =>
+                    {
+                        nextCalled = true;
+                        return ValueTask.CompletedTask;
+                    }, default);
+                    break;
+                case InboundAuthorizationKind.Command:
+                    await middleware.InvokeAsync(CreateCommandContext(typeof(TestRequest), typeof(TestHandler), nameof(TestHandler.AllowAnonymousHandler)), new TestRequest(), (_, _, _) =>
+                    {
+                        nextCalled = true;
+                        return ValueTask.CompletedTask;
+                    }, default);
+                    break;
+                case InboundAuthorizationKind.Notification:
+                    await middleware.InvokeAsync(CreateNotificationContext(typeof(TestRequest), typeof(TestHandler), nameof(TestHandler.AllowAnonymousHandler)), new TestRequest(), (_, _, _) =>
+                    {
+                        nextCalled = true;
+                        return ValueTask.CompletedTask;
+                    }, default);
+                    break;
+            }
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(InvokeAsync);
+        Assert.Contains("uninitialized", exception.Message);
+        Assert.False(nextCalled);
+    }
+
+    public sealed class UninitializedAuthorizationHandler : IInboundAuthorizationHandler
+    {
+        public ValueTask<InboundAuthorizationResult> AuthorizeAsync(InboundAuthorizationContext context, CancellationToken cancellationToken)
+            => ValueTask.FromResult(default(InboundAuthorizationResult));
+    }
+
+    [Theory]
     [InlineData(null, "forged", "403")]
     [InlineData("host", "forged", "403")]
     [InlineData("tenantb", "tenanta", "403")]

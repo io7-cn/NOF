@@ -2,6 +2,7 @@
 
 NOF keeps its runtime surface small by moving repetitive framework work into source generators and explicit architectural building blocks. These notes explain the decisions behind those building blocks.
 
+- [.NET 11 migration](net11-migration.md) — runtime requirements, compatibility, and union type decisions.
 - [Request dispatch](request-dispatch.md) — how requests are routed through the framework.
 - [Handler registration](handler-registration.md) — compile-time discovery and dependency registration.
 - [Source generators](source-generators.md) — generated infrastructure and diagnostics.

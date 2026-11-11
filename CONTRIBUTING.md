@@ -21,7 +21,7 @@ Be respectful, constructive, and inclusive. We are committed to providing a welc
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) or later
+- [.NET 11 SDK](https://dotnet.microsoft.com/download) or later
 - A C# IDE (Visual Studio 2026+, Rider, or VS Code with C# Dev Kit)
 - Git
 
@@ -151,7 +151,7 @@ feat(contract): add PatchRequest<T> abstraction
 fix(efcore): resolve multi-tenant migration isolation
 docs(hosting): update Quick Start example
 test(generator): add SnowflakeId source generator tests
-chore(ci): upgrade to .NET 10 SDK
+chore(ci): upgrade to .NET 11 SDK
 ```
 
 ## Pull Request Process

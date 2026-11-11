@@ -52,7 +52,7 @@ public sealed class AuthorizationInboundMiddleware(
                 MessageType = context.MessageType
             },
             cancellationToken).ConfigureAwait(false);
-        if (authorizationResult is InboundAuthorizationResult.Denied)
+        if (GetDenial(authorizationResult) is not null)
         {
             return;
         }
@@ -74,7 +74,7 @@ public sealed class AuthorizationInboundMiddleware(
                 MessageType = context.MessageType
             },
             cancellationToken).ConfigureAwait(false);
-        if (authorizationResult is InboundAuthorizationResult.Denied)
+        if (GetDenial(authorizationResult) is not null)
         {
             return;
         }
@@ -98,7 +98,7 @@ public sealed class AuthorizationInboundMiddleware(
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (authorizationResult is InboundAuthorizationResult.Denied denied)
+        if (GetDenial(authorizationResult) is { } denied)
         {
             ApplyFailure(context, denied);
             return;
@@ -112,6 +112,14 @@ public sealed class AuthorizationInboundMiddleware(
 
         await next(WithTrustedTenant(context), request, cancellationToken);
     }
+
+    private static InboundAuthorizationResult.Denied? GetDenial(InboundAuthorizationResult result)
+        => result switch
+        {
+            InboundAuthorizationResult.Allowed => null,
+            InboundAuthorizationResult.Denied denied => denied,
+            null => throw new InvalidOperationException("The authorization handler returned an uninitialized result.")
+        };
 
     private InboundAuthorizationResult.Denied? ValidateRequestTenant(RequestInboundContext context)
     {

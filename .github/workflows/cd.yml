@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '11.0.100'
   CONFIGURATION: Release
   SOLUTION_FILE: NOF.slnx
 
@@ -44,6 +44,10 @@ jobs:
     - name: Install MAUI workload
       if: runner.os == 'Windows'
       run: dotnet workload install maui
+
+    - name: Install Android dependencies
+      if: runner.os == 'Windows'
+      run: dotnet build src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj -t:InstallAndroidDependencies -f net11.0-android -p:AcceptAndroidSdkLicenses=True
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
@@ -157,6 +161,9 @@ jobs:
     - name: Install MAUI workload
       run: dotnet workload install maui
 
+    - name: Install Android dependencies
+      run: dotnet build src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj -t:InstallAndroidDependencies -f net11.0-android -p:AcceptAndroidSdkLicenses=True
+
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 
@@ -269,6 +276,8 @@ jobs:
   deploy-docs:
     runs-on: ubuntu-latest
     needs: build-and-test
+    # The github-pages environment permits main deployments, not release tags.
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       pages: write
@@ -287,7 +296,7 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     # Build first so DocFX can read pre-built DLLs instead of .csproj files.
-    # Workaround for C# 14 support: https://github.com/dotnet/docfx/issues/10808
+    # Workaround for modern C# support: https://github.com/dotnet/docfx/issues/10808
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 

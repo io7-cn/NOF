@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: '11.0.100'
   CONFIGURATION: Release
   SOLUTION_FILE: NOF.slnx
 
@@ -31,6 +31,10 @@ jobs:
       if: runner.os == 'Windows'
       run: dotnet workload install maui
 
+    - name: Install Android dependencies
+      if: runner.os == 'Windows'
+      run: dotnet build src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj -t:InstallAndroidDependencies -f net11.0-android -p:AcceptAndroidSdkLicenses=True
+
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 
@@ -43,6 +47,14 @@ jobs:
 
     - name: Run tests
       run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal --collect:"XPlat Code Coverage"
+
+    - name: Publish Native AOT smoke test
+      if: runner.os == 'Linux'
+      run: dotnet publish tests/NOF.Hosting.AspNetCore.AotSmoke/NOF.Hosting.AspNetCore.AotSmoke.csproj --configuration ${{ env.CONFIGURATION }} --runtime linux-x64 --output artifacts/aot-smoke
+
+    - name: Run Native AOT smoke test
+      if: runner.os == 'Linux'
+      run: ./artifacts/aot-smoke/NOF.Hosting.AspNetCore.AotSmoke
 
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4

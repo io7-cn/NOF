@@ -163,14 +163,17 @@ public sealed record OAuthTokenExchangeRequest(
     ClaimsPrincipal ActorPrincipal,
     IReadOnlySet<string> RequestedScopes);
 
-public abstract record OAuthTokenExchangeResult
+/// <summary>Contains an authorized token exchange or an OAuth grant failure.</summary>
+public union OAuthTokenExchangeResult(OAuthTokenExchangeResult.Success, OAuthTokenExchangeResult.Failure)
 {
+    /// <summary>Contains the subject, granted scopes, and additional access token claims.</summary>
     public sealed record Success(
         string Subject,
         IReadOnlySet<string> Scopes,
-        TokenClaim[]? AccessTokenClaims = null) : OAuthTokenExchangeResult;
+        TokenClaim[]? AccessTokenClaims = null);
 
-    public sealed record Failure(string Error, string ErrorDescription) : OAuthTokenExchangeResult;
+    /// <summary>Contains the OAuth error returned when the exchange is rejected.</summary>
+    public sealed record Failure(string Error, string ErrorDescription);
 }
 
 public sealed record OAuthSubjectProfile(

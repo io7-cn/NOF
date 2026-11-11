@@ -79,9 +79,9 @@ public static class GeneratedHttpRpcEndpoint
                 operation.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
-                    Content = new Dictionary<string, OpenApiMediaType>
+                    Content = new Dictionary<string, IOpenApiMediaType>
                     {
-                        ["application/json"] = new() { Schema = schema }
+                        ["application/json"] = new OpenApiMediaType { Schema = schema }
                     }
                 };
             }
@@ -104,9 +104,9 @@ public static class GeneratedHttpRpcEndpoint
         => new()
         {
             Description = description,
-            Content = new Dictionary<string, OpenApiMediaType>
+            Content = new Dictionary<string, IOpenApiMediaType>
             {
-                ["application/json"] = new() { Schema = schema }
+                ["application/json"] = new OpenApiMediaType { Schema = schema }
             }
         };
 

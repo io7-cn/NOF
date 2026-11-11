@@ -4,12 +4,13 @@ description: Run the repository's GitHub Actions build-and-test sequence locally
 
 # Run CI Locally
 
-The CI build-and-test job uses .NET 10, Release configuration, and `NOF.slnx` on Ubuntu and Windows. Windows installs the MAUI workload first.
+The CI build-and-test job uses .NET 11, Release configuration, and `NOF.slnx` on Ubuntu and Windows. Windows installs the pinned MAUI workload set and required Android SDK platform first.
 
 ## Windows Prerequisite
 
 ```bash
 dotnet workload install maui
+dotnet build src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj -t:InstallAndroidDependencies -f net11.0-android -p:AcceptAndroidSdkLicenses=True
 ```
 
 The project files use non-MAUI stubs on Linux. macOS builds use the MAUI targets and therefore also require the applicable workload.
