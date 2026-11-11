@@ -109,13 +109,13 @@
                 _request,
                 NOF.Contract.Context.Empty,
                 _streamCancellationTokenSource.Token);
-            if (result is not Success<IAsyncEnumerable<SampleStreamEvent>> success)
+            if (result is not IAsyncEnumerable<SampleStreamEvent> success)
             {
                 Message.Error(result.GetRpcFailureMessage());
                 return;
             }
 
-            await foreach (var item in success.Data.WithCancellation(_streamCancellationTokenSource.Token))
+            await foreach (var item in success.WithCancellation(_streamCancellationTokenSource.Token))
             {
                 _events.Add(item);
                 await InvokeAsync(StateHasChanged);

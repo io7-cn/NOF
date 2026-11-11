@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 namespace NOF.Domain;
 
 /// <summary>

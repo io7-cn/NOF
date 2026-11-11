@@ -223,7 +223,7 @@ public sealed class HttpRpcClientGenerator : IIncrementalGenerator
             var jsonRpcRoute = MakeBaseAddressRelative(NormalizeRoutePrefix(transport.RoutePrefix));
             if (isStreaming)
             {
-                sb.AppendLine($"                result = await global::NOF.Contract.JsonRpcHttpClient.SendStreamingAsync<{requestType}, {streamItemType}>(");
+                sb.AppendLine($"                result = await global::NOF.Contract.JsonRpcHttpClient.SendStreaming{(endpoint.ReturnInfo.HasSuccessWrapper ? "WithMessage" : "")}Async<{requestType}, {streamItemType}>(");
             }
             else
             {
@@ -339,19 +339,21 @@ public sealed class HttpRpcClientGenerator : IIncrementalGenerator
             sb.AppendLine("                {");
             sb.AppendLine("                    using (response)");
             sb.AppendLine("                    {");
-            sb.AppendLine($"                    result = await global::NOF.Contract.HttpRpcTransportResultReader.ReadFailureAsync<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<{streamItemType}>>>(response, ct).ConfigureAwait(false);");
+            sb.AppendLine($"                    result = await global::NOF.Contract.HttpRpcTransportResultReader.ReadFailureAsync<{responseType}>(response, ct).ConfigureAwait(false);");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
             sb.AppendLine("                else if (string.Equals(response.Content.Headers.ContentType?.MediaType, \"text/event-stream\", global::System.StringComparison.OrdinalIgnoreCase))");
             sb.AppendLine("                {");
             sb.AppendLine($"                    var stream = global::NOF.Contract.SseResponseReader.ReadAsync<{streamItemType}>(response, GetJsonTypeInfo<{streamItemType}>(), ct);");
-            sb.AppendLine($"                    result = global::NOF.Contract.Result.Stream<{streamItemType}>(stream, global::NOF.Contract.StreamingResponseMetadata.ReadMessage(response));");
+            sb.AppendLine(endpoint.ReturnInfo.HasSuccessWrapper
+                ? $"                    result = global::NOF.Contract.Result.WithMessage<global::System.Collections.Generic.IAsyncEnumerable<{streamItemType}>>(stream, global::NOF.Contract.StreamingResponseMetadata.ReadMessage(response));"
+                : $"                    result = global::NOF.Contract.Result.Stream<{streamItemType}>(stream);");
             sb.AppendLine("                }");
             sb.AppendLine("                else");
             sb.AppendLine("                {");
             sb.AppendLine("                    using (response)");
             sb.AppendLine("                    {");
-            sb.AppendLine($"                        result = await global::NOF.Contract.HttpRpcTransportResultReader.ReadStreamingFallbackAsync<{streamItemType}>(response, GetJsonTypeInfo<global::NOF.Contract.Result>(), ct).ConfigureAwait(false);");
+            sb.AppendLine($"                        result = global::NOF.Contract.RpcResponse.Require<{responseType}>(await global::NOF.Contract.HttpRpcTransportResultReader.ReadStreamingFallbackAsync<{streamItemType}>(response, GetJsonTypeInfo<global::NOF.Contract.Result>(), ct).ConfigureAwait(false));");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
         }

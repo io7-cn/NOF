@@ -252,10 +252,10 @@ public sealed class AuthenticationExtensionsTests
         var client = await clientRepository.GetAsync("bootstrap-public-client");
 
         Assert.NotNull(client.ExpectSuccess());
-        Assert.Equal(OAuthClientType.Public, client.ExpectSuccess().Data.ClientType);
-        Assert.Equal("Bootstrap Public Client", client.ExpectSuccess().Data.DisplayName);
-        Assert.Equal(["jobs.read", "openid", "profile"], client.ExpectSuccess().Data.AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
-        Assert.Equal(["https://public.local/callback"], client.ExpectSuccess().Data.RedirectUris);
+        Assert.Equal(OAuthClientType.Public, client.ExpectSuccess().ClientType);
+        Assert.Equal("Bootstrap Public Client", client.ExpectSuccess().DisplayName);
+        Assert.Equal(["jobs.read", "openid", "profile"], client.ExpectSuccess().AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
+        Assert.Equal(["https://public.local/callback"], client.ExpectSuccess().RedirectUris);
     }
 
     [Fact]
@@ -306,10 +306,10 @@ public sealed class AuthenticationExtensionsTests
             var existingClient = await secondClientRepository.GetAsync("bootstrap-public-client");
 
             Assert.NotNull(existingClient.ExpectSuccess());
-            Assert.Equal("Existing Public Client", existingClient.ExpectSuccess().Data.DisplayName);
-            Assert.Equal(["existing.scope"], existingClient.ExpectSuccess().Data.AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
-            Assert.Equal(["https://existing.local/callback"], existingClient.ExpectSuccess().Data.RedirectUris);
-            Assert.False(existingClient.ExpectSuccess().Data.IsEnabled);
+            Assert.Equal("Existing Public Client", existingClient.ExpectSuccess().DisplayName);
+            Assert.Equal(["existing.scope"], existingClient.ExpectSuccess().AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
+            Assert.Equal(["https://existing.local/callback"], existingClient.ExpectSuccess().RedirectUris);
+            Assert.False(existingClient.ExpectSuccess().IsEnabled);
         }
         finally
         {
@@ -361,10 +361,10 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(client.ExpectSuccess());
-        Assert.Equal(OAuthClientType.Confidential, client.ExpectSuccess().Data.ClientType);
-        Assert.Equal("Bootstrap Confidential Client", client.ExpectSuccess().Data.DisplayName);
-        Assert.Equal(["jobs.read", "jobs.write"], client.ExpectSuccess().Data.AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
-        Assert.Equal(["https://confidential.local/callback"], client.ExpectSuccess().Data.RedirectUris);
+        Assert.Equal(OAuthClientType.Confidential, client.ExpectSuccess().ClientType);
+        Assert.Equal("Bootstrap Confidential Client", client.ExpectSuccess().DisplayName);
+        Assert.Equal(["jobs.read", "jobs.write"], client.ExpectSuccess().AllowedScopes.OrderBy(static scope => scope, StringComparer.Ordinal).ToArray());
+        Assert.Equal(["https://confidential.local/callback"], client.ExpectSuccess().RedirectUris);
         Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation.Value);
     }
 
@@ -429,9 +429,9 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(client.ExpectSuccess());
-        Assert.Equal(jsonWebKeySet, client.ExpectSuccess().Data.JsonWebKeySet);
+        Assert.Equal(jsonWebKeySet, client.ExpectSuccess().JsonWebKeySet);
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("access-token", result.ExpectSuccess().Data.AccessToken);
+        Assert.Equal("access-token", result.ExpectSuccess().AccessToken);
         Assert.Equal(clientId, tokenService.LastRequest?.ClientId);
         Assert.NotNull(replayResult.ExpectFailure());
         Assert.Equal("invalid_client", replayResult.ExpectFailure().Code);
@@ -486,7 +486,7 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(createResult.ExpectSuccess());
-        Assert.Null(createResult.ExpectSuccess().Data.ClientSecret);
+        Assert.Null(createResult.ExpectSuccess().ClientSecret);
         Assert.NotNull(result.ExpectFailure());
         Assert.Equal("invalid_client", result.ExpectFailure().Code);
         Assert.Equal("client assertion is invalid.", result.ExpectFailure().Message);
@@ -525,9 +525,9 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("access-token", result.ExpectSuccess().Data.AccessToken);
-        Assert.Null(result.ExpectSuccess().Data.RefreshToken);
-        Assert.Equal("jobs.read jobs.write", result.ExpectSuccess().Data.Scope);
+        Assert.Equal("access-token", result.ExpectSuccess().AccessToken);
+        Assert.Null(result.ExpectSuccess().RefreshToken);
+        Assert.Equal("jobs.read jobs.write", result.ExpectSuccess().Scope);
         Assert.Equal("jobs-api", tokenService.LastRequest?.Audience);
         Assert.Null(tokenService.LastRequest?.RefreshToken);
         Assert.Contains(tokenService.LastRequest!.AccessClaims!, claim => claim.Type == OAuthClaimTypes.Subject && claim.Value == "client:service-a");
@@ -877,7 +877,7 @@ public sealed class AuthenticationExtensionsTests
 
         Assert.NotNull(result.ExpectSuccess());
         Assert.Null(tokenService.LastRequest?.RefreshToken);
-        Assert.Null(result.ExpectSuccess().Data.RefreshToken);
+        Assert.Null(result.ExpectSuccess().RefreshToken);
     }
 
     [Fact]
@@ -967,8 +967,8 @@ public sealed class AuthenticationExtensionsTests
         });
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal(OAuthClientType.Public, result.ExpectSuccess().Data.Client.ClientType);
-        Assert.Null(result.ExpectSuccess().Data.ClientSecret);
+        Assert.Equal(OAuthClientType.Public, result.ExpectSuccess().Client.ClientType);
+        Assert.Null(result.ExpectSuccess().ClientSecret);
 
         var rotateResult = await service.RotateSecretAsync("public-app");
         Assert.NotNull(rotateResult.ExpectFailure());
@@ -1002,7 +1002,7 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("provided-secret", result.ExpectSuccess().Data.ClientSecret);
+        Assert.Equal("provided-secret", result.ExpectSuccess().ClientSecret);
         Assert.IsType<OAuthClientCredentialsValidationResult.Success>(validation.Value);
     }
 
@@ -1033,32 +1033,32 @@ public sealed class AuthenticationExtensionsTests
         });
 
         Assert.NotNull(registration.ExpectSuccess());
-        Assert.StartsWith("nof_dcr_", registration.ExpectSuccess().Data.Client.ClientId, StringComparison.Ordinal);
-        Assert.StartsWith("nof_reg_", registration.ExpectSuccess().Data.RegistrationAccessToken, StringComparison.Ordinal);
-        Assert.Null(registration.ExpectSuccess().Data.ClientSecret);
-        Assert.Equal(OAuthClientAuthenticationMethods.None, registration.ExpectSuccess().Data.Client.TokenEndpointAuthenticationMethod);
+        Assert.StartsWith("nof_dcr_", registration.ExpectSuccess().Client.ClientId, StringComparison.Ordinal);
+        Assert.StartsWith("nof_reg_", registration.ExpectSuccess().RegistrationAccessToken, StringComparison.Ordinal);
+        Assert.Null(registration.ExpectSuccess().ClientSecret);
+        Assert.Equal(OAuthClientAuthenticationMethods.None, registration.ExpectSuccess().Client.TokenEndpointAuthenticationMethod);
 
         var storedClient = await EntityFrameworkQueryableExtensions.SingleAsync(
             dbContext.Set<OAuthClient>(),
-            client => client.ClientId == registration.ExpectSuccess().Data.Client.ClientId);
-        Assert.NotEqual(registration.ExpectSuccess().Data.RegistrationAccessToken, storedClient.RegistrationAccessTokenHash);
-        Assert.DoesNotContain(registration.ExpectSuccess().Data.RegistrationAccessToken, storedClient.RegistrationAccessTokenHash, StringComparison.Ordinal);
+            client => client.ClientId == registration.ExpectSuccess().Client.ClientId);
+        Assert.NotEqual(registration.ExpectSuccess().RegistrationAccessToken, storedClient.RegistrationAccessTokenHash);
+        Assert.DoesNotContain(registration.ExpectSuccess().RegistrationAccessToken, storedClient.RegistrationAccessTokenHash, StringComparison.Ordinal);
 
         var read = await registrationRepository.GetAsync(
-            registration.ExpectSuccess().Data.Client.ClientId,
-            registration.ExpectSuccess().Data.RegistrationAccessToken);
+            registration.ExpectSuccess().Client.ClientId,
+            registration.ExpectSuccess().RegistrationAccessToken);
         Assert.NotNull(read.ExpectSuccess());
-        Assert.NotEqual(registration.ExpectSuccess().Data.RegistrationAccessToken, read.ExpectSuccess().Data.RegistrationAccessToken);
+        Assert.NotEqual(registration.ExpectSuccess().RegistrationAccessToken, read.ExpectSuccess().RegistrationAccessToken);
 
         var staleRead = await registrationRepository.GetAsync(
-            registration.ExpectSuccess().Data.Client.ClientId,
-            registration.ExpectSuccess().Data.RegistrationAccessToken);
+            registration.ExpectSuccess().Client.ClientId,
+            registration.ExpectSuccess().RegistrationAccessToken);
         Assert.NotNull(staleRead.ExpectFailure());
         Assert.Equal("invalid_token", staleRead.ExpectFailure().Code);
 
         var update = await registrationRepository.UpdateAsync(
-            registration.ExpectSuccess().Data.Client.ClientId,
-            read.ExpectSuccess().Data.RegistrationAccessToken,
+            registration.ExpectSuccess().Client.ClientId,
+            read.ExpectSuccess().RegistrationAccessToken,
             currentClientSecret: null,
             new UpdateOAuthClientRequest
             {
@@ -1076,15 +1076,15 @@ public sealed class AuthenticationExtensionsTests
             });
 
         Assert.NotNull(update.ExpectSuccess());
-        Assert.Equal("Renamed Dynamic Public App", update.ExpectSuccess().Data.Client.DisplayName);
-        Assert.Equal(["https://dynamic.local/new-callback"], update.ExpectSuccess().Data.Client.RedirectUris);
-        Assert.Equal(["new-owner@dynamic.local"], update.ExpectSuccess().Data.Client.Contacts);
-        Assert.NotEqual(read.ExpectSuccess().Data.RegistrationAccessToken, update.ExpectSuccess().Data.RegistrationAccessToken);
+        Assert.Equal("Renamed Dynamic Public App", update.ExpectSuccess().Client.DisplayName);
+        Assert.Equal(["https://dynamic.local/new-callback"], update.ExpectSuccess().Client.RedirectUris);
+        Assert.Equal(["new-owner@dynamic.local"], update.ExpectSuccess().Client.Contacts);
+        Assert.NotEqual(read.ExpectSuccess().RegistrationAccessToken, update.ExpectSuccess().RegistrationAccessToken);
 
         var deletion = await registrationRepository.DeleteAsync(
-            registration.ExpectSuccess().Data.Client.ClientId,
-            update.ExpectSuccess().Data.RegistrationAccessToken);
-        var deletedClient = await clientRepository.GetAsync(registration.ExpectSuccess().Data.Client.ClientId);
+            registration.ExpectSuccess().Client.ClientId,
+            update.ExpectSuccess().RegistrationAccessToken);
+        var deletedClient = await clientRepository.GetAsync(registration.ExpectSuccess().Client.ClientId);
 
         Assert.NotNull(deletion.ExpectSuccess());
         Assert.NotNull(deletedClient.ExpectFailure());
@@ -1113,27 +1113,27 @@ public sealed class AuthenticationExtensionsTests
         });
 
         Assert.NotNull(registration.ExpectSuccess());
-        Assert.NotNull(registration.ExpectSuccess().Data.ClientSecret);
+        Assert.NotNull(registration.ExpectSuccess().ClientSecret);
         var read = await registrationRepository.GetAsync(
-            registration.ExpectSuccess().Data.Client.ClientId,
-            registration.ExpectSuccess().Data.RegistrationAccessToken);
+            registration.ExpectSuccess().Client.ClientId,
+            registration.ExpectSuccess().RegistrationAccessToken);
 
         Assert.NotNull(read.ExpectSuccess());
-        Assert.NotNull(read.ExpectSuccess().Data.ClientSecret);
-        Assert.NotEqual(registration.ExpectSuccess().Data.ClientSecret, read.ExpectSuccess().Data.ClientSecret);
+        Assert.NotNull(read.ExpectSuccess().ClientSecret);
+        Assert.NotEqual(registration.ExpectSuccess().ClientSecret, read.ExpectSuccess().ClientSecret);
 
         var oldCredentials = await clientRepository.ValidateClientCredentialsAsync(
             new OAuthClientCredentialsValidationRequest(
-                registration.ExpectSuccess().Data.Client.ClientId,
-                registration.ExpectSuccess().Data.ClientSecret,
+                registration.ExpectSuccess().Client.ClientId,
+                registration.ExpectSuccess().ClientSecret,
                 new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal),
                 OAuthClientAuthenticationMethods.ClientSecretBasic,
                 GrantType: OAuthGrantTypes.AuthorizationCode),
             CancellationToken.None);
         var rotatedCredentials = await clientRepository.ValidateClientCredentialsAsync(
             new OAuthClientCredentialsValidationRequest(
-                registration.ExpectSuccess().Data.Client.ClientId,
-                read.ExpectSuccess().Data.ClientSecret,
+                registration.ExpectSuccess().Client.ClientId,
+                read.ExpectSuccess().ClientSecret,
                 new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal),
                 OAuthClientAuthenticationMethods.ClientSecretBasic,
                 GrantType: OAuthGrantTypes.AuthorizationCode),
@@ -1163,7 +1163,7 @@ public sealed class AuthenticationExtensionsTests
         Assert.NotNull(result.ExpectSuccess());
         Assert.Equal(
             ["https://app.local/callback", "https://app.local/signout"],
-            result.ExpectSuccess().Data.Client.RedirectUris.OrderBy(static uri => uri, StringComparer.Ordinal).ToArray());
+            result.ExpectSuccess().Client.RedirectUris.OrderBy(static uri => uri, StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
@@ -1196,7 +1196,7 @@ public sealed class AuthenticationExtensionsTests
         var result = await service.GetAsync("blank-redirect-client");
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Empty(result.ExpectSuccess().Data.RedirectUris);
+        Assert.Empty(result.ExpectSuccess().RedirectUris);
     }
 
     [Fact]
@@ -1340,8 +1340,8 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("jobs.read", result.ExpectSuccess().Data.Scope);
-        Assert.Null(result.ExpectSuccess().Data.RefreshToken);
+        Assert.Equal("jobs.read", result.ExpectSuccess().Scope);
+        Assert.Null(result.ExpectSuccess().RefreshToken);
         Assert.Equal(["jobs.read"], subjectService.LastRequestedScopes.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
         Assert.NotNull(tokenService.LastRequest);
         Assert.Null(tokenService.LastRequest!.RefreshToken);
@@ -1528,7 +1528,7 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("jobs.write", result.ExpectSuccess().Data.Scope);
+        Assert.Equal("jobs.write", result.ExpectSuccess().Scope);
         Assert.Contains(tokenService.LastRequest!.AccessClaims!, claim => claim.Type == "custom.exchange" && claim.Value == "enabled");
         Assert.DoesNotContain(tokenService.LastRequest.AccessClaims!, claim => claim.Type == OAuthClaimTypes.Actor);
     }
@@ -1701,7 +1701,7 @@ public sealed class AuthenticationExtensionsTests
         {
             var keys = await cache.GetSecurityKeysAsync();
             Assert.Contains(keys, key => key.KeyId == hostKey.Kid);
-            new JwtSecurityTokenHandler().ValidateToken(token.ExpectSuccess().Data.AccessToken, new TokenValidationParameters
+            new JwtSecurityTokenHandler().ValidateToken(token.ExpectSuccess().AccessToken, new TokenValidationParameters
             {
                 ValidIssuer = "https://issuer.local",
                 ValidAudience = "nof-tests",

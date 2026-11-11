@@ -159,7 +159,7 @@ public sealed partial class TokenAuthorityService : ITokenService
         }
 
         var accessTokenResult = await IntrospectAccessTokenAsync(request, cancellationToken).ConfigureAwait(false);
-        if (accessTokenResult is Success<IntrospectTokenResponse> accessTokenResultSuccess && accessTokenResultSuccess.Data.Active)
+        if (accessTokenResult is IntrospectTokenResponse accessTokenResultSuccess && accessTokenResultSuccess.Active)
         {
             return accessTokenResult;
         }
@@ -255,7 +255,7 @@ public sealed partial class TokenAuthorityService : ITokenService
                 Audience = request.Audience
             },
             cancellationToken).ConfigureAwait(false);
-        if (validateResult is not Success<ValidateRefreshTokenResponse> validateResultSuccess)
+        if (validateResult is not ValidateRefreshTokenResponse validateResultSuccess)
         {
             return Result.Success(new IntrospectTokenResponse
             {
@@ -268,7 +268,7 @@ public sealed partial class TokenAuthorityService : ITokenService
         {
             Active = true,
             TokenType = OAuthTokenTypes.RefreshToken,
-            Claims = validateResultSuccess.Data.Claims
+            Claims = validateResultSuccess.Claims
         });
     }
 

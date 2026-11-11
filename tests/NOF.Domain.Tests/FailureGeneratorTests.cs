@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using NOF.Abstraction;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using Xunit;
@@ -39,10 +40,10 @@ public class FailureGeneratorTests
         Assert.Equal(2, fields.Count);
 
         var invalidInputField = fields.First(f => f.Declaration.Variables.First().Identifier.Text == "InvalidInput");
-        Assert.Contains("new(\"invalid input\", \"1001\")", invalidInputField.ToString());
+        Assert.Contains("new(\"1001\", \"invalid input\")", invalidInputField.ToString());
 
         var notFoundField = fields.First(f => f.Declaration.Variables.First().Identifier.Text == "NotFound");
-        Assert.Contains("new(\"not found\", \"1002\")", notFoundField.ToString());
+        Assert.Contains("new(\"1002\", \"not found\")", notFoundField.ToString());
     }
 
     [Fact]

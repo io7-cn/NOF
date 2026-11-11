@@ -53,7 +53,7 @@ public sealed class HttpRpcTransportBoundaryTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result<ReadTokenResponse>>();
         Assert.NotNull(payload.ExpectSuccess());
-        Assert.Equal("query-token", payload.ExpectSuccess().Data!.Token);
+        Assert.Equal("query-token", payload.ExpectSuccess()!.Token);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class HttpRpcTransportBoundaryTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<Result<CreateUserResponse>>();
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal(18, result.ExpectSuccess().Data.Age);
+        Assert.Equal(18, result.ExpectSuccess().Age);
     }
 
     [Fact]

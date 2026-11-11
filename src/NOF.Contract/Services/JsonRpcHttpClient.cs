@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -41,16 +42,29 @@ public static class JsonRpcHttpClient
         return await ReadResponseEnvelopeAsync(response, id, responseTypeInfo, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>> SendStreamingAsync<TRequest, TItem>(
-        HttpClient httpClient,
-        string endpoint,
-        string method,
-        TRequest request,
-        IEnumerable<KeyValuePair<string, string?>> headers,
-        JsonTypeInfo<TRequest> requestTypeInfo,
-        JsonTypeInfo<TItem> itemTypeInfo,
-        JsonTypeInfo<Result> fallbackTypeInfo,
-        CancellationToken cancellationToken)
+    public static Task<Result<IAsyncEnumerable<TItem>>> SendStreamingAsync<TRequest, TItem>(
+        HttpClient httpClient, string endpoint, string method, TRequest request,
+        IEnumerable<KeyValuePair<string, string?>> headers, JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo, CancellationToken cancellationToken)
+        => SendStreamingCoreAsync<TRequest, TItem, Result<IAsyncEnumerable<TItem>>>(httpClient, endpoint, method,
+            request, headers, requestTypeInfo, itemTypeInfo, fallbackTypeInfo,
+            static (items, _) => Result.Stream(items), cancellationToken);
+
+    /// <summary>Reads an SSE stream whose successful payload explicitly carries a message.</summary>
+    public static Task<Result<Success<IAsyncEnumerable<TItem>>>> SendStreamingWithMessageAsync<TRequest, TItem>(
+        HttpClient httpClient, string endpoint, string method, TRequest request,
+        IEnumerable<KeyValuePair<string, string?>> headers, JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo, CancellationToken cancellationToken)
+        => SendStreamingCoreAsync<TRequest, TItem, Result<Success<IAsyncEnumerable<TItem>>>>(httpClient, endpoint, method,
+            request, headers, requestTypeInfo, itemTypeInfo, fallbackTypeInfo,
+            static (items, message) => Result.WithMessage(items, message), cancellationToken);
+
+    private static async Task<TResponse> SendStreamingCoreAsync<TRequest, TItem, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TResponse>(
+        HttpClient httpClient, string endpoint, string method, TRequest request,
+        IEnumerable<KeyValuePair<string, string?>> headers, JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo,
+        Func<IAsyncEnumerable<TItem>, string, TResponse> createSuccess, CancellationToken cancellationToken)
+        where TResponse : IRpcResponse<TResponse>
     {
         ValidateRequestArguments(httpClient, endpoint, method, request, headers, requestTypeInfo);
         ArgumentNullException.ThrowIfNull(itemTypeInfo);
@@ -68,7 +82,7 @@ public static class JsonRpcHttpClient
         {
             using (response)
             {
-                return await HttpRpcTransportResultReader.ReadFailureAsync<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(
+                return await HttpRpcTransportResultReader.ReadFailureAsync<TResponse>(
                     response,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -80,13 +94,13 @@ public static class JsonRpcHttpClient
                 StringComparison.OrdinalIgnoreCase))
         {
             var stream = ReadStreamingItemsAsync(response, id, itemTypeInfo, cancellationToken);
-            return Result.Stream(stream, StreamingResponseMetadata.ReadMessage(response));
+            return createSuccess(stream, StreamingResponseMetadata.ReadMessage(response));
         }
 
         using (response)
         {
             var fallback = await ReadResponseEnvelopeAsync(response, id, fallbackTypeInfo, cancellationToken).ConfigureAwait(false);
-            return RpcResponse.Require<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(fallback);
+            return RpcResponse.Require<TResponse>(fallback);
         }
     }
 

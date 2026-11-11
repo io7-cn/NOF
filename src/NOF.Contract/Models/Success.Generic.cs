@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace NOF.Contract;
@@ -6,35 +5,16 @@ namespace NOF.Contract;
 /// <summary>A successful operation carrying non-null data and an optional message.</summary>
 /// <typeparam name="T">The payload type.</typeparam>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record Success<T> : ISuccess
+public sealed record Success<T>
 {
-    /// <summary>Creates a typed success and validates its data and discriminator.</summary>
+    /// <summary>Creates optional successful metadata with non-null data.</summary>
     [JsonConstructor]
-    public Success(T data, string message = "", string kind = "success")
+    public Success(T data, string message = "")
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(message);
-        if (kind != "success")
-        {
-            throw new JsonException("A success must have kind 'success'.");
-        }
-
         Data = data;
         Message = message;
-    }
-
-    /// <summary>Gets the required wire discriminator.</summary>
-    [JsonRequired]
-    public string Kind
-    {
-        get => "success";
-        init
-        {
-            if (value != "success")
-            {
-                throw new JsonException("Invalid outcome discriminator.");
-            }
-        }
     }
 
     /// <summary>Gets the successful payload.</summary>

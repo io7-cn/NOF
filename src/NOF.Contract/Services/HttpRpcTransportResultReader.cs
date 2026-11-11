@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -84,13 +85,11 @@ public static class HttpRpcTransportResultReader
                 using var document = JsonDocument.Parse(body);
                 var root = document.RootElement;
                 if (root.ValueKind == JsonValueKind.Object
-                    && root.EnumerateObject().Count() == 2
-                    && root.TryGetProperty("kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.ValueEquals("failure")
-                    && root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object
-                    && error.EnumerateObject().Count() == 2
-                    && error.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+                    && root.EnumerateObject().Count() == 3
+                    && root.TryGetProperty("$kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.ValueEquals("failure")
+                    && root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
                     && !string.IsNullOrWhiteSpace(code.GetString())
-                    && error.TryGetProperty("message", out var description) && description.ValueKind == JsonValueKind.String)
+                    && root.TryGetProperty("message", out var description) && description.ValueKind == JsonValueKind.String)
                 {
                     return new Failure(code.GetString()!, description.GetString()!);
                 }

@@ -28,6 +28,29 @@ public class HttpRpcClientGeneratorTests
         typeof(TransportOverMemoryAttribute)
     ];
 
+    [Theory]
+    [InlineData("ControllerRpc")]
+    [InlineData("JsonRpc")]
+    public void OptionalMessageWrapper_StreamsRemainStreaming(string style)
+    {
+        var source = $$"""
+            using NOF.Contract;
+            using System.Collections.Generic;
+            namespace App;
+            public record WatchRequest(string Name);
+            public record Progress(int Count);
+            [TransportOverHttp(HttpRpcStyle.{{style}})]
+            public interface IMyService : IRpcService
+            {
+                Result<Success<IAsyncEnumerable<Progress>>> Watch(WatchRequest request);
+            }
+            """;
+        var code = GetGeneratedHttpClientCode(RunGenerators(source));
+        Assert.Contains("Task<global::NOF.Contract.Result<global::NOF.Contract.Success<global::System.Collections.Generic.IAsyncEnumerable<global::App.Progress>>>>", code);
+        Assert.Contains(style == "JsonRpc" ? "SendStreamingWithMessageAsync" : "Result.WithMessage", code);
+        Assert.Contains("global::App.Progress", code);
+    }
+
     [Fact]
     public void TransportOverControllerRpc_GeneratesPublicHttpClientBesideContract()
     {

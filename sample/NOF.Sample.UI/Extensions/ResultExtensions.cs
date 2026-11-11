@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 namespace NOF.Contract;
 
 public static class NOFSampleResultExtensions

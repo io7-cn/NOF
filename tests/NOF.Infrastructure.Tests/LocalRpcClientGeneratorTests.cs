@@ -117,6 +117,7 @@ public class LocalRpcClientGeneratorTests
     public void CustomResult_ReturnType_UsesDirectResult()
     {
         const string source = """
+                              using NOF.Abstraction;
                               using NOF.Contract;
                               using NOF.Application;
                               using NOF.Infrastructure;

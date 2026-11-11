@@ -100,7 +100,7 @@ public sealed class TenantRequestAuthorizationTests
             Assert.Equal(expectedTenant, Assert.Single(resolvedTenants));
             var result = await response.Content.ReadFromJsonAsync<Result<string>>();
             Assert.NotNull(result.ExpectSuccess());
-            Assert.Equal(expectedTenant, result.ExpectSuccess().Data);
+            Assert.Equal(expectedTenant, result.ExpectSuccess());
         }
 
         var endpoint = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)

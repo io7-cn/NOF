@@ -32,7 +32,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         var result = document.RootElement.GetProperty("result").Deserialize<Result<PrefixedEchoResponse>>(
             JsonSerializerOptions.NOF);
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("hello rpc", result.ExpectSuccess().Data!.Value);
+        Assert.Equal("hello rpc", result.ExpectSuccess()!.Value);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         var result = document.RootElement.GetProperty("result").Deserialize<Result<PrefixedEchoResponse>>(
             JsonSerializerOptions.NOF);
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("contract route", result.ExpectSuccess().Data!.Value);
+        Assert.Equal("contract route", result.ExpectSuccess()!.Value);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         var result = document.RootElement.GetProperty("result").Deserialize<Result<PrefixedEchoResponse>>(
             JsonSerializerOptions.NOF);
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("root route", result.ExpectSuccess().Data!.Value);
+        Assert.Equal("root route", result.ExpectSuccess()!.Value);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         await using var app = await CreateAppAsync();
         using var client = app.GetTestClient();
 
-        var result = await JsonRpcHttpClient.SendStreamingAsync<PrefixedEchoRequest, PrefixedEchoResponse>(
+        var result = await JsonRpcHttpClient.SendStreamingWithMessageAsync<PrefixedEchoRequest, PrefixedEchoResponse>(
             client,
             "/contract-rpc",
             nameof(IPrefixedJsonRpcService.Stream),
@@ -178,7 +178,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         Assert.NotNull(result.ExpectSuccess());
         Assert.Equal("准备好了\r\nStream opened", result.ExpectSuccess().Message);
         var items = new List<PrefixedEchoResponse>();
-        await foreach (var item in result.ExpectSuccess().Data!.WithCancellation(CancellationToken.None))
+        await foreach (var item in result.ExpectSuccess().Data.WithCancellation(CancellationToken.None))
         {
             items.Add(item);
         }
@@ -192,7 +192,7 @@ public sealed class JsonRpcEndpointIntegrationTests
         await using var app = await CreateAppAsync();
         using var client = app.GetTestClient();
 
-        var result = await JsonRpcHttpClient.SendStreamingAsync<PrefixedEchoRequest, PrefixedEchoResponse>(
+        var result = await JsonRpcHttpClient.SendStreamingWithMessageAsync<PrefixedEchoRequest, PrefixedEchoResponse>(
             client,
             "/contract-rpc",
             nameof(IPrefixedJsonRpcService.Stream),
@@ -233,7 +233,7 @@ public sealed class JsonRpcEndpointIntegrationTests
     {
         Result<PrefixedEchoResponse> Echo(PrefixedEchoRequest request);
 
-        Result<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>> Stream(PrefixedEchoRequest request);
+        Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>> Stream(PrefixedEchoRequest request);
     }
 
     public sealed class PrefixedJsonRpcServer : RpcServer<IPrefixedJsonRpcService>, IRpcServer
@@ -244,7 +244,7 @@ public sealed class JsonRpcEndpointIntegrationTests
                 [nameof(IPrefixedJsonRpcService.Echo)] =
                     new(typeof(PrefixedEchoHandler), typeof(PrefixedEchoRequest), typeof(Result<PrefixedEchoResponse>)),
                 [nameof(IPrefixedJsonRpcService.Stream)] =
-                    new(typeof(PrefixedStreamHandler), typeof(PrefixedEchoRequest), typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>))
+                    new(typeof(PrefixedStreamHandler), typeof(PrefixedEchoRequest), typeof(Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>))
             };
 
         protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
@@ -259,20 +259,20 @@ public sealed class JsonRpcEndpointIntegrationTests
             => Task.FromResult(Result.Success(new PrefixedEchoResponse(request.Value)));
     }
 
-    public sealed class PrefixedStreamHandler : RpcHandler<PrefixedEchoRequest, Result<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>
+    public sealed class PrefixedStreamHandler : RpcHandler<PrefixedEchoRequest, Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>>
     {
-        public override Task<Result<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>> HandleAsync(
+        public override Task<Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>> HandleAsync(
             PrefixedEchoRequest request,
             Context context,
             CancellationToken cancellationToken)
         {
             if (request.Value == "fail")
             {
-                return Task.FromResult<Result<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>(
+                return Task.FromResult<Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>>(
                     Result.Fail("stream.failed", "Streaming failed"));
             }
 
-            return Task.FromResult(Result.Stream(StreamAsync(request.Value, cancellationToken), "准备好了\r\nStream opened"));
+            return Task.FromResult(Result.WithMessage(StreamAsync(request.Value, cancellationToken), "准备好了\r\nStream opened"));
         }
 
         private static async IAsyncEnumerable<PrefixedEchoResponse> StreamAsync(

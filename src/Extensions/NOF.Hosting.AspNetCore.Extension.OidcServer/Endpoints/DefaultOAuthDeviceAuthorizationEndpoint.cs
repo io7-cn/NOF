@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using OidcRoutes = Microsoft.AspNetCore.Routing.NOFOidcServerExtensions;
 
@@ -44,13 +45,13 @@ public sealed class DefaultOAuthDeviceAuthorizationEndpoint(
         }
 
         var clientResult = await clientRepository.GetAsync(tokenRequest.ClientId, cancellationToken).ConfigureAwait(false);
-        if (clientResult is not Success<OAuthClientDescriptor> clientResultSuccess || !clientResultSuccess.Data.IsEnabled)
+        if (clientResult is not OAuthClientDescriptor clientResultSuccess || !clientResultSuccess.IsEnabled)
         {
             return CreateError(httpRequest, "invalid_client", "client credentials are invalid.");
         }
 
         var requestedScopes = OidcRoutes.ParseScopes(tokenRequest.Scope);
-        if (requestedScopes.Any(scope => !clientResultSuccess.Data.AllowedScopes.Contains(scope, StringComparer.Ordinal)))
+        if (requestedScopes.Any(scope => !clientResultSuccess.AllowedScopes.Contains(scope, StringComparer.Ordinal)))
         {
             return CreateError(httpRequest, "invalid_scope", "requested scope is not allowed for this client.");
         }
@@ -58,16 +59,16 @@ public sealed class DefaultOAuthDeviceAuthorizationEndpoint(
         var createResult = await deviceGrantService.CreateAsync(
             new CreateOAuthDeviceGrantRequest
             {
-                ClientId = clientResultSuccess.Data.ClientId,
-                ClientDisplayName = clientResultSuccess.Data.DisplayName,
-                ClientLogoUri = clientResultSuccess.Data.LogoUri,
+                ClientId = clientResultSuccess.ClientId,
+                ClientDisplayName = clientResultSuccess.DisplayName,
+                ClientLogoUri = clientResultSuccess.LogoUri,
                 Scopes = requestedScopes
             },
             cancellationToken).ConfigureAwait(false);
         SetNoStore(httpRequest);
         return createResult switch
         {
-            Success<OAuthDeviceAuthorizationResponse> success => Results.Json(success.Data),
+            OAuthDeviceAuthorizationResponse success => Results.Json(success),
             Failure failure => CreateError(httpRequest, failure.Code, failure.Message),
             _ => throw new InvalidOperationException("The response contains no outcome case.")
         };

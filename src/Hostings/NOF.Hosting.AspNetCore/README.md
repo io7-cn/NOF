@@ -12,7 +12,7 @@ Provides the ASP.NET Core host integration for NOF applications, including HTTP 
 - **OpenAPI Registration** - built-in OpenAPI service registration; endpoint mapping stays explicit in the host application
 - **Infrastructure Defaults** - `Create()` applies `NOF.Infrastructure` defaults for typical server-side hosts
 - **JSON Configuration** - pre-configured `System.Text.Json` options with sensible defaults
-- **Streaming RPC over SSE** - `StreamingResult<T>` endpoints are exposed as server-sent events via ASP.NET Core's .NET 11 SSE support
+- **Streaming RPC over SSE** - `Result<IAsyncEnumerable<T>>` endpoints are exposed as server-sent events via ASP.NET Core's .NET 11 SSE support
 - **Invocation Context Middleware** - propagates tenant ID and other context through the request pipeline
 - **`[AutoInject]` Support** - bundled source generators for automatic DI registration
 
@@ -75,7 +75,7 @@ public interface IOrderService : IRpcService
     Result<OrderDto> Get(GetOrderRequest request);
 
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
-    StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);
+    Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
 }
 ```
 
@@ -143,9 +143,10 @@ error codes do not automatically become HTTP status codes. Stream authorization 
 return JSON with the authorization status before SSE starts; successful streams use SSE.
 Once a stream has started, its HTTP status cannot be changed to report a later failure.
 
-Generated clients deserialize a 2xx body into its Result, preserving `IsSuccess=false`.
-Always inspect `IsSuccess` before using `Value`. Non-2xx becomes a failed Result whose
-error code is the HTTP status and message contains the response body. The generated
+Generated clients deserialize a 2xx body into the union's selected value. Match
+`T` directly or match shared `NOF.Abstraction.Failure`. Non-2xx marked failure
+bodies preserve the business code and message; other bodies use the HTTP status
+as the code and retain the diagnostic text. The generated
 client does not retry automatically. If the Host adds HTTP resilience, retry writes
 only with a stable operation key and server-side deduplication. Transactional-message
 background retries are independent of HTTP client retries.
@@ -153,7 +154,7 @@ background retries are independent of HTTP client retries.
 JSON-RPC uses its own response/error envelope and should not be interpreted through
 this Controller RPC mapping table.
 
-For streaming methods, NOF emits `text/event-stream` responses and serializes each item from `StreamingResult<T>.Value` as an SSE `data:` payload. Generated HTTP clients automatically request SSE and materialize the response back into `Task<StreamingResult<T>>`.
+For streaming methods, NOF emits `text/event-stream` responses and serializes each item from the selected `IAsyncEnumerable<T>` as an SSE `data:` payload. Generated HTTP clients automatically request SSE and materialize the response back into `Task<Result<IAsyncEnumerable<T>>>`.
 
 ## Installation
 
@@ -164,3 +165,6 @@ dotnet add package NOF.Hosting.AspNetCore
 ## License
 
 Apache-2.0
+
+A successful message wrapper is optional: declare `Result<Success<IAsyncEnumerable<T>>>`
+when a stream needs a message. Generated clients preserve it using SSE response metadata.

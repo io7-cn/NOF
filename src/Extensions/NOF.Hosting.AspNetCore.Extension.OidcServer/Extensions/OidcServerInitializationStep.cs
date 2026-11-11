@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using System.Runtime.CompilerServices;
 
@@ -39,7 +40,7 @@ public sealed class OidcServerInitializationStep : IApplicationInitializationSte
                      .Select(static group => group.Last()))
         {
             var existing = await clientRepository.GetAsync(request.ClientId).ConfigureAwait(false);
-            if (existing is Success<OAuthClientDescriptor> existingSuccess)
+            if (existing is OAuthClientDescriptor existingSuccess)
             {
                 continue;
             }
@@ -62,7 +63,7 @@ public sealed class OidcServerInitializationStep : IApplicationInitializationSte
 
     private static void EnsureSucceeded(IUnion result, string clientId, string clientType)
     {
-        if (result.Value is ISuccess)
+        if (result.Value is not null and not Failure)
         {
             return;
         }

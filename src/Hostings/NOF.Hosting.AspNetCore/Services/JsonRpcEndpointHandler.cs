@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Infrastructure;
@@ -115,7 +116,7 @@ public static class JsonRpcEndpointHandler
             {
                 if (IsStreamingResult(handlerMapping.ReturnType))
                 {
-                    if (execution.Response.Value is ISuccess)
+                    if (execution.Response.Value is not null and not Failure)
                     {
                         return CreateStreamingResult(
                             handlerMapping.ReturnType,
@@ -188,10 +189,7 @@ public static class JsonRpcEndpointHandler
         return null;
     }
 
-    private static bool IsStreamingResult(Type returnType)
-        => returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Result<>)
-            && returnType.GetGenericArguments()[0] is { IsGenericType: true } payloadType
-            && payloadType.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>);
+    private static bool IsStreamingResult(Type returnType) => RpcStreamResponse.TryGetItemType(returnType, out _);
 
     [RequiresUnreferencedCode("JSON-RPC streaming response creation uses runtime generic type metadata.")]
     [RequiresDynamicCode("JSON-RPC streaming response creation uses runtime generic type instantiation.")]
@@ -201,8 +199,8 @@ public static class JsonRpcEndpointHandler
         ReadOnlyMemory<byte> requestId,
         IObjectSerializer serializer)
     {
-        var itemType = returnType.GetGenericArguments()[0].GetGenericArguments()[0];
-        var createMethod = _createStreamingResultMethod.MakeGenericMethod(itemType);
+        RpcStreamResponse.TryGetItemType(returnType, out var itemType);
+        var createMethod = _createStreamingResultMethod.MakeGenericMethod(itemType!);
         return (Microsoft.AspNetCore.Http.IResult)createMethod.Invoke(null, [response, requestId, serializer])!;
     }
 
@@ -211,13 +209,7 @@ public static class JsonRpcEndpointHandler
         ReadOnlyMemory<byte> requestId,
         IObjectSerializer serializer)
     {
-        if (response is not Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> streamingResult)
-        {
-            throw new InvalidOperationException(
-                $"JSON-RPC streaming operation returned '{response.GetType().FullName}' instead of '{typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>).FullName}'.");
-        }
-
-        return new JsonRpcStreamingHttpResult<TItem>(streamingResult, requestId, serializer);
+        return new JsonRpcStreamingHttpResult<TItem>(response, requestId, serializer);
     }
 
     private static Microsoft.AspNetCore.Http.IResult CreateResult(JsonElement id, ReadOnlyMemory<byte> result)

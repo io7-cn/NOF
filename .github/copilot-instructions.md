@@ -38,7 +38,7 @@ Use lowercase issue-linked topic branches and submit changes to `main` for requi
 
 ## Key Patterns
 
-- Results are native `Result(Success, Failure)` / `Result<T>(Success<T>, Failure)` unions. Match cases; successful cases carry `Message` and typed data is `success.Data`. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
+- Results are native `Result(Success, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. `Success<T>` optionally carries data and Message; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
 - RPC contracts are declared as `IRpcService` interfaces with one request parameter per method.
 - Application implementations use `RpcServer<TService>` and generated nested handler base classes.
 - ASP.NET Core maps endpoints explicitly with `app.MapHttpEndpoint<TRpcServer>()`.

@@ -40,7 +40,7 @@ public sealed class HttpEndpointRegistrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result<EchoResponse>>();
         Assert.NotNull(payload.ExpectSuccess());
-        Assert.Equal("hello", payload.ExpectSuccess().Data!.Value);
+        Assert.Equal("hello", payload.ExpectSuccess()!.Value);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public sealed class HttpEndpointRegistrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result<EchoResponse>>();
         Assert.NotNull(payload.ExpectSuccess());
-        Assert.Equal("prefixed", payload.ExpectSuccess().Data!.Value);
+        Assert.Equal("prefixed", payload.ExpectSuccess()!.Value);
     }
 
     public sealed class EchoRequest

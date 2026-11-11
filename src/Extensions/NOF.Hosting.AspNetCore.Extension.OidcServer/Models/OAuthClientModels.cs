@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed record OAuthClientCredentialsValidationRequest(

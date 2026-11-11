@@ -113,9 +113,9 @@ Client usage stays result-first:
 
 ```csharp
 var result = await orderClient.WatchAsync(new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
-if (result is Success<IAsyncEnumerable<OrderEvent>> success)
+if (result is IAsyncEnumerable<OrderEvent> events)
 {
-    await foreach (var item in success.Data.WithCancellation(cancellationToken))
+    await foreach (var item in events.WithCancellation(cancellationToken))
     {
         Console.WriteLine($"{item.OrderId}: {item.Status}");
     }

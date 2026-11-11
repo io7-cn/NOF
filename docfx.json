@@ -46,7 +46,8 @@
       },
       {
         "files": [
-          "**.md"
+          "README.md",
+          "docs/**/*.md"
         ],
         "src": ".standards",
         "dest": "standards"
@@ -62,7 +63,10 @@
       {
         "files": [
           "LICENSE",
-          "NOTICE"
+          "NOTICE",
+          "AGENTS.md",
+          ".ci/*.py",
+          "templates/repository/**"
         ],
         "src": ".standards",
         "dest": "standards"

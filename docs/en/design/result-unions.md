@@ -2,62 +2,101 @@
 
 [简体中文](../../zh-CN/design/result-unions.md) · [Development guide](../README.md)
 
-NOF 12 uses C# 15 native unions on .NET 11. This is a source, binary and wire
+NOF 12 uses native C# 15 unions on .NET 11. This is a source, binary and wire
 breaking change from NOF 11. Rebuild contracts, servers and clients together.
-An existing NOF 11 client cannot consume the NOF 12 JSON envelope.
 
-## Model
+## Values are the success cases
 
 ```csharp
+public union Result<T>(T, Failure) : IRpcResponse<Result<T>>;
 public union Result(Success, Failure) : IRpcResponse<Result>;
-public union Result<T>(Success<T>, Failure) : IRpcResponse<Result<T>>;
 ```
 
-`Success` contains `Message`; `Success<T>` contains non-null `Data` and `Message`.
-Both messages default to an empty string and may contain successful operation
-information. `Failure` contains a `ResultError` with a nonempty `Code` and a
-non-null `Message`. Domain failure descriptors remain `NOF.Domain.Failure`;
-transport failures use `NOF.Contract.Failure`.
+`Result<T>` contains `T` directly. `Success<T>` is optional metadata containing
+non-null `Data` and `Message`; select it explicitly as the payload type when a
+successful response needs a message. Payload-free `Result` uses `Success`, whose
+message defaults to an empty string. Ordinary DTOs can also define their own
+message properties without using a framework wrapper.
 
 ```csharp
-Result saved = new Success("Saved");
-Result<OrderDto> loaded = new Success<OrderDto>(order, "Loaded from cache");
+Result<OrderDto> loaded = order;
+Result<Success<OrderDto>> withMessage = new Success<OrderDto>(order, "Loaded from cache");
 Result<OrderDto> missing = new Failure("order.not_found", "Order not found");
+Result saved = new Success("Saved");
 
 string Describe(Result<OrderDto> outcome) => outcome switch
 {
-    Success<OrderDto> success => $"{success.Data.Id}: {success.Message}",
+    OrderDto value => $"Order {value.Id}",
     Failure failure => $"{failure.Code}: {failure.Message}",
     null => throw new InvalidOperationException("Uninitialized result")
 };
 ```
 
-`IsSuccess`, `ErrorCode`, `Extra`, `IResult`, `FailResult`, `ResultProjection`,
-`Result.From`, and the old payload-bearing `Result<T>.Value` API are removed.
-The native union still exposes its compiler-generated `Value`: that is the
-selected **case object**, not successful data. Match a case and use `success.Data`.
-The default union contains no case; RPC boundaries reject it.
+Match the payload itself. There is no `IsSuccess`, `Extra`, `IResult`, `FailResult`,
+`ResultProjection` or `Result.From`. The compiler-generated union `Value` contains
+the selected value/case as an object; use typed patterns for application code.
+A default/null union has no selected value and is rejected at RPC boundaries.
 
-Construction helpers remain: `Result.Success()`, `Result.Success(data, message)`,
-`Result.Fail(code, message)`, `Result.Page(items, totalCount, message)` and
-`Result.Stream(items, message)`. For string payloads use
-`Result.Success<string>(data, message)` or `new Success<string>(data, message)`;
-`Result.Success("Saved")` creates a payload-free success message.
+Construction helpers are `Result.Success(data)`, `Result.Fail(code, message)`,
+`Result.Page(items, totalCount)` and `Result.Stream(items)`.
+`Result.WithMessage(data, message)` returns `Result<Success<T>>`.
+Use `Result.Success<string>(text)` for a string payload;
+`Result.Success("Saved")` creates a payload-free successful message.
+
+## One shared failure
+
+`NOF.Abstraction.Failure` is the only shared failure value. It has a nonblank
+`Code` and non-null `Message`; its constructor order is `(code, message)`.
+There are no parallel Contract or Domain definitions and no conversion adapter.
+A generated domain failure can be returned directly from any `Result<T>` handler.
+`Result.Fail(existingFailure)` returns that same shared instance.
+
+The `[Failure(name, message, errorCode)]` annotation remains in Domain; its generator
+now emits `NOF.Abstraction.Failure(code, message)`. Domain exceptions accept that
+shared value. Import `NOF.Domain` to use `failure.Throw()`: it is a Domain extension
+that throws `DomainException`, keeping Abstraction independent of Domain.
+
+## JSON and AOT
+
+System.Text.Json writes the active value directly:
+
+```json
+{"id":42}
+{"data":{"id":42},"message":"Loaded from cache"}
+{"message":"Saved"}
+{"$kind":"failure","code":"order.not_found","message":"Missing"}
+```
+
+These represent `Result<OrderDto>`, `Result<Success<OrderDto>>`, payload-free
+`Result`, and a shared failure respectively. A custom native union classifier
+selects failures by the reserved root `$kind: "failure"` marker; it does not infer
+failure from `code` and `message` fields. Scalar, DTO, collection and dictionary
+payloads are supported, including successful DTOs with error-like property names.
+
+The root `$kind` property is reserved by the Result protocol. If successful data
+needs this property, select `Result<Success<T>>` so it appears inside `data`.
+Invalid markers, malformed failures and mixed failure/payload fields are rejected.
+The old `isSuccess/value/extra` envelope is not a supported compatibility format.
+
+The classifier uses source-generated union case metadata without constructing
+closed generic converters through reflection. Register concrete result and payload
+types in an application's JSON context for Native AOT; shared Failure metadata is
+also included in NOF's built-in context.
 
 ## Pagination and streaming
 
-Replace `PaginatedResult<T>` with `Result<Page<T>>`. The success case's data has
-`Items` and optional `TotalCount`; these fields are typed rather than stored in
-`Extra`. Replace `StreamingResult<T>` with `Result<IAsyncEnumerable<T>>`.
-Generated clients return `Task<Result<IAsyncEnumerable<T>>>`.
+Replace `PaginatedResult<T>` with `Result<Page<T>>`; successful `Page<T>` has typed
+`Items` and optional `TotalCount`. Replace `StreamingResult<T>` with
+`Result<IAsyncEnumerable<T>>`. If a stream needs a successful message, declare
+`Result<Success<IAsyncEnumerable<T>>>`. Both forms generate streaming clients and
+SSE endpoints, with corresponding `Task<Result<...>>` client return types.
 
 ```csharp
-var outcome = await client.WatchAsync(request, Context.Empty, cancellationToken);
-switch (outcome)
+var result = await client.WatchAsync(request, Context.Empty, cancellationToken);
+switch (result)
 {
-    case Success<IAsyncEnumerable<OrderEvent>> success:
-        Console.WriteLine(success.Message);
-        await foreach (var item in success.Data.WithCancellation(cancellationToken))
+    case IAsyncEnumerable<OrderEvent> events:
+        await foreach (var item in events.WithCancellation(cancellationToken))
         {
             Console.WriteLine(item);
         }
@@ -70,51 +109,29 @@ switch (outcome)
 }
 ```
 
-An initial stream failure uses the ordinary failure JSON. A successful HTTP or
-JSON-RPC stream uses SSE for items and `X-NOF-Result-Message` for the successful
-message (Base64-encoded UTF-8). Clients decode the header before returning the
-success case. Cross-origin browser applications must expose this header in their
-CORS policy using `WithExposedHeaders(StreamingResponseMetadata.MessageHeader)`.
-Exceptions during enumeration remain stream failures; a success case does not
-promise that an entire stream has completed successfully. JSON-RPC sends an error
-event for a server-side enumeration exception.
+A pre-stream failure uses ordinary Failure JSON. An explicitly wrapped successful
+stream sends its message in `X-NOF-Result-Message` (Base64 UTF-8), which generated
+clients decode into `Success<IAsyncEnumerable<T>>`. Cross-origin browser applications
+must expose that header using `WithExposedHeaders(StreamingResponseMetadata.MessageHeader)`.
+Bare streams remain bare. Exceptions during enumeration remain stream failures;
+an initial successful value does not promise successful completion of the stream.
 
-## JSON contract
+## Boundaries, deployment and rollback
 
-```json
-{"kind":"success","data":{"id":42},"message":"Loaded"}
-{"kind":"success","message":"Saved"}
-{"kind":"failure","error":{"code":"order.not_found","message":"Missing"}}
-```
+`IRpcResponse<TSelf>` extends `IUnion` and supplies static `CreateFailure` and
+`CreateEmptyResponse` factories. It has no success flag or reflective payload
+projection. Custom response unions use the shared Abstraction failure.
+`RpcResponse.Require<TResponse>` preserves an exact declared response type or
+propagates a shared failure through its static factory; it rejects an absent case
+or a different successful response type. An empty successful HTTP body is valid
+for payload-free Result only. Marked failure bodies on non-success HTTP statuses
+preserve the business code and message; other bodies become diagnostics with the
+numeric HTTP status as the code. OAuth endpoints retain their standard protocol.
 
-`kind` is required and validated; typed success requires non-null `data`.
-Contradictory cases, unknown case fields, and the old `isSuccess/value/extra`
-envelope are rejected. Failure carries no success payload. The same failure JSON
-can be read as `Result` or `Result<T>`. Source-generated System.Text.Json metadata
-supports the union and case records; register concrete result/payload types in
-the application's JSON context for Native AOT.
-
-## RPC boundaries and migration
-
-`IRpcResponse<TSelf>` extends the runtime `IUnion` interface and provides static
-`CreateFailure` and `CreateEmptyResponse` factories for generated transports.
-It contains no success flag, payload accessor or reflection-based conversion.
-Custom response unions must implement this self-typed contract. A middleware
-failure can be carried by any response union through `CreateFailure`;
-`RpcResponse.Require<TResponse>` otherwise requires the exact declared response
-type and a populated case. It does not project arbitrary successful objects.
-A successful empty HTTP body creates `Result.Success()` only for a payload-free
-response; a typed response with no data is rejected. Tagged failure bodies on
-non-success HTTP status codes preserve the business error code and message;
-other bodies become diagnostic text with the numeric HTTP status as the code.
-OAuth endpoint bodies continue to follow the OAuth protocol rather than the
-NOF RPC envelope.
-
-Migrate consumers by matching each success/failure case, replace payload reads
-with `success.Data`, replace failure reads with `failure.Code/Message`, and move
-application metadata from `Extra` into explicit DTO properties. Deploy a coordinated
-major-version upgrade or a separately versioned API route. To roll back, restore
-the complete NOF 11 contract/client/server set and its original wire format.
+Match successful `T` directly, opt into `Success<T>` for messages, replace failure
+reads with `failure.Code/Message`, and move `Extra` metadata into explicit DTOs.
+Deploy a coordinated major-version upgrade or separately versioned routes. Rollback
+restores the complete NOF 11 client/contract/server set and its original wire format.
 
 See the [C# union reference](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/union)
 and [System.Text.Json union documentation](https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/union-types).

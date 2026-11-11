@@ -33,13 +33,13 @@ public sealed class OAuthDeviceFlowTests
         var result = await clientRepository.GetAsync("living-room-tv");
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal(OAuthClientType.Public, result.ExpectSuccess().Data.ClientType);
-        Assert.Equal(OAuthClientAuthenticationMethods.None, result.ExpectSuccess().Data.TokenEndpointAuthenticationMethod);
+        Assert.Equal(OAuthClientType.Public, result.ExpectSuccess().ClientType);
+        Assert.Equal(OAuthClientAuthenticationMethods.None, result.ExpectSuccess().TokenEndpointAuthenticationMethod);
         Assert.Equal(
             [OAuthGrantTypes.RefreshToken, OAuthGrantTypes.DeviceCode],
-            result.ExpectSuccess().Data.AllowedGrantTypes.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
-        Assert.Empty(result.ExpectSuccess().Data.AllowedResponseTypes);
-        Assert.Empty(result.ExpectSuccess().Data.RedirectUris);
+            result.ExpectSuccess().AllowedGrantTypes.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
+        Assert.Empty(result.ExpectSuccess().AllowedResponseTypes);
+        Assert.Empty(result.ExpectSuccess().RedirectUris);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class OAuthDeviceFlowTests
         var pendingDescriptor = await deviceGrantService.GetPendingAsync(
             authorization.UserCode.ToLowerInvariant().Replace("-", " ", StringComparison.Ordinal));
         Assert.NotNull(pendingDescriptor.ExpectSuccess());
-        Assert.Equal("Living Room TV", pendingDescriptor.ExpectSuccess().Data.ClientDisplayName);
+        Assert.Equal("Living Room TV", pendingDescriptor.ExpectSuccess().ClientDisplayName);
 
         var wrongClient = await deviceGrantService.RedeemAsync(authorization.DeviceCode, "different-client");
         Assert.NotNull(wrongClient.ExpectFailure());
@@ -115,11 +115,11 @@ public sealed class OAuthDeviceFlowTests
 
         Assert.NotNull(approval.ExpectSuccess());
         Assert.NotNull(response.ExpectSuccess());
-        Assert.NotNull(response.ExpectSuccess().Data.IdToken);
-        Assert.NotNull(response.ExpectSuccess().Data.RefreshToken);
+        Assert.NotNull(response.ExpectSuccess().IdToken);
+        Assert.NotNull(response.ExpectSuccess().RefreshToken);
         Assert.NotNull(retry.ExpectSuccess());
-        Assert.Equal(response.ExpectSuccess().Data.AccessToken, retry.ExpectSuccess().Data.AccessToken);
-        Assert.Equal(response.ExpectSuccess().Data.RefreshToken, retry.ExpectSuccess().Data.RefreshToken);
+        Assert.Equal(response.ExpectSuccess().AccessToken, retry.ExpectSuccess().AccessToken);
+        Assert.Equal(response.ExpectSuccess().RefreshToken, retry.ExpectSuccess().RefreshToken);
 
         var noLongerPending = await deviceGrantService.GetPendingAsync(authorization.UserCode);
         Assert.NotNull(noLongerPending.ExpectFailure());
@@ -141,7 +141,7 @@ public sealed class OAuthDeviceFlowTests
             ClientDisplayName = "Living Room TV",
             Scopes = new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal)
         });
-        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess().Data);
+        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess());
 
         var denied = await service.DenyAsync(createdValue.UserCode);
         var redeemed = await service.RedeemAsync(createdValue.DeviceCode, "living-room-tv");
@@ -167,7 +167,7 @@ public sealed class OAuthDeviceFlowTests
             ClientDisplayName = "Living Room TV",
             Scopes = new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal)
         });
-        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess().Data);
+        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess());
 
         timeProvider.Advance(TimeSpan.FromMinutes(1));
         var redeemed = await service.RedeemAsync(createdValue.DeviceCode, "living-room-tv");

@@ -49,7 +49,7 @@ public sealed class JsonRpcHttpClientTests
         Assert.Equal("header", capturedHeader);
         Assert.Equal("https://example.test/bff/user-service/rpc", capturedRequestUri?.AbsoluteUri);
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("pong", result.ExpectSuccess().Data!.Value);
+        Assert.Equal("pong", result.ExpectSuccess()!.Value);
         capturedRequest.Dispose();
     }
 

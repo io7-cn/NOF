@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using System.Runtime.CompilerServices;
 
 namespace NOF.Contract;

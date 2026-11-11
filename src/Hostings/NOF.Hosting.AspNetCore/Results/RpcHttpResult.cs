@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Infrastructure;
 using System.Buffers;
@@ -33,13 +34,19 @@ public sealed class RpcHttpResult(
 [RequiresUnreferencedCode("Streaming HTTP response writing may require runtime JSON serialization for transport bodies.")]
 [RequiresDynamicCode("Streaming HTTP response writing may require runtime JSON serialization for transport bodies.")]
 public sealed class RpcStreamingHttpResult<TItem>(
-    Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> rpcResult,
+    System.Runtime.CompilerServices.IUnion rpcResult,
     int statusCode) : Microsoft.AspNetCore.Http.IResult
 {
-    private readonly Result<IAsyncEnumerable<TItem>> _rpcResult = rpcResult;
+    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult;
 
     /// <summary>Creates a streaming response with the default HTTP success status.</summary>
     public RpcStreamingHttpResult(Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> rpcResult)
+        : this(rpcResult, StatusCodes.Status200OK)
+    {
+    }
+
+    /// <summary>Creates a streaming response with an explicitly wrapped successful message.</summary>
+    public RpcStreamingHttpResult(Result<Success<IAsyncEnumerable<TItem>>> rpcResult)
         : this(rpcResult, StatusCodes.Status200OK)
     {
     }
@@ -48,15 +55,12 @@ public sealed class RpcStreamingHttpResult<TItem>(
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        if (_rpcResult is Failure)
+        if (_rpcResult.Value is Failure)
         {
             return new RpcHttpResult(_rpcResult, statusCode).ExecuteAsync(httpContext);
         }
 
-        if (_rpcResult is not Success<IAsyncEnumerable<TItem>> success)
-        {
-            throw new InvalidOperationException("The streaming response contains no outcome case.");
-        }
+        var success = RpcStreamResponse.Unwrap<TItem>(_rpcResult);
 
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
         httpContext.Response.Headers[StreamingResponseMetadata.MessageHeader] = StreamingResponseMetadata.EncodeMessage(success.Message);
@@ -66,7 +70,7 @@ public sealed class RpcStreamingHttpResult<TItem>(
 /// <summary>Writes a streaming RPC result using JSON-RPC.</summary>
 
 public sealed class JsonRpcStreamingHttpResult<TItem>(
-    Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> rpcResult,
+    System.Runtime.CompilerServices.IUnion rpcResult,
     ReadOnlyMemory<byte> requestId,
     IObjectSerializer serializer) : Microsoft.AspNetCore.Http.IResult
 {
@@ -74,7 +78,7 @@ public sealed class JsonRpcStreamingHttpResult<TItem>(
     private static readonly ReadOnlyMemory<byte> _dataPrefix = "data: "u8.ToArray();
     private static readonly ReadOnlyMemory<byte> _eventSeparator = "\n\n"u8.ToArray();
     private static readonly ReadOnlyMemory<byte> _errorEvent = "event: error\n"u8.ToArray();
-    private readonly Result<IAsyncEnumerable<TItem>> _rpcResult = rpcResult;
+    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult;
     private readonly ReadOnlyMemory<byte> _requestId = requestId;
     private readonly IObjectSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
@@ -82,10 +86,7 @@ public sealed class JsonRpcStreamingHttpResult<TItem>(
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        if (_rpcResult is not Success<IAsyncEnumerable<TItem>> success)
-        {
-            throw new InvalidOperationException("A JSON-RPC stream requires a successful outcome.");
-        }
+        var success = RpcStreamResponse.Unwrap<TItem>(_rpcResult);
 
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
         httpContext.Response.ContentType = "text/event-stream";

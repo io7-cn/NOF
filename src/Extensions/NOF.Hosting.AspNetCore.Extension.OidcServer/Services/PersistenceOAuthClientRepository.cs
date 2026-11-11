@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using System.IdentityModel.Tokens.Jwt;
@@ -341,12 +342,12 @@ public sealed class PersistenceOAuthClientRepository(
                 request with { ClientId = clientId },
                 (registrationSalt, registrationHash),
                 cancellationToken).ConfigureAwait(false);
-            if (createResult is Success<OAuthClientSecretDescriptor> createResultSuccess)
+            if (createResult is OAuthClientSecretDescriptor createResultSuccess)
             {
                 return Result.Success(new OAuthClientRegistrationSecretDescriptor
                 {
-                    Client = createResultSuccess.Data.Client,
-                    ClientSecret = createResultSuccess.Data.ClientSecret,
+                    Client = createResultSuccess.Client,
+                    ClientSecret = createResultSuccess.ClientSecret,
                     RegistrationAccessToken = registrationToken
                 });
             }

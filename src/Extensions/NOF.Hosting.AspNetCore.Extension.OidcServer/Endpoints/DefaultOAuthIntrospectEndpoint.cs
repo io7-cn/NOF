@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using OidcRoutes = Microsoft.AspNetCore.Routing.NOFOidcServerExtensions;
 
@@ -40,7 +41,7 @@ public sealed class DefaultOAuthIntrospectEndpoint(
                 Audience = oauthOptions.Value.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (result is not Success<IntrospectTokenResponse> resultSuccess)
+        if (result is not IntrospectTokenResponse resultSuccess)
         {
             var resultFailure = result switch
             {
@@ -53,6 +54,6 @@ public sealed class DefaultOAuthIntrospectEndpoint(
                 StatusCodes.Status500InternalServerError);
         }
 
-        return Results.Json(OidcRoutes.BuildIntrospectionResponse(resultSuccess.Data));
+        return Results.Json(OidcRoutes.BuildIntrospectionResponse(resultSuccess));
     }
 }

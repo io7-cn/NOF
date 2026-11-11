@@ -14,7 +14,7 @@ public sealed class HttpRpcTransportResultReaderTests
     {
         using var response = new HttpResponseMessage(HttpStatusCode.Forbidden)
         {
-            Content = new StringContent("""{"kind":"failure","error":{"code":"permission.denied","message":"Access denied"}}""", Encoding.UTF8, "application/json")
+            Content = new StringContent("""{"$kind":"failure","code":"permission.denied","message":"Access denied"}""", Encoding.UTF8, "application/json")
         };
         var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None);
         Assert.Equal("permission.denied", result.ExpectFailure().Code);
@@ -36,7 +36,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"kind":"failure","error":{"code":"conflict","message":"Already approved"}}""",
+                """{"$kind":"failure","code":"conflict","message":"Already approved"}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -57,7 +57,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"kind":"success","data":{"token":"abc"},"message":""}""",
+                """{"token":"abc"}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -68,7 +68,7 @@ public sealed class HttpRpcTransportResultReaderTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.Equal("abc", result.ExpectSuccess().Data!.Token);
+        Assert.Equal("abc", result.ExpectSuccess()!.Token);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"kind":"failure","error":{"code":"invalid_token","message":"access token expired."}}""",
+                """{"$kind":"failure","code":"invalid_token","message":"access token expired."}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -131,7 +131,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"kind":"failure","error":{"code":"stream_failed","message":"stream negotiation failed."}}""",
+                """{"$kind":"failure","code":"stream_failed","message":"stream negotiation failed."}""",
                 Encoding.UTF8,
                 "application/json")
         };

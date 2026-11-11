@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Contract;
 using System.Text.Json;
 using AspNetResult = Microsoft.AspNetCore.Http.IResult;
@@ -40,7 +41,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         var normalized = Normalize(request);
-        if (normalized is not Success<CreateOAuthClientRequest> normalizedSuccess)
+        if (normalized is not CreateOAuthClientRequest normalizedSuccess)
         {
             var normalizedFailure = normalized switch
             {
@@ -51,9 +52,9 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         var result = await registrationRepository
-            .RegisterAsync(normalizedSuccess.Data, cancellationToken)
+            .RegisterAsync(normalizedSuccess, cancellationToken)
             .ConfigureAwait(false);
-        if (result is not Success<OAuthClientRegistrationSecretDescriptor> resultSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
             var resultFailure = result switch
             {
@@ -65,7 +66,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
 
         SetNoStore(httpRequest);
         return Results.Json(
-            CreateResponse(resultSuccess.Data),
+            CreateResponse(resultSuccess),
             statusCode: StatusCodes.Status201Created);
     }
 
@@ -87,7 +88,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var result = await registrationRepository
             .GetAsync(clientId, registrationAccessToken, cancellationToken)
             .ConfigureAwait(false);
-        if (result is not Success<OAuthClientRegistrationSecretDescriptor> resultSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
             var resultFailure = result switch
             {
@@ -98,7 +99,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         SetNoStore(httpRequest);
-        return Results.Json(CreateResponse(resultSuccess.Data));
+        return Results.Json(CreateResponse(resultSuccess));
     }
 
     public async Task<AspNetResult> UpdateAsync(
@@ -123,7 +124,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         var normalized = Normalize(request);
-        if (normalized is not Success<CreateOAuthClientRequest> normalizedSuccess)
+        if (normalized is not CreateOAuthClientRequest normalizedSuccess)
         {
             var normalizedFailure = normalized switch
             {
@@ -133,7 +134,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             return CreateError(httpRequest, normalizedFailure.Code, normalizedFailure.Message);
         }
 
-        var createRequest = normalizedSuccess.Data;
+        var createRequest = normalizedSuccess;
         var updateRequest = new UpdateOAuthClientRequest
         {
             DisplayName = createRequest.DisplayName,
@@ -163,7 +164,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             request.ClientSecret,
             updateRequest,
             cancellationToken).ConfigureAwait(false);
-        if (result is not Success<OAuthClientRegistrationSecretDescriptor> resultSuccess)
+        if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
             var resultFailure = result switch
             {
@@ -174,7 +175,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         }
 
         SetNoStore(httpRequest);
-        return Results.Json(CreateResponse(resultSuccess.Data));
+        return Results.Json(CreateResponse(resultSuccess));
     }
 
     public async Task<AspNetResult> DeleteAsync(

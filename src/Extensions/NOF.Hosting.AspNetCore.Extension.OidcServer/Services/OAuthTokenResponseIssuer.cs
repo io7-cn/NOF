@@ -61,7 +61,7 @@ public sealed class OAuthTokenResponseIssuer(
                     : null
             },
             cancellationToken).ConfigureAwait(false);
-        if (issueResult is not Success<IssueTokenResponse> issueResultSuccess || (issueRefreshToken && issueResultSuccess.Data.RefreshToken is null))
+        if (issueResult is not IssueTokenResponse issueResultSuccess || (issueRefreshToken && issueResultSuccess.RefreshToken is null))
         {
             return null;
         }
@@ -106,10 +106,10 @@ public sealed class OAuthTokenResponseIssuer(
 
         return new OAuthTokenEndpointResponse
         {
-            AccessToken = issueResultSuccess.Data.AccessToken,
+            AccessToken = issueResultSuccess.AccessToken,
             TokenType = "Bearer",
             ExpiresIn = (long)options.AccessTokenExpiration.TotalSeconds,
-            RefreshToken = issueResultSuccess.Data.RefreshToken?.Token,
+            RefreshToken = issueResultSuccess.RefreshToken?.Token,
             Scope = string.Join(' ', scopes),
             IdToken = idToken
         };

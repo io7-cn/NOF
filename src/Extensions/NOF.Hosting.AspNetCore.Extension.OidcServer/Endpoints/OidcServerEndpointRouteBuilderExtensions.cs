@@ -6,6 +6,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -428,7 +429,7 @@ public static partial class NOFOidcServerExtensions
                 Audience = oauthOptions.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (validateResult is not Success<ValidateRefreshTokenResponse> validateResultSuccess)
+        if (validateResult is not ValidateRefreshTokenResponse validateResultSuccess)
         {
             var validateResultFailure = validateResult switch
             {
@@ -438,7 +439,7 @@ public static partial class NOFOidcServerExtensions
             return Fail("invalid_grant", validateResultFailure.Message);
         }
 
-        var claims = validateResultSuccess.Data.Claims
+        var claims = validateResultSuccess.Claims
             .GroupBy(static claim => claim.Type, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.First().Value ?? string.Empty, StringComparer.Ordinal);
         if (!claims.TryGetValue(OAuthClaimTypes.Subject, out var subject) || string.IsNullOrWhiteSpace(subject))
@@ -459,7 +460,7 @@ public static partial class NOFOidcServerExtensions
         }
 
         var scopes = ParseScopes(scope ?? string.Empty);
-        if (!await subjectService.CanRefreshAsync(subject, validateResultSuccess.Data.TokenId, scopes, cancellationToken).ConfigureAwait(false))
+        if (!await subjectService.CanRefreshAsync(subject, validateResultSuccess.TokenId, scopes, cancellationToken).ConfigureAwait(false))
         {
             return Fail("invalid_grant", "refresh token session is invalid.");
         }
@@ -467,7 +468,7 @@ public static partial class NOFOidcServerExtensions
         var revokeResult = await tokenService.RevokeRefreshTokenAsync(
             new RevokeRefreshTokenRequest
             {
-                TokenId = validateResultSuccess.Data.TokenId,
+                TokenId = validateResultSuccess.TokenId,
                 Expiration = oauthOptions.RefreshTokenExpiration
             },
             cancellationToken).ConfigureAwait(false);
@@ -656,7 +657,7 @@ public static partial class NOFOidcServerExtensions
         }
 
         var clientResult = await clientRepository.GetAsync(authenticatedClient.ClientId, cancellationToken).ConfigureAwait(false);
-        if (clientResult is not Success<OAuthClientDescriptor> clientResultSuccess || !clientResultSuccess.Data.IsEnabled)
+        if (clientResult is not OAuthClientDescriptor clientResultSuccess || !clientResultSuccess.IsEnabled)
         {
             return Fail("invalid_client", "client credentials are invalid.");
         }
@@ -670,7 +671,7 @@ public static partial class NOFOidcServerExtensions
         var exchangeResult = await tokenExchangeHandler.HandleAsync(
             new OAuthTokenExchangeRequest(
                 authenticatedClient.ClientId,
-                clientResultSuccess.Data.ClientType,
+                clientResultSuccess.ClientType,
                 subject,
                 principal,
                 actorPrincipal,
@@ -778,7 +779,7 @@ public static partial class NOFOidcServerExtensions
                 AccessClaims = accessClaims.ToArray()
             },
             cancellationToken).ConfigureAwait(false);
-        if (issueResult is not Success<IssueTokenResponse> issueResultSuccess)
+        if (issueResult is not IssueTokenResponse issueResultSuccess)
         {
             var issueResultFailure = issueResult switch
             {
@@ -790,7 +791,7 @@ public static partial class NOFOidcServerExtensions
 
         return Result.Success(new OAuthTokenEndpointResponse
         {
-            AccessToken = issueResultSuccess.Data.AccessToken,
+            AccessToken = issueResultSuccess.AccessToken,
             TokenType = "Bearer",
             ExpiresIn = (long)oauthOptions.AccessTokenExpiration.TotalSeconds,
             Scope = scopeText
@@ -879,19 +880,19 @@ public static partial class NOFOidcServerExtensions
         }
 
         var clientResult = await clientRepository.GetAsync(request.ClientId, cancellationToken).ConfigureAwait(false);
-        if (clientResult is not Success<OAuthClientDescriptor> clientResultSuccess || !clientResultSuccess.Data.IsEnabled)
+        if (clientResult is not OAuthClientDescriptor clientResultSuccess || !clientResultSuccess.IsEnabled)
         {
             return (request, CreateOAuthError("invalid_client", "client_id is invalid."), false);
         }
 
-        if (clientResultSuccess.Data.AllowedResponseTypes.Count > 0
-            && !clientResultSuccess.Data.AllowedResponseTypes.Contains(request.ResponseType, StringComparer.Ordinal))
+        if (clientResultSuccess.AllowedResponseTypes.Count > 0
+            && !clientResultSuccess.AllowedResponseTypes.Contains(request.ResponseType, StringComparer.Ordinal))
         {
             return (request, CreateOAuthError("unauthorized_client", "response_type is not allowed for this client."), false);
         }
 
         var requestedScopes = ParseScopes(request.Scope);
-        if (requestedScopes.Any(scope => !clientResultSuccess.Data.AllowedScopes.Contains(scope, StringComparer.Ordinal)))
+        if (requestedScopes.Any(scope => !clientResultSuccess.AllowedScopes.Contains(scope, StringComparer.Ordinal)))
         {
             return (request, CreateOAuthError("invalid_scope", "requested scope is not allowed for this client."), false);
         }
@@ -905,15 +906,15 @@ public static partial class NOFOidcServerExtensions
             }
             else
             {
-                resolvedRedirectUri = clientResultSuccess.Data.RedirectUris.Contains(request.RedirectUri, StringComparer.Ordinal)
+                resolvedRedirectUri = clientResultSuccess.RedirectUris.Contains(request.RedirectUri, StringComparer.Ordinal)
                     ? request.RedirectUri
                     : null;
             }
         }
         else
         {
-            resolvedRedirectUri = clientResultSuccess.Data.RedirectUris.Count == 1
-                ? clientResultSuccess.Data.RedirectUris[0]
+            resolvedRedirectUri = clientResultSuccess.RedirectUris.Count == 1
+                ? clientResultSuccess.RedirectUris[0]
                 : null;
         }
 
@@ -1076,19 +1077,19 @@ public static partial class NOFOidcServerExtensions
         }
 
         var clientResult = await clientRepository.GetAsync(clientCredentials.ClientId, cancellationToken).ConfigureAwait(false);
-        if (clientResult is not Success<OAuthClientDescriptor> clientResultSuccess || !clientResultSuccess.Data.IsEnabled)
+        if (clientResult is not OAuthClientDescriptor clientResultSuccess || !clientResultSuccess.IsEnabled)
         {
             return CreateOAuthError("invalid_client", "client credentials are invalid.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.GrantType)
-            && clientResultSuccess.Data.AllowedGrantTypes.Count > 0
-            && !clientResultSuccess.Data.AllowedGrantTypes.Contains(request.GrantType, StringComparer.Ordinal))
+            && clientResultSuccess.AllowedGrantTypes.Count > 0
+            && !clientResultSuccess.AllowedGrantTypes.Contains(request.GrantType, StringComparer.Ordinal))
         {
             return CreateOAuthError("unauthorized_client", "grant_type is not allowed for this client.");
         }
 
-        if (clientResultSuccess.Data.ClientType == OAuthClientType.Public)
+        if (clientResultSuccess.ClientType == OAuthClientType.Public)
         {
             if (!string.Equals(
                     clientCredentials.AuthenticationMethod,
@@ -1190,12 +1191,12 @@ public static partial class NOFOidcServerExtensions
         }
 
         var clientResult = await clientRepository.GetAsync(clientCredentials.ClientId, cancellationToken).ConfigureAwait(false);
-        if (clientResult is not Success<OAuthClientDescriptor> clientResultSuccess || !clientResultSuccess.Data.IsEnabled)
+        if (clientResult is not OAuthClientDescriptor clientResultSuccess || !clientResultSuccess.IsEnabled)
         {
             return (CreateOAuthError("invalid_client", "client credentials are invalid."), string.Empty);
         }
 
-        if (clientResultSuccess.Data.ClientType == OAuthClientType.Public)
+        if (clientResultSuccess.ClientType == OAuthClientType.Public)
         {
             if (!allowPublicClient)
             {

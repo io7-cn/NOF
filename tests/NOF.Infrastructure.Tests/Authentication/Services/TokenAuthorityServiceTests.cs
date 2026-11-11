@@ -50,11 +50,11 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectSuccess());
-        Assert.False(string.IsNullOrWhiteSpace(generateResult.ExpectSuccess().Data.AccessToken));
-        Assert.NotNull(generateResult.ExpectSuccess().Data.RefreshToken);
-        Assert.NotEqual(default, generateResult.ExpectSuccess().Data.RefreshToken!.ExpiresAtUtc);
+        Assert.False(string.IsNullOrWhiteSpace(generateResult.ExpectSuccess().AccessToken));
+        Assert.NotNull(generateResult.ExpectSuccess().RefreshToken);
+        Assert.NotEqual(default, generateResult.ExpectSuccess().RefreshToken!.ExpiresAtUtc);
 
-        var accessToken = new JwtSecurityTokenHandler().ReadJwtToken(generateResult.ExpectSuccess().Data.AccessToken);
+        var accessToken = new JwtSecurityTokenHandler().ReadJwtToken(generateResult.ExpectSuccess().AccessToken);
         Assert.False(string.IsNullOrWhiteSpace(accessToken.Header.Kid));
         Assert.Equal("at+jwt", accessToken.Header.Typ);
         Assert.Contains(accessToken.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "user-1");
@@ -64,7 +64,7 @@ public sealed class TokenAuthorityServiceTests
         Assert.Contains(accessToken.Claims, claim => claim.Type == ClaimTypes.TenantId && claim.Value == "tenant-1");
         Assert.Equal(2, accessToken.Claims.Count(claim => claim.Type == ClaimTypes.Permission));
 
-        var refreshToken = generateResult.ExpectSuccess().Data.RefreshToken;
+        var refreshToken = generateResult.ExpectSuccess().RefreshToken;
         Assert.NotNull(refreshToken);
         var refreshJwt = new JwtSecurityTokenHandler().ReadJwtToken(refreshToken.Token);
         Assert.Equal("JWT", refreshJwt.Header.Typ);
@@ -78,10 +78,10 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(validateResult.ExpectSuccess());
-        Assert.False(string.IsNullOrWhiteSpace(validateResult.ExpectSuccess().Data.TokenId));
-        Assert.Contains(validateResult.ExpectSuccess().Data.Claims, claim => claim.Type == JwtRegisteredClaimNames.Jti);
-        Assert.Contains(validateResult.ExpectSuccess().Data.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "user-1");
-        Assert.DoesNotContain(validateResult.ExpectSuccess().Data.Claims, claim => claim.Type == ClaimTypes.TenantId);
+        Assert.False(string.IsNullOrWhiteSpace(validateResult.ExpectSuccess().TokenId));
+        Assert.Contains(validateResult.ExpectSuccess().Claims, claim => claim.Type == JwtRegisteredClaimNames.Jti);
+        Assert.Contains(validateResult.ExpectSuccess().Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "user-1");
+        Assert.DoesNotContain(validateResult.ExpectSuccess().Claims, claim => claim.Type == ClaimTypes.TenantId);
     }
 
     [Fact]
@@ -107,8 +107,8 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectSuccess());
-        Assert.False(string.IsNullOrWhiteSpace(generateResult.ExpectSuccess().Data.AccessToken));
-        Assert.Null(generateResult.ExpectSuccess().Data.RefreshToken);
+        Assert.False(string.IsNullOrWhiteSpace(generateResult.ExpectSuccess().AccessToken));
+        Assert.Null(generateResult.ExpectSuccess().RefreshToken);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectSuccess());
-        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().Data.AccessToken.Split('.')[1]));
+        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().AccessToken.Split('.')[1]));
         using var payload = JsonDocument.Parse(payloadJson);
         Assert.Equal(JsonValueKind.Number, payload.RootElement.GetProperty(JwtRegisteredClaimNames.Iat).ValueKind);
         Assert.Equal(JsonValueKind.Number, payload.RootElement.GetProperty("auth_time").ValueKind);
@@ -168,7 +168,7 @@ public sealed class TokenAuthorityServiceTests
 
         Assert.NotNull(generateResult.ExpectSuccess());
 
-        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().Data.AccessToken.Split('.')[1]));
+        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().AccessToken.Split('.')[1]));
         using var payload = JsonDocument.Parse(payloadJson);
         var groups = payload.RootElement.GetProperty(OAuthClaimTypes.Groups);
 
@@ -201,7 +201,7 @@ public sealed class TokenAuthorityServiceTests
 
         Assert.NotNull(generateResult.ExpectSuccess());
 
-        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().Data.AccessToken.Split('.')[1]));
+        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(generateResult.ExpectSuccess().AccessToken.Split('.')[1]));
         using var payload = JsonDocument.Parse(payloadJson);
         var actor = payload.RootElement.GetProperty(OAuthClaimTypes.Actor);
 
@@ -261,12 +261,12 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectSuccess());
-        Assert.NotNull(generateResult.ExpectSuccess().Data.RefreshToken);
+        Assert.NotNull(generateResult.ExpectSuccess().RefreshToken);
 
         var validateResult = await tokenService.ValidateRefreshTokenAsync(
             new ValidateRefreshTokenRequest
             {
-                RefreshToken = generateResult.ExpectSuccess().Data.RefreshToken!.Token,
+                RefreshToken = generateResult.ExpectSuccess().RefreshToken!.Token,
                 Audience = "other-audience"
             },
             CancellationToken.None);
@@ -302,18 +302,18 @@ public sealed class TokenAuthorityServiceTests
         var introspectResult = await tokenService.IntrospectTokenAsync(
             new IntrospectTokenRequest
             {
-                Token = generateResult.ExpectSuccess().Data.AccessToken,
+                Token = generateResult.ExpectSuccess().AccessToken,
                 TokenTypeHint = OAuthTokenTypes.AccessToken,
                 Audience = "nof-tests"
             },
             CancellationToken.None);
 
         Assert.NotNull(introspectResult.ExpectSuccess());
-        Assert.True(introspectResult.ExpectSuccess().Data.Active);
-        Assert.Equal(OAuthTokenTypes.AccessToken, introspectResult.ExpectSuccess().Data.TokenType);
-        Assert.Contains(introspectResult.ExpectSuccess().Data.Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "user-1");
-        Assert.Contains(introspectResult.ExpectSuccess().Data.Claims, claim => claim.Type == OAuthClaimTypes.ClientId && claim.Value == "service-a");
-        Assert.Contains(introspectResult.ExpectSuccess().Data.Claims, claim => claim.Type == OAuthClaimTypes.Scope && claim.Value == "jobs.read");
+        Assert.True(introspectResult.ExpectSuccess().Active);
+        Assert.Equal(OAuthTokenTypes.AccessToken, introspectResult.ExpectSuccess().TokenType);
+        Assert.Contains(introspectResult.ExpectSuccess().Claims, claim => claim.Type == JwtRegisteredClaimNames.Sub && claim.Value == "user-1");
+        Assert.Contains(introspectResult.ExpectSuccess().Claims, claim => claim.Type == OAuthClaimTypes.ClientId && claim.Value == "service-a");
+        Assert.Contains(introspectResult.ExpectSuccess().Claims, claim => claim.Type == OAuthClaimTypes.Scope && claim.Value == "jobs.read");
     }
 
     [Fact]
@@ -344,16 +344,16 @@ public sealed class TokenAuthorityServiceTests
         var introspectResult = await tokenService.IntrospectTokenAsync(
             new IntrospectTokenRequest
             {
-                Token = generateResult.ExpectSuccess().Data.AccessToken,
+                Token = generateResult.ExpectSuccess().AccessToken,
                 TokenTypeHint = OAuthTokenTypes.AccessToken,
                 Audience = "nof-tests"
             },
             CancellationToken.None);
 
         Assert.NotNull(introspectResult.ExpectSuccess());
-        Assert.True(introspectResult.ExpectSuccess().Data.Active);
+        Assert.True(introspectResult.ExpectSuccess().Active);
 
-        var groupsClaim = Assert.Single(introspectResult.ExpectSuccess().Data.Claims, static claim => claim.Type == OAuthClaimTypes.Groups);
+        var groupsClaim = Assert.Single(introspectResult.ExpectSuccess().Claims, static claim => claim.Type == OAuthClaimTypes.Groups);
         Assert.Null(groupsClaim.Value);
         Assert.NotNull(groupsClaim.Values);
         Assert.Equal(["engineering", "ops"], groupsClaim.Values);
@@ -387,12 +387,12 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectSuccess());
-        Assert.NotNull(generateResult.ExpectSuccess().Data.RefreshToken);
+        Assert.NotNull(generateResult.ExpectSuccess().RefreshToken);
 
         var validateResult = await tokenService.ValidateRefreshTokenAsync(
             new ValidateRefreshTokenRequest
             {
-                RefreshToken = generateResult.ExpectSuccess().Data.RefreshToken!.Token,
+                RefreshToken = generateResult.ExpectSuccess().RefreshToken!.Token,
                 Audience = "nof-tests"
             },
             CancellationToken.None);
@@ -402,7 +402,7 @@ public sealed class TokenAuthorityServiceTests
         var revokeResult = await tokenService.RevokeRefreshTokenAsync(
             new RevokeRefreshTokenRequest
             {
-                TokenId = validateResult.ExpectSuccess().Data.TokenId,
+                TokenId = validateResult.ExpectSuccess().TokenId,
                 Expiration = TimeSpan.FromMinutes(10)
             },
             CancellationToken.None);
@@ -412,15 +412,15 @@ public sealed class TokenAuthorityServiceTests
         var introspectResult = await tokenService.IntrospectTokenAsync(
             new IntrospectTokenRequest
             {
-                Token = generateResult.ExpectSuccess().Data.RefreshToken!.Token,
+                Token = generateResult.ExpectSuccess().RefreshToken!.Token,
                 TokenTypeHint = OAuthTokenTypes.RefreshToken,
                 Audience = "nof-tests"
             },
             CancellationToken.None);
 
         Assert.NotNull(introspectResult.ExpectSuccess());
-        Assert.False(introspectResult.ExpectSuccess().Data.Active);
-        Assert.Equal(OAuthTokenTypes.RefreshToken, introspectResult.ExpectSuccess().Data.TokenType);
+        Assert.False(introspectResult.ExpectSuccess().Active);
+        Assert.Equal(OAuthTokenTypes.RefreshToken, introspectResult.ExpectSuccess().TokenType);
     }
 
     private static byte[] Base64UrlDecode(string value)

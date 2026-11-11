@@ -599,6 +599,7 @@ public class RpcServiceAnalyzerTests
     public async Task ServiceMethod_WithCustomResultImplementation_NoNOF210()
     {
         const string source = """
+            using NOF.Abstraction;
             using NOF.Contract;
             using System.Collections.Generic;
 

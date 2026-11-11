@@ -265,9 +265,9 @@ public static partial class NOFHostingAspNetCoreExtensions
         System.Runtime.CompilerServices.IUnion? response,
         HttpContext httpContext)
     {
-        if (response is Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>> streamingResult)
+        if (response?.Value is IAsyncEnumerable<TItem> or Success<IAsyncEnumerable<TItem>>)
         {
-            return new RpcStreamingHttpResult<TItem>(streamingResult, GetHttpStatusCode(httpContext));
+            return new RpcStreamingHttpResult<TItem>(response, GetHttpStatusCode(httpContext));
         }
 
         if (response is not null)
@@ -304,19 +304,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             : StatusCodes.Status200OK;
 
     private static bool TryGetStreamItemType(Type returnType, [NotNullWhen(true)] out Type? streamItemType)
-    {
-        if (returnType.IsGenericType
-            && returnType.GetGenericTypeDefinition() == typeof(Result<>)
-            && returnType.GetGenericArguments()[0] is { IsGenericType: true } payloadType
-            && payloadType.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>))
-        {
-            streamItemType = payloadType.GetGenericArguments()[0];
-            return true;
-        }
-
-        streamItemType = null;
-        return false;
-    }
+        => RpcStreamResponse.TryGetItemType(returnType, out streamItemType);
 
     private static IEnumerable<(HttpVerb Verb, string Route)> GetHttpEndpoints(MethodInfo method, string defaultRoute)
     {

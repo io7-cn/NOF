@@ -48,16 +48,16 @@ public sealed class GetOrder : OrderService.GetOrder
 
 When a host references `NOF.Infrastructure`, the same `OrderService` declaration also causes a `LocalOrderServiceClient` to be generated in the server namespace. Its service/client contract relationship comes from `IOrderServiceClient : IRpcClient<IOrderService>`, not from matching interface names.
 
-Streaming RPC handlers use the same generated nested `RpcHandler<TRequest, StreamingResult<T>>` model:
+Streaming RPC handlers use the same generated nested `RpcHandler<TRequest, Result<IAsyncEnumerable<T>>>` model:
 
 ```csharp
 public partial class OrderService : RpcServer<IOrderService>;
 
 public sealed class Watch : OrderService.Watch
 {
-    public override Task<StreamingResult<OrderEvent>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<Result<IAsyncEnumerable<OrderEvent>>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
     {
-        return Task.FromResult(StreamingResult.Success(Stream()));
+        return Task.FromResult(Result.Stream(Stream()));
 
         async IAsyncEnumerable<OrderEvent> Stream()
         {
@@ -69,7 +69,7 @@ public sealed class Watch : OrderService.Watch
 }
 ```
 
-The contract surface for the same method remains `StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);`.
+The contract surface for the same method remains `Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);`.
 
 ### Command Handlers
 

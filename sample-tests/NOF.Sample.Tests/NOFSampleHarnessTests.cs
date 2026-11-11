@@ -36,7 +36,7 @@ public sealed class NOFSampleHarnessTests
                 .SetUser("user-1", "Alice"));
 
         Assert.NotNull(roots.ExpectSuccess());
-        var root = Assert.Single(roots.ExpectSuccess().Data!.Nodes);
+        var root = Assert.Single(roots.ExpectSuccess()!.Nodes);
         Assert.Equal("root-a", root.Name);
         Assert.Null(root.ParentId);
     }
@@ -63,7 +63,7 @@ public sealed class NOFSampleHarnessTests
                     new GetRootConfigNodesRequest(),
                     context,
                     cancellationToken));
-            var root = Assert.Single(roots.ExpectSuccess().Data!.Nodes);
+            var root = Assert.Single(roots.ExpectSuccess()!.Nodes);
 
             var createChild = await scope.CallAsync<INOFSampleServiceClient, Result>(
                 (client, context, cancellationToken) => client.CreateConfigNodeAsync(
@@ -87,7 +87,7 @@ public sealed class NOFSampleHarnessTests
                     cancellationToken));
 
             Assert.NotNull(parent.ExpectSuccess());
-            Assert.Equal("parent-b", parent.ExpectSuccess().Data!.Node.Name);
+            Assert.Equal("parent-b", parent.ExpectSuccess()!.Node.Name);
 
             var projection = await scope.GetRequiredService<IDbContext>()
                 .Set<ConfigNodeChildren>()

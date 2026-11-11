@@ -41,8 +41,8 @@ public sealed class LocalRpcClientAuthorizationIntegrationTests
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
         Assert.NotNull(result.ExpectSuccess());
-        Assert.NotNull(result.ExpectSuccess().Data);
-        Assert.Equal("fleet", result.ExpectSuccess().Data.Name);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal("fleet", result.ExpectSuccess().Name);
         Assert.Equal(1, recorder.Count);
     }
 

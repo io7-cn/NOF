@@ -44,12 +44,12 @@ public sealed class DefaultOAuthRevokeEndpoint(
                 Audience = oauthOptions.Value.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (validateResult is not Success<ValidateRefreshTokenResponse> validateResultSuccess)
+        if (validateResult is not ValidateRefreshTokenResponse validateResultSuccess)
         {
             return Results.Ok();
         }
 
-        var refreshClientId = validateResultSuccess.Data.Claims
+        var refreshClientId = validateResultSuccess.Claims
             .FirstOrDefault(static claim => string.Equals(claim.Type, OAuthClaimTypes.ClientId, StringComparison.Ordinal))
             ?.Value;
         if (string.IsNullOrWhiteSpace(refreshClientId)
@@ -61,7 +61,7 @@ public sealed class DefaultOAuthRevokeEndpoint(
         await tokenService.RevokeRefreshTokenAsync(
             new RevokeRefreshTokenRequest
             {
-                TokenId = validateResultSuccess.Data.TokenId,
+                TokenId = validateResultSuccess.TokenId,
                 Expiration = oauthOptions.Value.RefreshTokenExpiration
             },
             cancellationToken).ConfigureAwait(false);

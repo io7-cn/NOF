@@ -45,7 +45,7 @@ native C# 15 `union` declarations:
 
 | Type | Cases | Boundary |
 | --- | --- | --- |
-| `Result`, `Result<T>` | `Success` / `Success<T>`, `Failure` | RPC, JSON serialization, local and HTTP clients |
+| `Result`, `Result<T>` | `Success` / `T`, shared `Failure` | RPC, JSON serialization, local and HTTP clients |
 | `InboundAuthorizationResult` | `Allowed`, `Denied` | Authorization handler and inbound middleware |
 | `OAuthClientCredentialsValidationResult` | `Success`, `Failure` | OAuth client repository and grant processing |
 | `OAuthTokenExchangeResult` | `Success`, `Failure` | Token exchange handler and token endpoint |
@@ -82,7 +82,7 @@ the existing protocol response; the union itself is not sent over the wire.
 
 | Existing model | Decision | Reason |
 | --- | --- | --- |
-| `Result`, `Result<T>` | Adopt native unions | Success and failure are separate cases; successful cases also carry `Message`. See the [breaking migration guide](../en/design/result-unions.md). |
+| `Result`, `Result<T>` | Adopt native unions | T and shared Failure are separate cases; Success<T> optionally adds Message metadata. See the [breaking migration guide](../en/design/result-unions.md). |
 | `Optional<T>` | Keep the current representation | Absent and explicitly present null are distinct, including for partial-update requests; `Value` and `HasValue` also define the JSON shape. |
 | Streaming and paging results | Use typed success payloads | `Result<IAsyncEnumerable<T>>` and `Result<Page<T>>` replace the old result subclasses. |
 | Cache and object-storage payloads | Keep generic contracts | Payloads form an open set; a closed union would restrict application types. |

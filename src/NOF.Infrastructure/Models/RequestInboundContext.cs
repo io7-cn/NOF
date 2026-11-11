@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using NOF.Contract;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
