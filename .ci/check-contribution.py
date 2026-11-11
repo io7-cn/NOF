@@ -19,7 +19,7 @@ def main():
             raise ValueError(f"Noncompliant topic branch: {branch}")
         if not re.fullmatch(r"(?:feat|fix|refactor|perf|style|docs|test|build|ci|chore|revert)(?:\([a-z0-9-]+\))?!?: [^\n.].*[^.]", message):
             raise ValueError("The pull-request title must be a Conventional Commit squash subject.")
-        if not re.search(r"(?:Refs:|https://github.com/[^/]+/[^/]+/issues/)\s*(?:#\d+|\S+)", body):
+        if not re.search(r"(?:Refs:\s*#\d+\b|https://github.com/[^/]+/[^/]+/issues/\d+\b)", body):
             raise ValueError("Link the tracking issue using Refs: #number or its URL.")
         if "!:" in message and not all(word in body.lower() for word in ("breaking", "migration")):
             raise ValueError("Describe the breaking impact and migration in the pull request.")

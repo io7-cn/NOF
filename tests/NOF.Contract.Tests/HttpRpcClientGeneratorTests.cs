@@ -23,7 +23,7 @@ public class HttpRpcClientGeneratorTests
         typeof(JsonRpcHttpClient),
         typeof(Result),
         typeof(Result<>),
-        typeof(StreamingResult<>),
+        typeof(IAsyncEnumerable<>),
         typeof(TransportOverHttpAttribute),
         typeof(TransportOverMemoryAttribute)
     ];
@@ -56,7 +56,7 @@ public class HttpRpcClientGeneratorTests
         Assert.Contains("if (_outboundPipeline is null)", code);
         Assert.Contains("await dispatch(outboundContext, request, cancellationToken)", code);
         Assert.Contains("await _outboundPipeline.ExecuteAsync(outboundContext, request, dispatch, cancellationToken)", code);
-        Assert.Contains("ResultProjection.RequireCompatible<global::NOF.Contract.Result>", code);
+        Assert.Contains("RpcResponse.Require<global::NOF.Contract.Result>", code);
         Assert.DoesNotContain("global::NOF.Contract.JsonRpcHttpClient.SendAsync", code);
         Assert.DoesNotContain("global::NOF.Hosting", code);
     }
@@ -99,7 +99,7 @@ public class HttpRpcClientGeneratorTests
             public interface IMyService : IRpcService
             {
                 [HttpEndpoint(HttpVerb.Get, "/events")]
-                StreamingResult<StreamEvent> Stream(QueryRequest request);
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(QueryRequest request);
             }
             """;
 
@@ -235,7 +235,7 @@ public class HttpRpcClientGeneratorTests
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "/stream-rpc")]
             public interface IMyService : IRpcService
             {
-                StreamingResult<StreamEvent> Stream(StreamRequest request);
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(StreamRequest request);
             }
             """;
 

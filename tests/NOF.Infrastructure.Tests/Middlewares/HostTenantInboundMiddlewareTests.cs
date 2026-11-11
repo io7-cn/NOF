@@ -26,7 +26,7 @@ public sealed class HostTenantInboundMiddlewareTests
             typeof(IHostTenantTestService), method,
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "untrusted")], default);
 
-        Assert.True(result.Response!.IsSuccess);
+        Assert.IsType<Success>(result.Response!.Value);
         var probe = provider.GetRequiredService<TenantProbe>();
         Assert.Equal(expectedTenant, probe.DependencyTenant);
         Assert.Equal(expectedTenant, probe.HandlerTenant);
@@ -43,7 +43,7 @@ public sealed class HostTenantInboundMiddlewareTests
             .ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(Result), typeof(IHostTenantTestService),
                 nameof(IHostTenantTestService.Host), null, default);
 
-        Assert.Equal("401", result.Response!.ErrorCode);
+        Assert.Equal("401", result.Response!.ExpectFailure().Code);
         Assert.Null(provider.GetRequiredService<TenantProbe>().DependencyTenant);
     }
 
@@ -56,7 +56,7 @@ public sealed class HostTenantInboundMiddlewareTests
         var result = await RpcServerInvoker.InvokeAsync<IHostTenantTestService>(scope.ServiceProvider,
             typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!, new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
-        Assert.True(result!.IsSuccess);
+        Assert.IsType<Success>(result!.Value);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
         Assert.Equal("caller", Context.Current.TenantId);
 
@@ -64,7 +64,7 @@ public sealed class HostTenantInboundMiddlewareTests
         var failed = await RpcServerInvoker.InvokeAsync<IHostTenantTestService>(
             scope.ServiceProvider, typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!,
             new Empty(), Context.Empty, default);
-        Assert.False(failed!.IsSuccess);
+        Assert.NotNull(failed!.ExpectFailure());
         Assert.Equal("caller", Context.Current.TenantId);
     }
 

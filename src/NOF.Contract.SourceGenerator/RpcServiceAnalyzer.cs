@@ -70,15 +70,15 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor VoidReturnNotSupported = new(
         "NOF209",
         "Void return is not supported",
-        "Method '{0}' on service interface '{1}' must not return void. Return a concrete IResult type instead, such as Result when no payload is needed.",
+        "Method '{0}' on service interface '{1}' must not return void. Return a concrete RPC response union instead, such as Result when no payload is needed.",
         "RpcService",
         DiagnosticSeverity.Error,
         true);
 
-    public static readonly DiagnosticDescriptor ReturnTypeMustImplementIResult = new(
+    public static readonly DiagnosticDescriptor ReturnTypeMustImplementRpcResponse = new(
         "NOF210",
-        "RPC return type must implement IResult",
-        "Method '{0}' on service interface '{1}' must return a type that implements IResult",
+        "RPC return type must implement IRpcResponse<TSelf>",
+        "Method '{0}' on service interface '{1}' must return a concrete union implementing IRpcResponse<TSelf>",
         "RpcService",
         DiagnosticSeverity.Error,
         true);
@@ -141,7 +141,7 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
         InvalidServiceMethodSignature,
         ServiceMethodOverloadsNotSupported,
         VoidReturnNotSupported,
-        ReturnTypeMustImplementIResult,
+        ReturnTypeMustImplementRpcResponse,
         TransportRequiresRpcService,
         MultipleTransportsNotSupported,
         HttpEndpointNotSupportedForJsonRpc,
@@ -324,7 +324,7 @@ public class RpcServiceAnalyzer : DiagnosticAnalyzer
                 && !method.ReturnsVoid)
             {
                 context.ReportDiagnostic(
-                    Diagnostic.Create(ReturnTypeMustImplementIResult, method.Locations.FirstOrDefault() ?? attrLocation, method.Name, typeSymbol.Name));
+                    Diagnostic.Create(ReturnTypeMustImplementRpcResponse, method.Locations.FirstOrDefault() ?? attrLocation, method.Name, typeSymbol.Name));
             }
 
             if (!validRequestParameter || !validReturnType || !validMethodName)

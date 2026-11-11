@@ -5,6 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="AntDesign" Version="1.5.1" />
+    <!-- Aspire's security-fixed AppHost requires OpenTelemetry 1.17 in the sample host. -->
+    <PackageVersion Update="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="[1.17.0,1.18.0)" />
+    <PackageVersion Update="OpenTelemetry.Extensions.Hosting" Version="[1.17.0,1.18.0)" />
+    <PackageVersion Include="Aspire.Hosting" Version="13.6.5" />
     <PackageVersion Include="Aspire.Hosting.Garnet" Version="13.1.0" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.1.0" />
     <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.1.0" />

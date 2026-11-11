@@ -99,12 +99,17 @@ public sealed class CacheOAuthDeviceGrantService(
         CancellationToken cancellationToken = default)
     {
         var sessionLookup = await ResolveSessionByUserCodeAsync(userCode, cancellationToken).ConfigureAwait(false);
-        if (!sessionLookup.IsSuccess)
+        if (sessionLookup is not Success<(OidcDeviceUserCodeCacheKey UserCodeKey, OidcDeviceAuthorizationCacheKey DeviceCodeKey)> sessionLookupSuccess)
         {
-            return Result.Fail(sessionLookup.ErrorCode, sessionLookup.Message);
+            var sessionLookupFailure = sessionLookup switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return Result.Fail(sessionLookupFailure.Code, sessionLookupFailure.Message);
         }
 
-        var (userCodeKey, deviceCodeKey) = sessionLookup.Value;
+        var (userCodeKey, deviceCodeKey) = sessionLookupSuccess.Data;
         await using var sessionLock = await cacheService
             .AcquireLockAsync(deviceCodeKey, LockExpiration, cancellationToken)
             .ConfigureAwait(false);
@@ -290,12 +295,17 @@ public sealed class CacheOAuthDeviceGrantService(
         CancellationToken cancellationToken)
     {
         var sessionLookup = await ResolveSessionByUserCodeAsync(userCode, cancellationToken).ConfigureAwait(false);
-        if (!sessionLookup.IsSuccess)
+        if (sessionLookup is not Success<(OidcDeviceUserCodeCacheKey UserCodeKey, OidcDeviceAuthorizationCacheKey DeviceCodeKey)> sessionLookupSuccess)
         {
-            return Result.Fail(sessionLookup.ErrorCode, sessionLookup.Message);
+            var sessionLookupFailure = sessionLookup switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
+            return Result.Fail(sessionLookupFailure.Code, sessionLookupFailure.Message);
         }
 
-        var (userCodeKey, deviceCodeKey) = sessionLookup.Value;
+        var (userCodeKey, deviceCodeKey) = sessionLookupSuccess.Data;
         await using var sessionLock = await cacheService
             .AcquireLockAsync(deviceCodeKey, LockExpiration, cancellationToken)
             .ConfigureAwait(false);

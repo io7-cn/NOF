@@ -32,14 +32,14 @@ public sealed class OAuthDeviceFlowTests
 
         var result = await clientRepository.GetAsync("living-room-tv");
 
-        Assert.True(result.IsSuccess, result.Message);
-        Assert.Equal(OAuthClientType.Public, result.Value.ClientType);
-        Assert.Equal(OAuthClientAuthenticationMethods.None, result.Value.TokenEndpointAuthenticationMethod);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal(OAuthClientType.Public, result.ExpectSuccess().Data.ClientType);
+        Assert.Equal(OAuthClientAuthenticationMethods.None, result.ExpectSuccess().Data.TokenEndpointAuthenticationMethod);
         Assert.Equal(
             [OAuthGrantTypes.RefreshToken, OAuthGrantTypes.DeviceCode],
-            result.Value.AllowedGrantTypes.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
-        Assert.Empty(result.Value.AllowedResponseTypes);
-        Assert.Empty(result.Value.RedirectUris);
+            result.ExpectSuccess().Data.AllowedGrantTypes.OrderBy(static value => value, StringComparer.Ordinal).ToArray());
+        Assert.Empty(result.ExpectSuccess().Data.AllowedResponseTypes);
+        Assert.Empty(result.ExpectSuccess().Data.RedirectUris);
     }
 
     [Fact]
@@ -73,12 +73,12 @@ public sealed class OAuthDeviceFlowTests
 
         var pendingDescriptor = await deviceGrantService.GetPendingAsync(
             authorization.UserCode.ToLowerInvariant().Replace("-", " ", StringComparison.Ordinal));
-        Assert.True(pendingDescriptor.IsSuccess, pendingDescriptor.Message);
-        Assert.Equal("Living Room TV", pendingDescriptor.Value.ClientDisplayName);
+        Assert.NotNull(pendingDescriptor.ExpectSuccess());
+        Assert.Equal("Living Room TV", pendingDescriptor.ExpectSuccess().Data.ClientDisplayName);
 
         var wrongClient = await deviceGrantService.RedeemAsync(authorization.DeviceCode, "different-client");
-        Assert.False(wrongClient.IsSuccess);
-        Assert.Equal("invalid_grant", wrongClient.ErrorCode);
+        Assert.NotNull(wrongClient.ExpectFailure());
+        Assert.Equal("invalid_grant", wrongClient.ExpectFailure().Code);
 
         timeProvider.Advance(TimeSpan.FromSeconds(5));
         var tokenContext = CreateHttpsContext(scope.Services);
@@ -101,10 +101,10 @@ public sealed class OAuthDeviceFlowTests
             deviceGrantService,
             CancellationToken.None);
 
-        Assert.False(pending.IsSuccess);
-        Assert.Equal("authorization_pending", pending.ErrorCode);
-        Assert.False(tooFast.IsSuccess);
-        Assert.Equal("slow_down", tooFast.ErrorCode);
+        Assert.NotNull(pending.ExpectFailure());
+        Assert.Equal("authorization_pending", pending.ExpectFailure().Code);
+        Assert.NotNull(tooFast.ExpectFailure());
+        Assert.Equal("slow_down", tooFast.ExpectFailure().Code);
 
         var approval = await deviceGrantService.ApproveAsync(authorization.UserCode, "user-42");
         var responses = await Task.WhenAll(
@@ -113,17 +113,17 @@ public sealed class OAuthDeviceFlowTests
         var response = responses[0];
         var retry = responses[1];
 
-        Assert.True(approval.IsSuccess, approval.Message);
-        Assert.True(response.IsSuccess, response.Message);
-        Assert.NotNull(response.Value.IdToken);
-        Assert.NotNull(response.Value.RefreshToken);
-        Assert.True(retry.IsSuccess, retry.Message);
-        Assert.Equal(response.Value.AccessToken, retry.Value.AccessToken);
-        Assert.Equal(response.Value.RefreshToken, retry.Value.RefreshToken);
+        Assert.NotNull(approval.ExpectSuccess());
+        Assert.NotNull(response.ExpectSuccess());
+        Assert.NotNull(response.ExpectSuccess().Data.IdToken);
+        Assert.NotNull(response.ExpectSuccess().Data.RefreshToken);
+        Assert.NotNull(retry.ExpectSuccess());
+        Assert.Equal(response.ExpectSuccess().Data.AccessToken, retry.ExpectSuccess().Data.AccessToken);
+        Assert.Equal(response.ExpectSuccess().Data.RefreshToken, retry.ExpectSuccess().Data.RefreshToken);
 
         var noLongerPending = await deviceGrantService.GetPendingAsync(authorization.UserCode);
-        Assert.False(noLongerPending.IsSuccess);
-        Assert.Equal("invalid_user_code", noLongerPending.ErrorCode);
+        Assert.NotNull(noLongerPending.ExpectFailure());
+        Assert.Equal("invalid_user_code", noLongerPending.ExpectFailure().Code);
     }
 
     [Fact]
@@ -141,15 +141,15 @@ public sealed class OAuthDeviceFlowTests
             ClientDisplayName = "Living Room TV",
             Scopes = new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal)
         });
-        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.Value);
+        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess().Data);
 
         var denied = await service.DenyAsync(createdValue.UserCode);
         var redeemed = await service.RedeemAsync(createdValue.DeviceCode, "living-room-tv");
 
-        Assert.True(created.IsSuccess, created.Message);
-        Assert.True(denied.IsSuccess, denied.Message);
-        Assert.False(redeemed.IsSuccess);
-        Assert.Equal("access_denied", redeemed.ErrorCode);
+        Assert.NotNull(created.ExpectSuccess());
+        Assert.NotNull(denied.ExpectSuccess());
+        Assert.NotNull(redeemed.ExpectFailure());
+        Assert.Equal("access_denied", redeemed.ExpectFailure().Code);
     }
 
     [Fact]
@@ -167,14 +167,14 @@ public sealed class OAuthDeviceFlowTests
             ClientDisplayName = "Living Room TV",
             Scopes = new HashSet<string>([OAuthScope.OpenId], StringComparer.Ordinal)
         });
-        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.Value);
+        var createdValue = Assert.IsType<OAuthDeviceAuthorizationResponse>(created.ExpectSuccess().Data);
 
         timeProvider.Advance(TimeSpan.FromMinutes(1));
         var redeemed = await service.RedeemAsync(createdValue.DeviceCode, "living-room-tv");
 
-        Assert.True(created.IsSuccess, created.Message);
-        Assert.False(redeemed.IsSuccess);
-        Assert.Equal("expired_token", redeemed.ErrorCode);
+        Assert.NotNull(created.ExpectSuccess());
+        Assert.NotNull(redeemed.ExpectFailure());
+        Assert.Equal("expired_token", redeemed.ExpectFailure().Code);
     }
 
     [Fact]

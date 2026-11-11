@@ -9,7 +9,7 @@ commit recorded by the `.standards` Git submodule; do not follow an upstream bra
 during verification or release.
 
 Use the stable .NET SDK and workload set in `global.json`. Runtime projects target
-.NET 11; compiler generators retain `netstandard2.0`. Follow [the framework rules](../../.agents/rules/nof-dev.md)
+.NET 11; compiler generators retain `netstandard2.0`. Follow [the framework rules](https://github.com/io7-cn/NOF/blob/main/.agents/rules/nof-dev.md)
 for formatting, restore, build and test commands. Clone with `--recurse-submodules`
 or run `git submodule update --init --recursive`, then run
 `python .standards/.ci/check-adoption.py` after the adoption commit is recorded.
@@ -24,10 +24,13 @@ Required checks are the standards/contribution check and the Windows/Linux build
 and test jobs. Linux also verifies formatting and Native AOT (compilation to a
 native executable). Passing checks do not authorize a merge. The maintainer must
 authorize the exact candidate and obtain the independent approvals required by
-[REV-02](../../.standards/docs/en/01-governance/review-standards.md); breaking API and
+[REV-02](https://github.com/io7-cn/standards/blob/d719e4fecda60102c81d8266e3456b836417c455/docs/en/01-governance/review-standards.md); breaking API and
 authorization changes require two independent qualified reviewers, including a
-domain owner. Configure equivalent protected-branch gates before merging if a
-hosting feature cannot enforce these rules directly.
+domain owner. GitHub protects `main`, including administrators: it requires both OS checks,
+`Standards and contribution policy`, two approvals, approval after the latest push,
+resolved conversations and an up-to-date branch. Force pushes and deletion are
+disabled; merging is restricted to XmmShp. Approval identities must still satisfy
+REV-02; the numeric approval count alone does not establish reviewer qualification.
 
 The existing `main` delivery workflow publishes uniquely versioned nightly NuGet
 packages after validation. Stable releases use explicit version tags or the
@@ -35,5 +38,7 @@ documented manual workflow. Existing published versions, including `v11.0.0`, ar
 immutable. Future protected release tags require verified signatures. No tag or
 stable release is created merely to validate a topic branch.
 
-See [contributing](../../CONTRIBUTING.md), [architecture](../design/index.md),
-[security reporting](../../SECURITY.md), and the [Apache 2.0 license](../../LICENSE).
+See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [architecture](../design/index.md),
+[security reporting](https://github.com/io7-cn/NOF/blob/main/SECURITY.md), and the [Apache 2.0 license](https://github.com/io7-cn/NOF/blob/main/LICENSE).
+
+- [Result Union migration](design/result-unions.md)

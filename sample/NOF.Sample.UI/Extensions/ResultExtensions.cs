@@ -2,18 +2,20 @@ namespace NOF.Contract;
 
 public static class NOFSampleResultExtensions
 {
-    extension(IResult result)
+    extension(System.Runtime.CompilerServices.IUnion result)
     {
         public string GetRpcFailureMessage()
         {
             ArgumentNullException.ThrowIfNull(result);
 
-            if (!string.IsNullOrWhiteSpace(result.Message))
+            var failure = result.Value as Failure
+                ?? throw new InvalidOperationException("Expected a failure outcome.");
+            if (!string.IsNullOrWhiteSpace(failure.Message))
             {
-                return result.Message;
+                return failure.Message;
             }
 
-            return int.TryParse(result.ErrorCode, out var statusCode)
+            return int.TryParse(failure.Code, out var statusCode)
                 ? $"请求失败，状态码: {statusCode}"
                 : "请求失败";
         }

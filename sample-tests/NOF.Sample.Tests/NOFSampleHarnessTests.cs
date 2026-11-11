@@ -24,7 +24,7 @@ public sealed class NOFSampleHarnessTests
                 .SetTenant("tenant-a")
                 .SetUser("user-1", "Alice"));
 
-        Assert.True(createResult.IsSuccess);
+        Assert.NotNull(createResult.ExpectSuccess());
 
         var roots = await host.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
             static (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
@@ -35,8 +35,8 @@ public sealed class NOFSampleHarnessTests
                 .SetTenant("tenant-a")
                 .SetUser("user-1", "Alice"));
 
-        Assert.True(roots.IsSuccess);
-        var root = Assert.Single(roots.Value!.Nodes);
+        Assert.NotNull(roots.ExpectSuccess());
+        var root = Assert.Single(roots.ExpectSuccess().Data!.Nodes);
         Assert.Equal("root-a", root.Name);
         Assert.Null(root.ParentId);
     }
@@ -56,21 +56,21 @@ public sealed class NOFSampleHarnessTests
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
                     cancellationToken));
-            Assert.True(createParent.IsSuccess);
+            Assert.NotNull(createParent.ExpectSuccess());
 
             var roots = await scope.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
                 (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
                     new GetRootConfigNodesRequest(),
                     context,
                     cancellationToken));
-            var root = Assert.Single(roots.Value!.Nodes);
+            var root = Assert.Single(roots.ExpectSuccess().Data!.Nodes);
 
             var createChild = await scope.CallAsync<INOFSampleServiceClient, Result>(
                 (client, context, cancellationToken) => client.CreateConfigNodeAsync(
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,
                     cancellationToken));
-            Assert.True(createChild.IsSuccess);
+            Assert.NotNull(createChild.ExpectSuccess());
 
             return root.Id;
         });
@@ -86,8 +86,8 @@ public sealed class NOFSampleHarnessTests
                     context,
                     cancellationToken));
 
-            Assert.True(parent.IsSuccess);
-            Assert.Equal("parent-b", parent.Value!.Node.Name);
+            Assert.NotNull(parent.ExpectSuccess());
+            Assert.Equal("parent-b", parent.ExpectSuccess().Data!.Node.Name);
 
             var projection = await scope.GetRequiredService<IDbContext>()
                 .Set<ConfigNodeChildren>()

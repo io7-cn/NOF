@@ -38,7 +38,7 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, ambient headers, and in-memory event primitives                                       |
 | [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, failures, domain exceptions, and ID generation                                       |
-| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `StreamingResult<T>`, `Optional<T>`, HTTP endpoint attributes |
+| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>`, HTTP endpoint attributes |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - RPC servers, handlers, state machines, mapping, caching, and object-storage contracts              |
 | [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Hosting abstractions - builder contracts, step contracts, dependency ordering, and JWT outbound propagation             |
 | [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - runtime defaults, object storage, transactional messaging, OpenTelemetry, auth resource server, and service wiring |
@@ -92,9 +92,11 @@ await app.RunAsync();
 
 In `DatabasePerTenant` mode, NOF deliberately uses one model and one migration chain for both the host database and every tenant database. They therefore have identical schemas. Tables used only by host-level features are still present in tenant databases and may remain empty; accepting this schema superset is the tradeoff for simpler model construction, migrations, deployment orchestration, and persistence-provider behavior.
 
+See the [Result Union migration guide](docs/en/design/result-unions.md) ([简体中文](docs/zh-CN/design/result-unions.md)) for the NOF 12 breaking contract.
+
 ## Streaming RPC
 
-NOF RPC contracts can expose server-streaming operations by returning `StreamingResult<T>` from the contract surface. Generated clients normalize those methods to `Task<StreamingResult<T>>`.
+NOF RPC contracts can expose server-streaming operations by returning `Result<IAsyncEnumerable<T>>` from the contract surface. Generated clients normalize those methods to `Task<Result<IAsyncEnumerable<T>>>`.
 
 ```csharp
 public record WatchOrdersRequest(Guid CustomerId);
@@ -103,17 +105,17 @@ public record OrderEvent(Guid OrderId, string Status);
 public interface IOrderService : IRpcService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
-    StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);
+    Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
 }
 ```
 
 Client usage stays result-first:
 
 ```csharp
-var result = await orderClient.WatchAsync(new WatchOrdersRequest(customerId), cancellationToken);
-if (result.IsSuccess)
+var result = await orderClient.WatchAsync(new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
+if (result is Success<IAsyncEnumerable<OrderEvent>> success)
 {
-    await foreach (var item in result.Value.WithCancellation(cancellationToken))
+    await foreach (var item in success.Data.WithCancellation(cancellationToken))
     {
         Console.WriteLine($"{item.OrderId}: {item.Status}");
     }

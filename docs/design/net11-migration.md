@@ -40,11 +40,12 @@ EF Core 11 runtime with a provider requiring EF Core 10.
 
 ## Adopted unions
 
-Three success/failure record hierarchies have a fixed set of outcomes and now use
+The following outcome models have a fixed set of outcomes and now use
 native C# 15 `union` declarations:
 
 | Type | Cases | Boundary |
 | --- | --- | --- |
+| `Result`, `Result<T>` | `Success` / `Success<T>`, `Failure` | RPC, JSON serialization, local and HTTP clients |
 | `InboundAuthorizationResult` | `Allowed`, `Denied` | Authorization handler and inbound middleware |
 | `OAuthClientCredentialsValidationResult` | `Success`, `Failure` | OAuth client repository and grant processing |
 | `OAuthTokenExchangeResult` | `Success`, `Failure` | Token exchange handler and token endpoint |
@@ -81,16 +82,15 @@ the existing protocol response; the union itself is not sent over the wire.
 
 | Existing model | Decision | Reason |
 | --- | --- | --- |
-| `Result<T>`, `FailResult` | Keep the current RPC envelope | `Value` already means the success payload; JSON fields, metadata, inheritance, projections, generators, and AOT serialization depend on it. A direct union would change that contract. |
+| `Result`, `Result<T>` | Adopt native unions | Success and failure are separate cases; successful cases also carry `Message`. See the [breaking migration guide](../en/design/result-unions.md). |
 | `Optional<T>` | Keep the current representation | Absent and explicitly present null are distinct, including for partial-update requests; `Value` and `HasValue` also define the JSON shape. |
-| `StreamingResult<T>`, `PaginatedResult<T>` | Keep the current envelopes | Stream and pagination metadata are part of the transport contract, and pagination inherits the typed result. |
+| Streaming and paging results | Use typed success payloads | `Result<IAsyncEnumerable<T>>` and `Result<Page<T>>` replace the old result subclasses. |
 | Cache and object-storage payloads | Keep generic contracts | Payloads form an open set; a closed union would restrict application types. |
 | `TopologyComparison` and other enums | Keep enums | Cases carry no separate payloads, so a union adds storage overhead without improving the model. |
 
-If a future version adds union-shaped RPC payloads, verify source-generated
-System.Text.Json round trips, OpenAPI schemas, streaming, and Native AOT. Multiple
-object cases require an unambiguous classifier or a separately designed tagged
-protocol; property names alone are not always sufficient.
+The Result migration uses tagged JSON, required case fields, source-generated
+System.Text.Json metadata and explicit streaming-message transport. Its guide
+describes coordinated deployment and rollback.
 
 ## References
 

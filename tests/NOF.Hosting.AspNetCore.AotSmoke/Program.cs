@@ -29,10 +29,10 @@ using var http = new HttpClient(new InspectBodyHandler(new HttpClientHandler()))
 var client = new HttpOrderServiceClient(http);
 var id = Guid.NewGuid();
 var updated = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "shipped" }, Context.Empty);
-Expect(updated.IsSuccess && updated.Value == new OrderDto(id, "shipped", "default"), "Generated PUT did not bind the path and body");
+Expect(updated is Success<OrderDto> updatedSuccess && updatedSuccess.Data == new OrderDto(id, "shipped", "default"), "Generated PUT did not bind the path and body");
 
 var read = await client.ReadAsync(new ReadOrderRequest { Id = id, Page = 7 }, Context.Empty);
-Expect(read.IsSuccess && read.Value == new OrderDto(id, "7", "read"), "Generated GET did not bind the path and query");
+Expect(read is Success<OrderDto> readSuccess && readSuccess.Data == new OrderDto(id, "7", "read"), "Generated GET did not bind the path and query");
 
 using var raw = new HttpClient { BaseAddress = http.BaseAddress };
 using var forged = await raw.PutAsync($"/orders/{id}",
@@ -40,7 +40,7 @@ using var forged = await raw.PutAsync($"/orders/{id}",
 forged.EnsureSuccessStatusCode();
 var forgedResult = await JsonSerializer.DeserializeAsync(
     await forged.Content.ReadAsStreamAsync(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<OrderDto>>());
-Expect(forgedResult?.Value == new OrderDto(id, "raw", "default"), "A JSON id changed the path ID");
+Expect(forgedResult is Success<OrderDto> forgedSuccess && forgedSuccess.Data == new OrderDto(id, "raw", "default"), "A JSON id changed the path ID");
 
 using var badPath = await raw.GetAsync("/orders/invalid");
 Expect(badPath.StatusCode == HttpStatusCode.BadRequest, "An invalid path value was accepted");
@@ -61,7 +61,7 @@ try
 {
     CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
     var result = await client.LookupAsync(lookup, Context.Empty);
-    Expect(result.IsSuccess && result.Value == "café #1?|Shipped|2026-04-10|2026-04-10T09:15:00.0001234Z|12.5|17|45|9.75",
+    Expect(result is Success<string> lookupSuccess && lookupSuccess.Data == "café #1?|Shipped|2026-04-10|2026-04-10T09:15:00.0001234Z|12.5|17|45|9.75",
         "Generated GET did not round-trip scalar and custom path values");
 }
 finally
@@ -96,7 +96,7 @@ Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAut
     "Generated route did not preserve NOF authorization");
 
 var failure = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "fail" }, Context.Empty);
-Expect(!failure.IsSuccess && failure.ErrorCode == "order.rejected", "Generated route did not serialize the business failure");
+Expect(failure is Failure rejected && rejected.Code == "order.rejected", "Generated route did not serialize the business failure");
 
 using var openApi = JsonDocument.Parse(await raw.GetStringAsync("/openapi/v1.json"));
 var put = openApi.RootElement.GetProperty("paths").GetProperty("/orders/{id}").GetProperty("put");
@@ -260,7 +260,7 @@ public sealed class LookupOrderHandler : OrderServer.Lookup
 {
     public override Task<Result<string>> HandleAsync(
         LookupOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(FormattableString.Invariant(
+        => Task.FromResult(Result.Success<string>(FormattableString.Invariant(
             $"{request.Slug}|{request.State}|{request.Day:yyyy-MM-dd}|{request.Timestamp:O}|{request.Amount}|{request.Warehouse.Value}|{request.Legacy.Value}|{request.Price.Value}")));
 }
 

@@ -24,7 +24,7 @@ public static class JsonRpcHttpClient
         JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TResponse> responseTypeInfo,
         CancellationToken cancellationToken)
-        where TResponse : IResult
+        where TResponse : IRpcResponse<TResponse>
     {
         ValidateRequestArguments(httpClient, endpoint, method, request, headers, requestTypeInfo);
         ArgumentNullException.ThrowIfNull(responseTypeInfo);
@@ -41,7 +41,7 @@ public static class JsonRpcHttpClient
         return await ReadResponseEnvelopeAsync(response, id, responseTypeInfo, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<StreamingResult<TItem>> SendStreamingAsync<TRequest, TItem>(
+    public static async Task<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>> SendStreamingAsync<TRequest, TItem>(
         HttpClient httpClient,
         string endpoint,
         string method,
@@ -68,7 +68,7 @@ public static class JsonRpcHttpClient
         {
             using (response)
             {
-                return await HttpRpcTransportResultReader.ReadFailureAsync<StreamingResult<TItem>>(
+                return await HttpRpcTransportResultReader.ReadFailureAsync<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(
                     response,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -80,13 +80,13 @@ public static class JsonRpcHttpClient
                 StringComparison.OrdinalIgnoreCase))
         {
             var stream = ReadStreamingItemsAsync(response, id, itemTypeInfo, cancellationToken);
-            return Result.Stream(stream);
+            return Result.Stream(stream, StreamingResponseMetadata.ReadMessage(response));
         }
 
         using (response)
         {
             var fallback = await ReadResponseEnvelopeAsync(response, id, fallbackTypeInfo, cancellationToken).ConfigureAwait(false);
-            return ResultProjection.RequireCompatible<StreamingResult<TItem>>(fallback);
+            return RpcResponse.Require<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(fallback);
         }
     }
 
@@ -96,7 +96,7 @@ public static class JsonRpcHttpClient
         string expectedId,
         JsonTypeInfo<TResponse> responseTypeInfo,
         CancellationToken cancellationToken)
-        where TResponse : IResult
+        where TResponse : IRpcResponse<TResponse>
     {
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -105,14 +105,20 @@ public static class JsonRpcHttpClient
 
         if (root.TryGetProperty("result", out var resultElement))
         {
-            return resultElement.Deserialize(responseTypeInfo)
+            var result = resultElement.Deserialize(responseTypeInfo)
                 ?? throw new InvalidOperationException($"JSON-RPC response result for '{typeof(TResponse).FullName}' is null.");
+            if (result.Value is null)
+            {
+                throw new InvalidOperationException("The JSON-RPC response contains no outcome case.");
+            }
+
+            return result;
         }
 
         if (root.TryGetProperty("error", out var errorElement)
             && errorElement.ValueKind == JsonValueKind.Object)
         {
-            return ResultProjection.RequireCompatible<TResponse>(ReadError(errorElement));
+            return TResponse.CreateFailure(ReadError(errorElement));
         }
 
         throw new InvalidOperationException("JSON-RPC response must contain either a result or an error object.");
@@ -145,7 +151,7 @@ public static class JsonRpcHttpClient
                 && errorElement.ValueKind == JsonValueKind.Object)
             {
                 var error = ReadError(errorElement);
-                throw new InvalidOperationException($"JSON-RPC streaming error {error.ErrorCode}: {error.Message}");
+                throw new InvalidOperationException($"JSON-RPC streaming error {error.Code}: {error.Message}");
             }
 
             throw new InvalidOperationException("JSON-RPC streaming response must contain either a result or an error object.");
@@ -222,7 +228,7 @@ public static class JsonRpcHttpClient
         }
     }
 
-    private static IResult ReadError(JsonElement errorElement)
+    private static Failure ReadError(JsonElement errorElement)
     {
         var code = errorElement.TryGetProperty("code", out var codeElement)
             ? codeElement.ToString()

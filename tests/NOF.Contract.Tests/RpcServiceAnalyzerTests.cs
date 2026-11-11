@@ -606,7 +606,11 @@ public class RpcServiceAnalyzerTests
 
             public record Query(string Value);
 
-            public sealed record CustomResult(bool IsSuccess, string ErrorCode, string Message, object? Value, IDictionary<string, string> Extra) : IResult;
+            public union CustomResult(Success, Failure) : IRpcResponse<CustomResult>
+            {
+                public static CustomResult CreateFailure(Failure failure) => failure;
+                public static CustomResult CreateEmptyResponse() => new Success();
+            }
 
             public partial interface IMyService : IRpcService
             {

@@ -18,3 +18,7 @@
   href: step.md
 - name: Value Object
   href: value-object.md
+- name: Result Union migration (English)
+  href: ../en/design/result-unions.md
+- name: Result 联合类型迁移
+  href: ../zh-CN/design/result-unions.md

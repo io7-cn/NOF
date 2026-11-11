@@ -52,9 +52,8 @@ public sealed class HttpRpcTransportBoundaryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result<ReadTokenResponse>>();
-        Assert.NotNull(payload);
-        Assert.True(payload.IsSuccess);
-        Assert.Equal("query-token", payload.Value!.Token);
+        Assert.NotNull(payload.ExpectSuccess());
+        Assert.Equal("query-token", payload.ExpectSuccess().Data!.Token);
     }
 
     [Fact]
@@ -69,9 +68,8 @@ public sealed class HttpRpcTransportBoundaryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<Result<CreateUserResponse>>();
-        Assert.NotNull(result);
-        Assert.True(result.IsSuccess);
-        Assert.Equal(18, result.Value.Age);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal(18, result.ExpectSuccess().Data.Age);
     }
 
     [Fact]
@@ -84,8 +82,7 @@ public sealed class HttpRpcTransportBoundaryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result>();
-        Assert.NotNull(payload);
-        Assert.True(payload.IsSuccess);
+        Assert.NotNull(payload.ExpectSuccess());
     }
 
     [Fact]
@@ -98,10 +95,9 @@ public sealed class HttpRpcTransportBoundaryTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<Result<ReadTokenResponse>>();
-        Assert.NotNull(payload);
-        Assert.False(payload.IsSuccess);
-        Assert.Equal("invalid_token", payload.ErrorCode);
-        Assert.Equal("access token expired.", payload.Message);
+        Assert.NotNull(payload.ExpectFailure());
+        Assert.Equal("invalid_token", payload.ExpectFailure().Code);
+        Assert.Equal("access token expired.", payload.ExpectFailure().Message);
     }
 
     [Fact]
@@ -118,9 +114,8 @@ public sealed class HttpRpcTransportBoundaryTests
             value.ToString().Contains("insufficient_scope", StringComparison.Ordinal) &&
             value.ToString().Contains("scope=\"sample.permission\"", StringComparison.Ordinal));
         var payload = await response.Content.ReadFromJsonAsync<Result>();
-        Assert.NotNull(payload);
-        Assert.False(payload.IsSuccess);
-        Assert.Equal("403", payload.ErrorCode);
+        Assert.NotNull(payload.ExpectFailure());
+        Assert.Equal("403", payload.ExpectFailure().Code);
     }
 
     private static async Task<WebApplication> CreateAppAsync()
@@ -262,7 +257,7 @@ public sealed class HttpRpcTransportBoundaryTests
                 context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "403";
                 context.ResponseHeaders["WWW-Authenticate"] =
                     "Bearer error=\"insufficient_scope\", authorization_server=\"https://auth.local/oauth2\", scope=\"sample.permission\"";
-                context.SetResponse(Result.Fail("403", "Insufficient permissions"), ignoreResultResponseType: false);
+                context.SetResponse(Result.Fail("403", "Insufficient permissions"));
                 return ValueTask.CompletedTask;
             }
 

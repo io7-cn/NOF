@@ -157,7 +157,7 @@ public sealed class AuthorizationInboundMiddleware(
         context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] =
             failure.StatusCode.ToString(CultureInfo.InvariantCulture);
         context.ResponseHeaders[WwwAuthenticateHeader] = CreateBearerChallenge(failure);
-        context.SetResponse(failure.Result, ignoreResultResponseType: false);
+        context.SetResponse(failure.Result);
     }
 
     private string CreateBearerChallenge(InboundAuthorizationResult.Denied failure)

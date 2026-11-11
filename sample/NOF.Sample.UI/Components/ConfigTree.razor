@@ -158,11 +158,10 @@
             NewParentId = newParentId
         }, NOF.Contract.Context.Empty);
 
-        if (result.IsSuccess)
+        if (result is Success)
         {
             Message.Success("节点移动成功");
             await LoadRootNodes();
-            StateHasChanged();
         }
         else
         {

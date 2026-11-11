@@ -265,7 +265,7 @@ public sealed class HttpRpcClientGenerator : IIncrementalGenerator
         sb.AppendLine("                await _outboundPipeline.ExecuteAsync(outboundContext, request, dispatch, cancellationToken).ConfigureAwait(false);");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            return global::NOF.Contract.ResultProjection.RequireCompatible<{responseType}>(");
+        sb.AppendLine($"            return global::NOF.Contract.RpcResponse.Require<{responseType}>(");
         sb.AppendLine("                outboundContext.Response ?? throw new global::System.InvalidOperationException(\"RPC call returned a null response.\"));");
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -337,12 +337,15 @@ public sealed class HttpRpcClientGenerator : IIncrementalGenerator
             sb.AppendLine("                var response = await _httpClient.SendAsync(httpRequest, global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);");
             sb.AppendLine("                if (!response.IsSuccessStatusCode)");
             sb.AppendLine("                {");
-            sb.AppendLine($"                    result = await global::NOF.Contract.HttpRpcTransportResultReader.ReadFailureAsync<global::NOF.Contract.StreamingResult<{streamItemType}>>(response, ct).ConfigureAwait(false);");
+            sb.AppendLine("                    using (response)");
+            sb.AppendLine("                    {");
+            sb.AppendLine($"                    result = await global::NOF.Contract.HttpRpcTransportResultReader.ReadFailureAsync<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<{streamItemType}>>>(response, ct).ConfigureAwait(false);");
+            sb.AppendLine("                    }");
             sb.AppendLine("                }");
             sb.AppendLine("                else if (string.Equals(response.Content.Headers.ContentType?.MediaType, \"text/event-stream\", global::System.StringComparison.OrdinalIgnoreCase))");
             sb.AppendLine("                {");
             sb.AppendLine($"                    var stream = global::NOF.Contract.SseResponseReader.ReadAsync<{streamItemType}>(response, GetJsonTypeInfo<{streamItemType}>(), ct);");
-            sb.AppendLine($"                    result = global::NOF.Contract.Result.Stream<{streamItemType}>(stream);");
+            sb.AppendLine($"                    result = global::NOF.Contract.Result.Stream<{streamItemType}>(stream, global::NOF.Contract.StreamingResponseMetadata.ReadMessage(response));");
             sb.AppendLine("                }");
             sb.AppendLine("                else");
             sb.AppendLine("                {");

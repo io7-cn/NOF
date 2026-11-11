@@ -47,7 +47,7 @@ public union InboundAuthorizationResult(InboundAuthorizationResult.Allowed, Inbo
 
     /// <summary>Rejects the operation with a business failure and an HTTP challenge.</summary>
     public sealed record Denied(
-        IResult Result,
+        Failure Result,
         int StatusCode,
         IReadOnlyList<string> ChallengePermissions);
 

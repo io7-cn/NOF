@@ -4,12 +4,13 @@ using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace NOF.Infrastructure;
 
 public static class RpcServerInvoker
 {
-    public static async Task<IResult?> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TRpcService>(
+    public static async Task<IUnion?> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TRpcService>(
         IServiceProvider callerServiceProvider,
         MethodInfo serviceMethodInfo,
         object request,

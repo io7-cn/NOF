@@ -119,16 +119,16 @@
                 new CreateDemoOAuthClientRequest(),
                 Context.Empty);
 
-            if (!result.IsSuccess)
+            if (result is not Success<CreateDemoOAuthClientResponse> success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
 
-            _clientId = result.Value.ClientId;
-            _clientSecret = result.Value.ClientSecret;
+            _clientId = success.Data.ClientId;
+            _clientSecret = success.Data.ClientSecret;
             _clientAccessToken = null;
             _exchangedAccessToken = null;
-            _step1Result = JsonSerializer.Serialize(result.Value, _jsonOptions);
+            _step1Result = JsonSerializer.Serialize(success.Data, _jsonOptions);
             _step2Result = "尚未执行";
             _step4Result = "尚未执行";
             _step5Result = "尚未执行";
@@ -147,14 +147,14 @@
                 },
                 Context.Empty);
 
-            if (!result.IsSuccess)
+            if (result is not Success<DemoTokenResponse> success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
 
-            _clientAccessToken = result.Value.AccessToken;
+            _clientAccessToken = success.Data.AccessToken;
             _exchangedAccessToken = null;
-            _step2Result = JsonSerializer.Serialize(result.Value, _jsonOptions);
+            _step2Result = JsonSerializer.Serialize(success.Data, _jsonOptions);
             _step4Result = "尚未执行";
             _step5Result = "尚未执行";
         });
@@ -165,14 +165,14 @@
         await ExecuteStepAsync("正在模拟用户授权并获取 Token...", async () =>
         {
             var result = await OAuthDemoService.GetUserTokenAsync(new GetDemoUserTokenRequest(), Context.Empty);
-            if (!result.IsSuccess)
+            if (result is not Success<DemoTokenResponse> success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
 
-            _userAccessToken = result.Value.AccessToken;
+            _userAccessToken = success.Data.AccessToken;
             _exchangedAccessToken = null;
-            _step3Result = JsonSerializer.Serialize(result.Value, _jsonOptions);
+            _step3Result = JsonSerializer.Serialize(success.Data, _jsonOptions);
             _step4Result = "尚未执行";
             _step5Result = "尚未执行";
         });
@@ -193,13 +193,13 @@
                 },
                 Context.Empty);
 
-            if (!result.IsSuccess)
+            if (result is not Success<DemoTokenResponse> success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
 
-            _exchangedAccessToken = result.Value.AccessToken;
-            _step4Result = JsonSerializer.Serialize(result.Value, _jsonOptions);
+            _exchangedAccessToken = success.Data.AccessToken;
+            _step4Result = JsonSerializer.Serialize(success.Data, _jsonOptions);
             _step5Result = "尚未执行";
         });
     }
@@ -215,12 +215,12 @@
                 },
                 Context.Empty);
 
-            if (!result.IsSuccess)
+            if (result is not Success<ConsumeDemoAccessTokenResponse> success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
 
-            _step5Result = JsonSerializer.Serialize(result.Value, _jsonOptions);
+            _step5Result = JsonSerializer.Serialize(success.Data, _jsonOptions);
         });
     }
 

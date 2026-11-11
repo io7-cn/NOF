@@ -91,7 +91,7 @@ public sealed class AuthorizationInboundMiddlewareTests
         if (errorCode is not null)
         {
             Assert.Null(forwardedTenant);
-            Assert.Equal(errorCode, Assert.IsAssignableFrom<IResult>(context.Response).ErrorCode);
+            Assert.Equal(errorCode, context.Response!.ExpectFailure().Code);
             Assert.Equal(errorCode, context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode]);
         }
         else
@@ -116,7 +116,7 @@ public sealed class AuthorizationInboundMiddlewareTests
         }, default);
 
         Assert.False(nextCalled);
-        Assert.Equal("401", Assert.IsAssignableFrom<IResult>(context.Response).ErrorCode);
+        Assert.Equal("401", context.Response!.ExpectFailure().Code);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class AuthorizationInboundMiddlewareTests
         var deniedContext = CreateRequestContext(nameof(TestService.HostMethod));
         await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) =>
             throw new InvalidOperationException("An unauthorized host handler must not run"), default);
-        Assert.Equal("403", Assert.IsAssignableFrom<IResult>(deniedContext.Response).ErrorCode);
+        Assert.Equal("403", deniedContext.Response!.ExpectFailure().Code);
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage"));
@@ -210,10 +210,10 @@ public sealed class AuthorizationInboundMiddlewareTests
         var context = CreateRequestContext(nameof(TestService.LoginOnlyMethod));
         await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
 
-        var response = Assert.IsAssignableFrom<IResult>(context.Response);
-        Assert.False(response.IsSuccess);
-        Assert.Equal("401", response.ErrorCode);
-        Assert.Equal("Please login first", response.Message);
+        var response = Assert.IsAssignableFrom<System.Runtime.CompilerServices.IUnion>(context.Response);
+        Assert.NotNull(response.ExpectFailure());
+        Assert.Equal("401", response.ExpectFailure().Code);
+        Assert.Equal("Please login first", response.ExpectFailure().Message);
         Assert.Equal("401", context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode]);
         Assert.Equal(
             "Bearer error=\"invalid_token\", authorization_server=\"https://auth.local/oauth2\"",
@@ -230,8 +230,8 @@ public sealed class AuthorizationInboundMiddlewareTests
         var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
         await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
 
-        var denied = Assert.IsAssignableFrom<IResult>(deniedContext.Response);
-        Assert.Equal("403", denied.ErrorCode);
+        var denied = Assert.IsAssignableFrom<System.Runtime.CompilerServices.IUnion>(deniedContext.Response);
+        Assert.Equal("403", denied.ExpectFailure().Code);
         Assert.Equal("403", deniedContext.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode]);
         Assert.Equal(
             "Bearer error=\"insufficient_scope\", authorization_server=\"https://auth.local/oauth2\", scope=\"input-method\"",
@@ -260,8 +260,8 @@ public sealed class AuthorizationInboundMiddlewareTests
         var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler));
         await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
 
-        var denied = Assert.IsAssignableFrom<IResult>(deniedContext.Response);
-        Assert.Equal("403", denied.ErrorCode);
+        var denied = Assert.IsAssignableFrom<System.Runtime.CompilerServices.IUnion>(deniedContext.Response);
+        Assert.Equal("403", denied.ExpectFailure().Code);
         Assert.Equal(
             "Bearer error=\"insufficient_scope\", authorization_server=\"https://auth.local/oauth2\", scope=\"execute-method\"",
             deniedContext.ResponseHeaders["WWW-Authenticate"]);
@@ -295,8 +295,8 @@ public sealed class AuthorizationInboundMiddlewareTests
             (_, _, _) => ValueTask.CompletedTask,
             default);
 
-        var denied = Assert.IsAssignableFrom<IResult>(context.Response);
-        Assert.Equal("403", denied.ErrorCode);
+        var denied = Assert.IsAssignableFrom<System.Runtime.CompilerServices.IUnion>(context.Response);
+        Assert.Equal("403", denied.ExpectFailure().Code);
     }
 
     [Fact]

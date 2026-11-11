@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using NOF.Contract;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -60,7 +61,7 @@ public sealed class OAuthTokenResponseIssuer(
                     : null
             },
             cancellationToken).ConfigureAwait(false);
-        if (!issueResult.IsSuccess || (issueRefreshToken && issueResult.Value.RefreshToken is null))
+        if (issueResult is not Success<IssueTokenResponse> issueResultSuccess || (issueRefreshToken && issueResultSuccess.Data.RefreshToken is null))
         {
             return null;
         }
@@ -105,10 +106,10 @@ public sealed class OAuthTokenResponseIssuer(
 
         return new OAuthTokenEndpointResponse
         {
-            AccessToken = issueResult.Value.AccessToken,
+            AccessToken = issueResultSuccess.Data.AccessToken,
             TokenType = "Bearer",
             ExpiresIn = (long)options.AccessTokenExpiration.TotalSeconds,
-            RefreshToken = issueResult.Value.RefreshToken?.Token,
+            RefreshToken = issueResultSuccess.Data.RefreshToken?.Token,
             Scope = string.Join(' ', scopes),
             IdToken = idToken
         };

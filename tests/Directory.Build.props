@@ -2,7 +2,7 @@
   <PropertyGroup>
     <NoWarn>$(NoWarn);CS1591;CS8620</NoWarn>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'NOF.Abstraction.Tests' and '$(MSBuildProjectName)' != 'NOF.Domain.Tests' and '$(MSBuildProjectName)' != 'NOF.Hosting.AspNetCore.AotSmoke'">
     <Compile Include="$(MSBuildThisFileDirectory)Common\Assertions\*.cs" Link="Assertions\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

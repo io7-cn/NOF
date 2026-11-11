@@ -77,7 +77,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 
 - Add assemblies containing handlers, mappings, or `[AutoInject]` services through `AddApplicationPart(...)`.
 - Register every RPC server explicitly through `AddRpcServer<TServer>()`; applicable endpoints are mapped during `BuildAsync()`.
-- Build request contracts with one reference-type request and a non-task `IResult` return.
+- Build request contracts with one reference-type request and a non-task `IRpcResponse<TSelf>` union return.
 - Keep persistence-provider APIs out of the application layer.
 - Apply filtering, ordering, and paging before `ProjectTo<TDestination>()`.
 - Keep explicit paths available when ambient `Mapper`, `IdGenerator`, or `EventPublisher` conveniences make dependencies unclear.

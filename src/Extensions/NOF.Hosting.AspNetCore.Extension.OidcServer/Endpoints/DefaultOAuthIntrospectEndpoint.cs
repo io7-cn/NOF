@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Contract;
 using OidcRoutes = Microsoft.AspNetCore.Routing.NOFOidcServerExtensions;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -39,14 +40,19 @@ public sealed class DefaultOAuthIntrospectEndpoint(
                 Audience = oauthOptions.Value.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccess)
+        if (result is not Success<IntrospectTokenResponse> resultSuccess)
         {
+            var resultFailure = result switch
+            {
+                Failure responseFailure => responseFailure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
             return OidcRoutes.CreateOAuthErrorResult(
-                result.ErrorCode,
-                result.Message,
+                resultFailure.Code,
+                resultFailure.Message,
                 StatusCodes.Status500InternalServerError);
         }
 
-        return Results.Json(OidcRoutes.BuildIntrospectionResponse(result.Value));
+        return Results.Json(OidcRoutes.BuildIntrospectionResponse(resultSuccess.Data));
     }
 }

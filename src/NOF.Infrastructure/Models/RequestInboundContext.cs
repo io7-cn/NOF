@@ -2,6 +2,7 @@ using NOF.Contract;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace NOF.Infrastructure;
 
@@ -10,7 +11,7 @@ public sealed class RequestInboundContext : Context
 {
     private readonly RequestInboundState _state;
 
-    public IResult? Response => _state.Response;
+    public IUnion? Response => _state.Response;
 
     public IDictionary<string, string?> ResponseHeaders => _state.ResponseHeaders;
 
@@ -29,23 +30,21 @@ public sealed class RequestInboundContext : Context
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public required Type ResponseType { get; init; }
 
-    public void SetResponse(IResult response)
+    public void SetResponse(IUnion response)
     {
         ArgumentNullException.ThrowIfNull(response);
+        if (response.Value is null)
+        {
+            throw new InvalidOperationException("The RPC response contains no outcome case.");
+        }
         _state.Response = response;
     }
 
-    public void SetResponse(IResult failure, bool ignoreResultResponseType = false)
+    public void SetResponse(Failure failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
 
-        if (!ignoreResultResponseType && CreatesBusinessResult(ResponseType))
-        {
-            _state.Response = ResultProjection.CreateFailure(ResponseType, failure);
-            return;
-        }
-
-        _state.Response = ResultProjection.CreateFailure(typeof(Result), failure);
+        _state.Response = new Result(failure);
     }
 
     [SetsRequiredMembers]
@@ -69,12 +68,9 @@ public sealed class RequestInboundContext : Context
     protected override Context Clone(IReadOnlyDictionary<object, object?> items)
         => new RequestInboundContext(items, this);
 
-    private static bool CreatesBusinessResult(Type responseType)
-        => typeof(IResult).IsAssignableFrom(responseType);
-
     private sealed class RequestInboundState
     {
-        public IResult? Response { get; set; }
+        public IUnion? Response { get; set; }
 
         public IDictionary<string, string?> ResponseHeaders { get; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
     }

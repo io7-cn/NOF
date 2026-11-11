@@ -48,8 +48,8 @@ public sealed class JsonRpcHttpClientTests
         Assert.Equal("ping", capturedRequest.RootElement.GetProperty("params").GetProperty("value").GetString());
         Assert.Equal("header", capturedHeader);
         Assert.Equal("https://example.test/bff/user-service/rpc", capturedRequestUri?.AbsoluteUri);
-        Assert.True(result.IsSuccess);
-        Assert.Equal("pong", result.Value!.Value);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal("pong", result.ExpectSuccess().Data!.Value);
         capturedRequest.Dispose();
     }
 
@@ -83,9 +83,9 @@ public sealed class JsonRpcHttpClientTests
             JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<Pong>>(),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("-32601", result.ErrorCode);
-        Assert.Equal("Method not found", result.Message);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("-32601", result.ExpectFailure().Code);
+        Assert.Equal("Method not found", result.ExpectFailure().Message);
     }
 
     private sealed record Ping(string Value);

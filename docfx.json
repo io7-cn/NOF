@@ -43,6 +43,13 @@
           "api/**"
         ],
         "src": "docs/"
+      },
+      {
+        "files": [
+          "**.md"
+        ],
+        "src": ".standards",
+        "dest": "standards"
       }
     ],
     "resource": [
@@ -51,6 +58,14 @@
           "images/**"
         ],
         "src": "docs/"
+      },
+      {
+        "files": [
+          "LICENSE",
+          "NOTICE"
+        ],
+        "src": ".standards",
+        "dest": "standards"
       }
     ],
     "output": "_site",

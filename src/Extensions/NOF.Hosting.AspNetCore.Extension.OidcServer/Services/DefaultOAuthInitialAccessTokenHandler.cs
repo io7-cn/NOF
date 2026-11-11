@@ -25,13 +25,13 @@ public sealed class DefaultOAuthInitialAccessTokenHandler(
                 Audience = options.Value.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (!introspection.IsSuccess || !introspection.Value.Active)
+        if (introspection is not Success<IntrospectTokenResponse> introspectionSuccess || !introspectionSuccess.Data.Active)
         {
             return Result.Fail("invalid_token", "initial access token is invalid.");
         }
 
         var requiredScope = options.Value.ClientRegistrationInitialAccessTokenScope;
-        var scopes = introspection.Value.Claims
+        var scopes = introspectionSuccess.Data.Claims
             .Where(static claim => string.Equals(claim.Type, OAuthClaimTypes.Scope, StringComparison.Ordinal))
             .SelectMany(static claim => claim.Values ?? [claim.Value ?? string.Empty])
             .SelectMany(static value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))

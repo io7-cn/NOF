@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Contract;
 using OidcRoutes = Microsoft.AspNetCore.Routing.NOFOidcServerExtensions;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -66,8 +67,11 @@ public sealed class DefaultOAuthTokenEndpoint(
 
         request.HttpRequest.HttpContext.Response.Headers.CacheControl = "no-store";
         request.HttpRequest.HttpContext.Response.Headers.Pragma = "no-cache";
-        return result.IsSuccess
-            ? Results.Json(result.Value)
-            : OidcRoutes.CreateOAuthErrorResult(result.ErrorCode, result.Message);
+        return result switch
+        {
+            Success<OAuthTokenEndpointResponse> success => Results.Json(success.Data),
+            Failure failure => OidcRoutes.CreateOAuthErrorResult(failure.Code, failure.Message),
+            _ => throw new InvalidOperationException("The response contains no outcome case.")
+        };
     }
 }

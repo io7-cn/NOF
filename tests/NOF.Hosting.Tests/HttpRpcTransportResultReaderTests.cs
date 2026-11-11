@@ -10,12 +10,33 @@ namespace NOF.Hosting.Tests;
 public sealed class HttpRpcTransportResultReaderTests
 {
     [Fact]
+    public async Task ReadFailureAsync_TaggedFailure_PreservesBusinessCodeAndMessage()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent("""{"kind":"failure","error":{"code":"permission.denied","message":"Access denied"}}""", Encoding.UTF8, "application/json")
+        };
+        var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None);
+        Assert.Equal("permission.denied", result.ExpectFailure().Code);
+        Assert.Equal("Access denied", result.ExpectFailure().Message);
+    }
+
+    [Fact]
+    public async Task ReadAsync_EmptySuccess_RequiresDataForTypedResult()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.NoContent);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HttpRpcTransportResultReader.ReadAsync(
+            response, CreateTypeInfo<Result<TokenResponse>>(), CancellationToken.None));
+        Assert.NotNull((await HttpRpcTransportResultReader.ReadAsync(response, CreateTypeInfo<Result>(), CancellationToken.None)).ExpectSuccess());
+    }
+
+    [Fact]
     public async Task ReadAsync_WhenHttp200ContainsBusinessFailure_PreservesFailure()
     {
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"isSuccess":false,"errorCode":"conflict","message":"Already approved","value":null,"extra":{}}""",
+                """{"kind":"failure","error":{"code":"conflict","message":"Already approved"}}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -25,9 +46,9 @@ public sealed class HttpRpcTransportResultReaderTests
             CreateTypeInfo<Result<TokenResponse>>(),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("conflict", result.ErrorCode);
-        Assert.Null(result.Value);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("conflict", result.ExpectFailure().Code);
+
     }
 
     [Fact]
@@ -36,7 +57,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"isSuccess":true,"errorCode":"","message":"","value":{"token":"abc"},"extra":{}}""",
+                """{"kind":"success","data":{"token":"abc"},"message":""}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -46,8 +67,8 @@ public sealed class HttpRpcTransportResultReaderTests
             CreateTypeInfo<Result<TokenResponse>>(),
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal("abc", result.Value!.Token);
+        Assert.NotNull(result.ExpectSuccess());
+        Assert.Equal("abc", result.ExpectSuccess().Data!.Token);
     }
 
     [Fact]
@@ -63,9 +84,9 @@ public sealed class HttpRpcTransportResultReaderTests
 
         var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("401", result.ErrorCode);
-        Assert.Contains("invalid_token", result.Message);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("401", result.ExpectFailure().Code);
+        Assert.Contains("invalid_token", result.ExpectFailure().Message);
     }
 
     [Fact]
@@ -79,8 +100,8 @@ public sealed class HttpRpcTransportResultReaderTests
             CreateTypeInfo<Result>(),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("302", result.ErrorCode);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("302", result.ExpectFailure().Code);
     }
 
     [Fact]
@@ -89,7 +110,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"isSuccess":false,"errorCode":"invalid_token","message":"access token expired.","value":null,"extra":{}}""",
+                """{"kind":"failure","error":{"code":"invalid_token","message":"access token expired."}}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -99,9 +120,9 @@ public sealed class HttpRpcTransportResultReaderTests
             CreateTypeInfo<Result<TokenResponse>>(),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Null(result.Value);
-        Assert.Equal("invalid_token", result.ErrorCode);
+        Assert.NotNull(result.ExpectFailure());
+
+        Assert.Equal("invalid_token", result.ExpectFailure().Code);
     }
 
     [Fact]
@@ -110,7 +131,7 @@ public sealed class HttpRpcTransportResultReaderTests
         using var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """{"isSuccess":false,"errorCode":"stream_failed","message":"stream negotiation failed.","value":null,"extra":{"mode":"json"}}""",
+                """{"kind":"failure","error":{"code":"stream_failed","message":"stream negotiation failed."}}""",
                 Encoding.UTF8,
                 "application/json")
         };
@@ -120,11 +141,10 @@ public sealed class HttpRpcTransportResultReaderTests
             CreateTypeInfo<Result>(),
             CancellationToken.None);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("stream_failed", result.ErrorCode);
-        Assert.Equal("stream negotiation failed.", result.Message);
-        Assert.Null(result.Value);
-        Assert.Equal("json", result.Extra["mode"]);
+        Assert.NotNull(result.ExpectFailure());
+        Assert.Equal("stream_failed", result.ExpectFailure().Code);
+        Assert.Equal("stream negotiation failed.", result.ExpectFailure().Message);
+
     }
 
     public sealed record TokenResponse(string Token);

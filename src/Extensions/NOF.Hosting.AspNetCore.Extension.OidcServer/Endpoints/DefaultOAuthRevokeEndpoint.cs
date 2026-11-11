@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using NOF.Contract;
 using OidcRoutes = Microsoft.AspNetCore.Routing.NOFOidcServerExtensions;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -43,12 +44,12 @@ public sealed class DefaultOAuthRevokeEndpoint(
                 Audience = oauthOptions.Value.AccessTokenAudience
             },
             cancellationToken).ConfigureAwait(false);
-        if (!validateResult.IsSuccess)
+        if (validateResult is not Success<ValidateRefreshTokenResponse> validateResultSuccess)
         {
             return Results.Ok();
         }
 
-        var refreshClientId = validateResult.Value.Claims
+        var refreshClientId = validateResultSuccess.Data.Claims
             .FirstOrDefault(static claim => string.Equals(claim.Type, OAuthClaimTypes.ClientId, StringComparison.Ordinal))
             ?.Value;
         if (string.IsNullOrWhiteSpace(refreshClientId)
@@ -60,7 +61,7 @@ public sealed class DefaultOAuthRevokeEndpoint(
         await tokenService.RevokeRefreshTokenAsync(
             new RevokeRefreshTokenRequest
             {
-                TokenId = validateResult.Value.TokenId,
+                TokenId = validateResultSuccess.Data.TokenId,
                 Expiration = oauthOptions.Value.RefreshTokenExpiration
             },
             cancellationToken).ConfigureAwait(false);

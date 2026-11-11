@@ -10,7 +10,7 @@ NOF keeps generic command and notification dispatch, but RPC-style request handl
 - Command sending: use `ICommandSender`.
 - Notification publishing: use `INotificationPublisher`.
 - Deferred dispatch: await `ICommandSender.DeferSendAsync(message, context, cancellationToken)` and `INotificationPublisher.DeferPublishAsync(message, context, cancellationToken)` to stage outbox messages before saving the same `IDbContext`. With an explicit transaction, durability requires `CommitAsync()` after `SaveChangesAsync()`.
-- Streaming RPC operations use `StreamingResult<T>` at the contract layer, `Task<StreamingResult<T>>` at the client layer, and `IAsyncEnumerable<T>` inside application handlers.
+- Streaming RPC operations use `Result<IAsyncEnumerable<T>>` at the contract layer, `Task<Result<IAsyncEnumerable<T>>>` at the client layer, and `IAsyncEnumerable<T>` inside application handlers.
 
 ## Notes
 

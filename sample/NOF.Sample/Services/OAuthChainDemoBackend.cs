@@ -39,20 +39,24 @@ public sealed class OAuthChainDemoBackend(
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (!createResult.IsSuccess)
+        if (createResult is not Success<OAuthClientSecretDescriptor> success)
         {
-            return Result.Fail(createResult.ErrorCode, createResult.Message);
+            return createResult switch
+            {
+                NOF.Contract.Failure failure => failure,
+                _ => throw new InvalidOperationException("The response contains no outcome case.")
+            };
         }
 
-        if (string.IsNullOrWhiteSpace(createResult.Value.ClientSecret))
+        if (string.IsNullOrWhiteSpace(success.Data.ClientSecret))
         {
             return Result.Fail("500", "Created OAuth client did not return a client secret.");
         }
 
         return new CreateDemoOAuthClientResponse
         {
-            ClientId = createResult.Value.Client.ClientId,
-            ClientSecret = createResult.Value.ClientSecret,
+            ClientId = success.Data.Client.ClientId,
+            ClientSecret = success.Data.ClientSecret,
             AllowedScopes = AllowedScopes
         };
     }

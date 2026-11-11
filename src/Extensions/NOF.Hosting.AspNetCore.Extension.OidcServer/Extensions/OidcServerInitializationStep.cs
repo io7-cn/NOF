@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using NOF.Contract;
+using System.Runtime.CompilerServices;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
@@ -38,12 +39,12 @@ public sealed class OidcServerInitializationStep : IApplicationInitializationSte
                      .Select(static group => group.Last()))
         {
             var existing = await clientRepository.GetAsync(request.ClientId).ConfigureAwait(false);
-            if (existing.IsSuccess)
+            if (existing is Success<OAuthClientDescriptor> existingSuccess)
             {
                 continue;
             }
 
-            if (!string.Equals(existing.ErrorCode, "not_found", StringComparison.Ordinal))
+            if (existing is not Failure { Code: "not_found" })
             {
                 EnsureSucceeded(
                     existing,
@@ -59,14 +60,16 @@ public sealed class OidcServerInitializationStep : IApplicationInitializationSte
         }
     }
 
-    private static void EnsureSucceeded(IResult result, string clientId, string clientType)
+    private static void EnsureSucceeded(IUnion result, string clientId, string clientType)
     {
-        if (result.IsSuccess)
+        if (result.Value is ISuccess)
         {
             return;
         }
 
+        var failure = result.Value as Failure
+            ?? throw new InvalidOperationException("The response contains no outcome case.");
         throw new InvalidOperationException(
-            $"Failed to bootstrap OIDC {clientType} client '{clientId}': [{result.ErrorCode}] {result.Message}");
+            $"Failed to bootstrap OIDC {clientType} client '{clientId}': [{failure.Code}] {failure.Message}");
     }
 }
