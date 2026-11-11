@@ -50,10 +50,10 @@ The CI pipeline enforces formatting via `dotnet format`. Fix any violations befo
 
 ## Development Workflow
 
-1. **Fork** the repository and create a branch from `develop`.
+1. Link an issue, refresh `main`, and create or reuse a compliant topic branch. Read the [adopted development standards](docs/en/README.md) first.
 2. **Name your branch** using the convention: `feature/<short-description>`, `fix/<short-description>`, or `docs/<short-description>`.
 3. Make your changes, ensuring all tests pass and formatting is clean.
-4. Push to your fork and open a **Pull Request** against `develop`.
+4. Push the topic branch and open a **Pull Request** against `main`. Merge only after required checks and independent approvals; use a Conventional Commit squash message.
 
 ### Branch Strategy
 

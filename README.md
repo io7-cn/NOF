@@ -1,5 +1,7 @@
 # NOF Framework
 
+[Development standards (English)](docs/en/README.md) · [开发规范（简体中文）](docs/zh-CN/README.md)
+
 [![CI](https://github.com/XmmShp/NOF/actions/workflows/ci.yml/badge.svg)](https://github.com/XmmShp/NOF/actions/workflows/ci.yml)
 [![CD](https://github.com/XmmShp/NOF/actions/workflows/cd.yml/badge.svg)](https://github.com/XmmShp/NOF/actions/workflows/cd.yml)
 
