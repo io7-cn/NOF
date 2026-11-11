@@ -18,7 +18,7 @@ execution conventions, domain boundaries and reliable persistence/messaging.
 DDD does not require a microservice deployment or a framework base class for every entity.
 Simple CRUD use cases remain valid without a rich aggregate model.
 
-The existing RpcHandler requires IRpcResponse and its inbound context carries an
+The former RPC handler required IRpcResponse and its inbound context carried an
 IUnion response. Failure has been unified in Abstraction, but its JSON discriminator
 and the Result transport factories still couple business values to serialization/RPC.
 Domain IRepository exposes LINQ, tracking and attachment operations. Merely moving
@@ -61,10 +61,11 @@ The execution/policy machinery can remain behind generated invocation; applicati
 should not need a second use-case class, thin RPC forwarding class, or a separate
 public executor API to express one service operation.
 
-The current IRequestHandler/IRequestExecutor implementation in draft PR #5 is an
-execution prototype validating response freedom, rejection, context and AOT. Its
-parallel public programming model is provisional and must be consolidated into the
-service model before this architecture is considered implemented.
+The former parallel IRequestHandler/IRequestExecutor prototype has been removed.
+The implementation retains generated service operations through IApplicationService,
+ApplicationService<TService> and ServiceOperation<TRequest,TResponse>. Contracts can
+return plain DTOs, nullable values and business unions, and need no transport attribute
+for local calls. HTTP exposure is explicit. See the [migration guide](application-requests.md).
 
 The application policy pipeline handles application authorization, validation,
 tenant boundaries, transaction policies and idempotency. Authentication mechanisms,
@@ -112,7 +113,7 @@ recovery behavior, licensing and migration costs first.
 
 ## Delivery phases and consequences
 
-1. **Application execution:** introduce ordinary typed handlers, typed policy execution
+1. **Application execution:** evolve generated service operations, preserve policy execution
    and explicit execution rejection. Provide a native ASP.NET Core vertical slice and
    a supported RPC bridge. Keep legacy RPC authorization/tenant checks in force.
 2. **Policy and context split:** migrate shared application rules to the application

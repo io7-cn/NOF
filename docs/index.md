@@ -5,7 +5,7 @@
 ## Key Features
 
 - **Clean Architecture** - Layered packages (`Domain`, `Contract`, `Application`, `Infrastructure`) enforce separation of concerns.
-- **CQRS & Messaging** - First-class `IRpcService`, command/notification dispatch, and handler pipelines.
+- **CQRS & Messaging** - First-class `IApplicationService`, command/notification dispatch, and handler pipelines.
 - **Streaming RPC** - Contract-first server-streaming via `Result<IAsyncEnumerable<T>>` with HTTP SSE support in ASP.NET Core.
 - **Source Generators** - Compile-time code generation for RPC servers, HTTP endpoint mapping, DI registration, failure definitions, and more.
 - **Transactional Outbox** - Reliable message delivery with inbox/outbox pattern built into EF Core infrastructure.

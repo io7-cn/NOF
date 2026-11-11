@@ -1,82 +1,95 @@
-# Transport-independent application requests
-
-> Prototype status: this guide documents the current draft implementation, not the final developer API. ADR 0001 retains the generated service/operation override model and requires consolidating this parallel execution surface before merge.
+# Application services and generated operations
 
 [简体中文](../../zh-CN/design/application-requests.md) · [Architecture decision](0001-application-core-and-adapters.md)
 
-ADR 0001 phase 1 adds a scoped executor. NOF.Application owns the contracts;
-NOF.Infrastructure provides execution and DI registration. A plain ServiceCollection
-can run use cases without a web server, serializer, database or broker.
-
-Implement `IRequestHandler<TRequest,TResponse>` or inherit `RequestHandler<TRequest,TResponse>`.
-`HandleAsync(request, context, cancellationToken)` returns `Task<TResponse>` without
-an IRpcResponse constraint. DTOs, business unions and nullable values are supported.
+An application service operation is the use case. Keep the existing service contract,
+generated `Service.Operation` base and override workflow; there is no second public
+request-handler/executor hierarchy or a forwarding class per operation.
 
 ```csharp
-builder.AddApplicationPart(typeof(GetOrder).Assembly);
-var execution = await executor.ExecuteAsync<GetOrder, GetOrderRequest, OrderDto?>(request, context, ct);
-switch (execution)
+public interface IOrderService : IApplicationService
 {
-    case RequestCompleted<OrderDto?> completed:
-        // Use completed.Response, including null or a business union.
-        break;
-    case RequestRejected rejected:
-        // The adapter maps rejected.Kind and rejected.Failure.
-        break;
+    OrderDto? Find(FindOrderRequest request);
+    Result<OrderDto> Save(SaveOrderRequest request);
+}
+
+public partial class OrderService : ApplicationService<IOrderService>;
+
+public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
+{
+    public override Task<OrderDto?> HandleAsync(
+        FindOrderRequest request, Context context, CancellationToken ct)
+        => orders.FindAsync(request.Id, context, ct);
 }
 ```
 
-The application source generator discovers concrete closed handler classes, including
-direct interface implementations, inherited handlers and record classes. It emits
-scoped registrations through the existing assembly initializer. NOF hosts already
-add the calling assembly; a separate Application assembly needs only one
-AddApplicationPart call. Discovery uses no runtime type scan or dynamic generic
-construction. Registration is keyed by the concrete use case type, not its input/output
-pair. Multiple use cases may share those models, and a class implementing multiple
-request contracts has one scoped instance. TryAddScoped preserves explicit DI substitutions.
+Contracts declare one input and a synchronous business return type. Generated handlers
+and clients are asynchronous and receive Context and CancellationToken. DTOs, nullable
+values, ordinary business unions and optional Result responses are supported. Result
+keeps its raw successful value; Success<T> remains an explicit optional message wrapper.
+No IRpcResponse implementation is required by the service operation.
 
-For an isolated ServiceCollection, call AddNOFRequests once and invoke the generated
-assembly initializer, or explicitly register selected handlers with AddRequestHandler
-for tests or special composition. Explicit registration is idempotent by use case
-type and can coexist with generated registration. Callers create a DI scope per unit
-of work. Requests and contexts must be non-null. RequestCompleted is an in-process execution case, not a
-wire success envelope. A business Failure inside Result remains a completed execution.
-Exceptions/cancellation propagate; uninitialized execution unions throw.
-
-Register `IRequestMiddleware<TUseCase,TRequest,TResponse>` through DI, outermost first.
-Policies are addressed by use case type too: shared DTOs do not implicitly share
-authorization or other policies. Register open generic middleware once for shared
-policies, or a closed middleware for a specific use case. Its InvokeAsync can reject
-or call next with a normalized request/context. Handlers are constructed at the terminal delegate after Context.Current is bound. Ambient
-context is restored across awaits/errors. Middleware instances resolve before
-invocation: defer tenant-specific dependencies/work until after normalization.
-
-`AddNOFRequests()` installs only the executor: no automatic authentication,
-authorization, validation, transactions, retries, idempotency or RPC attribute
-interpretation. New entry points must establish trusted context and configure
-required policies. Shared policy migration is ADR phase 2; existing RPC checks remain.
-
-Native ASP.NET Core endpoints own binding, authorization, status, headers,
-TypedResults, files and OpenAPI. Return the completed business value and map rejection
-at that boundary. Do not serialize RequestExecution. Authentication rejections need
-the host's challenge behavior. Native endpoints do not inherit RPC RequirePermission.
-
-A generated RPC handler can bridge to the same plain-DTO use case:
+## Registration and invocation
 
 ```csharp
-public sealed class ReadOrder(IRequestExecutor executor) : OrderServer.Read
-{
-    public override Task<Result<OrderDto>> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context,
-            static dto => Result.Success(dto), cancellationToken);
-}
+builder.AddApplicationPart(typeof(OrderService).Assembly);
+builder.AddApplicationService<OrderService>();
+builder.Services.AddScoped<IOrderServiceClient, LocalOrderServiceClient>();
 ```
 
-The bridge projects completed values and calls TResponse.CreateFailure for policy
-rejections. An overload supports matching business/RPC response types. Existing RPC
-transport security and wire contracts remain active.
+The host registers a service container and selects its client adapter, as in the
+previous service model. Application-part initialization automatically registers
+operation implementations as scoped services. Do not register individual operations.
+NOF hosts already add the calling assembly; add a separate Application assembly once.
+There is no runtime handler-type scan or dynamic generic construction.
 
-The sample GetRootConfigNodesUseCase returns a plain DTO. The AotSmoke executable
-runs one ReadOrderUseCase through generated RPC and native Minimal API with
-source-generated JSON and native-AOT CI coverage.
+Call `IOrderServiceClient.FindAsync(request, context, ct)`. The generated local client
+uses the shared inbound/outbound pipelines and creates an invocation scope. Identity
+is the service contract plus operation name, so Read and Preview may share the same
+request/response types while retaining different implementations and policy metadata.
+
+## Adapters and execution semantics
+
+A contract without a transport attribute is local by default and exposes no HTTP
+routes. TransportOverMemory remains an explicit local-only declaration. Opt into
+controller HTTP or JSON-RPC with TransportOverHttp; only HTTP adapters interpret
+HttpEndpoint, binding, status codes, headers and wire serialization.
+
+Native ASP.NET Core endpoints can inject a generated local client and return native
+TypedResults, files or other host results. Business handlers need no IResult or
+HttpContext dependency. Endpoint authorization remains the host's responsibility;
+local invocation still runs NOF application authorization and tenant policies.
+
+An explicit nullable response permits null; null from a non-nullable operation is an
+execution error. A completed business Failure or business union remains a business
+value. Pipeline policies use RequestInboundContext.Reject(failure), separately from
+SetResponse(value). Handler resolution occurs after policies and normalized ambient
+context binding. Caller-requested cancellation propagates rather than becoming failure.
+
+The runtime-only ServiceExecution union distinguishes completed values (including
+null) from policy rejection; it is never a wire envelope or a handler return contract.
+Generated clients for ordinary responses report rejection as ServiceRejectedException.
+Explicit outcome contracts retain their statically generated failure factory, preserving
+Result failure behavior without reflection. Existing authorization, tenant isolation,
+transactions/outbox and streaming pipelines remain in use.
+
+## Breaking migration
+
+| Previous API | Current API |
+| --- | --- |
+| IRpcService | IApplicationService |
+| RpcServer<TService> | ApplicationService<TService> |
+| RpcHandler<TRequest,TResponse> | generated Service.Operation base backed by ServiceOperation<TRequest,TResponse> |
+| AddRpcServer<TService>() | AddApplicationService<TService>() |
+| IRpcClient<TService> | IApplicationServiceClient<TService> |
+| Local{ServiceName}Client | same generated name and operation call shape |
+| Mandatory transport declaration | local by default; HTTP is explicit opt-in |
+| Mandatory IRpcResponse return | declared DTO, nullable value or business union |
+
+Remove prototype IRequestHandler/IRequestExecutor/AddRequestHandler and ExecuteUseCaseAsync
+forwarders. Put the implementation back in the generated service-operation override.
+For policies, replace the old Failure overload of SetResponse with explicit Reject.
+Upgrade contracts, implementations, generated clients and host packages together.
+The sample root configuration query now returns its DTO directly. The AOT smoke runs
+DTOs, nullable returns, a business union without IRpcResponse, shared input/output
+operations, rejection, generated HTTP, native HTTP and local-only services.

@@ -15,7 +15,7 @@ namespace NOF.Hosting.AspNetCore;
 /// <summary>Maps generated Controller RPC routes without building a delegate at runtime.</summary>
 public static class GeneratedHttpRpcEndpoint
 {
-    internal static IReadOnlySet<string> Map(IEndpointRouteBuilder app, RpcServerRegistration registration)
+    internal static IReadOnlySet<string> Map(IEndpointRouteBuilder app, ApplicationServiceRegistration registration)
     {
         var mapped = new HashSet<string>(StringComparer.Ordinal);
         if (registration.HandlerMappings is not { } mappings)
@@ -40,7 +40,7 @@ public static class GeneratedHttpRpcEndpoint
         return mapped;
     }
 
-    private static void Map(IEndpointRouteBuilder app, GeneratedHttpRpcRoute route, RpcHandlerMapping mapping)
+    private static void Map(IEndpointRouteBuilder app, GeneratedHttpRpcRoute route, ServiceOperationMapping mapping)
     {
         var options = app.ServiceProvider.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
             .Value.SerializerOptions;
@@ -111,7 +111,7 @@ public static class GeneratedHttpRpcEndpoint
         };
 
     private static async Task InvokeAsync(
-        HttpContext context, GeneratedHttpRpcRoute route, RpcHandlerMapping mapping, JsonSerializerOptions options)
+        HttpContext context, GeneratedHttpRpcRoute route, ServiceOperationMapping mapping, JsonSerializerOptions options)
     {
         if (route.HasBody && !context.Request.HasJsonContentType())
         {
@@ -144,11 +144,11 @@ public static class GeneratedHttpRpcEndpoint
         var adapter = context.RequestServices.GetRequiredService<HttpRequestInboundAdapter>();
         var execution = await adapter.InvokeAsync(
             context, route.ServiceType, route.OperationName, request, mapping, context.RequestAborted).ConfigureAwait(false);
-        var response = execution.Response ?? throw new InvalidOperationException("The RPC endpoint did not return a result.");
+        var response = execution.Execution;
         context.Response.StatusCode = context.Items.TryGetValue(NOFInfrastructureConstants.Transport.Headers.HttpStatusCode, out var status)
             && status is int code
             ? code
-            : StatusCodes.Status200OK;
+            : execution.Rejection is null ? StatusCodes.Status200OK : execution.Rejection.Code == "500" ? 500 : 400;
         context.Response.ContentType = "application/json; charset=utf-8";
         await route.WriteResponseAsync(context.Response.Body, response, options, context.RequestAborted).ConfigureAwait(false);
     }

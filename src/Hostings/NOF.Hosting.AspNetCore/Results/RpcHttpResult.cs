@@ -10,10 +10,10 @@ namespace NOF.Hosting.AspNetCore;
 /// <summary>Writes an RPC result as an HTTP response.</summary>
 
 public sealed class RpcHttpResult(
-    System.Runtime.CompilerServices.IUnion rpcResult,
+    object? rpcResult,
     int statusCode = StatusCodes.Status200OK) : Microsoft.AspNetCore.Http.IResult
 {
-    private readonly System.Runtime.CompilerServices.IUnion _rpcResult = rpcResult ?? throw new ArgumentNullException(nameof(rpcResult));
+    private readonly object? _rpcResult = rpcResult;
 
     [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Transport response bodies are framework-controlled runtime payloads.")]
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Transport response bodies are framework-controlled runtime payloads.")]
@@ -25,7 +25,7 @@ public sealed class RpcHttpResult(
 
         await httpContext.Response.WriteAsJsonAsync(
             _rpcResult,
-            _rpcResult.GetType(),
+            _rpcResult?.GetType() ?? typeof(object),
             cancellationToken: httpContext.RequestAborted).ConfigureAwait(false);
     }
 }

@@ -1,0 +1,98 @@
+using Microsoft.CodeAnalysis;
+using NOF.Contract.SourceGenerator;
+using Xunit;
+
+namespace NOF.Contract.Tests;
+
+public class ApplicationServiceClientGeneratorTests
+{
+    private static readonly Type[] _refs =
+    [
+        typeof(Empty),
+        typeof(HttpEndpointAttribute),
+        typeof(IApplicationServiceClient),
+        typeof(IApplicationService),
+        typeof(Result),
+        typeof(Result<>),
+        typeof(IAsyncEnumerable<>)
+    ];
+
+    [Fact]
+    public void GeneratesClientInterface_WithBusinessReturnTypes()
+    {
+        const string source = """
+            using NOF.Contract;
+
+            namespace App;
+
+            public record PingRequest(string Value);
+            public record GetRequest(int Id);
+            public record ArchiveRequest(int Id);
+            public record Pong(string Value);
+
+            public partial interface IMyService : IApplicationService
+            {
+                Result Ping(PingRequest request);
+                Result<Pong> Get(GetRequest request);
+                Result Archive(ArchiveRequest request);
+            }
+            """;
+
+        var runResult = new ApplicationServiceClientGenerator().GetResult(source, _refs);
+        var code = runResult.GeneratedTrees.Single().GetRoot().ToFullString();
+
+        Assert.Contains("public interface IMyServiceClient : global::NOF.Contract.IApplicationServiceClient<global::App.IMyService>", code);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result> PingAsync", code);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result<global::App.Pong>> GetAsync", code);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result> ArchiveAsync", code);
+    }
+
+    [Fact]
+    public void GeneratesClientInterface_WithStreamingResultForStreamingMethods()
+    {
+        const string source = """
+            using NOF.Contract;
+            using System.Collections.Generic;
+
+            namespace App;
+
+            public record StreamRequest(string Value);
+            public record StreamEvent(string Value);
+
+            public partial interface IMyService : IApplicationService
+            {
+                Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(StreamRequest request);
+            }
+            """;
+
+        var runResult = new ApplicationServiceClientGenerator().GetResult(source, _refs);
+        var code = runResult.GeneratedTrees.Single().GetRoot().ToFullString();
+
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result<global::System.Collections.Generic.IAsyncEnumerable<global::App.StreamEvent>>> StreamAsync", code);
+    }
+
+    [Fact]
+    public void GeneratesClientInterface_ForGenericRpcService()
+    {
+        const string source = """
+            using NOF.Contract;
+
+            namespace App;
+
+            public record Query<TValue>(TValue Value);
+
+            public partial interface IMyService<TValue> : IApplicationService
+                where TValue : class, new()
+            {
+                Result<TValue> Get(Query<TValue> request);
+            }
+            """;
+
+        var runResult = new ApplicationServiceClientGenerator().GetResult(source, _refs);
+        var code = runResult.GeneratedTrees.Single().GetRoot().ToFullString();
+
+        Assert.Contains("public interface IMyServiceClient<TValue> : global::NOF.Contract.IApplicationServiceClient<global::App.IMyService<TValue>>", code);
+        Assert.Contains("where TValue : class, new()", code);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::NOF.Contract.Result<TValue>> GetAsync(global::App.Query<TValue> request", code);
+    }
+}

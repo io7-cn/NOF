@@ -12,20 +12,20 @@ This package does not define runtime outbound authentication directives.
 
 Commands and notifications are plain payload types. Handler discovery comes from the `CommandHandler<T>` and `NotificationHandler<T>` base classes rather than marker interfaces on the message types.
 
-## Application use cases
+## Application services
 
-IRequestHandler<TRequest,TResponse> and RequestHandler<TRequest,TResponse> have no RPC response constraint. The application source generator discovers concrete handlers and emits scoped registrations through AddApplicationPart; hosts do not register each use case individually. IRequestExecutor separates completed business responses from policy rejections and resolves handlers after policies allow execution. See the [application request guide](../../docs/en/design/application-requests.md).
+IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> has no RPC response constraint. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Generated local and HTTP clients preserve OperationAsync(request, context, ct). See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 
 ### RPC Servers
 
-RPC contracts are declared on `IRpcService` interfaces in the contract layer. Application implementations use `RpcServer<TService>`:
+RPC contracts are declared on `IApplicationService` interfaces in the contract layer. Application implementations use `ApplicationService<TService>`:
 
 ```csharp
 using NOF.Application;
 
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
@@ -50,12 +50,12 @@ public sealed class GetOrder : OrderService.GetOrder
 }
 ```
 
-When a host references `NOF.Infrastructure`, the same `OrderService` declaration also causes a `LocalOrderServiceClient` to be generated in the server namespace. Its service/client contract relationship comes from `IOrderServiceClient : IRpcClient<IOrderService>`, not from matching interface names.
+When a host references `NOF.Infrastructure`, the same `OrderService` declaration also causes a `LocalOrderServiceClient` to be generated in the server namespace. Its service/client contract relationship comes from `IOrderServiceClient : IApplicationServiceClient<IOrderService>`, not from matching interface names.
 
-Streaming RPC handlers use the same generated nested `RpcHandler<TRequest, Result<IAsyncEnumerable<T>>>` model:
+Streaming RPC handlers use the same generated nested `ServiceOperation<TRequest, Result<IAsyncEnumerable<T>>>` model:
 
 ```csharp
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class Watch : OrderService.Watch
 {

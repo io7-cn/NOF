@@ -16,7 +16,7 @@ NOF 面向 HTTP、本地调用、后台任务和消息消费者，支持 DDD 与
 ASP.NET Core 提供 HTTP 能力，NOF 提供应用执行约定、领域边界，以及可靠持久化和消息语义。
 DDD 不要求微服务部署，也不要求每个实体继承框架基类；简单 CRUD 可以保持简单。
 
-现有 RpcHandler 强制 IRpcResponse，入站上下文使用 IUnion 响应。Failure 已统一到
+现有 ServiceOperation 强制 IRpcResponse，入站上下文使用 IUnion 响应。Failure 已统一到
 Abstraction，但 JSON 判别字段以及 Result 的传输工厂仍耦合了业务值和协议。
 Domain 的 IRepository 暴露 LINQ、跟踪和 Attach 操作。把类型移进 Abstraction，
 不等于它的接口就已传输无关。
@@ -48,9 +48,10 @@ UseCase 就是这套模型表达的应用操作，不是在 RPC 旁边再增加�
 执行和策略机制可以隐藏在生成式调用之后；表达一个服务操作，不应要求开发者额外维护
 独立 UseCase 类、RPC 转发类和另一套公开 Executor API。
 
-草稿 PR #5 当前的 IRequestHandler/IRequestExecutor 实现是验证返回值自由度、策略拒绝、
-上下文和 AOT 的执行原型。其并行的公开编程模型是临时方案，需要收敛回服务模型，
-不能将当前原型视为本架构的最终实现。
+原先并行的 IRequestHandler/IRequestExecutor 原型已经移除。实现沿用生成式服务操作，
+使用 IApplicationService、ApplicationService<TService> 与 ServiceOperation<TRequest,TResponse>。
+契约可以返回普通 DTO、可空值和业务 Union；本地调用无需传输特性，HTTP 暴露必须显式声明。
+参见[迁移指南](application-requests.md)。
 
 应用策略管线负责应用权限、验证、租户边界、事务策略和幂等。认证机制、HTTP 绑定及
 状态/响应头、消息确认及重投递、线协议序列化属于适配器。领域不变量留在领域模型。
@@ -88,8 +89,8 @@ UseCase 就是这套模型表达的应用操作，不是在 RPC 旁边再增加�
 
 ## 交付阶段与影响
 
-1. **应用执行**：加入普通类型处理器、类型化策略和独立执行拒绝，提供原生 ASP.NET Core
-   纵向示例及 RPC 桥接；保持旧 RPC 授权/租户检查有效。
+1. **应用执行**：将生成式服务操作演进为传输无关的业务入口，保留策略与独立执行拒绝，
+   通过同一个服务操作模型验证原生 ASP.NET Core 和 RPC 适配器，保持授权/租户检查有效。
 2. **策略与上下文拆分**：共享应用规则迁入应用管线，协议规则留在适配器。
    保持每一步的安全行为，避免为去重而静默移除认证或授权。
 3. **纯结果与编解码器**：移除核心业务结果上的 IRpcResponse 和 JSON 元数据，

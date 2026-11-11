@@ -10,7 +10,18 @@ public sealed class RequestOutboundContext : Context
 {
     public IDictionary<string, string?> Headers { get; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-    public IUnion? Response { get; set; }
+    /// <summary>Gets or sets the execution outcome carried through outbound middleware.</summary>
+    public ServiceExecution Execution { get; set; }
+
+    /// <summary>Gets or completes the business response. Null is a valid completed response.</summary>
+    public object? Response
+    {
+        get => Execution.Value is ServiceCompleted completed ? completed.Response : null;
+        set => Execution = new ServiceCompleted(value);
+    }
+
+    /// <summary>Rejects an outbound invocation before its business response is produced.</summary>
+    public void Reject(NOF.Abstraction.Failure failure) => Execution = new ServiceRejected(failure);
 
     public required Type ServiceType { get; init; }
 
@@ -30,7 +41,7 @@ public sealed class RequestOutboundContext : Context
         : base(items)
     {
         Headers = new Dictionary<string, string?>(source.Headers, StringComparer.OrdinalIgnoreCase);
-        Response = source.Response;
+        Execution = source.Execution;
         ServiceType = source.ServiceType;
         MethodInfo = source.MethodInfo;
     }

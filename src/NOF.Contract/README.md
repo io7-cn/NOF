@@ -32,7 +32,7 @@ Use `[UseHostTenant]` on an RPC contract method to execute the operation in the 
 
 ```csharp
 [TransportOverMemory]
-public interface IPlatformUserService : IRpcService
+public interface IPlatformUserService : IApplicationService
 {
     [UseHostTenant]
     [RequirePermission("platform.users.read")]
@@ -70,7 +70,7 @@ public record WatchOrdersRequest(Guid CustomerId);
 public record OrderEvent(Guid OrderId, string Status);
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
     Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
@@ -80,14 +80,14 @@ public interface IOrderService : IRpcService
 ### RPC Contracts
 
 RPC service methods use a strict single-request signature, do not accept `CancellationToken` on the contract surface,
-do not end with `Async`, and must return a non-Task union implementing `IRpcResponse<TSelf>`. Use `Result<T>` for a payload and `Result` when no response payload is needed. `Empty` can be a request type but is not an RPC return type. Streaming methods must return `Result<IAsyncEnumerable<T>>`.
+do not end with `Async`, and return a declared non-Task business value, including a DTO, nullable value or union. Use a DTO directly or choose `Result<T>` when the operation has a business failure case; `Result` remains useful when no response payload is needed. `Empty` can be a request type but is not an RPC return type. Streaming methods must return `Result<IAsyncEnumerable<T>>`.
 
 ```csharp
 public record GetOrderRequest(Guid Id);
 public record CreateOrderRequest(string ProductName, int Quantity);
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
     [Summary("Get order")]
     [HttpEndpoint(HttpVerb.Get, "/api/orders/get")]
@@ -107,7 +107,7 @@ public interface IOrderService : IRpcService
 }
 ```
 
-Declaring `TransportOverHttp` also generates the transport client next to the contract. For the example above, NOF generates the protocol-neutral `IOrderServiceClient : IRpcClient<IOrderService>` interface and a public partial `HttpOrderServiceClient` implementation. The generic `IRpcClient<TRpcService>` base is the explicit relationship between service and client contracts; transport and local-client generators do not need to infer that relationship from type names.
+Declaring `TransportOverHttp` also generates the transport client next to the contract. For the example above, NOF generates the protocol-neutral `IOrderServiceClient : IApplicationServiceClient<IOrderService>` interface and a public partial `HttpOrderServiceClient` implementation. The generic `IApplicationServiceClient<TService>` base is the explicit relationship between service and client contracts; transport and local-client generators do not need to infer that relationship from type names.
 
 ```csharp
 builder.Services.AddHttpClient<IOrderServiceClient, HttpOrderServiceClient>(client =>
@@ -122,16 +122,16 @@ For RPC contracts that must remain inside one process, use `TransportOverMemory`
 
 ```csharp
 [TransportOverMemory]
-public interface IBackOfficeService : IRpcService
+public interface IBackOfficeService : IApplicationService
 {
     Result<DashboardDto> GetDashboard(GetDashboardRequest request);
 }
 ```
 
-NOF still generates `IBackOfficeServiceClient`, and `NOF.Infrastructure` generates the corresponding local client from its `RpcServer<IBackOfficeService>` implementation. Register the server and local client in a Blazor Server or other in-process host:
+NOF still generates `IBackOfficeServiceClient`, and `NOF.Infrastructure` generates the corresponding local client from its `ApplicationService<IBackOfficeService>` implementation. Register the server and local client in a Blazor Server or other in-process host:
 
 ```csharp
-builder.AddRpcServer<BackOfficeService>();
+builder.AddApplicationService<BackOfficeService>();
 builder.Services.ReplaceOrAddScoped<IBackOfficeServiceClient, LocalBackOfficeServiceClient>();
 ```
 
@@ -140,7 +140,7 @@ No HTTP client is generated for a memory-only contract. Each server transport de
 ### Other Annotations
 
 - **`[HttpEndpoint]`** - declares HTTP verb and route metadata for RPC methods
-- Every RPC service contract must declare exactly one `TransportOverAttribute` implementation
+- Application service contracts may declare at most one `TransportOverAttribute` implementation; without one they remain local-only
 - **`[TransportOverHttp]`** - declares the HTTP RPC style and an optional contract-level route prefix, and generates the matching `Http...Client`
 - **`[TransportOverMemory]`** - declares that the RPC service is intended for its generated local client; the built-in HTTP transport does not expose it, and methods must not declare `[HttpEndpoint]`
 - HTTP route prefixes are application-relative paths. A leading `/` is optional and one trailing `/` is normalized away; empty or whitespace values, absolute URIs, query strings, fragments, route parameters, escaped characters, backslashes, empty path segments, and `.` or `..` segments are rejected at compile time

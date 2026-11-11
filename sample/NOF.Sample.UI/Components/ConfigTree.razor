@@ -48,9 +48,8 @@
 
     private async Task LoadRootNodes()
     {
-        var result = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Contract.Context.Empty);
-        var response = Message.UnwrapWithMessage(result);
-        var rootNodes = response?.Nodes ?? [];
+        var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Contract.Context.Empty);
+        var rootNodes = response.Nodes;
         _treeData = rootNodes.Select(node => new TreeNodeData
         {
             Key = node.Id.ToString(),

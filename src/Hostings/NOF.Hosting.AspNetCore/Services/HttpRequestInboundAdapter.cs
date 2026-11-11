@@ -13,25 +13,25 @@ namespace NOF.Hosting.AspNetCore;
 /// without first going through the request outbound pipeline.
 /// </summary>
 public sealed class HttpRequestInboundAdapter(
-    RpcServerInvocationResolver invocationResolver,
+    ApplicationServiceInvocationResolver invocationResolver,
     RequestInboundPipelineExecutor inboundPipeline,
     IOptions<HttpHeaderOutboundOptions> httpHeaderOptions)
 {
     private readonly HttpHeaderOutboundOptions _httpHeaderOptions = httpHeaderOptions.Value;
 
     public async Task<RequestInboundContext> InvokeAsync<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TRpcService,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest>(
         HttpContext httpContext,
         string operationName,
         TRequest request,
         CancellationToken cancellationToken)
-        where TRpcService : class, IRpcService
+        where TService : class, IApplicationService
     {
-        var resolution = invocationResolver.Resolve<TRpcService>(operationName);
+        var resolution = invocationResolver.Resolve<TService>(operationName);
         return await InvokeAsync(
             httpContext,
-            typeof(TRpcService),
+            typeof(TService),
             operationName,
             request!,
             resolution.HandlerMapping,
@@ -43,7 +43,7 @@ public sealed class HttpRequestInboundAdapter(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
         string operationName,
         object request,
-        RpcHandlerMapping handlerMapping,
+        ServiceOperationMapping handlerMapping,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);

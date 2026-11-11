@@ -18,7 +18,7 @@ Current runtime expectations that guidance must preserve:
 
 - application parts execute source-generated assembly initializers against `IServiceCollection`
 - handler, mapping, event, and RPC registries are DI singleton instances and freeze on first read
-- RPC contracts declare exactly one transport and RPC servers are registered explicitly with `AddRpcServer<T>()`
+- Application service contracts are local by default; HTTP requires explicit opt-in. Service containers are registered with `AddApplicationService<T>()`
 - RPC, command, and notification boundaries pass `Context` explicitly
 - application persistence uses `IDbContext` and `IRepository<T>`; EF Core and NHibernate are provider packages
 - `Mapper`, `IdGenerator`, and `EventPublisher` are async-flow conveniences with explicit dependency paths available

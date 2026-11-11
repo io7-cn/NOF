@@ -68,7 +68,7 @@ public abstract class GeneratedHttpRpcRoute
     /// <summary>Writes the result using source-generated JSON metadata.</summary>
     public abstract Task WriteResponseAsync(
         Stream body,
-        IUnion response,
+        ServiceExecution response,
         JsonSerializerOptions options,
         CancellationToken cancellationToken);
 }
@@ -77,8 +77,7 @@ public abstract class GeneratedHttpRpcRoute
 public abstract class GeneratedHttpRpcRoute<
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
     TResponse> : GeneratedHttpRpcRoute
-    where TService : class, IRpcService
-    where TResponse : IRpcResponse<TResponse>
+    where TService : class, IApplicationService
 {
     /// <inheritdoc />
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
@@ -95,10 +94,14 @@ public abstract class GeneratedHttpRpcRoute<
     /// <inheritdoc />
     public override Task WriteResponseAsync(
         Stream body,
-        IUnion response,
+        ServiceExecution response,
         JsonSerializerOptions options,
         CancellationToken cancellationToken)
     {
-        return JsonSerializer.SerializeAsync(body, RpcResponse.Require<TResponse>(response), options.GetRequiredTypeInfo<TResponse>(), cancellationToken);
+        if (response.Value is ServiceRejected rejected)
+        {
+            return JsonSerializer.SerializeAsync(body, rejected.Failure, options.GetRequiredTypeInfo<NOF.Abstraction.Failure>(), cancellationToken);
+        }
+        return JsonSerializer.SerializeAsync(body, response.Require<TResponse>(allowNull: true), options.GetRequiredTypeInfo<TResponse>(), cancellationToken);
     }
 }

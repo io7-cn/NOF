@@ -59,7 +59,7 @@ public class NOFInfrastructureTests
             service.ImplementationType == typeof(OutboxCleanupBackgroundService));
         Assert.Contains(builder.Services, service =>
             service.ServiceType == typeof(IApplicationInitializationStep) &&
-            service.ImplementationInstance is RpcServerTransportInitializationStep);
+            service.ImplementationInstance is ApplicationServiceTransportInitializationStep);
         Assert.NotNull(provider.GetRequiredService<IOptions<TransactionalMessageOptions>>());
         Assert.Equal(TenantMode.DatabasePerTenant, provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value.TenantMode);
         Assert.IsType<MemoryBackplane>(provider.GetRequiredService<IBackplane>());

@@ -18,8 +18,8 @@ public class HttpRpcClientGeneratorTests
         typeof(System.Net.Http.Json.HttpContentJsonExtensions),
         typeof(System.Text.Json.JsonSerializerOptions),
         typeof(IRequestOutboundPipelineExecutor),
-        typeof(IRpcClient),
-        typeof(IRpcService),
+        typeof(IApplicationServiceClient),
+        typeof(IApplicationService),
         typeof(JsonRpcHttpClient),
         typeof(Result),
         typeof(Result<>),
@@ -40,7 +40,7 @@ public class HttpRpcClientGeneratorTests
             public record WatchRequest(string Name);
             public record Progress(int Count);
             [TransportOverHttp(HttpRpcStyle.{{style}})]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result<Success<IAsyncEnumerable<Progress>>> Watch(WatchRequest request);
             }
@@ -62,7 +62,7 @@ public class HttpRpcClientGeneratorTests
             public record CreateUserRequest(string Name);
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/api")]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 [HttpEndpoint(HttpVerb.Post, "/users")]
                 Result CreateUser(CreateUserRequest request);
@@ -79,7 +79,7 @@ public class HttpRpcClientGeneratorTests
         Assert.Contains("if (_outboundPipeline is null)", code);
         Assert.Contains("await dispatch(outboundContext, request, cancellationToken)", code);
         Assert.Contains("await _outboundPipeline.ExecuteAsync(outboundContext, request, dispatch, cancellationToken)", code);
-        Assert.Contains("RpcResponse.Require<global::NOF.Contract.Result>", code);
+        Assert.Contains("outboundContext.Execution.Require<global::NOF.Contract.Result>", code);
         Assert.DoesNotContain("global::NOF.Contract.JsonRpcHttpClient.SendAsync", code);
         Assert.DoesNotContain("global::NOF.Hosting", code);
     }
@@ -95,7 +95,7 @@ public class HttpRpcClientGeneratorTests
             public record PingRequest(string Value);
 
             [TransportOverMemory]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
@@ -119,7 +119,7 @@ public class HttpRpcClientGeneratorTests
             public record StreamEvent(string Value);
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 [HttpEndpoint(HttpVerb.Get, "/events")]
                 Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(QueryRequest request);
@@ -149,7 +149,7 @@ public class HttpRpcClientGeneratorTests
             public record QueryRequest(string? Keyword, DateTime? CreatedFromUtc);
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 [HttpEndpoint(HttpVerb.Get, "/profiles")]
                 Result GetProfiles(QueryRequest request);
@@ -182,7 +182,7 @@ public class HttpRpcClientGeneratorTests
             public record PingRequest(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "contract-rpc/")]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
@@ -207,7 +207,7 @@ public class HttpRpcClientGeneratorTests
             public record PingRequest(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "../rpc")]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
@@ -229,7 +229,7 @@ public class HttpRpcClientGeneratorTests
             public record PingRequest(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
@@ -256,7 +256,7 @@ public class HttpRpcClientGeneratorTests
             public record StreamEvent(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "/stream-rpc")]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result<global::System.Collections.Generic.IAsyncEnumerable<StreamEvent>> Stream(StreamRequest request);
             }
@@ -282,7 +282,7 @@ public class HttpRpcClientGeneratorTests
             public record Query<TValue>(TValue Value);
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-            public interface IMyService<TValue> : IRpcService
+            public interface IMyService<TValue> : IApplicationService
                 where TValue : class, new()
             {
                 Result<TValue> Get(Query<TValue> request);
@@ -307,7 +307,7 @@ public class HttpRpcClientGeneratorTests
             public record GetCurrentUserRequest;
 
             [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/api/user-service")]
-            public interface IUserService : IRpcService
+            public interface IUserService : IApplicationService
             {
                 [HttpEndpoint(HttpVerb.Get, "/get-current-user")]
                 Result GetCurrentUser(GetCurrentUserRequest request);
@@ -324,7 +324,7 @@ public class HttpRpcClientGeneratorTests
     }
 
     [Fact]
-    public void HttpClientGenerator_DoesNotRequireRpcServiceClientGeneratorOutputAsInput()
+    public void HttpClientGenerator_DoesNotRequireApplicationServiceClientGeneratorOutputAsInput()
     {
         const string source = """
             using NOF.Contract;
@@ -334,7 +334,7 @@ public class HttpRpcClientGeneratorTests
             public record PingRequest(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-            public interface IMyService : IRpcService
+            public interface IMyService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
@@ -359,7 +359,7 @@ public class HttpRpcClientGeneratorTests
         var extraReferences = _refs.Select(type => type.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            new RpcServiceClientGenerator().AsSourceGenerator(),
+            new ApplicationServiceClientGenerator().AsSourceGenerator(),
             new HttpRpcClientGenerator().AsSourceGenerator());
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out outputCompilation, out _);

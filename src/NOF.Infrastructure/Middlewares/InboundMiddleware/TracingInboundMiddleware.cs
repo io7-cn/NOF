@@ -98,6 +98,10 @@ public sealed class TracingInboundMiddleware(
             await next(context, request, cancellationToken);
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             HandleActivityException(activity, ex);
@@ -197,7 +201,7 @@ public sealed class TracingInboundMiddleware(
                 requestName,
                 handlerName,
                 domainException.Message);
-            context.SetResponse(Result.Fail(domainException.ErrorCode, domainException.Message));
+            context.Reject(Result.Fail(domainException.ErrorCode, domainException.Message));
             return;
         }
 
@@ -207,6 +211,6 @@ public sealed class TracingInboundMiddleware(
             requestName,
             handlerName,
             exception.Message);
-        context.SetResponse(Result.Fail("500", "Internal server error"));
+        context.Reject(Result.Fail("500", "Internal server error"));
     }
 }

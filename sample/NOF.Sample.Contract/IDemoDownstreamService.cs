@@ -4,7 +4,7 @@ using System.ComponentModel;
 namespace NOF.Sample;
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IDemoDownstreamService : IRpcService
+public interface IDemoDownstreamService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Post, "rpc/OAuthChainDemo/Downstream/Inspect")]
     [Summary("消费 access token")]

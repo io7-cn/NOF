@@ -7,6 +7,55 @@ namespace NOF.Contract.Tests;
 
 public sealed class JsonRpcHttpClientTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SendValueAsync_ReadsOrdinaryAndNullableBusinessResponses(bool returnNull)
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStreamAsync());
+            Assert.Equal("Read", document.RootElement.GetProperty("method").GetString());
+            var id = document.RootElement.GetProperty("id").GetString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    jsonrpc = "2.0",
+                    result = returnNull ? null : new Pong("plain"),
+                    id
+                }, JsonSerializerOptions.NOF))
+            };
+        }))
+        { BaseAddress = new Uri("https://example.test") };
+        var result = await JsonRpcHttpClient.SendValueAsync<Ping, Pong?>(httpClient, "/rpc", "Read", new Ping("ping"), [],
+            JsonSerializerOptions.NOF.GetRequiredTypeInfo<Ping>(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<Pong?>(), default, allowNull: true);
+        Assert.Equal(returnNull ? null : new Pong("plain"), result);
+    }
+
+    [Fact]
+    public async Task SendValueAsync_ReportsPolicyRejectionWithoutManufacturingBusinessValues()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            using var document = JsonDocument.Parse(await request.Content!.ReadAsStreamAsync());
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    jsonrpc = "2.0",
+                    error = new { code = -32000, message = "Forbidden", data = new { code = "order.denied" } },
+                    id = document.RootElement.GetProperty("id").GetString()
+                }))
+            };
+        }))
+        { BaseAddress = new Uri("https://example.test") };
+        var rejected = await Assert.ThrowsAsync<ServiceRejectedException>(() => JsonRpcHttpClient.SendValueAsync<Ping, Pong>(
+            httpClient, "/rpc", "Read", new Ping("ping"), [], JsonSerializerOptions.NOF.GetRequiredTypeInfo<Ping>(),
+            JsonSerializerOptions.NOF.GetRequiredTypeInfo<Pong>(), default));
+        Assert.Equal("order.denied", rejected.Failure.Code);
+    }
+
     [Fact]
     public async Task SendAsync_WritesJsonRpcEnvelopeAndReadsBusinessResult()
     {

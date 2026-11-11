@@ -73,12 +73,12 @@ public sealed class AllSourceGeneratorsMonolithTests
             public sealed record PingRequest(string Value);
 
             [TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc")]
-            public interface IDemoService : IRpcService
+            public interface IDemoService : IApplicationService
             {
                 Result Ping(PingRequest request);
             }
 
-            public partial class DemoServer : RpcServer<IDemoService>;
+            public partial class DemoServer : ApplicationService<IDemoService>;
 
             public sealed class PingHandler : DemoServer.Ping
             {
@@ -97,13 +97,13 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(InMemoryEventHandler<>),
             typeof(CommandHandler<>),
             typeof(MappableAttribute<,>),
-            typeof(RpcServer<>),
-            typeof(IRpcService),
+            typeof(ApplicationService<>),
+            typeof(IApplicationService),
             typeof(TransportOverHttpAttribute),
             typeof(Result),
             typeof(IValueObject<>),
             typeof(FailureAttribute),
-            typeof(RpcServerInvoker),
+            typeof(ApplicationServiceInvoker),
             typeof(System.Text.Json.NOFAbstractionExtensions));
         ISourceGenerator[] generators =
         [
@@ -113,11 +113,11 @@ public sealed class AllSourceGeneratorsMonolithTests
             new ValueObjectGenerator().AsSourceGenerator(),
             new HandlerRegistrationGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
-            new RpcServerAutoInjectGenerator().AsSourceGenerator(),
-            new RpcServerGenerator().AsSourceGenerator(),
-            new RpcServiceClientGenerator().AsSourceGenerator(),
+            new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
+            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new ApplicationServiceClientGenerator().AsSourceGenerator(),
             new HttpRpcClientGenerator().AsSourceGenerator(),
-            new LocalRpcClientGenerator().AsSourceGenerator()
+            new LocalApplicationServiceClientGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {
@@ -131,7 +131,7 @@ public sealed class AllSourceGeneratorsMonolithTests
         Assert.Empty(outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
-        Assert.Contains("interface IDemoServiceClient : global::NOF.Contract.IRpcClient<global::Monolith.IDemoService>", generatedCode);
+        Assert.Contains("interface IDemoServiceClient : global::NOF.Contract.IApplicationServiceClient<global::Monolith.IDemoService>", generatedCode);
         Assert.Contains("partial class HttpDemoServiceClient : IDemoServiceClient", generatedCode);
         Assert.Contains("class LocalDemoServerClient : global::Monolith.IDemoServiceClient", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);

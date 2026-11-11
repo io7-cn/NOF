@@ -18,7 +18,7 @@ public sealed class GeneralCodeFixProviderTests
     private static readonly Type[] _forceLoadedAssemblies =
     [
         typeof(IValueObject<>),
-        typeof(IRpcService),
+        typeof(IApplicationService),
         typeof(DbContext),
         typeof(NOFDbContext),
     ];
@@ -142,7 +142,7 @@ public sealed class GeneralCodeFixProviderTests
             "TransportOverMemory",
             new TypeDeclarationCodeFixProvider());
 
-        Assert.Contains(": global::NOF.Contract.IRpcService", changed);
+        Assert.Contains(": global::NOF.Contract.IApplicationService", changed);
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public sealed class GeneralCodeFixProviderTests
             namespace Test;
             [TransportOverMemory]
             [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-            public interface IService : IRpcService { }
+            public interface IService : IApplicationService { }
             """;
 
         var (_, actions) = await GetCodeActionsAsync(
@@ -530,7 +530,7 @@ public sealed class GeneralCodeFixProviderTests
                 namespace Test;
                 [TransportOverMemory]
                 [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-                public interface IService : IRpcService { }
+                public interface IService : IApplicationService { }
                 """,
             "IService",
             new AttributeRemovalCodeFixProvider(),

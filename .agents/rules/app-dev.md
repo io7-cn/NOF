@@ -19,9 +19,9 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 ## Core Abstractions
 
-- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
+- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-- RPC: `IRpcService`, `RpcServer<TService>`, generated nested RPC handler bases, generated client interfaces and implementations.
+- RPC: `IApplicationService`, `ApplicationService<TService>`, generated nested RPC handler bases, generated client interfaces and implementations.
 - Messaging: `CommandHandler<T>`, `NotificationHandler<T>`, `ICommandSender`, `INotificationPublisher`.
 - In-process events: `InMemoryEventHandler<T>`, `IEventPublisher`, `PublishAsEvent()`.
 - Persistence: `IDbContext`, `IDbContextFactory`, `IRepository<T>`, provider-neutral async LINQ extensions.
@@ -31,13 +31,13 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 Commands and notifications are plain payload objects; inheriting the corresponding handler base opts a handler into generated registration.
 
-## RPC Rules
+## Application Service Rules
 
-- Every RPC contract inherits `IRpcService` and declares exactly one transport: `[TransportOverHttp(...)]` or `[TransportOverMemory]`.
-- A contract method takes exactly one reference-type request and returns a non-task union implementing `IRpcResponse<TSelf>`. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
+- Every application service contract inherits `IApplicationService`. A transport declaration is optional; no declaration means local-only. Only `[TransportOverHttp(...)]` exposes HTTP routes.
+- A contract method takes exactly one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
 - Controller-style HTTP methods use `[HttpEndpoint]`; JSON-RPC and memory contracts must not.
-- A generated server container is a `partial` class inheriting `RpcServer<TService>`.
-- Register each server with `builder.AddRpcServer<TServer>()`; the host maps applicable transports during `BuildAsync()`.
+- A generated server container is a `partial` class inheriting `ApplicationService<TService>`.
+- Register each server with `builder.AddApplicationService<TServer>()`; the host maps applicable transports during `BuildAsync()`.
 - Generated client and server handler methods are asynchronous and receive `Context` explicitly.
 
 ## Program.cs Baseline
@@ -51,7 +51,7 @@ using NOF.Infrastructure.EntityFrameworkCore;
 var builder = NOFWebApplicationBuilder.Create(args);
 
 builder.AddApplicationPart(typeof(OrderService).Assembly);
-builder.AddRpcServer<OrderService>();
+builder.AddApplicationService<OrderService>();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)

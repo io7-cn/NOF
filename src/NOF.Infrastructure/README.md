@@ -15,9 +15,7 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
 
-NOF hosts discover application handlers through the existing AddApplicationPart assembly initializer. A separate application assembly needs one assembly registration, rather than an AddRequestHandler call per use case.
-
-For application execution alone, call AddNOFRequests() or AddRequestHandler<TRequest,TResponse,THandler>(). This registers only the executor, without automatic authentication, transactions or other policies. See the [guide](../../docs/en/design/application-requests.md).
+Application services use AddApplicationService<TService>() and application-part initialization for generated operation implementations. Local and HTTP clients share the existing policy pipeline; undecorated contracts expose no HTTP routes. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Usage
 
@@ -158,41 +156,41 @@ identity source. OAuth scope claims are not automatically converted to permissio
 
 ## Local RPC Clients
 
-The Infrastructure source generator discovers `RpcServer<TService>` implementations in the host and referenced application assemblies. For a server named `OrderService`, it generates a public `LocalOrderServiceClient` implementing the canonical client interface generated beside the service contract:
+The Infrastructure source generator discovers `ApplicationService<TService>` implementations in the host and referenced application assemblies. For a server named `OrderService`, it generates a public `LocalOrderServiceClient` implementing the canonical client interface generated beside the service contract:
 
 ```csharp
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 
 builder.Services.ReplaceOrAddScoped<IOrderServiceClient, LocalOrderServiceClient>();
 ```
 
-No `LocalRpcClientAttribute` or user-authored empty partial client class is required. Both the Contract and Infrastructure generators derive `IOrderServiceClient` independently from `IOrderService`; the Infrastructure generator never reads Contract generator output.
+No `LocalApplicationServiceClientAttribute` or user-authored empty partial client class is required. Both the Contract and Infrastructure generators derive `IOrderServiceClient` independently from `IOrderService`; the Infrastructure generator never reads Contract generator output.
 
 Local calls preserve the same request boundary as a remote RPC for dependency-injection lifetimes. The outbound pipeline runs in the caller's scope. Its terminal dispatch creates and asynchronously disposes a new scope for RPC server resolution, daemon-service activation, the inbound pipeline, and the handler. Scoped dependencies such as `DbContext` are therefore not shared between the caller and handler, while headers produced by outbound middleware cross the boundary.
 
-Contracts marked with `[TransportOverMemory]` use the same local client path. Their server registrations remain available to `RpcServerInvoker`. The transport initialization step stays transport-agnostic and passes every registration to every `IRpcServerTransport`; each transport inspects the contract metadata and decides whether it applies. The built-in HTTP transport ignores memory-only contracts.
+Contracts marked with `[TransportOverMemory]` use the same local client path. Their server registrations remain available to `ApplicationServiceInvoker`. The transport initialization step stays transport-agnostic and passes every registration to every `IApplicationServiceTransport`; each transport inspects the contract metadata and decides whether it applies. The built-in HTTP transport ignores memory-only contracts.
 
 ## RPC Server Transport Extension Point
 
-`NOF.Infrastructure` owns the framework-level RPC server transport initialization step. Transport packages implement `IRpcServerTransport` and register the implementation in DI:
+`NOF.Infrastructure` owns the framework-level RPC server transport initialization step. Transport packages implement `IApplicationServiceTransport` and register the implementation in DI:
 
 ```csharp
-public sealed class MyRpcServerTransport : IRpcServerTransport
+public sealed class MyApplicationServiceTransport : IApplicationServiceTransport
 {
-    public TopologyComparison Compare(IRpcServerTransport other)
+    public TopologyComparison Compare(IApplicationServiceTransport other)
         => TopologyComparison.DoesNotMatter;
 
-    public Task MapAsync(IHost host, RpcServerRegistration registration)
+    public Task MapAsync(IHost host, ApplicationServiceRegistration registration)
     {
         // Inspect the contract metadata and map this registration.
         return Task.CompletedTask;
     }
 }
 
-services.AddRpcServerTransport<MyRpcServerTransport>();
+services.AddApplicationServiceTransport<MyApplicationServiceTransport>();
 ```
 
-At application initialization, NOF orders all registered transports through the normal topology mechanism and passes every `RpcServerRegistration`, together with the built `IHost`, to each transport. The transport implementation owns applicability checks and mapping behavior.
+At application initialization, NOF orders all registered transports through the normal topology mechanism and passes every `ApplicationServiceRegistration`, together with the built `IHost`, to each transport. The transport implementation owns applicability checks and mapping behavior.
 
 ## Persistence Providers
 

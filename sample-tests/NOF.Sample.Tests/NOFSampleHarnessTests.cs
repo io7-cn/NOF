@@ -26,7 +26,7 @@ public sealed class NOFSampleHarnessTests
 
         Assert.NotNull(createResult.ExpectSuccess());
 
-        var roots = await host.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
+        var roots = await host.CallAsync<INOFSampleServiceClient, GetRootConfigNodesResponse>(
             static (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
                 new GetRootConfigNodesRequest(),
                 context,
@@ -35,8 +35,8 @@ public sealed class NOFSampleHarnessTests
                 .SetTenant("tenant-a")
                 .SetUser("user-1", "Alice"));
 
-        Assert.NotNull(roots.ExpectSuccess());
-        var root = Assert.Single(roots.ExpectSuccess()!.Nodes);
+        Assert.NotNull(roots);
+        var root = Assert.Single(roots.Nodes);
         Assert.Equal("root-a", root.Name);
         Assert.Null(root.ParentId);
     }
@@ -58,12 +58,12 @@ public sealed class NOFSampleHarnessTests
                     cancellationToken));
             Assert.NotNull(createParent.ExpectSuccess());
 
-            var roots = await scope.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
+            var roots = await scope.CallAsync<INOFSampleServiceClient, GetRootConfigNodesResponse>(
                 (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
                     new GetRootConfigNodesRequest(),
                     context,
                     cancellationToken));
-            var root = Assert.Single(roots.ExpectSuccess()!.Nodes);
+            var root = Assert.Single(roots.Nodes);
 
             var createChild = await scope.CallAsync<INOFSampleServiceClient, Result>(
                 (client, context, cancellationToken) => client.CreateConfigNodeAsync(
@@ -103,9 +103,9 @@ public sealed class NOFSampleHarnessTests
         var builder = NOFTestAppBuilder.Create()
             .AddApplicationPartOf<NOFSampleService>()
             .AddApplicationPartOf<LocalNOFSampleServiceClient>()
-            .AddRpcServer<NOFSampleService>()
+            .AddApplicationService<NOFSampleService>()
             .AddInMemoryPersistence()
-            .AddLocalRpcClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
+            .AddLocalApplicationServiceClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
 
         return await builder.BuildTestHostAsync();
     }

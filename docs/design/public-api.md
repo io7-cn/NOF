@@ -2,12 +2,12 @@
 
 ## Current Model
 
-Application use cases can implement `IRequestHandler<TRequest,TResponse>` independently of RPC. See the [application request guide](../en/design/application-requests.md). The interface rules below describe the RPC adapter surface.
+Application service contracts inherit IApplicationService and keep generated Service.Operation overrides independently of transport. See the [application request guide](../en/design/application-requests.md). The interface rules below describe the RPC adapter surface.
 
 NOF RPC contracts are interface-first and method-based.
 
 ```csharp
-public interface IUserService : IRpcService
+public interface IUserService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/users/get")]
     Result<UserDto> GetUser(GetUserRequest request);
@@ -19,7 +19,7 @@ public interface IUserService : IRpcService
 
 ## Service Interface Rules
 
-- RPC interfaces implement `IRpcService`.
+- RPC interfaces implement `IApplicationService`.
 - Each RPC method takes exactly one request object.
 - Service methods are synchronous on the contract surface: no `Task`, no `ValueTask`, no `CancellationToken`.
 - Method overloading is not supported.
@@ -29,10 +29,10 @@ public interface IUserService : IRpcService
 
 ## Application Implementation Model
 
-Application-side implementations use `RpcServer<TService>` and generated nested handler base classes:
+Application-side implementations use `ApplicationService<TService>` and generated nested handler base classes:
 
 ```csharp
-public partial class UserService : RpcServer<IUserService>;
+public partial class UserService : ApplicationService<IUserService>;
 
 public class GetUser : UserService.GetUser
 {
@@ -46,10 +46,10 @@ public class GetUser : UserService.GetUser
 The generated client contract explicitly records its service relationship:
 
 ```csharp
-public interface IUserServiceClient : IRpcClient<IUserService>;
+public interface IUserServiceClient : IApplicationServiceClient<IUserService>;
 ```
 
-When `NOF.Infrastructure` discovers `UserService : RpcServer<IUserService>`, it uses this generic relationship to generate `LocalUserServiceClient`. No local-client attribute or empty partial client declaration is needed.
+When `NOF.Infrastructure` discovers `UserService : ApplicationService<IUserService>`, it uses this generic relationship to generate `LocalUserServiceClient`. No local-client attribute or empty partial client declaration is needed.
 
 Streaming methods are implemented with the same generated handler model:
 
@@ -75,14 +75,14 @@ public class WatchUsers : UserService.WatchUsers
 `NOF.Hosting.AspNetCore` maps registered RPC servers automatically during application initialization:
 
 ```csharp
-builder.AddRpcServer<UserService>();
+builder.AddApplicationService<UserService>();
 ```
 
 Modules and plugins that receive only `IServiceCollection` can call
-`services.AddRpcServer<UserService>()` directly. This registration API belongs to
+`services.AddApplicationService<UserService>()` directly. This registration API belongs to
 `NOF.Application` in the `Microsoft.Extensions.DependencyInjection` namespace and
 requires no host builder or infrastructure package. The builder API delegates to
-it. Both register a scoped server and update the collection-local `RpcServerRegistry`;
+it. Both register a scoped server and update the collection-local `ApplicationServiceRegistry`;
 repeated registration is idempotent, and the last server registered for a contract
 wins. Register before the registry is first read. Host initialization still owns
 transport setup and endpoint mapping.
@@ -93,18 +93,18 @@ When the mapped RPC method returns `Result<IAsyncEnumerable<T>>`, `NOF.Hosting.A
 
 ## RPC Transport Declaration
 
-An RPC service contract must declare exactly one intended transport:
+An application service contract is local by default. It may explicitly choose one transport adapter:
 
 ```csharp
 [TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc")]
-public interface IUserService : IRpcService;
+public interface IUserService : IApplicationService;
 ```
 
-Use `[TransportOverMemory]` instead when the contract is only consumed by an in-process UI such as Blazor Server. It still gets the protocol-neutral client interface and a generated local client, but it gets no HTTP client and the built-in HTTP transport does not map it. Transport initialization remains transport-agnostic; each `IRpcServerTransport` decides whether it applies by inspecting the contract's transport metadata.
+Use `[TransportOverMemory]` instead when the contract is only consumed by an in-process UI such as Blazor Server. It still gets the protocol-neutral client interface and a generated local client, but it gets no HTTP client and the built-in HTTP transport does not map it. Transport initialization remains transport-agnostic; each `IApplicationServiceTransport` decides whether it applies by inspecting the contract's transport metadata.
 
-`TransportOverAttribute` is abstract and belongs to `NOF.Contract`, so callers and implementations read the same transport metadata from the RPC service interface. The analyzer rejects missing or multiple transport declarations, as well as transport attributes placed on interfaces that do not inherit `IRpcService`. The route prefix is optional. During automatic endpoint registration, `ControllerRpc` prepends it to each operation route, while `JsonRpc` uses it as the single JSON-RPC endpoint route. A JSON-RPC contract without a route prefix is mapped at `/`.
+`TransportOverAttribute` is abstract and belongs to `NOF.Contract`, so callers and implementations read the same transport metadata from the RPC service interface. The analyzer rejects missing or multiple transport declarations, as well as transport attributes placed on interfaces that do not inherit `IApplicationService`. The route prefix is optional. During automatic endpoint registration, `ControllerRpc` prepends it to each operation route, while `JsonRpc` uses it as the single JSON-RPC endpoint route. A JSON-RPC contract without a route prefix is mapped at `/`.
 
-Registering the server through `AddRpcServer<UserService>()` exposes it using the transport style and route prefix declared by the contract.
+Registering the server through `AddApplicationService<UserService>()` exposes it using the transport style and route prefix declared by the contract.
 
 The same declaration generates both `IUserServiceClient` and a public partial `HttpUserServiceClient` in the contract assembly. The HTTP client constructor requires `HttpClient` and accepts `IRequestOutboundPipelineExecutor` optionally. This keeps the transport choice and usable client together: hosts with an outbound pipeline get middleware execution through DI, while lightweight callers can use the generated client without referencing `NOF.Hosting`.
 
@@ -124,11 +124,11 @@ Current RPC analyzer diagnostics include:
 - `NOF207`: invalid RPC method signature.
 - `NOF208`: service method overloads are not supported.
 - `NOF209`: `void` return types are not supported.
-- `NOF211`: a transport attribute can only be declared on an interface inheriting `IRpcService`.
+- `NOF211`: a transport attribute can only be declared on an interface inheriting `IApplicationService`.
 - `NOF212`: an RPC service contract cannot declare multiple `TransportOverAttribute` implementations.
 - `NOF213`: methods on a JSON-RPC contract must not declare `[HttpEndpoint]`.
 - `NOF214`: an RPC service contract must declare a `TransportOverAttribute` implementation.
 - `NOF215`: an HTTP RPC route prefix is invalid.
 - `NOF216`: methods on an in-memory RPC contract must not declare `[HttpEndpoint]`.
 - `NOF217`: a Controller RPC path template cannot be bound to its request object.
-- `NOF300`: a class inheriting `RpcServer<TService>` must be `partial`.
+- `NOF300`: a class inheriting `ApplicationService<TService>` must be `partial`.

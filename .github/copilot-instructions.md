@@ -39,9 +39,9 @@ Use lowercase issue-linked topic branches and submit changes to `main` for requi
 ## Key Patterns
 
 - Results are native `Result(Success, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. `Success<T>` optionally carries data and Message; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
-- RPC contracts are declared as `IRpcService` interfaces with one request parameter per method.
-- Application implementations use `RpcServer<TService>` and generated nested handler base classes.
-- ASP.NET Core maps endpoints explicitly with `app.MapHttpEndpoint<TRpcServer>()`.
+- Application contracts are declared as `IApplicationService` interfaces with one request parameter and a declared business response per method. DTOs, nullable values and business unions are supported; transport metadata is optional.
+- Application implementations use `ApplicationService<TService>` and generated nested handler base classes.
+- `AddApplicationService<T>()` registers a service container; application parts automatically register operation implementations. ASP.NET Core maps only explicitly HTTP-declared contracts during `BuildAsync()`. Undecorated services are local-only.
 - `NOFWebApplicationBuilder.Create(args)` always registers JSON, CORS, and OpenAPI services.
 - `app.MapOpenApi()` is an explicit host choice.
 - EF Core registration uses `UseDbContext<TDbContext>()` plus `WithTenantMode(...)`, `WithConnectionString(...)`, `WithOptions(...)`, and optional `MigrateOnInitialize()`.

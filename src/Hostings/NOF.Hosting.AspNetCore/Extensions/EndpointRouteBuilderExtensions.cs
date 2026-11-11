@@ -45,26 +45,26 @@ public static partial class NOFHostingAspNetCoreExtensions
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(rpcServerType);
 
-        if (!typeof(RpcServer).IsAssignableFrom(rpcServerType)
-            || !typeof(IRpcServer).IsAssignableFrom(rpcServerType))
+        if (!typeof(ApplicationService).IsAssignableFrom(rpcServerType)
+            || !typeof(IApplicationServiceImplementation).IsAssignableFrom(rpcServerType))
         {
             throw new InvalidOperationException($"Type '{rpcServerType.FullName}' is not a valid RPC server type.");
         }
 
         var serviceType = rpcServerType.GetProperty(
-                nameof(IRpcServerServiceType.ServiceType),
+                nameof(IApplicationServiceType.ServiceType),
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             ?.GetValue(null) as Type
-            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IRpcServerServiceType.ServiceType)}'.");
+            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IApplicationServiceType.ServiceType)}'.");
 
         var handlerMappings = rpcServerType.GetProperty(
-                nameof(IRpcServer.HandlerMappings),
+                nameof(IApplicationServiceImplementation.HandlerMappings),
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-            ?.GetValue(null) as IReadOnlyDictionary<string, RpcHandlerMapping>;
+            ?.GetValue(null) as IReadOnlyDictionary<string, ServiceOperationMapping>;
 
         if (handlerMappings is null)
         {
-            throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IRpcServer.HandlerMappings)}'.");
+            throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IApplicationServiceImplementation.HandlerMappings)}'.");
         }
 
         var routePrefix = GetHttpRoutePrefix(serviceType);
@@ -82,7 +82,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         IEndpointRouteBuilder app,
         string mappingKey,
         Type serviceType,
-        IReadOnlyDictionary<string, RpcHandlerMapping> handlerMappings,
+        IReadOnlyDictionary<string, ServiceOperationMapping> handlerMappings,
         string? prefix,
         IReadOnlySet<string>? generatedOperations)
     {
@@ -181,7 +181,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest,
         TResponse>(string operationName)
-        where TService : class, IRpcService
+        where TService : class, IApplicationService
     {
         async Task<Http.IResult> Handler(
             [AsParameters] TRequest request,
@@ -190,7 +190,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             CancellationToken cancellationToken)
         {
             var execution = await adapter.InvokeAsync<TService, TRequest>(httpContext, operationName, request!, cancellationToken).ConfigureAwait(false);
-            return CreateHttpResponse<TResponse>(execution.Response, httpContext);
+            return CreateHttpResponse<TResponse>(execution.Execution, httpContext);
         }
 
         return Handler;
@@ -202,7 +202,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest,
         TResponse>(string operationName)
-        where TService : class, IRpcService
+        where TService : class, IApplicationService
     {
         async Task<Http.IResult> Handler(
             [FromBody] TRequest request,
@@ -211,7 +211,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             CancellationToken cancellationToken)
         {
             var execution = await adapter.InvokeAsync<TService, TRequest>(httpContext, operationName, request!, cancellationToken).ConfigureAwait(false);
-            return CreateHttpResponse<TResponse>(execution.Response, httpContext);
+            return CreateHttpResponse<TResponse>(execution.Execution, httpContext);
         }
 
         return Handler;
@@ -223,7 +223,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest,
         TItem>(string operationName)
-        where TService : class, IRpcService
+        where TService : class, IApplicationService
     {
         async Task<Http.IResult> Handler(
             [AsParameters] TRequest request,
@@ -232,7 +232,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             CancellationToken cancellationToken)
         {
             var execution = await adapter.InvokeAsync<TService, TRequest>(httpContext, operationName, request!, cancellationToken).ConfigureAwait(false);
-            return CreateStreamingResult<TItem>(execution.Response, httpContext);
+            return CreateStreamingResult<TItem>(execution.Execution, httpContext);
         }
 
         return Handler;
@@ -244,7 +244,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest,
         TItem>(string operationName)
-        where TService : class, IRpcService
+        where TService : class, IApplicationService
     {
         async Task<Http.IResult> Handler(
             [FromBody] TRequest request,
@@ -253,7 +253,7 @@ public static partial class NOFHostingAspNetCoreExtensions
             CancellationToken cancellationToken)
         {
             var execution = await adapter.InvokeAsync<TService, TRequest>(httpContext, operationName, request!, cancellationToken).ConfigureAwait(false);
-            return CreateStreamingResult<TItem>(execution.Response, httpContext);
+            return CreateStreamingResult<TItem>(execution.Execution, httpContext);
         }
 
         return Handler;
@@ -262,9 +262,15 @@ public static partial class NOFHostingAspNetCoreExtensions
     [RequiresUnreferencedCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     [RequiresDynamicCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     private static Http.IResult CreateStreamingResult<TItem>(
-        System.Runtime.CompilerServices.IUnion? response,
+        ServiceExecution execution,
         HttpContext httpContext)
     {
+        if (execution.Value is ServiceRejected rejected)
+        {
+            return new RpcHttpResult(rejected.Failure, GetHttpStatusCode(httpContext));
+        }
+        var response = execution.Value is ServiceCompleted completed ? completed.Response as System.Runtime.CompilerServices.IUnion : null;
+
         if (response?.Value is IAsyncEnumerable<TItem> or Success<IAsyncEnumerable<TItem>>)
         {
             return new RpcStreamingHttpResult<TItem>(response, GetHttpStatusCode(httpContext));
@@ -280,21 +286,13 @@ public static partial class NOFHostingAspNetCoreExtensions
 
     [RequiresUnreferencedCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
     [RequiresDynamicCode("HTTP transport response writing may require runtime JSON serialization for transport bodies.")]
-    private static Http.IResult CreateHttpResponse<TResponse>(
-        System.Runtime.CompilerServices.IUnion? transportResult,
-        HttpContext httpContext)
+    private static Http.IResult CreateHttpResponse<TResponse>(ServiceExecution execution, HttpContext httpContext)
     {
-        if (transportResult is TResponse result)
+        if (execution.Value is ServiceRejected rejected)
         {
-            return new RpcHttpResult((System.Runtime.CompilerServices.IUnion)(object)result!, GetHttpStatusCode(httpContext));
+            return new RpcHttpResult(rejected.Failure, GetHttpStatusCode(httpContext));
         }
-
-        if (transportResult is not null)
-        {
-            return new RpcHttpResult(transportResult, GetHttpStatusCode(httpContext));
-        }
-
-        throw new InvalidOperationException($"HTTP RPC endpoint returned '{transportResult?.GetType().FullName ?? "null"}' instead of '{typeof(TResponse).FullName}'.");
+        return new RpcHttpResult(execution.Require<TResponse>(allowNull: true), GetHttpStatusCode(httpContext));
     }
 
     private static int GetHttpStatusCode(HttpContext httpContext)

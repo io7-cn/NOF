@@ -14,6 +14,41 @@ public static class JsonRpcHttpClient
 {
     private const string JsonRpcVersion = "2.0";
 
+    /// <summary>Invokes a JSON-RPC adapter for an ordinary application response.</summary>
+    public static async Task<TResponse> SendValueAsync<TRequest, TResponse>(
+        HttpClient httpClient, string endpoint, string method, TRequest request,
+        IEnumerable<KeyValuePair<string, string?>> headers, JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TResponse> responseTypeInfo, CancellationToken cancellationToken, bool allowNull = false)
+    {
+        ValidateRequestArguments(httpClient, endpoint, method, request, headers, requestTypeInfo);
+        ArgumentNullException.ThrowIfNull(responseTypeInfo);
+        var id = Guid.NewGuid().ToString("N");
+        using var httpRequest = CreateHttpRequest(endpoint, id, method, request, headers, requestTypeInfo);
+        using var response = await httpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return await HttpRpcTransportResultReader.ReadValueAsync(response, responseTypeInfo, cancellationToken, allowNull).ConfigureAwait(false);
+        }
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        var root = document.RootElement;
+        ValidateResponseEnvelope(root, id);
+        if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+        {
+            throw new ServiceRejectedException(ReadError(error));
+        }
+        if (!root.TryGetProperty("result", out var result))
+        {
+            throw new InvalidOperationException("JSON-RPC response must contain either a result or an error object.");
+        }
+        var value = result.Deserialize(responseTypeInfo);
+        if (value is null && (!allowNull || default(TResponse) is not null))
+        {
+            throw new InvalidOperationException($"The JSON-RPC response for '{typeof(TResponse).FullName}' is null.");
+        }
+        return value!;
+    }
+
     public static async Task<TResponse> SendAsync<
         TRequest,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TResponse>(
@@ -247,6 +282,11 @@ public static class JsonRpcHttpClient
         var code = errorElement.TryGetProperty("code", out var codeElement)
             ? codeElement.ToString()
             : "-32603";
+        if (errorElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("code", out var applicationCode) && applicationCode.ValueKind == JsonValueKind.String)
+        {
+            code = applicationCode.GetString() ?? code;
+        }
         var message = errorElement.TryGetProperty("message", out var messageElement)
             && messageElement.ValueKind == JsonValueKind.String
                 ? messageElement.GetString() ?? "JSON-RPC error"

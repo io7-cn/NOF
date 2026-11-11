@@ -1,11 +1,18 @@
 using NOF.Application;
 using NOF.Contract;
+using NOF.Sample.Application.Repositories;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
-public class GetRootConfigNodes(IRequestExecutor executor) : NOFSampleService.GetRootConfigNodes
+public class GetRootConfigNodes(IDbContext dbContext) : NOFSampleService.GetRootConfigNodes
 {
-    public override Task<Result<GetRootConfigNodesResponse>> HandleAsync(GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<GetRootConfigNodesUseCase, GetRootConfigNodesResponse>(executor, request, context,
-            static response => Result.Success(response), cancellationToken);
+    public override async Task<GetRootConfigNodesResponse> HandleAsync(
+        GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken)
+    {
+        var nodes = await dbContext.Set<ConfigNode>()
+            .QueryRootNodes()
+            .ProjectTo<ConfigNodeDto>()
+            .ToListAsync(cancellationToken);
+        return new GetRootConfigNodesResponse { Nodes = nodes };
+    }
 }

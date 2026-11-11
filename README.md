@@ -15,7 +15,7 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 .NET 10 release baseline.
 
 - **Clean Architecture** - layered packages (`Domain`, `Contract`, `Application`, `Infrastructure`) enforce separation of concerns
-- **CQRS & Messaging** - first-class `IRpcService`, typed command/notification dispatch, handler pipelines, and streaming RPC support
+- **CQRS & Messaging** - first-class `IApplicationService`, typed command/notification dispatch, handler pipelines, and streaming RPC support
 - **Source Generators** - compile-time code generation for RPC servers, HTTP endpoint mapping, DI registration, mapping registration, and failure definitions
 - **Transactional Outbox** - reliable message delivery with inbox/outbox pattern built into EF Core infrastructure
 - **State Machines** - declarative, event-driven state machine builder with persistent context
@@ -32,7 +32,7 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 - `Mapper`, `IdGenerator`, and `EventPublisher` expose ambient async-flow convenience APIs while still supporting explicit dependency paths.
 - Built-in in-memory cache state is isolated per host through DI singletons rather than process-wide mutable `static` fields.
 
-Application use cases can return DTOs, nullable values or business unions through IRequestHandler and IRequestExecutor. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [usage guide](docs/en/design/application-requests.md).
+Application services keep generated Service.Operation overrides and support ordinary DTOs, nullable values and business unions. Local calls need no transport declaration; HTTP is explicit opt-in. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [migration guide](docs/en/design/application-requests.md).
 
 ## Packages
 
@@ -82,8 +82,8 @@ builder.UseDbContext<AppDbContext>()
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
     .MigrateOnInitialize();
 
-// Modules with only IServiceCollection can use services.AddRpcServer<MyAppService>().
-builder.AddRpcServer<MyAppService>();
+// Modules with only IServiceCollection can use services.AddApplicationService<MyAppService>().
+builder.AddApplicationService<MyAppService>();
 
 var app = await builder.BuildAsync();
 
@@ -104,7 +104,7 @@ NOF RPC contracts can expose server-streaming operations by returning `Result<IA
 public record WatchOrdersRequest(Guid CustomerId);
 public record OrderEvent(Guid OrderId, string Status);
 
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
     Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);

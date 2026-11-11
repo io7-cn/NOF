@@ -31,12 +31,10 @@ builder.AddApplicationPart(typeof(NOFSampleService).Assembly)
 ## Practical Guidance
 
 - If handlers or mappers are not discovered, first check that the assembly containing them is added via `AddApplicationPart(...)`.
-- Keep RPC contracts (`IRpcService`) and their implementations in assemblies that are loaded as application parts.
+- Keep RPC contracts (`IApplicationService`) and their implementations in assemblies that are loaded as application parts.
 - Transport integrations such as RabbitMQ consume the frozen handler registries, so stale or missing application parts will prevent consumer registration.
 - `AutoInjectRegistry` stores native `ServiceDescriptor` instances; there is no separate `AutoInjectServiceRegistration` model anymore.
 
-## Application use cases
+## Application service operations
 
-Concrete closed classes implementing IRequestHandler<TRequest,TResponse>, directly or through RequestHandler<TRequest,TResponse>, are discovered by the application source generator. Record classes and inherited closed generic contracts are supported. AddApplicationPart runs the generated initializer once per service collection and registers scoped handlers without runtime type scanning. NOF hosts add the calling assembly automatically. Additional application assemblies need one AddApplicationPart call.
-
-Use case identity is the concrete handler type, not the request/response pair. Multiple handlers may share input/output models; their policy chains remain separate. Generated TryAddScoped registration is idempotent and preserves explicit substitutions. A handler implementing multiple request contracts is still registered once. Explicit AddRequestHandler remains available for tests and selected composition. See the [guide](../en/design/application-requests.md).
+Declare a partial ApplicationService<TService> container and implement its generated Service.Operation base. ApplicationServiceAutoInjectGenerator registers operation implementations as scoped services through AddApplicationPart. Register the service container with AddApplicationService<TService>(); no per-operation registration is needed. Identity is the service contract plus operation name, so different operations can share input/output models. See the [migration guide](../en/design/application-requests.md).

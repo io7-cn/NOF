@@ -62,7 +62,7 @@ public sealed class TenantRequestAuthorizationTests
             return new TenantHandler();
         });
         builder.Services.AddTransient<StreamHandler>();
-        builder.AddRpcServer<TenantServer>();
+        builder.AddApplicationService<TenantServer>();
         await using var app = await builder.BuildAsync();
         app.MapOpenApi();
         await app.StartAsync();
@@ -117,7 +117,7 @@ public sealed class TenantRequestAuthorizationTests
     }
 
     [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-    public interface ITenantService : IRpcService
+    public interface ITenantService : IApplicationService
     {
         [RequirePermission]
         [HttpEndpoint(HttpVerb.Post, "/tenant")]
@@ -133,26 +133,26 @@ public sealed class TenantRequestAuthorizationTests
         Result<global::System.Collections.Generic.IAsyncEnumerable<string>> Stream(Empty request);
     }
 
-    public sealed class TenantServer : RpcServer<ITenantService>, IRpcServer
+    public sealed class TenantServer : ApplicationService<ITenantService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(ITenantService.Tenant)] = new(typeof(TenantHandler), typeof(Empty), typeof(Result<string>)),
                 [nameof(ITenantService.Host)] = new(typeof(TenantHandler), typeof(Empty), typeof(Result<string>)),
                 [nameof(ITenantService.Stream)] = new(typeof(StreamHandler), typeof(Empty), typeof(Result<global::System.Collections.Generic.IAsyncEnumerable<string>>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class TenantHandler : RpcHandler<Empty, Result<string>>
+    public sealed class TenantHandler : ServiceOperation<Empty, Result<string>>
     {
         public override Task<Result<string>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success<string>(context.TenantId));
     }
 
-    public sealed class StreamHandler : RpcHandler<Empty, Result<global::System.Collections.Generic.IAsyncEnumerable<string>>>
+    public sealed class StreamHandler : ServiceOperation<Empty, Result<global::System.Collections.Generic.IAsyncEnumerable<string>>>
     {
         public override Task<Result<global::System.Collections.Generic.IAsyncEnumerable<string>>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Unauthorized streaming handlers must not run");

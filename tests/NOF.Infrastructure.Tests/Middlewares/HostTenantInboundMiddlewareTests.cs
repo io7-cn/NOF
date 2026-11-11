@@ -26,7 +26,7 @@ public sealed class HostTenantInboundMiddlewareTests
             typeof(IHostTenantTestService), method,
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "untrusted")], default);
 
-        Assert.IsType<Success>(result.Response!.Value);
+        Assert.IsType<Success>(Assert.IsType<Result>(result.Response).Value);
         var probe = provider.GetRequiredService<TenantProbe>();
         Assert.Equal(expectedTenant, probe.DependencyTenant);
         Assert.Equal(expectedTenant, probe.HandlerTenant);
@@ -43,7 +43,7 @@ public sealed class HostTenantInboundMiddlewareTests
             .ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(Result), typeof(IHostTenantTestService),
                 nameof(IHostTenantTestService.Host), null, default);
 
-        Assert.Equal("401", result.Response!.ExpectFailure().Code);
+        Assert.Equal("401", Assert.IsType<Failure>(result.Rejection).Code);
         Assert.Null(provider.GetRequiredService<TenantProbe>().DependencyTenant);
     }
 
@@ -53,18 +53,18 @@ public sealed class HostTenantInboundMiddlewareTests
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
         using var provider = CreateProvider(authenticated: true);
         using var scope = provider.CreateScope();
-        var result = await RpcServerInvoker.InvokeAsync<IHostTenantTestService>(scope.ServiceProvider,
+        var result = await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(scope.ServiceProvider,
             typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!, new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
-        Assert.IsType<Success>(result!.Value);
+        Assert.IsType<Success>(result.Require<Result>(Result.CreateFailure).Value);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
         Assert.Equal("caller", Context.Current.TenantId);
 
         provider.GetRequiredService<TenantProbe>().Throw = true;
-        var failed = await RpcServerInvoker.InvokeAsync<IHostTenantTestService>(
+        var failed = await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(
             scope.ServiceProvider, typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!,
             new Empty(), Context.Empty, default);
-        Assert.NotNull(failed!.ExpectFailure());
+        Assert.NotNull(Assert.IsType<ServiceRejected>(failed.Value).Failure);
         Assert.Equal("caller", Context.Current.TenantId);
     }
 
@@ -103,15 +103,15 @@ public sealed class HostTenantInboundMiddlewareTests
         builder.Services.AddScoped<TenantProbeHandler>();
         builder.Services.AddScoped<IRequestOutboundPipelineExecutor, RequestOutboundPipelineExecutor>();
         builder.Services.AddScoped<HostTenantTestServer>();
-        var registry = new RpcServerRegistry();
-        registry.Add(new RpcServerRegistration(typeof(IHostTenantTestService), typeof(HostTenantTestServer)));
+        var registry = new ApplicationServiceRegistry();
+        registry.Add(new ApplicationServiceRegistration(typeof(IHostTenantTestService), typeof(HostTenantTestServer)));
         builder.Services.AddSingleton(registry);
         return builder.Services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 }
 
 [TransportOverMemory]
-public interface IHostTenantTestService : IRpcService
+public interface IHostTenantTestService : IApplicationService
 {
     [UseHostTenant]
     [RequirePermission]
@@ -126,7 +126,7 @@ public interface IHostTenantTestService : IRpcService
     Result Disabled(Empty request);
 }
 
-public interface IHostTenantTestServiceClient : IRpcClient<IHostTenantTestService>;
+public interface IHostTenantTestServiceClient : IApplicationServiceClient<IHostTenantTestService>;
 
 public sealed class TenantProbe
 {
@@ -141,7 +141,7 @@ public sealed class TenantDependency
     public string TenantId { get; } = Context.Current.TenantId;
 }
 
-public sealed class TenantProbeHandler : RpcHandler<Empty, Result>
+public sealed class TenantProbeHandler : ServiceOperation<Empty, Result>
 {
     private readonly TenantProbe _probe;
 
@@ -164,13 +164,13 @@ public sealed class TenantProbeHandler : RpcHandler<Empty, Result>
     }
 }
 
-public sealed class HostTenantTestServer : RpcServer<IHostTenantTestService>
+public sealed class HostTenantTestServer : ApplicationService<IHostTenantTestService>
 {
-    private static readonly IReadOnlyDictionary<string, RpcHandlerMapping> _mappings =
-        new Dictionary<string, RpcHandlerMapping>
+    private static readonly IReadOnlyDictionary<string, ServiceOperationMapping> _mappings =
+        new Dictionary<string, ServiceOperationMapping>
         {
             [nameof(IHostTenantTestService.Host)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(Result))
         };
 
-    protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => _mappings;
+    protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => _mappings;
 }

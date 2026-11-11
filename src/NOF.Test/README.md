@@ -22,10 +22,10 @@ Object storage uses `MemoryObjectStorageRider` by default, with state isolated p
 
 ```csharp
 var builder = NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<MyRpcServer>()
-    .AddRpcServer<MyRpcServer>()
+    .AddApplicationPartOf<MyApplicationService>()
+    .AddApplicationService<MyApplicationService>()
     .AddInMemoryPersistence()
-    .AddLocalRpcClient<IMyServiceClient, LocalMyRpcServerClient>();
+    .AddLocalApplicationServiceClient<IMyServiceClient, LocalMyApplicationServiceClient>();
 
 await using var host = await builder.BuildTestHostAsync();
 ```
@@ -35,11 +35,11 @@ Common builder helpers:
 - `ConfigureServices(...)`
 - `AddApplicationPartOf<TMarker>()`
 - `AddApplicationPart(Assembly)`
-- `AddRpcServer<TRpcServer>()`
+- `AddApplicationService<TApplicationService>()`
 - `AddInMemoryPersistence()`
-- `AddLocalRpcClient<TService, TImplementation>()`
+- `AddLocalApplicationServiceClient<TService, TImplementation>()`
 
-`LocalMyRpcServerClient` is generated from `MyRpcServer : RpcServer<IMyService>`; tests do not declare a `LocalRpcClientAttribute` or an empty partial client class.
+`LocalMyApplicationServiceClient` is generated from `MyApplicationService : ApplicationService<IMyService>`; tests do not declare a `LocalApplicationServiceClientAttribute` or an empty partial client class.
 
 ### `NOFTestHost`
 
@@ -90,9 +90,9 @@ You can also keep the full Arrange-Act-Assert flow inside a single scope:
 ```csharp
 await using var host = await NOFTestAppBuilder.Create()
     .AddApplicationPartOf<NOFSampleService>()
-    .AddRpcServer<NOFSampleService>()
+    .AddApplicationService<NOFSampleService>()
     .AddInMemoryPersistence()
-    .AddLocalRpcClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>()
+    .AddLocalApplicationServiceClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>()
     .BuildTestHostAsync();
 
 var roots = await host.ExecuteAsync(async scope =>

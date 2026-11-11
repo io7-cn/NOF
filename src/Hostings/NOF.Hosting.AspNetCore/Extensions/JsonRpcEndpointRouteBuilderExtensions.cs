@@ -21,23 +21,23 @@ public static partial class NOFHostingAspNetCoreExtensions
         ArgumentNullException.ThrowIfNull(app);
         ArgumentNullException.ThrowIfNull(rpcServerType);
 
-        if (!typeof(RpcServer).IsAssignableFrom(rpcServerType)
-            || !typeof(IRpcServer).IsAssignableFrom(rpcServerType))
+        if (!typeof(ApplicationService).IsAssignableFrom(rpcServerType)
+            || !typeof(IApplicationServiceImplementation).IsAssignableFrom(rpcServerType))
         {
             throw new InvalidOperationException($"Type '{rpcServerType.FullName}' is not a valid RPC server type.");
         }
 
         var serviceType = rpcServerType.GetProperty(
-                nameof(IRpcServerServiceType.ServiceType),
+                nameof(IApplicationServiceType.ServiceType),
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
             ?.GetValue(null) as Type
-            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IRpcServerServiceType.ServiceType)}'.");
+            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IApplicationServiceType.ServiceType)}'.");
 
         var handlerMappings = rpcServerType.GetProperty(
-                nameof(IRpcServer.HandlerMappings),
+                nameof(IApplicationServiceImplementation.HandlerMappings),
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-            ?.GetValue(null) as IReadOnlyDictionary<string, RpcHandlerMapping>
-            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IRpcServer.HandlerMappings)}'.");
+            ?.GetValue(null) as IReadOnlyDictionary<string, ServiceOperationMapping>
+            ?? throw new InvalidOperationException($"RPC server type '{rpcServerType.FullName}' does not expose static property '{nameof(IApplicationServiceImplementation.HandlerMappings)}'.");
 
         return MapJsonRpcEndpointCore(app, rpcServerType, serviceType, handlerMappings);
     }
@@ -46,7 +46,7 @@ public static partial class NOFHostingAspNetCoreExtensions
         IEndpointRouteBuilder app,
         Type rpcServerType,
         Type serviceType,
-        IReadOnlyDictionary<string, RpcHandlerMapping> handlerMappings)
+        IReadOnlyDictionary<string, ServiceOperationMapping> handlerMappings)
     {
         var resolvedPattern = HttpRoutePrefix.Normalize(GetHttpRoutePrefix(serviceType) ?? "/");
 

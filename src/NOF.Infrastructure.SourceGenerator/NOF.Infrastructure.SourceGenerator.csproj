@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\SourceGenerator.Shared\RpcContractConventions.cs" Link="Shared\RpcContractConventions.cs" />
+    <Compile Include="..\SourceGenerator.Shared\ServiceContractConventions.cs" Link="Shared\ServiceContractConventions.cs" />
     <Compile Include="..\SourceGenerator.Shared\ValueObjectLengthConfigurationAnalysis.cs" Link="Shared\ValueObjectLengthConfigurationAnalysis.cs" />
   </ItemGroup>
 </Project>

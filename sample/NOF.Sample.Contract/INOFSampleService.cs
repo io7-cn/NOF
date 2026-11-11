@@ -4,7 +4,7 @@ using System.ComponentModel;
 namespace NOF.Sample;
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface INOFSampleService : IRpcService
+public interface INOFSampleService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Post, "rpc/NOFSample/CreateConfigNode")]
     [Summary("创建配置节点")]
@@ -58,7 +58,7 @@ public interface INOFSampleService : IRpcService
     [Summary("查询所有根配置节点")]
     [Description("获取所有没有父节点的顶层配置节点列表")]
     [Category("配置节点")]
-    Result<GetRootConfigNodesResponse> GetRootConfigNodes(GetRootConfigNodesRequest request);
+    GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
 
     [HttpEndpoint(HttpVerb.Get, "rpc/NOFSample/GetConfiguration")]
     Result<GetConfigurationResponse> GetConfiguration(GetConfigurationRequest request);

@@ -129,7 +129,7 @@ public sealed class HttpRpcTransportBoundaryTests
         builder.Services.AddTransient<RedirectHandler>();
         builder.Services.AddTransient<TokenFailureHandler>();
         builder.Services.AddTransient<OAuthFailureHandler>();
-        builder.AddRpcServer<ValidationRpcServer>();
+        builder.AddApplicationService<ValidationApplicationService>();
 
         var app = await builder.BuildAsync();
         app.MapPost("/custom", ([FromBody] CreateUserRequest request) => Results.Ok(Result.Success(new CreateUserResponse(request.Age))));
@@ -178,7 +178,7 @@ public sealed class HttpRpcTransportBoundaryTests
     }
 
     [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/rpc")]
-    public partial interface IValidationRpcService : IRpcService
+    public partial interface IValidationRpcService : IApplicationService
     {
         [HttpEndpoint(HttpVerb.Post, "/CreateUser")]
         Result<CreateUserResponse> CreateUser(CreateUserRequest request);
@@ -196,10 +196,10 @@ public sealed class HttpRpcTransportBoundaryTests
         Result OAuthFailure(Empty request);
     }
 
-    public sealed class ValidationRpcServer : RpcServer<IValidationRpcService>, IRpcServer
+    public sealed class ValidationApplicationService : ApplicationService<IValidationRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IValidationRpcService.CreateUser)] =
                     new(typeof(CreateUserHandler), typeof(CreateUserRequest), typeof(Result<CreateUserResponse>)),
@@ -213,34 +213,34 @@ public sealed class HttpRpcTransportBoundaryTests
                     new(typeof(OAuthFailureHandler), typeof(Empty), typeof(Result))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class CreateUserHandler : RpcHandler<CreateUserRequest, Result<CreateUserResponse>>
+    public sealed class CreateUserHandler : ServiceOperation<CreateUserRequest, Result<CreateUserResponse>>
     {
         public override Task<Result<CreateUserResponse>> HandleAsync(CreateUserRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(new CreateUserResponse(request.Age)));
     }
 
-    public sealed class ReadTokenHandler : RpcHandler<ReadTokenRequest, Result<ReadTokenResponse>>
+    public sealed class ReadTokenHandler : ServiceOperation<ReadTokenRequest, Result<ReadTokenResponse>>
     {
         public override Task<Result<ReadTokenResponse>> HandleAsync(ReadTokenRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(new ReadTokenResponse(request.Token.Value)));
     }
 
-    public sealed class RedirectHandler : RpcHandler<RedirectRequest, Result>
+    public sealed class RedirectHandler : ServiceOperation<RedirectRequest, Result>
     {
         public override Task<Result> HandleAsync(RedirectRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success());
     }
 
-    public sealed class TokenFailureHandler : RpcHandler<Empty, Result<ReadTokenResponse>>
+    public sealed class TokenFailureHandler : ServiceOperation<Empty, Result<ReadTokenResponse>>
     {
         public override Task<Result<ReadTokenResponse>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
             => Task.FromResult((Result<ReadTokenResponse>)Result.Fail("invalid_token", "access token expired."));
     }
 
-    public sealed class OAuthFailureHandler : RpcHandler<Empty, Result>
+    public sealed class OAuthFailureHandler : ServiceOperation<Empty, Result>
     {
         public override Task<Result> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success());
@@ -257,7 +257,7 @@ public sealed class HttpRpcTransportBoundaryTests
                 context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "403";
                 context.ResponseHeaders["WWW-Authenticate"] =
                     "Bearer error=\"insufficient_scope\", authorization_server=\"https://auth.local/oauth2\", scope=\"sample.permission\"";
-                context.SetResponse(Result.Fail("403", "Insufficient permissions"));
+                context.Reject(Result.Fail("403", "Insufficient permissions"));
                 return ValueTask.CompletedTask;
             }
 

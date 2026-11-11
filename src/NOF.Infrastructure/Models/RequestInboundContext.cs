@@ -12,7 +12,13 @@ public sealed class RequestInboundContext : Context
 {
     private readonly RequestInboundState _state;
 
-    public IUnion? Response => _state.Response;
+    public object? Response => Execution.Value is ServiceCompleted completed ? completed.Response : null;
+
+    /// <summary>Gets the execution outcome without conflating rejection with business failures.</summary>
+    public ServiceExecution Execution => _state.Execution;
+
+    /// <summary>Gets a policy rejection, if execution was rejected.</summary>
+    public Failure? Rejection => Execution.Value is ServiceRejected rejected ? rejected.Failure : null;
 
     public IDictionary<string, string?> ResponseHeaders => _state.ResponseHeaders;
 
@@ -31,22 +37,11 @@ public sealed class RequestInboundContext : Context
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public required Type ResponseType { get; init; }
 
-    public void SetResponse(IUnion response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        if (response.Value is null)
-        {
-            throw new InvalidOperationException("The RPC response contains no outcome case.");
-        }
-        _state.Response = response;
-    }
+    /// <summary>Completes execution with the operation's unchanged business value, including null.</summary>
+    public void SetResponse(object? response) => _state.Execution = new ServiceCompleted(response);
 
-    public void SetResponse(Failure failure)
-    {
-        ArgumentNullException.ThrowIfNull(failure);
-
-        _state.Response = new Result(failure);
-    }
+    /// <summary>Rejects execution without manufacturing a business response.</summary>
+    public void Reject(Failure failure) => _state.Execution = new ServiceRejected(failure);
 
     [SetsRequiredMembers]
     private RequestInboundContext(IReadOnlyDictionary<object, object?> items, RequestInboundContext source)
@@ -69,9 +64,10 @@ public sealed class RequestInboundContext : Context
     protected override Context Clone(IReadOnlyDictionary<object, object?> items)
         => new RequestInboundContext(items, this);
 
+    // Shared by immutable context clones so policies observe the same execution outcome.
     private sealed class RequestInboundState
     {
-        public IUnion? Response { get; set; }
+        public ServiceExecution Execution { get; set; }
 
         public IDictionary<string, string?> ResponseHeaders { get; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
     }

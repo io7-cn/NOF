@@ -23,7 +23,7 @@ public static class JsonRpcEndpointHandler
     [RequiresDynamicCode("JSON-RPC request binding and response writing use runtime JSON type metadata.")]
     public static Delegate Create(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
-        IReadOnlyDictionary<string, RpcHandlerMapping> handlerMappings)
+        IReadOnlyDictionary<string, ServiceOperationMapping> handlerMappings)
     {
         ArgumentNullException.ThrowIfNull(serviceType);
         ArgumentNullException.ThrowIfNull(handlerMappings);
@@ -49,7 +49,7 @@ public static class JsonRpcEndpointHandler
     private static async Task<Microsoft.AspNetCore.Http.IResult> HandleAsync(
         HttpContext httpContext,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
-        IReadOnlyDictionary<string, RpcHandlerMapping> handlerMappings,
+        IReadOnlyDictionary<string, ServiceOperationMapping> handlerMappings,
         HttpRequestInboundAdapter inboundAdapter,
         IObjectSerializer serializer,
         CancellationToken cancellationToken)
@@ -107,7 +107,11 @@ public static class JsonRpcEndpointHandler
                 return CreateError(id, -32603, "Internal error");
             }
 
-            if (execution.Response is null)
+            if (execution.Rejection is { } rejection)
+            {
+                return CreatePolicyError(id, rejection);
+            }
+            if (execution.Execution.Value is not ServiceCompleted)
             {
                 return CreateError(id, -32603, "Internal error");
             }
@@ -116,21 +120,21 @@ public static class JsonRpcEndpointHandler
             {
                 if (IsStreamingResult(handlerMapping.ReturnType))
                 {
-                    if (execution.Response.Value is not null and not Failure)
+                    if (execution.Response is System.Runtime.CompilerServices.IUnion { Value: not null and not Failure } streamResponse)
                     {
                         return CreateStreamingResult(
                             handlerMapping.ReturnType,
-                            execution.Response,
+                            streamResponse,
                             Encoding.UTF8.GetBytes(id.GetRawText()),
                             serializer);
                     }
 
-                    var failure = RpcResponse.Require<Result>(execution.Response);
+                    var failure = RpcResponse.Require<Result>(execution.Response as System.Runtime.CompilerServices.IUnion);
                     var failurePayload = serializer.Serialize(failure, typeof(Result));
                     return CreateResult(id, failurePayload);
                 }
 
-                var payload = serializer.Serialize(execution.Response, execution.Response.GetType());
+                var payload = serializer.Serialize(execution.Response, handlerMapping.ReturnType);
                 return CreateResult(id, payload);
             }
             catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException or TargetInvocationException)
@@ -220,6 +224,27 @@ public static class JsonRpcEndpointHandler
         writer.WriteString("jsonrpc", JsonRpcVersion);
         writer.WritePropertyName("result");
         writer.WriteRawValue(result.Span, skipInputValidation: false);
+        writer.WritePropertyName("id");
+        id.WriteTo(writer);
+        writer.WriteEndObject();
+        writer.Flush();
+        return Results.Bytes(buffer.WrittenSpan.ToArray(), "application/json; charset=utf-8");
+    }
+
+    private static Microsoft.AspNetCore.Http.IResult CreatePolicyError(JsonElement id, Failure failure)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer);
+        writer.WriteStartObject();
+        writer.WriteString("jsonrpc", JsonRpcVersion);
+        writer.WritePropertyName("error");
+        writer.WriteStartObject();
+        writer.WriteNumber("code", -32000);
+        writer.WriteString("message", failure.Message);
+        writer.WriteStartObject("data");
+        writer.WriteString("code", failure.Code);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
         writer.WritePropertyName("id");
         id.WriteTo(writer);
         writer.WriteEndObject();

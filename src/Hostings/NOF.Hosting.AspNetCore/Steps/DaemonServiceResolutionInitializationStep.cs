@@ -7,7 +7,7 @@ namespace NOF.Hosting.AspNetCore;
 public sealed class DaemonServiceResolutionInitializationStep : IApplicationInitializationStep
 {
     public TopologyComparison Compare(IApplicationInitializationStep other)
-        => other is RpcServerTransportInitializationStep
+        => other is ApplicationServiceTransportInitializationStep
             ? TopologyComparison.Before
             : TopologyComparison.DoesNotMatter;
 

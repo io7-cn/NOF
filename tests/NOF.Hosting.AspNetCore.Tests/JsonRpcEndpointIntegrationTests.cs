@@ -13,7 +13,7 @@ namespace NOF.Hosting.AspNetCore.Tests;
 public sealed class JsonRpcEndpointIntegrationTests
 {
     [Fact]
-    public async Task JsonRpcEndpoint_ShouldInvokeMappedRpcServerUsingOperationNameOnly()
+    public async Task JsonRpcEndpoint_ShouldInvokeMappedApplicationServiceUsingOperationNameOnly()
     {
         await using var app = await CreateAppAsync();
         using var client = app.GetTestClient();
@@ -73,12 +73,12 @@ public sealed class JsonRpcEndpointIntegrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_ShouldRegisterJsonRpcServerOnlyOnce()
+    public async Task AddApplicationService_ShouldRegisterJsonApplicationServiceOnlyOnce()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<PrefixedJsonRpcServer>();
-        builder.AddRpcServer<PrefixedJsonRpcServer>();
+        builder.AddApplicationService<PrefixedJsonApplicationService>();
+        builder.AddApplicationService<PrefixedJsonApplicationService>();
         builder.Services.AddTransient<PrefixedEchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -94,11 +94,11 @@ public sealed class JsonRpcEndpointIntegrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_ShouldUseJsonRpcContractRoutePrefix()
+    public async Task AddApplicationService_ShouldUseJsonRpcContractRoutePrefix()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<PrefixedJsonRpcServer>();
+        builder.AddApplicationService<PrefixedJsonApplicationService>();
         builder.Services.AddTransient<PrefixedEchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -123,11 +123,11 @@ public sealed class JsonRpcEndpointIntegrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_WithoutJsonRpcRoutePrefix_ShouldMapRootRoute()
+    public async Task AddApplicationService_WithoutJsonRpcRoutePrefix_ShouldMapRootRoute()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<RootJsonRpcServer>();
+        builder.AddApplicationService<RootJsonApplicationService>();
         builder.Services.AddTransient<RootEchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -212,7 +212,7 @@ public sealed class JsonRpcEndpointIntegrationTests
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<PrefixedJsonRpcServer>();
+        builder.AddApplicationService<PrefixedJsonApplicationService>();
         builder.Services.AddTransient<PrefixedEchoHandler>();
         builder.Services.AddTransient<PrefixedStreamHandler>();
 
@@ -229,17 +229,17 @@ public sealed class JsonRpcEndpointIntegrationTests
     public sealed record PrefixedEchoResponse(string Value);
 
     [TransportOverHttp(HttpRpcStyle.JsonRpc, "contract-rpc/")]
-    public partial interface IPrefixedJsonRpcService : IRpcService
+    public partial interface IPrefixedJsonRpcService : IApplicationService
     {
         Result<PrefixedEchoResponse> Echo(PrefixedEchoRequest request);
 
         Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>> Stream(PrefixedEchoRequest request);
     }
 
-    public sealed class PrefixedJsonRpcServer : RpcServer<IPrefixedJsonRpcService>, IRpcServer
+    public sealed class PrefixedJsonApplicationService : ApplicationService<IPrefixedJsonRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IPrefixedJsonRpcService.Echo)] =
                     new(typeof(PrefixedEchoHandler), typeof(PrefixedEchoRequest), typeof(Result<PrefixedEchoResponse>)),
@@ -247,10 +247,10 @@ public sealed class JsonRpcEndpointIntegrationTests
                     new(typeof(PrefixedStreamHandler), typeof(PrefixedEchoRequest), typeof(Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class PrefixedEchoHandler : RpcHandler<PrefixedEchoRequest, Result<PrefixedEchoResponse>>
+    public sealed class PrefixedEchoHandler : ServiceOperation<PrefixedEchoRequest, Result<PrefixedEchoResponse>>
     {
         public override Task<Result<PrefixedEchoResponse>> HandleAsync(
             PrefixedEchoRequest request,
@@ -259,7 +259,7 @@ public sealed class JsonRpcEndpointIntegrationTests
             => Task.FromResult(Result.Success(new PrefixedEchoResponse(request.Value)));
     }
 
-    public sealed class PrefixedStreamHandler : RpcHandler<PrefixedEchoRequest, Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>>
+    public sealed class PrefixedStreamHandler : ServiceOperation<PrefixedEchoRequest, Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>>
     {
         public override Task<Result<Success<global::System.Collections.Generic.IAsyncEnumerable<PrefixedEchoResponse>>>> HandleAsync(
             PrefixedEchoRequest request,
@@ -287,24 +287,24 @@ public sealed class JsonRpcEndpointIntegrationTests
     }
 
     [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-    public interface IRootJsonRpcService : IRpcService
+    public interface IRootJsonRpcService : IApplicationService
     {
         Result<PrefixedEchoResponse> Echo(PrefixedEchoRequest request);
     }
 
-    public sealed class RootJsonRpcServer : RpcServer<IRootJsonRpcService>, IRpcServer
+    public sealed class RootJsonApplicationService : ApplicationService<IRootJsonRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IRootJsonRpcService.Echo)] =
                     new(typeof(RootEchoHandler), typeof(PrefixedEchoRequest), typeof(Result<PrefixedEchoResponse>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class RootEchoHandler : RpcHandler<PrefixedEchoRequest, Result<PrefixedEchoResponse>>
+    public sealed class RootEchoHandler : ServiceOperation<PrefixedEchoRequest, Result<PrefixedEchoResponse>>
     {
         public override Task<Result<PrefixedEchoResponse>> HandleAsync(
             PrefixedEchoRequest request,

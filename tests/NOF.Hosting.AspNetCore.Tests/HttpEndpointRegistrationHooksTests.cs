@@ -14,17 +14,17 @@ public sealed class HttpEndpointRegistrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AddRpcServer_ShouldMapRpcEndpointAutomatically(bool registerThroughServices)
+    public async Task AddApplicationService_ShouldMapRpcEndpointAutomatically(bool registerThroughServices)
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
         if (registerThroughServices)
         {
-            builder.Services.AddRpcServer<HookedRpcServer>();
+            builder.Services.AddApplicationService<HookedApplicationService>();
         }
         else
         {
-            builder.AddRpcServer<HookedRpcServer>();
+            builder.AddApplicationService<HookedApplicationService>();
         }
         builder.Services.AddTransient<EchoHandler>();
 
@@ -44,12 +44,12 @@ public sealed class HttpEndpointRegistrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_ShouldRegisterRpcServerOnlyOnce()
+    public async Task AddApplicationService_ShouldRegisterApplicationServiceOnlyOnce()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<HookedRpcServer>();
-        builder.Services.AddRpcServer<HookedRpcServer>();
+        builder.AddApplicationService<HookedApplicationService>();
+        builder.Services.AddApplicationService<HookedApplicationService>();
         builder.Services.AddTransient<EchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -65,11 +65,11 @@ public sealed class HttpEndpointRegistrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_WithMemoryTransport_ShouldNotMapHttpEndpoint()
+    public async Task AddApplicationService_WithMemoryTransport_ShouldNotMapHttpEndpoint()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<MemoryRpcServer>();
+        builder.AddApplicationService<MemoryApplicationService>();
         builder.Services.AddTransient<MemoryEchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -93,11 +93,11 @@ public sealed class HttpEndpointRegistrationTests
     }
 
     [Fact]
-    public async Task AddRpcServer_ShouldUseControllerRpcContractRoutePrefix()
+    public async Task AddApplicationService_ShouldUseControllerRpcContractRoutePrefix()
     {
         var builder = NOFWebApplicationBuilder.Create([]);
         builder.WebApplicationBuilder.WebHost.UseTestServer();
-        builder.AddRpcServer<PrefixedControllerRpcServer>();
+        builder.AddApplicationService<PrefixedControllerApplicationService>();
         builder.Services.AddTransient<PrefixedEchoHandler>();
 
         await using var app = await builder.BuildAsync();
@@ -122,74 +122,75 @@ public sealed class HttpEndpointRegistrationTests
 
     public sealed record EchoResponse(string Value);
 
-    public partial interface IHookedRpcService : IRpcService
+    [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
+    public partial interface IHookedRpcService : IApplicationService
     {
         [HttpEndpoint(HttpVerb.Post, "/Echo")]
         Result<EchoResponse> Echo(EchoRequest request);
     }
 
-    public sealed class HookedRpcServer : RpcServer<IHookedRpcService>, IRpcServer
+    public sealed class HookedApplicationService : ApplicationService<IHookedRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IHookedRpcService.Echo)] =
                     new(typeof(EchoHandler), typeof(EchoRequest), typeof(Result<EchoResponse>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class EchoHandler : RpcHandler<EchoRequest, Result<EchoResponse>>
+    public sealed class EchoHandler : ServiceOperation<EchoRequest, Result<EchoResponse>>
     {
         public override Task<Result<EchoResponse>> HandleAsync(EchoRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(new EchoResponse(request.Value)));
     }
 
     [TransportOverHttp(HttpRpcStyle.ControllerRpc, "controller-rpc/")]
-    public partial interface IPrefixedControllerRpcService : IRpcService
+    public partial interface IPrefixedControllerRpcService : IApplicationService
     {
         [HttpEndpoint(HttpVerb.Post, "/Echo")]
         Result<EchoResponse> Echo(EchoRequest request);
     }
 
-    public sealed class PrefixedControllerRpcServer : RpcServer<IPrefixedControllerRpcService>, IRpcServer
+    public sealed class PrefixedControllerApplicationService : ApplicationService<IPrefixedControllerRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IPrefixedControllerRpcService.Echo)] =
                     new(typeof(PrefixedEchoHandler), typeof(EchoRequest), typeof(Result<EchoResponse>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class PrefixedEchoHandler : RpcHandler<EchoRequest, Result<EchoResponse>>
+    public sealed class PrefixedEchoHandler : ServiceOperation<EchoRequest, Result<EchoResponse>>
     {
         public override Task<Result<EchoResponse>> HandleAsync(EchoRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(new EchoResponse(request.Value)));
     }
 
     [TransportOverMemory]
-    public interface IMemoryRpcService : IRpcService
+    public interface IMemoryRpcService : IApplicationService
     {
         Result<EchoResponse> MemoryEcho(EchoRequest request);
     }
 
-    public sealed class MemoryRpcServer : RpcServer<IMemoryRpcService>, IRpcServer
+    public sealed class MemoryApplicationService : ApplicationService<IMemoryRpcService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, RpcHandlerMapping> HandlerMappings { get; } =
-            new Dictionary<string, RpcHandlerMapping>
+        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, ServiceOperationMapping>
             {
                 [nameof(IMemoryRpcService.MemoryEcho)] =
                     new(typeof(MemoryEchoHandler), typeof(EchoRequest), typeof(Result<EchoResponse>))
             };
 
-        protected override IReadOnlyDictionary<string, RpcHandlerMapping> GetHandlerMappings() => HandlerMappings;
+        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class MemoryEchoHandler : RpcHandler<EchoRequest, Result<EchoResponse>>
+    public sealed class MemoryEchoHandler : ServiceOperation<EchoRequest, Result<EchoResponse>>
     {
         public override Task<Result<EchoResponse>> HandleAsync(EchoRequest request, Context context, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success(new EchoResponse(request.Value)));

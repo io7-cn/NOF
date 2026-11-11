@@ -36,7 +36,7 @@ public class HttpEndpointReflectionTests
         Assert.DoesNotContain(publicMethods, static method => method.Name is "MapHttpEndpoint" or "MapJsonRpcEndpoint");
     }
 
-    private interface IAppService : IRpcService
+    private interface IAppService : IApplicationService
     {
         [HttpEndpoint(HttpVerb.Get, "/rpc/GetUser")]
         Result<UserDto> GetUser(GetUserRequest request);

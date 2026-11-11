@@ -12,24 +12,24 @@ public static partial class NOFApplicationExtensions
     extension(IServiceCollection services)
     {
         /// <summary>
-        /// Registers a scoped RPC server and its service-to-implementation metadata.
+        /// Registers a scoped application service implementation and its service-to-implementation metadata.
         /// Hosts initialize the declared transport separately. Register servers before
-        /// the <see cref="RpcServerRegistry"/> is first read.
+        /// the <see cref="ApplicationServiceRegistry"/> is first read.
         /// </summary>
-        /// <typeparam name="TRpcServer">The RPC server implementation to register.</typeparam>
+        /// <typeparam name="TApplicationService">The application service implementation implementation to register.</typeparam>
         /// <returns>The service collection for further configuration.</returns>
-        public IServiceCollection AddRpcServer<
-            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRpcServer>()
-            where TRpcServer : RpcServer, IRpcServer
+        public IServiceCollection AddApplicationService<
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApplicationService>()
+            where TApplicationService : ApplicationService, IApplicationServiceImplementation
         {
             ArgumentNullException.ThrowIfNull(services);
 
-            services.TryAddScoped<TRpcServer>();
-            var registry = services.GetOrAddSingleton<RpcServerRegistry>();
-            registry.RemoveWhere(existing => existing.ServiceType == TRpcServer.ServiceType);
-            registry.Add(new RpcServerRegistration(TRpcServer.ServiceType, typeof(TRpcServer))
+            services.TryAddScoped<TApplicationService>();
+            var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
+            registry.RemoveWhere(existing => existing.ServiceType == TApplicationService.ServiceType);
+            registry.Add(new ApplicationServiceRegistration(TApplicationService.ServiceType, typeof(TApplicationService))
             {
-                HandlerMappings = TRpcServer.HandlerMappings
+                HandlerMappings = TApplicationService.HandlerMappings
             });
             return services;
         }
@@ -43,7 +43,7 @@ public static partial class NOFApplicationExtensions
             services.GetOrAddSingleton<MappingRegistry>();
             services.GetOrAddSingleton<CommandHandlerRegistry>();
             services.GetOrAddSingleton<NotificationHandlerRegistry>();
-            services.GetOrAddSingleton<RpcServerRegistry>();
+            services.GetOrAddSingleton<ApplicationServiceRegistry>();
             services.TryAddSingleton<IMapper, ExpressionMapper>();
             services.TryAddEnumerable(new ServiceDescriptor(
                 typeof(IDaemonService),

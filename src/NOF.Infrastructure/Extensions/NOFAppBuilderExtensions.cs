@@ -16,11 +16,11 @@ public static partial class NOFInfrastructureExtensions
 {
     extension(IHostApplicationBuilder builder)
     {
-        public IHostApplicationBuilder AddRpcServer<
-            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRpcServer>()
-            where TRpcServer : RpcServer, IRpcServer
+        public IHostApplicationBuilder AddApplicationService<
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApplicationService>()
+            where TApplicationService : ApplicationService, IApplicationServiceImplementation
         {
-            builder.Services.AddRpcServer<TRpcServer>();
+            builder.Services.AddApplicationService<TApplicationService>();
             return builder;
         }
 
@@ -36,9 +36,8 @@ public static partial class NOFInfrastructureExtensions
         {
             builder.ConfigureNOFHostEnvironment();
             builder.Services.AddNOFApplication();
-            builder.Services.AddNOFRequests();
             builder.Services.AddInMemoryPersistence();
-            builder.Services.TryAddInitializationStep(new RpcServerTransportInitializationStep());
+            builder.Services.TryAddInitializationStep(new ApplicationServiceTransportInitializationStep());
             AddOpenTelemetry(builder);
 
             #region Core Services
@@ -50,7 +49,7 @@ public static partial class NOFInfrastructureExtensions
                 builder.Environment.ServiceId,
                 builder.Environment.InstanceId)));
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
-            builder.Services.TryAddScoped<RpcServerInvocationResolver>();
+            builder.Services.TryAddScoped<ApplicationServiceInvocationResolver>();
 
             builder.Services.TryAddSingleton<MemoryCacheServiceRiderState>();
             builder.Services.TryAddSingleton<CacheServiceLocalLockState>();

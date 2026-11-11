@@ -26,13 +26,13 @@ public sealed class HttpRpcRouteBinding
             || method.ContainingType.IsGenericType
             || method.ContainingType.IsFileLocal
             || method.IsGenericMethod
-            || method.GetAttributes().Count(static attr => attr.AttributeClass?.ToDisplayString() == RpcServiceHelpers.HttpEndpointAttributeFqn) != 1)
+            || method.GetAttributes().Count(static attr => attr.AttributeClass?.ToDisplayString() == ApplicationServiceHelpers.HttpEndpointAttributeFqn) != 1)
         {
             error = "use one HTTP endpoint on a non-generic method in a top-level, non-generic contract";
             return null;
         }
 
-        if (!RpcServiceHelpers.TryGetServiceReturnInfo(method, out var result) || result.IsStream)
+        if (!ApplicationServiceHelpers.TryGetServiceReturnInfo(method, out var result) || result.IsStream)
         {
             error = "parameterized routes require a unary RPC result";
             return null;
@@ -49,11 +49,11 @@ public sealed class HttpRpcRouteBinding
         }
 
         var binding = new HttpRpcRouteBinding();
-        var properties = RpcServiceHelpers.GetAllPublicProperties(requestType);
+        var properties = ApplicationServiceHelpers.GetAllPublicProperties(requestType);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var segment in route.Split('/'))
         {
-            if (!RpcServiceHelpers.ContainsRouteParameters(segment))
+            if (!ApplicationServiceHelpers.ContainsRouteParameters(segment))
             {
                 continue;
             }
@@ -171,7 +171,7 @@ public sealed class HttpRpcRouteBinding
             || type.TypeKind == TypeKind.Enum
             || type is INamedTypeSymbol { TypeKind: not TypeKind.Interface } namedType
                 && namedType.AllInterfaces.Any(candidate =>
-                    candidate.OriginalDefinition.ToDisplayString() == RpcServiceHelpers.ParsableFqn
+                    candidate.OriginalDefinition.ToDisplayString() == ApplicationServiceHelpers.ParsableFqn
                     && SymbolEqualityComparer.Default.Equals(candidate.TypeArguments[0], namedType));
 
     private static IMethodSymbol? FindStaticPathParser(ITypeSymbol type)

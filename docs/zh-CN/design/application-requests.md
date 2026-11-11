@@ -1,73 +1,82 @@
-# 传输无关的应用请求
-
-> 原型状态：本文记录当前草稿实现，不代表最终开发者 API。ADR 0001 保留生成式服务操作与 override 模型，合并前需要将这套并行执行入口收敛回服务模型。
+# 应用服务与生成式操作
 
 [English](../../en/design/application-requests.md) · [架构决策](0001-application-core-and-adapters.md)
 
-ADR 0001 第一阶段引入作用域级执行器。契约位于 NOF.Application，执行与注册位于
-NOF.Infrastructure。普通 ServiceCollection 即可运行，无需 Web、序列化器、数据库或消息代理。
-
-实现 `IRequestHandler<TRequest,TResponse>` 或继承 `RequestHandler<TRequest,TResponse>`。
-`HandleAsync(request, context, cancellationToken)` 返回 Task<TResponse>，无 IRpcResponse
-约束；可以返回 DTO、业务 Union 或 null。
+应用服务操作本身就是 UseCase。保留服务契约、生成的 `Service.Operation` 基类与 override
+工作流，不再维护第二套公开 Handler/Executor 或每个操作的转发类。
 
 ```csharp
-builder.AddApplicationPart(typeof(GetOrder).Assembly);
-var execution = await executor.ExecuteAsync<GetOrder, GetOrderRequest, OrderDto?>(request, context, ct);
-switch (execution)
+public interface IOrderService : IApplicationService
 {
-    case RequestCompleted<OrderDto?> completed:
-        // 使用 Response，包括 null 或业务 Union。
-        break;
-    case RequestRejected rejected:
-        // 由适配器映射 Kind 和 Failure。
-        break;
+    OrderDto? Find(FindOrderRequest request);
+    Result<OrderDto> Save(SaveOrderRequest request);
+}
+
+public partial class OrderService : ApplicationService<IOrderService>;
+
+public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
+{
+    public override Task<OrderDto?> HandleAsync(
+        FindOrderRequest request, Context context, CancellationToken ct)
+        => orders.FindAsync(request.Id, context, ct);
 }
 ```
 
-应用层源码生成器发现具体的封闭 Handler 类，包括直接实现接口、间接继承和 record 类，
-通过已有的程序集初始化器生成 Scoped 注册。NOF 宿主已自动加入调用程序集；独立的
-Application 程序集只需一次 AddApplicationPart，不需要逐个注册 UseCase。
-整个过程不使用运行时类型扫描或动态泛型构造。注册以具体 UseCase 类型为身份，
-不以输入/输出组合为唯一键。多个 UseCase 可以共用这些模型；一个类实现多个请求
-契约时共享一个 Scoped 实例。TryAddScoped 保留已有的显式 DI 替换。
+契约声明一个请求参数与同步业务返回类型；生成的 Handler 和客户端使用异步方法，接收
+Context 和 CancellationToken。返回值可以是 DTO、可空值、普通业务 Union 或可选的 Result。
+Result 的成功值仍直接为 T，Success<T> 仅用于显式携带成功消息。服务操作不要求 IRpcResponse。
 
-独立 ServiceCollection 可以调用一次 AddNOFRequests，再运行生成的程序集初始化器；
-测试或特殊装配也可以用 AddRequestHandler 显式选择 Handler；该注册按 UseCase 类型
-幂等，可以与自动注册共存。
-调用方为每个工作单元创建 DI 作用域，请求和 Context 不能为 null。
-RequestCompleted 是进程内执行分支，不是线上成功包装；Result 中的业务 Failure
-仍然属于执行完成。异常和取消直接传播，未初始化的执行 Union 会抛出异常。
-
-通过 DI 注册 `IRequestMiddleware<TUseCase,TRequest,TResponse>`，先注册的在最外层。
-策略同样按 UseCase 类型寻址，共用 DTO 不会隐式共用授权等策略。通用策略可以一次
-注册开放泛型中间件，特定用例的策略则注册对应封闭类型。
-InvokeAsync 可以拒绝，或用规范化后的请求/上下文调用 next。到达终端委托才构造
-Handler，此时 Context.Current 已绑定；await 和异常后恢复原值。策略实例会提前解析，
-因此应将租户相关依赖和工作推迟到规范化之后。
-
-`AddNOFRequests()` 仅注册执行器，不自动安装认证、授权、验证、事务、重试、幂等性，
-也不解释 RPC 特性。新入口必须建立可信上下文并配置所需策略。共享策略迁移属于
-ADR 第二阶段，已有 RPC 检查继续生效。
-
-原生 ASP.NET Core 端点负责绑定、授权、状态码、响应头、TypedResults、文件和 OpenAPI。
-完成时返回业务值，在边界映射拒绝，不要序列化 RequestExecution。认证拒绝需要使用
-宿主认证方案的 challenge 行为。原生端点不会因为调用执行器而继承 RPC RequirePermission。
-
-已有生成式 RPC Handler 可以桥接到同一个返回 DTO 的用例：
+## 注册与调用
 
 ```csharp
-public sealed class ReadOrder(IRequestExecutor executor) : OrderServer.Read
-{
-    public override Task<Result<OrderDto>> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context,
-            static dto => Result.Success(dto), cancellationToken);
-}
+builder.AddApplicationPart(typeof(OrderService).Assembly);
+builder.AddApplicationService<OrderService>();
+builder.Services.AddScoped<IOrderServiceClient, LocalOrderServiceClient>();
 ```
 
-桥接投影业务完成值，并用 TResponse.CreateFailure 映射策略拒绝；业务响应与 RPC 响应
-相同时有简化重载。原有 RPC 安全管线和线上契约继续生效。
+宿主沿用原有方式注册服务容器、选择客户端适配器；应用程序集初始化器自动将操作实现注册为
+Scoped 服务，不需要逐个注册操作。NOF 宿主已加入调用程序集，独立 Application 程序集只需
+加入一次。整个过程不扫描运行时 Handler 类型，也不动态构造泛型。
 
-示例 GetRootConfigNodesUseCase 直接返回 DTO。AotSmoke 用同一个 ReadOrderUseCase
-验证生成式 RPC 和原生 Minimal API，使用源生成 JSON，并由 CI 验证 Native AOT。
+调用 `IOrderServiceClient.FindAsync(request, context, ct)`。生成的本地客户端复用入站/出站
+管线，为调用建立作用域。操作身份是服务契约与操作名：Read、Preview 可以共用输入与输出模型，
+仍然具有不同的实现和策略元数据。
+
+## 适配器与执行语义
+
+没有传输特性的契约默认只在进程内调用，不公开 HTTP 路由。TransportOverMemory 仍可显式
+声明本地调用。通过 TransportOverHttp 选择 controller HTTP 或 JSON-RPC；仅 HTTP 适配器
+解释 HttpEndpoint、绑定、状态码、响应头和线上序列化。
+
+原生 ASP.NET Core 端点可以注入生成的本地客户端，直接返回 TypedResults、文件或其他宿主
+响应，业务 Handler 不依赖 IResult 和 HttpContext。端点授权由宿主负责，本地服务调用仍然
+执行 NOF 应用授权与租户策略。
+
+只有显式声明可空返回的操作才能返回 null；非空操作返回 null 属于执行错误。业务 Failure
+或业务 Union 是完成值。管线策略用 RequestInboundContext.Reject(failure) 拒绝执行，
+与 SetResponse(value) 分开。策略与上下文规范化后才解析 Handler，绑定正确的 ambient Context。
+调用方请求的取消直接传播，不转成失败响应。
+
+运行时 ServiceExecution Union 区分业务完成值（包括 null）和策略拒绝，不是线上包装或
+Handler 返回契约。普通响应的生成客户端通过 ServiceRejectedException 报告拒绝；显式结果
+契约保留静态生成的失败工厂，因此既有 Result 失败行为无需反射即可延续。继续复用原有的
+授权、租户、事务/outbox 与流式管线。
+
+## 破坏性迁移
+
+| 原 API | 新 API |
+| --- | --- |
+| IRpcService | IApplicationService |
+| RpcServer<TService> | ApplicationService<TService> |
+| RpcHandler<TRequest,TResponse> | 生成的 Service.Operation，底层为 ServiceOperation<TRequest,TResponse> |
+| AddRpcServer<TService>() | AddApplicationService<TService>() |
+| IRpcClient<TService> | IApplicationServiceClient<TService> |
+| Local{ServiceName}Client | 保留生成名称与操作调用方式 |
+| 必须声明传输方式 | 默认本地调用，HTTP 显式启用 |
+| 必须返回 IRpcResponse | 声明 DTO、可空值或业务 Union |
+
+删除原型 IRequestHandler、IRequestExecutor、AddRequestHandler 与 ExecuteUseCaseAsync
+转发实现，将业务代码放回生成式服务操作 override。策略使用明确的 Reject 替代原来
+SetResponse 的 Failure 重载。契约、实现、生成客户端和宿主包应一同升级。
+示例的根配置节点查询已经直接返回 DTO。AOT 冒烟验证 DTO、可空值、无 IRpcResponse 的
+业务 Union、共用模型的不同操作、策略拒绝、生成 HTTP、原生 HTTP 和本地服务。

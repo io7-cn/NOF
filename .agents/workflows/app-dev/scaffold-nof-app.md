@@ -58,7 +58,7 @@ using NOF.Contract;
 namespace MyApp.Contract;
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc, "api")]
-public interface IAppService : IRpcService
+public interface IAppService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Get, "health")]
     Result<HealthResponse> Health(Empty request);
@@ -78,7 +78,7 @@ using MyApp.Contract;
 
 namespace MyApp.Application;
 
-public partial class AppService : RpcServer<IAppService>;
+public partial class AppService : ApplicationService<IAppService>;
 
 public sealed class Health : AppService.Health
 {
@@ -125,7 +125,7 @@ using NOF.Infrastructure.EntityFrameworkCore;
 var builder = NOFWebApplicationBuilder.Create(args);
 
 builder.AddApplicationPart(typeof(AppService).Assembly);
-builder.AddRpcServer<AppService>();
+builder.AddApplicationService<AppService>();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
@@ -152,7 +152,7 @@ await app.RunAsync();
 ## Notes
 
 - `NOFWebApplicationBuilder.Create(args)` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
-- `AddApplicationPart(...)` executes generated assembly initializers; `AddRpcServer<T>()` explicitly registers the RPC server.
+- `AddApplicationPart(...)` executes generated assembly initializers; `AddApplicationService<T>()` explicitly registers the RPC server.
 - Applicable RPC endpoints are mapped automatically during `BuildAsync()`.
 - Add RabbitMQ, Redis, or OIDC packages only when the application needs those providers.
 - Application handlers should inject `IDbContext` / `IRepository<T>`; keep EF Core types in the host.

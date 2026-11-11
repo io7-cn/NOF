@@ -54,11 +54,11 @@ public sealed class NOFTestAppBuilder : IHostApplicationBuilder
         return this;
     }
 
-    public NOFTestAppBuilder AddRpcServer<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRpcServer>()
-        where TRpcServer : RpcServer, IRpcServer
+    public NOFTestAppBuilder AddApplicationService<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TApplicationService>()
+        where TApplicationService : ApplicationService, IApplicationServiceImplementation
     {
-        Hosting.NOFInfrastructureExtensions.AddRpcServer<TRpcServer>(this);
+        Hosting.NOFInfrastructureExtensions.AddApplicationService<TApplicationService>(this);
         return this;
     }
 
@@ -68,7 +68,7 @@ public sealed class NOFTestAppBuilder : IHostApplicationBuilder
         return this;
     }
 
-    public NOFTestAppBuilder AddLocalRpcClient<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>()
+    public NOFTestAppBuilder AddLocalApplicationServiceClient<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>()
         where TService : class
         where TImplementation : class, TService
     {

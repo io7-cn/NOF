@@ -47,10 +47,10 @@ public static partial class NOFInfrastructureExtensions
             return services;
         }
 
-        public IServiceCollection AddRpcServerTransport<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTransport>()
-            where TTransport : class, IRpcServerTransport
+        public IServiceCollection AddApplicationServiceTransport<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTransport>()
+            where TTransport : class, IApplicationServiceTransport
         {
-            services.TryAddEnumerable(ServiceDescriptor.Singleton<IRpcServerTransport, TTransport>());
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IApplicationServiceTransport, TTransport>());
             return services;
         }
 

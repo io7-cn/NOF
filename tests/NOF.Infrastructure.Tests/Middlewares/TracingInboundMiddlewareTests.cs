@@ -8,6 +8,26 @@ namespace NOF.Infrastructure.Tests.Middlewares;
 public sealed class TracingInboundMiddlewareTests
 {
     [Fact]
+    public async Task InvokeAsync_ServiceCancellation_ShouldPropagateWithoutBecomingARejection()
+    {
+        var context = new RequestInboundContext
+        {
+            ServiceType = typeof(ServiceOperationPipelineTests.IProbeService),
+            ServiceMethodInfo = typeof(ServiceOperationPipelineTests.IProbeService).GetMethod("Read")!,
+            HandlerType = typeof(ServiceOperationPipelineTests.ProbeOperation),
+            HandlerMethodInfo = typeof(ServiceOperationPipelineTests.ProbeOperation).GetMethod("HandleAsync",
+                [typeof(ServiceOperationPipelineTests.Query), typeof(Context), typeof(CancellationToken)])!,
+            RequestType = typeof(ServiceOperationPipelineTests.Query),
+            ResponseType = typeof(ServiceOperationPipelineTests.Reply)
+        };
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await CreateMiddleware().InvokeAsync(
+            context, new ServiceOperationPipelineTests.Query(), (_, _, token) => ValueTask.FromCanceled(token), source.Token));
+        Assert.Null(context.Execution.Value);
+    }
+
+    [Fact]
     public async Task InvokeAsync_CommandException_ShouldPropagate()
     {
         var middleware = CreateMiddleware();

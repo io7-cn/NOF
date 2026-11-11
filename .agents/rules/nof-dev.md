@@ -28,9 +28,9 @@ Use this file when contributing to the NOF framework itself.
 
 ## Current Runtime Patterns
 
-- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
+- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-- RPC: `IRpcService`, one `[TransportOverHttp(...)]` or `[TransportOverMemory]` declaration, `RpcServer<TService>`, generated clients, and `AddRpcServer<TServer>()`.
+- RPC: `IApplicationService`, optional `[TransportOverHttp(...)]` or `[TransportOverMemory]` metadata, `ApplicationService<TService>`, generated clients, and `AddApplicationService<TServer>()`.
 - Messaging: plain payload types plus `CommandHandler<T>` / `NotificationHandler<T>`; all handler and dispatch APIs receive `Context`.
 - In-memory events: `InMemoryEventHandler<T>`, `IEventPublisher`, and optional `PublishAsEvent()` ambient convenience.
 - Transactional outbox: asynchronous `DeferSendAsync(...)` / `DeferPublishAsync(...)`, plus ordered variants, followed by `IDbContext.SaveChangesAsync()`.
@@ -38,7 +38,7 @@ Use this file when contributing to the NOF framework itself.
 - Initialization: `IApplicationInitializationStep` instances are registered in `IServiceCollection` and ordered by `Compare(...)` returning `TopologyComparison`.
 - Source generation: `[AutoInject]`, `[Failure]`, `[Mappable<TSource, TDestination>]`, `[NewableValueObject]`, `IValueObject<T>`, handler registration, and RPC client/server generation.
 - Application parts: `AddApplicationPart(assembly)` runs generated `AssemblyInitializeAttribute` initializers against the current `IServiceCollection`.
-- Registries: `EventHandlerRegistry`, `MappingRegistry`, `CommandHandlerRegistry`, `NotificationHandlerRegistry`, and `RpcServerRegistry` are singleton instances stored in DI and freeze on first read. Do not reintroduce a process-wide type registry.
+- Registries: `EventHandlerRegistry`, `MappingRegistry`, `CommandHandlerRegistry`, `NotificationHandlerRegistry`, and `ApplicationServiceRegistry` are singleton instances stored in DI and freeze on first read. Do not reintroduce a process-wide type registry.
 - Ambient helpers: `Mapper`, `IdGenerator`, and `EventPublisher` are scoped through daemon-service resolution; `Context.Current` follows the current async execution flow. Explicit APIs remain the primary runtime contracts.
 
 ## Coding Rules

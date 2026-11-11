@@ -109,7 +109,7 @@ public class NOFTestHostTests
     public async Task CallAsync_ShouldUseScopeContextAndConfiguredClient()
     {
         var builder = NOFTestAppBuilder.Create()
-            .AddLocalRpcClient<ITestClient, TestClient>();
+            .AddLocalApplicationServiceClient<ITestClient, TestClient>();
 
         await using var host = await builder.BuildTestHostAsync();
         var result = await host.CallAsync<ITestClient, string>(

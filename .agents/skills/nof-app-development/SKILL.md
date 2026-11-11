@@ -1,6 +1,6 @@
 ---
 name: nof-app-development
-description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IRpcService, RpcServer<T>, CommandHandler<T>, NotificationHandler<T>, IDbContext, IRepository<T>, Result, or CacheKey<T>.
+description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, CommandHandler<T>, NotificationHandler<T>, IDbContext, IRepository<T>, Result, or CacheKey<T>.
 ---
 
 # NOF Application Development
@@ -20,15 +20,15 @@ Application code should remain provider-neutral by using `IDbContext` and `IRepo
 
 ## Application use cases
 
-- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
+- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI. Existing RPC handlers can bridge plain business values through ExecuteUseCaseAsync. Application handlers are automatically discovered when their assembly is added as an application part. Do not serialize RequestExecution or assume AddNOFRequests installs authentication/transactions.
+Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI, calling generated local service clients. There is no separate IRequestHandler/IRequestExecutor API or RPC forwarding class. ServiceExecution is an internal invocation outcome, not a wire envelope. Preserve application authorization and tenant policies across entry points.
 
 ## Message and RPC Types
 
 | Concern | Declaration | Handler / registration |
 |---|---|---|
-| RPC | `IRpcService` + exactly one transport attribute | generated nested base under `RpcServer<TService>`; register with `AddRpcServer<TServer>()` |
+| RPC | `IApplicationService` + optional transport attribute | generated nested base under `ApplicationService<TService>`; register with `AddApplicationService<TServer>()` |
 | Command | plain payload | `CommandHandler<T>` |
 | Notification | plain payload | `NotificationHandler<T>` |
 | In-memory event | arbitrary payload | `InMemoryEventHandler<T>` |
@@ -70,7 +70,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 
 | Goal | Use |
 |---|---|
-| expose controller-style HTTP RPC | `[TransportOverHttp(HttpRpcStyle.ControllerRpc)]`, method `[HttpEndpoint]`, `AddRpcServer<T>()` |
+| expose controller-style HTTP RPC | `[TransportOverHttp(HttpRpcStyle.ControllerRpc)]`, method `[HttpEndpoint]`, `AddApplicationService<T>()` |
 | expose JSON-RPC | `[TransportOverHttp(HttpRpcStyle.JsonRpc, routePrefix)]`, no method `[HttpEndpoint]` |
 | keep RPC in process | `[TransportOverMemory]` and generated local client |
 | persist application data | `IDbContext` / `IRepository<T>`; choose EF Core or NHibernate in the host |
@@ -82,8 +82,8 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 ## Conventions
 
 - Add assemblies containing handlers, mappings, or `[AutoInject]` services through `AddApplicationPart(...)`.
-- Register every RPC server explicitly through `AddRpcServer<TServer>()`; applicable endpoints are mapped during `BuildAsync()`.
-- Build request contracts with one reference-type request and a non-task `IRpcResponse<TSelf>` union return.
+- Register every RPC server explicitly through `AddApplicationService<TServer>()`; applicable endpoints are mapped during `BuildAsync()`.
+- Build request contracts with one reference-type request and its declared non-task business return, including a DTO, nullable value or union.
 - Keep persistence-provider APIs out of the application layer.
 - Apply filtering, ordering, and paging before `ProjectTo<TDestination>()`.
 - Keep explicit paths available when ambient `Mapper`, `IdGenerator`, or `EventPublisher` conveniences make dependencies unclear.

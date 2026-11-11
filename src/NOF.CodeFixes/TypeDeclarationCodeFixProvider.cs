@@ -84,7 +84,7 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                         CodeAction.Create(
                             "Make interface an RPC service contract",
                             cancellationToken => AddRpcServiceBaseAsync(context.Document, serviceInterface, cancellationToken),
-                            equivalenceKey: "AddIRpcService"),
+                            equivalenceKey: "AddIApplicationService"),
                         diagnostic);
                 }
                 break;
@@ -314,7 +314,7 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
         CancellationToken cancellationToken)
     {
         var baseType = SyntaxFactory.SimpleBaseType(
-            SyntaxFactory.ParseTypeName("global::NOF.Contract.IRpcService"));
+            SyntaxFactory.ParseTypeName("global::NOF.Contract.IApplicationService"));
         var baseList = declaration.BaseList is null
             ? SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(baseType))
             : declaration.BaseList.AddTypes(baseType);

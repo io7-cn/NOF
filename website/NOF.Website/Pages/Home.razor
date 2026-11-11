@@ -67,7 +67,7 @@ builder.<span class="code-method">UseDbContext</span>&lt;OrdersDbContext&gt;()
     .<span class="code-method">WithTenantMode</span>(TenantMode.DatabasePerTenant)
     .<span class="code-method">MigrateOnInitialize</span>();
 
-builder.<span class="code-method">AddRpcServer</span>&lt;OrderService&gt;();
+builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&gt;();
 
 <span class="code-keyword">var</span> app = <span class="code-keyword">await</span> builder.<span class="code-method">BuildAsync</span>();
 <span class="code-keyword">await</span> app.<span class="code-method">RunAsync</span>();</code></pre>

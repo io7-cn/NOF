@@ -8,6 +8,32 @@ namespace NOF.Contract;
 
 public static class HttpRpcTransportResultReader
 {
+    /// <summary>Reads an ordinary business response without requiring an outcome interface.</summary>
+    public static async Task<T> ReadValueAsync<T>(HttpResponseMessage response, JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken, bool allowNull = false)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(typeInfo);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ServiceRejectedException(await CreateTransportFailureAsync(response, cancellationToken).ConfigureAwait(false));
+        }
+        if (IsBodyEmpty(response))
+        {
+            if (allowNull && default(T) is null)
+            {
+                return default!;
+            }
+            throw new InvalidOperationException($"The HTTP response for '{typeof(T).FullName}' is empty.");
+        }
+        var value = await response.Content.ReadFromJsonAsync(typeInfo, cancellationToken).ConfigureAwait(false);
+        if (value is null && (!allowNull || default(T) is not null))
+        {
+            throw new InvalidOperationException($"The HTTP response for '{typeof(T).FullName}' is empty or null.");
+        }
+        return value!;
+    }
+
     public static async Task<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>> ReadStreamingFallbackAsync<TItem>(
         HttpResponseMessage response,
         JsonTypeInfo<Result> fallbackTypeInfo,

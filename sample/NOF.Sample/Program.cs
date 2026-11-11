@@ -12,9 +12,9 @@ var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
-builder.AddRpcServer<NOFSampleService>();
-builder.AddRpcServer<OAuthChainDemoService>();
-builder.AddRpcServer<DemoDownstreamService>();
+builder.AddApplicationService<NOFSampleService>();
+builder.AddApplicationService<OAuthChainDemoService>();
+builder.AddApplicationService<DemoDownstreamService>();
 
 builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' is required."));

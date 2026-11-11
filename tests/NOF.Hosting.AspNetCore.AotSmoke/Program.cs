@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
+using NOF.Infrastructure;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -13,13 +15,15 @@ JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(static options =>
     options.TypeInfoResolverChain.Add(SmokeJsonContext.Default));
 
 var builder = NOFWebApplicationBuilder.Create(args);
-builder.Services.AddRpcServer<OrderServer>();
+builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddScoped<OrderServer.Update, UpdateOrderHandler>();
 builder.Services.AddScoped<OrderServer.Read, ReadOrderHandler>();
 builder.Services.AddScoped<OrderServer.ReadWithMessage, ReadOrderWithMessageHandler>();
 builder.Services.AddScoped<OrderServer.ReadProtected, ReadProtectedOrderHandler>();
 builder.Services.AddScoped<OrderServer.Lookup, LookupOrderHandler>();
-builder.Services.AddScoped<IRequestMiddleware<ReadOrderUseCase, ReadOrderRequest, OrderDto>, ValidateReadOrder>();
+builder.Services.AddApplicationService<PlainOrderService>();
+builder.Services.AddScoped<LocalOrderServerClient>();
+builder.Services.AddRequestInboundMiddleware<ValidateReadOrder>();
 
 await using var app = await builder.BuildAsync();
 app.MapOpenApi();
@@ -27,11 +31,17 @@ app.MapGet("/native/orders/{id}", NativeReadOrderAsync);
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
-    var preview = await scope.ServiceProvider.GetRequiredService<IRequestExecutor>()
-        .ExecuteAsync<PreviewOrderUseCase, ReadOrderRequest, OrderDto>(
-            new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
-    Expect(preview is RequestCompleted<OrderDto> completed && completed.Response.Label == "preview",
-        "Automatically discovered use cases sharing input/output types did not retain separate identities and policies");
+    var localClient = new LocalOrderServerClient(scope.ServiceProvider);
+    var preview = await localClient.PreviewAsync(new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
+    Expect(preview.Label == "preview", "Service operations sharing input/output models did not retain separate identities");
+    var plain = new LocalPlainOrderServiceClient(scope.ServiceProvider);
+    var plainValue = await plain.ReadAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    Expect(plainValue.Label == "local", "A service without a transport declaration could not run locally");
+    Expect(await plain.FindAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
+        "A nullable local service response was rejected");
+    var decision = await plain.DecideAsync(new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    Expect(decision is Failure businessFailure && businessFailure.Code == "order.missing",
+        "A business union without an RPC response interface could not run locally");
 }
 await app.StartAsync();
 
@@ -52,6 +62,23 @@ Expect(withMessage is Success<OrderDto> messagePayload && messagePayload.Data.Id
     "The optional success wrapper did not retain its data and message");
 
 using var raw = new HttpClient { BaseAddress = http.BaseAddress };
+using var unexposed = await raw.PostAsync("/Decide", new StringContent("{}", Encoding.UTF8, "application/json"));
+Expect(unexposed.StatusCode == HttpStatusCode.NotFound, "A service without HTTP opt-in was exposed over HTTP");
+var value = await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = 7 }, Context.Empty);
+Expect(value == new OrderDto(id, "7", "read"), "Generated HTTP client did not support a plain DTO");
+Expect(await client.FindAsync(new ReadOrderRequest { Id = id }, Context.Empty) is null, "Generated HTTP client did not preserve a nullable response");
+var businessDecision = await client.DecideAsync(new ReadOrderRequest { Id = id }, Context.Empty);
+Expect(businessDecision is Failure decisionFailure && decisionFailure.Code == "order.missing",
+    "HTTP did not preserve a business union without IRpcResponse");
+try
+{
+    await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = -1 }, Context.Empty);
+    throw new InvalidOperationException("A plain DTO operation accepted rejected input");
+}
+catch (ServiceRejectedException rejection)
+{
+    Expect(rejection.Failure.Code == "order.page", "Plain DTO policy rejection lost failure details");
+}
 using var native = await raw.GetAsync($"/native/orders/{id}?page=7");
 native.EnsureSuccessStatusCode();
 var nativeOrder = await JsonSerializer.DeserializeAsync(await native.Content.ReadAsStreamAsync(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
@@ -151,32 +178,39 @@ static void Expect(bool condition, string message)
 }
 
 static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync(
-    Guid id, int? page, IRequestExecutor executor, CancellationToken cancellationToken)
+    Guid id, int? page, LocalOrderServerClient client, CancellationToken cancellationToken)
 {
-    var execution = await executor.ExecuteAsync<ReadOrderUseCase, ReadOrderRequest, OrderDto>(
-        new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken);
-    return execution switch
+    try
     {
-        RequestCompleted<OrderDto> completed => TypedResults.Ok(completed.Response),
-        RequestRejected rejected => TypedResults.Problem(
-            statusCode: rejected.Kind switch
-            {
-                RequestRejectionKind.AuthenticationRequired => StatusCodes.Status401Unauthorized,
-                RequestRejectionKind.Forbidden => StatusCodes.Status403Forbidden,
-                _ => StatusCodes.Status400BadRequest
-            }, title: rejected.Failure.Code, detail: rejected.Failure.Message),
-        null => throw new InvalidOperationException("Missing execution outcome")
-    };
+        return TypedResults.Ok(await client.ReadValueAsync(new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken));
+    }
+    catch (ServiceRejectedException rejected)
+    {
+        return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest,
+            title: rejected.Failure.Code, detail: rejected.Failure.Message);
+    }
 }
 
 [TransportOverHttp(HttpRpcStyle.ControllerRpc, "/orders")]
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
     [HttpEndpoint(HttpVerb.Put, "/{id}")]
     Result<OrderDto> Update(UpdateOrderRequest request);
 
     [HttpEndpoint(HttpVerb.Get, "/{id}")]
     Result<OrderDto> Read(ReadOrderRequest request);
+
+    [HttpEndpoint(HttpVerb.Get, "/{id}/value")]
+    OrderDto ReadValue(ReadOrderRequest request);
+
+    [HttpEndpoint(HttpVerb.Get, "/{id}/preview")]
+    OrderDto Preview(ReadOrderRequest request);
+
+    [HttpEndpoint(HttpVerb.Get, "/{id}/nullable")]
+    OrderDto? Find(ReadOrderRequest request);
+
+    [HttpEndpoint(HttpVerb.Get, "/{id}/decision")]
+    PlainDecision Decide(ReadOrderRequest request);
 
     [HttpEndpoint(HttpVerb.Get, "/{id}/with-message")]
     Result<Success<OrderDto>> ReadWithMessage(ReadOrderRequest request);
@@ -278,7 +312,7 @@ public readonly record struct LegacyPrice(decimal Value) : IFormattable
     public string ToString(string? format, IFormatProvider? provider) => Value.ToString(format, provider);
 }
 
-public partial class OrderServer : RpcServer<IOrderService>;
+public partial class OrderServer : ApplicationService<IOrderService>;
 
 public sealed class UpdateOrderHandler : OrderServer.Update
 {
@@ -289,34 +323,81 @@ public sealed class UpdateOrderHandler : OrderServer.Update
             : Result.Success(new OrderDto(request.Id, request.Status, request.Label)));
 }
 
-public sealed class ReadOrderHandler(IRequestExecutor executor) : OrderServer.Read
+public sealed class ReadOrderHandler : OrderServer.Read
 {
-    public override Task<Result<OrderDto>> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context, static dto => Result.Success(dto), cancellationToken);
+    public override Task<Result<OrderDto>> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult(Result.Success(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read")));
 }
 
-public sealed class ReadOrderUseCase : IRequestHandler<ReadOrderRequest, OrderDto>
+public sealed class ReadOrderValue : OrderServer.ReadValue
 {
-    public Task<OrderDto> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
 }
 
-public sealed class ValidateReadOrder : IRequestMiddleware<ReadOrderUseCase, ReadOrderRequest, OrderDto>
-{
-    public Task<RequestExecution<OrderDto>> InvokeAsync(ReadOrderRequest request, Context context,
-        RequestExecutionDelegate<ReadOrderRequest, OrderDto> next, CancellationToken cancellationToken)
-        => request.Page < 0
-            ? Task.FromResult<RequestExecution<OrderDto>>(new RequestRejected(RequestRejectionKind.ValidationFailed,
-                new Failure("order.page", "Page must be nonnegative")))
-            : next(request, context, cancellationToken);
-}
-
-public sealed class PreviewOrderUseCase : RequestHandler<ReadOrderRequest, OrderDto>
+public sealed class PreviewOrder : OrderServer.Preview
 {
     public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, "preview", "preview"));
+}
+
+public sealed class FindOrder : OrderServer.Find
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
+}
+
+public sealed class ValidateReadOrder : IRequestInboundMiddleware
+{
+    public TopologyComparison Compare(IRequestInboundMiddleware other) => TopologyComparison.DoesNotMatter;
+
+    public ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
+    {
+        if (context.ServiceType == typeof(IOrderService)
+            && context.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
+            && request is ReadOrderRequest { Page: < 0 })
+        {
+            context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "400";
+            context.Reject(new Failure("order.page", "Page must be nonnegative"));
+            return ValueTask.CompletedTask;
+        }
+        return next(context, request, cancellationToken);
+    }
+}
+
+public interface IPlainOrderService : IApplicationService
+{
+    OrderDto Read(ReadOrderRequest request);
+    OrderDto? Find(ReadOrderRequest request);
+    PlainDecision Decide(ReadOrderRequest request);
+}
+
+[JsonUnion(TypeClassifier = typeof(ResultJsonTypeClassifier))]
+public union PlainDecision(OrderDto, Failure);
+public partial class PlainOrderService : ApplicationService<IPlainOrderService>;
+
+public sealed class ReadPlainOrder : PlainOrderService.Read
+{
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, "read", "local"));
+}
+
+public sealed class FindPlainOrder : PlainOrderService.Find
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
+}
+
+public sealed class DecidePlainOrder : PlainOrderService.Decide
+{
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
+}
+
+public sealed class DecideOrder : OrderServer.Decide
+{
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
 }
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
@@ -359,6 +440,7 @@ public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : Delega
 
 [JsonSerializable(typeof(Result))]
 [JsonSerializable(typeof(OrderDto))]
+[JsonSerializable(typeof(PlainDecision))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 [JsonSerializable(typeof(Result<Success<OrderDto>>))]
 [JsonSerializable(typeof(Result<OrderDto>))]

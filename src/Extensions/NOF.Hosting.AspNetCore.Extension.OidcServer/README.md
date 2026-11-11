@@ -4,7 +4,7 @@ Authentication authority core and ASP.NET Core OIDC server endpoints for the NOF
 
 ## Overview
 
-This package provides NOF authentication authority capabilities and exposes them as standard HTTP OIDC endpoints instead of projecting them through `IRpcService` contracts.
+This package provides NOF authentication authority capabilities and exposes them as standard HTTP OIDC endpoints instead of projecting them through `IApplicationService` contracts.
 
 ## Features
 

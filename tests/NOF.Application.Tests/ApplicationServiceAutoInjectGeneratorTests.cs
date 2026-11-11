@@ -1,0 +1,161 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
+using NOF.Application;
+using NOF.Application.SourceGenerator;
+using NOF.Contract;
+using Xunit;
+
+namespace NOF.SourceGenerator.Tests;
+
+public class ApplicationServiceAutoInjectGeneratorTests
+{
+    [Fact]
+    public void GeneratedCode_RegistersServiceOperationsOnly()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Abstraction;
+            using NOF.Contract;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            namespace App
+            {
+                public record PingRequest(string Value);
+
+                public partial interface IMyService : IApplicationService
+                {
+                    Result Ping(PingRequest request);
+                }
+
+                public partial class MyService : ApplicationService<IMyService>;
+
+                public sealed class PingHandler : MyService.Ping
+                {
+                    public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                        => Task.FromResult(Result.Success());
+                }
+            }
+            """;
+
+        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+            typeof(ApplicationService<>),
+            typeof(ServiceOperation<,>),
+            typeof(IApplicationService),
+            typeof(Context),
+            typeof(Result),
+            typeof(Result<>),
+            typeof(ServiceDescriptor),
+            typeof(AssemblyInitializeAttribute),
+            typeof(ApplicationServiceRegistration),
+            typeof(InitializedTypes));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([
+            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
+        ]);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        Assert.Empty(outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetRoot().ToFullString()));
+
+        Assert.Contains("AssemblyInitializeAttribute<global::App.__AppApplicationServiceAutoInjectAssemblyInitializer>", generatedCode);
+        Assert.Contains("services.InitializedTypes.Add(typeof(__AppApplicationServiceAutoInjectAssemblyInitializer))", generatedCode);
+        Assert.Contains("services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Scoped(typeof(global::App.MyService.Ping), typeof(global::App.PingHandler)));", generatedCode);
+        Assert.DoesNotContain("ApplicationServiceRegistration", generatedCode);
+        Assert.DoesNotContain("ServiceDescriptor.Scoped(typeof(global::App.MyService)", generatedCode);
+    }
+
+    [Fact]
+    public void GeneratedCode_DoesNotRegister_UnrelatedInterfaces()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Contract;
+
+            namespace App
+            {
+                public partial interface IMyService : IApplicationService
+                {
+                    Result Run(RunRequest request);
+                }
+
+                public record RunRequest(string Value);
+
+                public partial class MyService : ApplicationService<IMyService>;
+
+                public interface IUnrelated
+                {
+                    Result Run(RunRequest request);
+                }
+
+                public sealed class UnrelatedHandler : IUnrelated
+                {
+                    public Result Run(RunRequest request) => Result.Success();
+                }
+            }
+            """;
+
+        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+            typeof(ApplicationService<>),
+            typeof(ServiceOperation<,>),
+            typeof(IApplicationService),
+            typeof(Result),
+            typeof(Result<>),
+            typeof(ServiceDescriptor),
+            typeof(AssemblyInitializeAttribute),
+            typeof(ApplicationServiceRegistration),
+            typeof(InitializedTypes));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([
+            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
+        ]);
+
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
+        Assert.Empty(outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetRoot().ToFullString()));
+        Assert.DoesNotContain("UnrelatedHandler", generatedCode);
+    }
+
+    [Fact]
+    public void GeneratedCode_DoesNotRequireApplicationServiceGeneratorOutputAsInput()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Contract;
+
+            namespace App;
+
+            public record PingRequest(string Value);
+
+            public interface IMyService : IApplicationService
+            {
+                Result Ping(PingRequest request);
+            }
+
+            public partial class MyService : ApplicationService<IMyService>;
+
+            public sealed class PingHandler : MyService.Ping;
+            """;
+
+        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+            typeof(ApplicationService<>),
+            typeof(ServiceOperation<,>),
+            typeof(IApplicationService),
+            typeof(Result),
+            typeof(ServiceDescriptor),
+            typeof(AssemblyInitializeAttribute),
+            typeof(InitializedTypes));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ApplicationServiceAutoInjectGenerator());
+
+        driver = driver.RunGenerators(compilation);
+
+        var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetRoot().ToFullString()));
+        Assert.Contains("typeof(global::App.MyService.Ping), typeof(global::App.PingHandler)", generatedCode);
+    }
+}

@@ -208,6 +208,7 @@ public sealed class RequestInboundPipelineExecutor
         IEnumerable<KeyValuePair<string, string?>>? headers,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var middlewares = new DependencyGraph<IRequestInboundMiddleware>(
             _serviceProvider.GetServices<IRequestInboundMiddleware>()).GetExecutionOrder();
         var context = CreateContext(request, handlerType, responseType, serviceType, methodName, headers);
@@ -268,12 +269,11 @@ public sealed class RequestInboundPipelineExecutor
         object request,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var _ = Context.PushCurrent(context);
-        var handler = (RpcHandler)services.GetRequiredService(handlerType);
+        var handler = (ServiceOperation)services.GetRequiredService(handlerType);
         var response = await handler.HandleAsync(request, context, cancellationToken).ConfigureAwait(false);
-        context.SetResponse(
-            response
-            ?? throw new InvalidOperationException($"RPC handler '{handlerType.FullName}' returned a null response."));
+        context.SetResponse(response);
     }
 
     private static async ValueTask ExecuteRequestMiddlewareAsync(
@@ -330,7 +330,7 @@ public static class InboundContextReflection
     {
         for (var current = handlerType; current is not null; current = current.BaseType)
         {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(RpcHandler<,>))
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(ServiceOperation<,>))
             {
                 return current.GetGenericArguments()[0];
             }
