@@ -19,7 +19,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 ## Core Abstractions
 
-- Application use cases: explicitly register `IRequestHandler<TRequest,TResponse>` with `AddRequestHandler<TRequest,TResponse,THandler>()` and invoke `IRequestExecutor`. DTO, nullable and business-union responses need no RPC constraint. Policies use `IRequestMiddleware<,>` in registration order; configure security explicitly. See `docs/en/design/application-requests.md`.
+- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
 
 - RPC: `IRpcService`, `RpcServer<TService>`, generated nested RPC handler bases, generated client interfaces and implementations.
 - Messaging: `CommandHandler<T>`, `NotificationHandler<T>`, `ICommandSender`, `INotificationPublisher`.

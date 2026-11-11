@@ -20,9 +20,9 @@ Application code should remain provider-neutral by using `IDbContext` and `IRepo
 
 ## Application use cases
 
-- Application use cases: explicitly register `IRequestHandler<TRequest,TResponse>` with `AddRequestHandler<TRequest,TResponse,THandler>()` and invoke `IRequestExecutor`. DTO, nullable and business-union responses need no RPC constraint. Policies use `IRequestMiddleware<,>` in registration order; configure security explicitly. See `docs/en/design/application-requests.md`.
+- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
 
-Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI. Existing RPC handlers can bridge plain business values through ExecuteUseCaseAsync. Application handlers are explicitly registered; AddApplicationPart does not discover them. Do not serialize RequestExecution or assume AddNOFRequests installs authentication/transactions.
+Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI. Existing RPC handlers can bridge plain business values through ExecuteUseCaseAsync. Application handlers are automatically discovered when their assembly is added as an application part. Do not serialize RequestExecution or assume AddNOFRequests installs authentication/transactions.
 
 ## Message and RPC Types
 

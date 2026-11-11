@@ -19,13 +19,20 @@ builder.Services.AddScoped<OrderServer.Read, ReadOrderHandler>();
 builder.Services.AddScoped<OrderServer.ReadWithMessage, ReadOrderWithMessageHandler>();
 builder.Services.AddScoped<OrderServer.ReadProtected, ReadProtectedOrderHandler>();
 builder.Services.AddScoped<OrderServer.Lookup, LookupOrderHandler>();
-builder.Services.AddRequestHandler<ReadOrderRequest, OrderDto, ReadOrderUseCase>();
-builder.Services.AddScoped<IRequestMiddleware<ReadOrderRequest, OrderDto>, ValidateReadOrder>();
+builder.Services.AddScoped<IRequestMiddleware<ReadOrderUseCase, ReadOrderRequest, OrderDto>, ValidateReadOrder>();
 
 await using var app = await builder.BuildAsync();
 app.MapOpenApi();
 app.MapGet("/native/orders/{id}", NativeReadOrderAsync);
 app.Urls.Add("http://127.0.0.1:0");
+using (var scope = app.Services.CreateScope())
+{
+    var preview = await scope.ServiceProvider.GetRequiredService<IRequestExecutor>()
+        .ExecuteAsync<PreviewOrderUseCase, ReadOrderRequest, OrderDto>(
+            new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
+    Expect(preview is RequestCompleted<OrderDto> completed && completed.Response.Label == "preview",
+        "Automatically discovered use cases sharing input/output types did not retain separate identities and policies");
+}
 await app.StartAsync();
 
 using var http = new HttpClient(new InspectBodyHandler(new HttpClientHandler()))
@@ -146,7 +153,7 @@ static void Expect(bool condition, string message)
 static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync(
     Guid id, int? page, IRequestExecutor executor, CancellationToken cancellationToken)
 {
-    var execution = await executor.ExecuteAsync<ReadOrderRequest, OrderDto>(
+    var execution = await executor.ExecuteAsync<ReadOrderUseCase, ReadOrderRequest, OrderDto>(
         new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken);
     return execution switch
     {
@@ -286,17 +293,17 @@ public sealed class ReadOrderHandler(IRequestExecutor executor) : OrderServer.Re
 {
     public override Task<Result<OrderDto>> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<OrderDto>(executor, request, context, static dto => Result.Success(dto), cancellationToken);
+        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context, static dto => Result.Success(dto), cancellationToken);
 }
 
-public sealed class ReadOrderUseCase : RequestHandler<ReadOrderRequest, OrderDto>
+public sealed class ReadOrderUseCase : IRequestHandler<ReadOrderRequest, OrderDto>
 {
-    public override Task<OrderDto> HandleAsync(
+    public Task<OrderDto> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
 }
 
-public sealed class ValidateReadOrder : IRequestMiddleware<ReadOrderRequest, OrderDto>
+public sealed class ValidateReadOrder : IRequestMiddleware<ReadOrderUseCase, ReadOrderRequest, OrderDto>
 {
     public Task<RequestExecution<OrderDto>> InvokeAsync(ReadOrderRequest request, Context context,
         RequestExecutionDelegate<ReadOrderRequest, OrderDto> next, CancellationToken cancellationToken)
@@ -304,6 +311,12 @@ public sealed class ValidateReadOrder : IRequestMiddleware<ReadOrderRequest, Ord
             ? Task.FromResult<RequestExecution<OrderDto>>(new RequestRejected(RequestRejectionKind.ValidationFailed,
                 new Failure("order.page", "Page must be nonnegative")))
             : next(request, context, cancellationToken);
+}
+
+public sealed class PreviewOrderUseCase : RequestHandler<ReadOrderRequest, OrderDto>
+{
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, "preview", "preview"));
 }
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected

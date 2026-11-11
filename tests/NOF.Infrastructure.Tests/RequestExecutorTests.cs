@@ -34,8 +34,8 @@ public class RequestExecutorTests
         var services = new ServiceCollection();
         services.AddSingleton<Trace>();
         services.AddRequestHandler<Query, Reply, PlainHandler>();
-        services.AddScoped<IRequestMiddleware<Query, Reply>, NormalizeTenant>();
-        services.AddScoped<IRequestMiddleware<Query, Reply>, ObserveTenant>();
+        services.AddScoped<IRequestMiddleware<PlainHandler, Query, Reply>, NormalizeTenant>();
+        services.AddScoped<IRequestMiddleware<PlainHandler, Query, Reply>, ObserveTenant>();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var result = await Execute(scope.ServiceProvider, Context.Empty);
@@ -49,10 +49,10 @@ public class RequestExecutorTests
     {
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, Reply>>(_ => throw new InvalidOperationException("Handler was constructed"));
-        services.AddScoped<IRequestMiddleware<Query, Reply>, Reject>();
+        services.AddScoped<PlainHandler>(_ => throw new InvalidOperationException("Handler was constructed"));
+        services.AddScoped<IRequestMiddleware<PlainHandler, Query, Reply>, Reject>();
         using var provider = services.BuildServiceProvider();
-        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<Query, Reply>(new(), Context.Empty);
+        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<PlainHandler, Query, Reply>(new(), Context.Empty);
         var rejected = Assert.IsType<RequestRejected>(execution.Value);
         Assert.Equal(RequestRejectionKind.Forbidden, rejected.Kind);
         Assert.Equal("access.denied", rejected.Failure.Code);
@@ -63,9 +63,9 @@ public class RequestExecutorTests
     {
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, string?>>(_ => new DelegateHandler<string?>((_, _, _) => Task.FromResult<string?>(null)));
+        services.AddScoped<DelegateHandler<string?>>(_ => new DelegateHandler<string?>((_, _, _) => Task.FromResult<string?>(null)));
         using var provider = services.BuildServiceProvider();
-        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<Query, string?>(new(), Context.Empty);
+        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<DelegateHandler<string?>, Query, string?>(new(), Context.Empty);
         Assert.Null(Assert.IsType<RequestCompleted<string?>>(execution.Value).Response);
     }
 
@@ -74,10 +74,10 @@ public class RequestExecutorTests
     {
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, Result<string>>>(_ => new DelegateHandler<Result<string>>(
+        services.AddScoped<DelegateHandler<Result<string>>>(_ => new DelegateHandler<Result<string>>(
             (_, _, _) => Task.FromResult<Result<string>>(new Failure("order.closed", "Already closed"))));
         using var provider = services.BuildServiceProvider();
-        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<Query, Result<string>>(new(), Context.Empty);
+        var execution = await provider.GetRequiredService<IRequestExecutor>().ExecuteAsync<DelegateHandler<Result<string>>, Query, Result<string>>(new(), Context.Empty);
         var response = Assert.IsType<RequestCompleted<Result<string>>>(execution.Value).Response;
         Assert.Equal("order.closed", Assert.IsType<Failure>(response.Value).Code);
     }
@@ -87,12 +87,12 @@ public class RequestExecutorTests
     {
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, Reply>>(_ => throw new InvalidOperationException("Handler was constructed"));
+        services.AddScoped<PlainHandler>(_ => throw new InvalidOperationException("Handler was constructed"));
         using var provider = services.BuildServiceProvider();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IRequestExecutor>()
-            .ExecuteAsync<Query, Reply>(new(), Context.Empty, cancellation.Token));
+            .ExecuteAsync<PlainHandler, Query, Reply>(new(), Context.Empty, cancellation.Token));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class RequestExecutorTests
         using var cancellation = new CancellationTokenSource();
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, string>>(_ => new DelegateHandler<string>((_, _, token) =>
+        services.AddScoped<DelegateHandler<string>>(_ => new DelegateHandler<string>((_, _, token) =>
         {
             Assert.Equal(cancellation.Token, token);
             cancellation.Cancel();
@@ -109,7 +109,7 @@ public class RequestExecutorTests
         }));
         using var provider = services.BuildServiceProvider();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IRequestExecutor>()
-            .ExecuteAsync<Query, string>(new(), Context.Empty, cancellation.Token));
+            .ExecuteAsync<DelegateHandler<string>, Query, string>(new(), Context.Empty, cancellation.Token));
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class RequestExecutorTests
         var failure = new InvalidOperationException("broken handler");
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<Query, string>>(_ => new DelegateHandler<string>(async (_, context, _) =>
+        services.AddScoped<DelegateHandler<string>>(_ => new DelegateHandler<string>(async (_, context, _) =>
         {
             await Task.Yield();
             Assert.Same(context, Context.Current);
@@ -128,7 +128,7 @@ public class RequestExecutorTests
         }));
         using var provider = services.BuildServiceProvider();
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IRequestExecutor>()
-            .ExecuteAsync<Query, string>(new(), Context.Empty));
+            .ExecuteAsync<DelegateHandler<string>, Query, string>(new(), Context.Empty));
         Assert.Same(failure, thrown);
         Assert.Same(original, Context.Current);
     }
@@ -138,25 +138,41 @@ public class RequestExecutorTests
     {
         var services = new ServiceCollection();
         services.AddNOFRequests();
-        services.AddScoped<IRequestMiddleware<Query, Reply>, InvalidPolicy>();
+        services.AddScoped<IRequestMiddleware<PlainHandler, Query, Reply>, InvalidPolicy>();
         using var provider = services.BuildServiceProvider();
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IRequestExecutor>()
-            .ExecuteAsync<Query, Reply>(new(), Context.Empty));
+            .ExecuteAsync<PlainHandler, Query, Reply>(new(), Context.Empty));
     }
 
     [Fact]
-    public void Registration_RejectsDuplicateHandlers_AndOnlyAddsExecutionServices()
+    public void Registration_IsIdempotent_AndOnlyAddsExecutionServices()
     {
         var services = new ServiceCollection();
         services.AddNOFRequests().AddNOFRequests();
         Assert.Single(services);
         services.AddRequestHandler<Query, Reply, PlainHandler>();
-        Assert.Throws<InvalidOperationException>(() => services.AddRequestHandler<Query, Reply, PlainHandler>());
+        services.AddRequestHandler<Query, Reply, PlainHandler>();
+        Assert.Single(services, static descriptor => descriptor.ServiceType == typeof(PlainHandler));
+    }
+
+    [Fact]
+    public async Task UseCaseIdentity_SelectsDifferentHandlers_WithIndependentPolicies_ForTheSameInputAndOutput()
+    {
+        var services = new ServiceCollection();
+        services.AddRequestHandler<Query, Reply, PlainHandler>();
+        services.AddRequestHandler<Query, Reply, AlternateHandler>();
+        services.AddScoped<IRequestMiddleware<PlainHandler, Query, Reply>, Reject>();
+        using var provider = services.BuildServiceProvider();
+        var executor = provider.GetRequiredService<IRequestExecutor>();
+        var denied = await executor.ExecuteAsync<PlainHandler, Query, Reply>(new(), Context.Empty);
+        Assert.IsType<RequestRejected>(denied.Value);
+        var allowed = await executor.ExecuteAsync<AlternateHandler, Query, Reply>(new(), Context.Empty);
+        Assert.Equal("alternate", Assert.IsType<RequestCompleted<Reply>>(allowed.Value).Response.Tenant);
     }
 
     private static async Task<Reply> Execute(IServiceProvider services, Context context)
     {
-        var execution = await services.GetRequiredService<IRequestExecutor>().ExecuteAsync<Query, Reply>(new(), context);
+        var execution = await services.GetRequiredService<IRequestExecutor>().ExecuteAsync<PlainHandler, Query, Reply>(new(), context);
         return Assert.IsType<RequestCompleted<Reply>>(execution.Value).Response;
     }
 
@@ -184,7 +200,13 @@ public class RequestExecutorTests
         }
     }
 
-    public sealed class NormalizeTenant(Trace trace) : IRequestMiddleware<Query, Reply>
+    public sealed class AlternateHandler : IRequestHandler<Query, Reply>
+    {
+        public Task<Reply> HandleAsync(Query request, Context context, CancellationToken cancellationToken)
+            => Task.FromResult(new Reply(Guid.NewGuid(), "alternate"));
+    }
+
+    public sealed class NormalizeTenant(Trace trace) : IRequestMiddleware<PlainHandler, Query, Reply>
     {
         public async Task<RequestExecution<Reply>> InvokeAsync(Query request, Context context,
             RequestExecutionDelegate<Query, Reply> next, CancellationToken cancellationToken)
@@ -197,7 +219,7 @@ public class RequestExecutorTests
         }
     }
 
-    public sealed class ObserveTenant(Trace trace) : IRequestMiddleware<Query, Reply>
+    public sealed class ObserveTenant(Trace trace) : IRequestMiddleware<PlainHandler, Query, Reply>
     {
         public Task<RequestExecution<Reply>> InvokeAsync(Query request, Context context,
             RequestExecutionDelegate<Query, Reply> next, CancellationToken cancellationToken)
@@ -208,7 +230,7 @@ public class RequestExecutorTests
         }
     }
 
-    public sealed class Reject : IRequestMiddleware<Query, Reply>
+    public sealed class Reject : IRequestMiddleware<PlainHandler, Query, Reply>
     {
         public Task<RequestExecution<Reply>> InvokeAsync(Query request, Context context,
             RequestExecutionDelegate<Query, Reply> next, CancellationToken cancellationToken)
@@ -216,7 +238,7 @@ public class RequestExecutorTests
                 new Failure("access.denied", "Access denied")));
     }
 
-    public sealed class InvalidPolicy : IRequestMiddleware<Query, Reply>
+    public sealed class InvalidPolicy : IRequestMiddleware<PlainHandler, Query, Reply>
     {
         public Task<RequestExecution<Reply>> InvokeAsync(Query request, Context context,
             RequestExecutionDelegate<Query, Reply> next, CancellationToken cancellationToken)

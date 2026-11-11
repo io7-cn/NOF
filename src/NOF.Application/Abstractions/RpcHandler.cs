@@ -54,18 +54,20 @@ public abstract class RpcHandler<TRequest, [DynamicallyAccessedMembers(Dynamical
 
     /// <summary>Adapts a transport-independent use case into this RPC operation's response contract.</summary>
     /// <remarks>Existing RPC transport authentication and tenant policies still execute before this bridge.</remarks>
-    protected static async Task<TResponse> ExecuteUseCaseAsync(
+    protected static async Task<TResponse> ExecuteUseCaseAsync<TUseCase>(
         IRequestExecutor executor, TRequest request, Context context, CancellationToken cancellationToken)
-        => await ExecuteUseCaseAsync<TResponse>(executor, request, context, static response => response, cancellationToken).ConfigureAwait(false);
+        where TUseCase : class, IRequestHandler<TRequest, TResponse>
+        => await ExecuteUseCaseAsync<TUseCase, TResponse>(executor, request, context, static response => response, cancellationToken).ConfigureAwait(false);
 
     /// <summary>Projects a use case's business value into the RPC contract without coupling the use case to RPC.</summary>
-    protected static async Task<TResponse> ExecuteUseCaseAsync<TBusinessResponse>(
+    protected static async Task<TResponse> ExecuteUseCaseAsync<TUseCase, TBusinessResponse>(
         IRequestExecutor executor, TRequest request, Context context,
         Func<TBusinessResponse, TResponse> projectResponse, CancellationToken cancellationToken)
+        where TUseCase : class, IRequestHandler<TRequest, TBusinessResponse>
     {
         ArgumentNullException.ThrowIfNull(executor);
         ArgumentNullException.ThrowIfNull(projectResponse);
-        var execution = await executor.ExecuteAsync<TRequest, TBusinessResponse>(request, context, cancellationToken).ConfigureAwait(false);
+        var execution = await executor.ExecuteAsync<TUseCase, TRequest, TBusinessResponse>(request, context, cancellationToken).ConfigureAwait(false);
         return execution switch
         {
             RequestCompleted<TBusinessResponse> completed => projectResponse(completed.Response),

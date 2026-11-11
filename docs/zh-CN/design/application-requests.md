@@ -10,8 +10,8 @@ NOF.Infrastructure。普通 ServiceCollection 即可运行，无需 Web、序列
 约束；可以返回 DTO、业务 Union 或 null。
 
 ```csharp
-services.AddRequestHandler<GetOrderRequest, OrderDto?, GetOrder>();
-var execution = await executor.ExecuteAsync<GetOrderRequest, OrderDto?>(request, context, ct);
+builder.AddApplicationPart(typeof(GetOrder).Assembly);
+var execution = await executor.ExecuteAsync<GetOrder, GetOrderRequest, OrderDto?>(request, context, ct);
 switch (execution)
 {
     case RequestCompleted<OrderDto?> completed:
@@ -23,12 +23,23 @@ switch (execution)
 }
 ```
 
-每个请求/响应组合只注册一次；本阶段显式注册，尚不提供生成式发现。
+应用层源码生成器发现具体的封闭 Handler 类，包括直接实现接口、间接继承和 record 类，
+通过已有的程序集初始化器生成 Scoped 注册。NOF 宿主已自动加入调用程序集；独立的
+Application 程序集只需一次 AddApplicationPart，不需要逐个注册 UseCase。
+整个过程不使用运行时类型扫描或动态泛型构造。注册以具体 UseCase 类型为身份，
+不以输入/输出组合为唯一键。多个 UseCase 可以共用这些模型；一个类实现多个请求
+契约时共享一个 Scoped 实例。TryAddScoped 保留已有的显式 DI 替换。
+
+独立 ServiceCollection 可以调用一次 AddNOFRequests，再运行生成的程序集初始化器；
+测试或特殊装配也可以用 AddRequestHandler 显式选择 Handler；该注册按 UseCase 类型
+幂等，可以与自动注册共存。
 调用方为每个工作单元创建 DI 作用域，请求和 Context 不能为 null。
 RequestCompleted 是进程内执行分支，不是线上成功包装；Result 中的业务 Failure
 仍然属于执行完成。异常和取消直接传播，未初始化的执行 Union 会抛出异常。
 
-通过 DI 注册 `IRequestMiddleware<TRequest,TResponse>`，先注册的在最外层。
+通过 DI 注册 `IRequestMiddleware<TUseCase,TRequest,TResponse>`，先注册的在最外层。
+策略同样按 UseCase 类型寻址，共用 DTO 不会隐式共用授权等策略。通用策略可以一次
+注册开放泛型中间件，特定用例的策略则注册对应封闭类型。
 InvokeAsync 可以拒绝，或用规范化后的请求/上下文调用 next。到达终端委托才构造
 Handler，此时 Context.Current 已绑定；await 和异常后恢复原值。策略实例会提前解析，
 因此应将租户相关依赖和工作推迟到规范化之后。
@@ -48,7 +59,7 @@ public sealed class ReadOrder(IRequestExecutor executor) : OrderServer.Read
 {
     public override Task<Result<OrderDto>> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<OrderDto>(executor, request, context,
+        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context,
             static dto => Result.Success(dto), cancellationToken);
 }
 ```

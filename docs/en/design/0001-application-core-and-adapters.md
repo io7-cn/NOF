@@ -45,6 +45,9 @@ must identify that prerequisite and must not bypass protected-main review gates.
 Choose option 3. A use case accepts a typed request and execution context and returns
 its declared business response. Responses may be DTOs, nullable values, Result<T>,
 or business-specific unions; no RPC response interface is required by the core.
+The concrete use case type identifies execution and its policies. Different use cases
+may share request/response types without ambiguity. Source-generated application-part
+registration avoids a per-use-case host registration list.
 
 The application policy pipeline handles application authorization, validation,
 tenant boundaries, transaction policies and idempotency. Authentication mechanisms,

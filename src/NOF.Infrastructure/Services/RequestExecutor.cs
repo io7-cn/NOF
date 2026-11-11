@@ -8,8 +8,9 @@ namespace NOF.Infrastructure;
 public sealed class RequestExecutor(IServiceProvider services) : IRequestExecutor
 {
     /// <inheritdoc />
-    public async Task<RequestExecution<TResponse>> ExecuteAsync<TRequest, TResponse>(
+    public async Task<RequestExecution<TResponse>> ExecuteAsync<TUseCase, TRequest, TResponse>(
         TRequest request, Context context, CancellationToken cancellationToken = default)
+        where TUseCase : class, IRequestHandler<TRequest, TResponse>
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
@@ -19,12 +20,12 @@ public sealed class RequestExecutor(IServiceProvider services) : IRequestExecuto
         {
             token.ThrowIfCancellationRequested();
             using var ambient = Context.PushCurrent(currentContext);
-            var handler = services.GetRequiredService<IRequestHandler<TRequest, TResponse>>();
+            var handler = services.GetRequiredService<TUseCase>();
             return new RequestCompleted<TResponse>(
                 await handler.HandleAsync(currentRequest, currentContext, token).ConfigureAwait(false));
         };
 
-        var middlewares = services.GetServices<IRequestMiddleware<TRequest, TResponse>>().ToArray();
+        var middlewares = services.GetServices<IRequestMiddleware<TUseCase, TRequest, TResponse>>().ToArray();
         for (var index = middlewares.Length - 1; index >= 0; index--)
         {
             var middleware = middlewares[index];

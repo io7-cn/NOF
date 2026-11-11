@@ -14,7 +14,7 @@ Commands and notifications are plain payload types. Handler discovery comes from
 
 ## Application use cases
 
-IRequestHandler<TRequest,TResponse> and RequestHandler<TRequest,TResponse> have no RPC response constraint. IRequestExecutor separates completed business responses from policy rejections and resolves handlers after policies allow execution. See the [application request guide](../../docs/en/design/application-requests.md).
+IRequestHandler<TRequest,TResponse> and RequestHandler<TRequest,TResponse> have no RPC response constraint. The application source generator discovers concrete handlers and emits scoped registrations through AddApplicationPart; hosts do not register each use case individually. IRequestExecutor separates completed business responses from policy rejections and resolves handlers after policies allow execution. See the [application request guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 

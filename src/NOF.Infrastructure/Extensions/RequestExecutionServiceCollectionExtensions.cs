@@ -16,7 +16,7 @@ public static class RequestExecutionServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Adds one scoped application handler for a request/response pair.</summary>
+    /// <summary>Adds a selected scoped application handler for explicit composition. Use cases normally register through application parts.</summary>
     /// <typeparam name="TRequest">The request type.</typeparam>
     /// <typeparam name="TResponse">The business response type.</typeparam>
     /// <typeparam name="THandler">The concrete handler implementation.</typeparam>
@@ -25,12 +25,8 @@ public static class RequestExecutionServiceCollectionExtensions
         where THandler : class, IRequestHandler<TRequest, TResponse>
     {
         ArgumentNullException.ThrowIfNull(services);
-        if (services.Any(static descriptor => descriptor.ServiceType == typeof(IRequestHandler<TRequest, TResponse>)))
-        {
-            throw new InvalidOperationException($"An application handler is already registered for '{typeof(TRequest)}' and '{typeof(TResponse)}'.");
-        }
         services.AddNOFRequests();
-        services.AddScoped<IRequestHandler<TRequest, TResponse>, THandler>();
+        services.TryAddScoped<THandler>();
         return services;
     }
 }

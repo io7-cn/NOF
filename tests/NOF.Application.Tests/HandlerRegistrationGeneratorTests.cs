@@ -11,6 +11,154 @@ namespace NOF.SourceGenerator.Tests;
 
 public class HandlerRegistrationGeneratorTests
 {
+    [Theory]
+    [InlineData("base")]
+    [InlineData("interface")]
+    [InlineData("inherited")]
+    [InlineData("record")]
+    [InlineData("partial")]
+    public void ApplicationHandlers_GenerateCompilableScopedRegistration(string kind)
+    {
+        const string method = "public System.Threading.Tasks.Task<int> HandleAsync(MyRequest request, Context context, System.Threading.CancellationToken cancellationToken) => System.Threading.Tasks.Task.FromResult(42);";
+        var declaration = kind switch
+        {
+            "base" => "public sealed class Concrete : RequestHandler<MyRequest, int> { " + method.Replace("public ", "public override ") + " }",
+            "interface" => "public sealed class Concrete : IRequestHandler<MyRequest, int> { " + method + " }",
+            "record" => "public sealed record Concrete : IRequestHandler<MyRequest, int> { " + method + " }",
+            "partial" => "public sealed partial class Concrete : IRequestHandler<MyRequest, int> { " + method + " } public sealed partial class Concrete { }",
+            _ => "public abstract class Base<T> : RequestHandler<MyRequest, T> { public override System.Threading.Tasks.Task<T> HandleAsync(MyRequest request, Context context, System.Threading.CancellationToken cancellationToken) => throw new System.NotImplementedException(); } public sealed class Concrete : Base<int> { }"
+        };
+        var source = "using NOF.Application; using NOF.Contract; namespace App { public record MyRequest; " + declaration + " }";
+        var (result, output) = RunApplicationGenerator(source);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
+        Assert.Contains("services.TryAddScoped<global::App.Concrete>();", code);
+        Assert.DoesNotContain("ServiceDescriptor.Transient", code);
+        Assert.DoesNotContain("GetTypes", code);
+        Assert.DoesNotContain("Activator", code);
+    }
+
+    [Fact]
+    public void ApplicationHandlers_PreserveNullableResponses_AndMultipleContracts()
+    {
+        const string source = """
+            #nullable enable
+            using NOF.Application;
+            using NOF.Contract;
+            namespace App;
+            public record Query;
+            public record OtherQuery;
+            public sealed class Handler : IRequestHandler<Query, string?>, IRequestHandler<OtherQuery, int>
+            {
+                public System.Threading.Tasks.Task<string?> HandleAsync(Query request, Context context, System.Threading.CancellationToken cancellationToken)
+                    => System.Threading.Tasks.Task.FromResult<string?>(null);
+                public System.Threading.Tasks.Task<int> HandleAsync(OtherQuery request, Context context, System.Threading.CancellationToken cancellationToken)
+                    => System.Threading.Tasks.Task.FromResult(42);
+            }
+            """;
+        var (result, output) = RunApplicationGenerator(source);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Warning or DiagnosticSeverity.Error));
+        var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
+        Assert.Contains("services.TryAddScoped<global::App.Handler>();", code);
+        Assert.Equal(1, code.Split("services.TryAddScoped<global::App.Handler>();").Length - 1);
+    }
+
+    [Fact]
+    public void ApplicationHandlers_AreScoped_Idempotent_AndIsolatedPerServiceCollection()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Contract;
+            namespace GeneratedRuntime;
+            public record Query;
+            public sealed class Handler : IRequestHandler<Query, int>
+            {
+                public System.Threading.Tasks.Task<int> HandleAsync(Query request, Context context, System.Threading.CancellationToken cancellationToken)
+                    => System.Threading.Tasks.Task.FromResult(42);
+            }
+            """;
+        var (_, output) = RunApplicationGenerator(source);
+        using var stream = new MemoryStream();
+        var emission = output.Emit(stream);
+        Assert.True(emission.Success, string.Join(Environment.NewLine, emission.Diagnostics));
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        var attribute = Assert.Single(assembly.GetCustomAttributes(false).OfType<AssemblyInitializeAttribute>());
+        var services = new ServiceCollection();
+        attribute.Initialize(services);
+        attribute.Initialize(services);
+        var handler = Assert.Single(services, descriptor => descriptor.ServiceType.Assembly == assembly);
+        Assert.Equal(ServiceLifetime.Scoped, handler.Lifetime);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        Assert.Same(first.ServiceProvider.GetRequiredService(handler.ServiceType), first.ServiceProvider.GetRequiredService(handler.ServiceType));
+        Assert.NotSame(first.ServiceProvider.GetRequiredService(handler.ServiceType), second.ServiceProvider.GetRequiredService(handler.ServiceType));
+        var independent = new ServiceCollection();
+        attribute.Initialize(independent);
+        Assert.Single(independent, descriptor => descriptor.ServiceType == handler.ServiceType);
+        IServiceCollection conflicting = new ServiceCollection();
+        var custom = ServiceDescriptor.Scoped(handler.ServiceType, handler.ServiceType);
+        conflicting.Add(custom);
+        attribute.Initialize(conflicting);
+        Assert.Same(custom, Assert.Single(conflicting, descriptor => descriptor.ServiceType == handler.ServiceType));
+    }
+
+    [Fact]
+    public void ApplicationHandlers_SharingInputAndOutput_AreRegisteredByUseCaseIdentity()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Contract;
+            namespace App;
+            public record Query;
+            public abstract class Base : RequestHandler<Query, int>
+            {
+                public override System.Threading.Tasks.Task<int> HandleAsync(Query request, Context context, System.Threading.CancellationToken cancellationToken)
+                    => System.Threading.Tasks.Task.FromResult(42);
+            }
+            public sealed class First : Base;
+            public sealed class Second : Base;
+            """;
+        var (result, output) = RunApplicationGenerator(source);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(output.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
+        Assert.Contains("services.TryAddScoped<global::App.First>();", code);
+        Assert.Contains("services.TryAddScoped<global::App.Second>();", code);
+    }
+
+    [Fact]
+    public void ApplicationHandlers_IgnoreAbstractOpenGenericAndUnrelatedTypes()
+    {
+        const string source = """
+            using NOF.Application;
+            using NOF.Contract;
+            namespace App;
+            public abstract class Base<T> : IRequestHandler<T, int>
+            {
+                public System.Threading.Tasks.Task<int> HandleAsync(T request, Context context, System.Threading.CancellationToken cancellationToken)
+                    => System.Threading.Tasks.Task.FromResult(42);
+            }
+            public class Open<T> : Base<T>;
+            public class Unrelated;
+            """;
+        var (result, _) = RunApplicationGenerator(source);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(result.GeneratedTrees);
+    }
+
+    private static (GeneratorDriverRunResult Result, Compilation Output) RunApplicationGenerator(string source)
+    {
+        var compilation = CSharpCompilation.CreateCompilation("GeneratedRequests" + Guid.NewGuid().ToString("N"), source, true,
+            typeof(IServiceCollection), typeof(ServiceCollection), typeof(InitializedTypes), typeof(Context), typeof(IRequestHandler<,>));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new HandlerRegistrationGenerator().AsSourceGenerator()],
+            parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+        return (driver.GetRunResult(), output);
+    }
+
     [Fact]
     public void GeneratedCode_CommandHandler_RegistersConcreteOnly()
     {

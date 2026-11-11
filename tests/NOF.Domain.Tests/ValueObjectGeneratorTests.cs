@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using NOF.Abstraction;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using System.Reflection;
@@ -18,6 +19,7 @@ public class ValueObjectGeneratorTests
     private static readonly Type[] _extraRefs =
     [
         typeof(IValueObject<>),
+        typeof(Failure),
         typeof(NewableValueObjectAttribute),
         typeof(ValueObjectLengthAttribute),
         typeof(IdGenerator),

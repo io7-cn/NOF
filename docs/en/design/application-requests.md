@@ -11,8 +11,8 @@ Implement `IRequestHandler<TRequest,TResponse>` or inherit `RequestHandler<TRequ
 an IRpcResponse constraint. DTOs, business unions and nullable values are supported.
 
 ```csharp
-services.AddRequestHandler<GetOrderRequest, OrderDto?, GetOrder>();
-var execution = await executor.ExecuteAsync<GetOrderRequest, OrderDto?>(request, context, ct);
+builder.AddApplicationPart(typeof(GetOrder).Assembly);
+var execution = await executor.ExecuteAsync<GetOrder, GetOrderRequest, OrderDto?>(request, context, ct);
 switch (execution)
 {
     case RequestCompleted<OrderDto?> completed:
@@ -24,15 +24,28 @@ switch (execution)
 }
 ```
 
-Register each request/response pair once; this phase uses explicit registration,
-not generated discovery. Callers create a DI scope per unit of work. Requests and
-contexts must be non-null. RequestCompleted is an in-process execution case, not a
+The application source generator discovers concrete closed handler classes, including
+direct interface implementations, inherited handlers and record classes. It emits
+scoped registrations through the existing assembly initializer. NOF hosts already
+add the calling assembly; a separate Application assembly needs only one
+AddApplicationPart call. Discovery uses no runtime type scan or dynamic generic
+construction. Registration is keyed by the concrete use case type, not its input/output
+pair. Multiple use cases may share those models, and a class implementing multiple
+request contracts has one scoped instance. TryAddScoped preserves explicit DI substitutions.
+
+For an isolated ServiceCollection, call AddNOFRequests once and invoke the generated
+assembly initializer, or explicitly register selected handlers with AddRequestHandler
+for tests or special composition. Explicit registration is idempotent by use case
+type and can coexist with generated registration. Callers create a DI scope per unit
+of work. Requests and contexts must be non-null. RequestCompleted is an in-process execution case, not a
 wire success envelope. A business Failure inside Result remains a completed execution.
 Exceptions/cancellation propagate; uninitialized execution unions throw.
 
-Register `IRequestMiddleware<TRequest,TResponse>` through DI, outermost first.
-Its InvokeAsync can reject or call next with a normalized request/context. Handlers
-are constructed at the terminal delegate after Context.Current is bound. Ambient
+Register `IRequestMiddleware<TUseCase,TRequest,TResponse>` through DI, outermost first.
+Policies are addressed by use case type too: shared DTOs do not implicitly share
+authorization or other policies. Register open generic middleware once for shared
+policies, or a closed middleware for a specific use case. Its InvokeAsync can reject
+or call next with a normalized request/context. Handlers are constructed at the terminal delegate after Context.Current is bound. Ambient
 context is restored across awaits/errors. Middleware instances resolve before
 invocation: defer tenant-specific dependencies/work until after normalization.
 
@@ -53,7 +66,7 @@ public sealed class ReadOrder(IRequestExecutor executor) : OrderServer.Read
 {
     public override Task<Result<OrderDto>> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => ExecuteUseCaseAsync<OrderDto>(executor, request, context,
+        => ExecuteUseCaseAsync<ReadOrderUseCase, OrderDto>(executor, request, context,
             static dto => Result.Success(dto), cancellationToken);
 }
 ```

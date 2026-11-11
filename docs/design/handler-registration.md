@@ -34,3 +34,9 @@ builder.AddApplicationPart(typeof(NOFSampleService).Assembly)
 - Keep RPC contracts (`IRpcService`) and their implementations in assemblies that are loaded as application parts.
 - Transport integrations such as RabbitMQ consume the frozen handler registries, so stale or missing application parts will prevent consumer registration.
 - `AutoInjectRegistry` stores native `ServiceDescriptor` instances; there is no separate `AutoInjectServiceRegistration` model anymore.
+
+## Application use cases
+
+Concrete closed classes implementing IRequestHandler<TRequest,TResponse>, directly or through RequestHandler<TRequest,TResponse>, are discovered by the application source generator. Record classes and inherited closed generic contracts are supported. AddApplicationPart runs the generated initializer once per service collection and registers scoped handlers without runtime type scanning. NOF hosts add the calling assembly automatically. Additional application assemblies need one AddApplicationPart call.
+
+Use case identity is the concrete handler type, not the request/response pair. Multiple handlers may share input/output models; their policy chains remain separate. Generated TryAddScoped registration is idempotent and preserves explicit substitutions. A handler implementing multiple request contracts is still registered once. Explicit AddRequestHandler remains available for tests and selected composition. See the [guide](../en/design/application-requests.md).

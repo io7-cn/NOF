@@ -12,7 +12,7 @@ The current generator inputs are:
 | Abstraction | `EventHandlerRegistrationGenerator` | User class and `InMemoryEventHandler<T>` |
 | Domain | `FailureGenerator` | User type and `FailureAttribute` |
 | Domain | `ValueObjectGenerator` | User struct, `IValueObject<T>`, and `ValueObjectLengthAttribute` |
-| Application | `HandlerRegistrationGenerator` | User class and the stable command/notification handler bases |
+| Application | `HandlerRegistrationGenerator` | User class/record, stable command/notification bases, and `IRequestHandler<,>` contracts |
 | Application | `MappableGenerator` | User mapping declaration, attributes, and mapped source/destination types |
 | Application | `RpcServerGenerator` | User `RpcServer<TService>` and RPC service contract |
 | Application | `RpcServerAutoInjectGenerator` | User `Server.Operation` base-type syntax, `RpcServer<TService>`, and RPC service contract |

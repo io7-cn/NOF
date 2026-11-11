@@ -28,7 +28,7 @@ Use this file when contributing to the NOF framework itself.
 
 ## Current Runtime Patterns
 
-- Application use cases: explicitly register `IRequestHandler<TRequest,TResponse>` with `AddRequestHandler<TRequest,TResponse,THandler>()` and invoke `IRequestExecutor`. DTO, nullable and business-union responses need no RPC constraint. Policies use `IRequestMiddleware<,>` in registration order; configure security explicitly. See `docs/en/design/application-requests.md`.
+- Application use cases: concrete closed `IRequestHandler<TRequest,TResponse>` implementations (including `RequestHandler<,>` subclasses) are source-generated into scoped registrations through `AddApplicationPart(...)`. Do not register every use case manually. Invoke `IRequestExecutor`; DTO, nullable and business-union responses need no RPC constraint. Select execution by concrete UseCase type; multiple handlers may share input/output models. Policies use `IRequestMiddleware<TUseCase,TRequest,TResponse>` in registration order; configure security explicitly. Use `AddRequestHandler<,,>()` only for selected explicit composition. See `docs/en/design/application-requests.md`.
 
 - RPC: `IRpcService`, one `[TransportOverHttp(...)]` or `[TransportOverMemory]` declaration, `RpcServer<TService>`, generated clients, and `AddRpcServer<TServer>()`.
 - Messaging: plain payload types plus `CommandHandler<T>` / `NotificationHandler<T>`; all handler and dispatch APIs receive `Context`.
