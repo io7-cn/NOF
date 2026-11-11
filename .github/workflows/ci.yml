@@ -47,12 +47,15 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_FILE }} -p:Configuration=${{ env.CONFIGURATION }}
 
-    - name: Verify code formatting
-      if: runner.os == 'Linux'
-      run: dotnet format --verify-no-changes --verbosity diagnostic
-
     - name: Build solution
       run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore
+
+    - name: Verify code formatting
+      if: runner.os == 'Linux'
+      # The formatter needs the source-generator assemblies built above.
+      env:
+        Configuration: ${{ env.CONFIGURATION }}
+      run: dotnet format --no-restore --verify-no-changes --verbosity diagnostic
 
     - name: Run tests
       run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal --collect:"XPlat Code Coverage"

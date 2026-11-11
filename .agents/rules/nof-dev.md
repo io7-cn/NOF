@@ -53,13 +53,13 @@ Use this file when contributing to the NOF framework itself.
 ## Build Commands
 
 ```bash
-dotnet restore NOF.slnx
-dotnet format --verify-no-changes --verbosity diagnostic
+dotnet restore NOF.slnx -p:Configuration=Release
 dotnet build NOF.slnx --configuration Release --no-restore
+dotnet format --no-restore --verify-no-changes --verbosity diagnostic
 dotnet test NOF.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
 ```
 
-The GitHub matrix installs the MAUI workload on Windows before restore. See `workflows/nof-dev/run-ci-locally.md` for the exact sequence.
+Build before formatting so source-generator assemblies exist; set the Configuration environment variable to Release for format analysis. The GitHub matrix installs the MAUI workload on Windows before restore. See `workflows/nof-dev/run-ci-locally.md` for the exact sequence.
 
 ## Change Checklist
 

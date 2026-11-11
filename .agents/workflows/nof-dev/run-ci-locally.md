@@ -20,13 +20,13 @@ On Linux, run `dotnet workload restore NOF.slnx -p:Configuration=Release` once t
 ## CI Sequence
 
 ```bash
-dotnet restore NOF.slnx
-dotnet format --verify-no-changes --verbosity diagnostic
+dotnet restore NOF.slnx -p:Configuration=Release
 dotnet build NOF.slnx --configuration Release --no-restore
+dotnet format --no-restore --verify-no-changes --verbosity diagnostic
 dotnet test NOF.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
 ```
 
-GitHub runs the formatting check only on Linux, but contributors should run it on every platform.
+Set the Configuration environment variable to Release before formatting (`$env:Configuration='Release'` in PowerShell or `export Configuration=Release` in bash). Build first so analyzer/source-generator assemblies exist; the formatter must analyze the same Release outputs as tests. GitHub runs this check only on Linux, but contributors should run it on every platform.
 
 If formatting fails:
 
@@ -34,4 +34,4 @@ If formatting fails:
 dotnet format
 ```
 
-Review the resulting changes, then rerun the verification sequence. The CD workflow repeats restore, format, build, and tests before packing projects discovered under `src/`.
+Review the resulting changes, then rerun the verification sequence. The CD workflow repeats restore, build, format, and tests before packing projects discovered under `src/`.
