@@ -48,16 +48,23 @@
 
     private async Task LoadRootNodes()
     {
-        var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Contract.Context.Empty);
-        var rootNodes = response.Nodes;
-        _treeData = rootNodes.Select(node => new TreeNodeData
+        try
         {
-            Key = node.Id.ToString(),
-            Title = node.Name,
-            NodeId = node.Id,
-            IsLeaf = false,
-            Children = null
-        }).ToList();
+            var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Contract.Context.Empty);
+            _treeData = response.Nodes.Select(node => new TreeNodeData
+            {
+                Key = node.Id.ToString(),
+                Title = node.Name,
+                NodeId = node.Id,
+                IsLeaf = false,
+                Children = null
+            }).ToList();
+        }
+        catch (ServiceRejectedException rejected)
+        {
+            _treeData = [];
+            Message.Error(rejected.Failure.Message);
+        }
     }
 
     private async Task OnNodeLoadAsync(TreeEventArgs<TreeNodeData> args)
