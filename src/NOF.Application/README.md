@@ -14,7 +14,7 @@ Commands and notifications are plain payload types. Handler discovery comes from
 
 ## Application services
 
-IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> has no RPC response constraint. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
+IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> accepts ordinary business responses. IRpcResponse is removed. Generated descriptors identify operations for HTTP adapters without introducing an HTTP dependency. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 

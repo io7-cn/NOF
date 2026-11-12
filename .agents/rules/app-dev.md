@@ -19,7 +19,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 ## Core Abstractions
 
-- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
+- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions are ordinary responses; IRpcResponse is removed. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
 - RPC: `IApplicationService`, `ApplicationService<TService>`, generated nested operation bases and static Service.Operation.InvokeAsync entries; no client interfaces or implementations are generated.
 - Messaging: `CommandHandler<T>`, `NotificationHandler<T>`, `ICommandSender`, `INotificationPublisher`.
@@ -31,17 +31,17 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 Commands and notifications are plain payload objects; inheriting the corresponding handler base opts a handler into generated registration.
 
-Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. Optional HTTP annotations generate server metadata only. Dedicated REST endpoint-module APIs remain future work.
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. HTTP annotations/generators have moved to Hosting; keep them out of Contract.
 
 Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 
 ## Application Service Rules
 
-- Every application service contract inherits `IApplicationService`. A transport declaration is optional; no declaration means local-only. Only `[TransportOverHttp(...)]` exposes HTTP routes.
+- Every application service contract inherits `IApplicationService`. Keep HTTP declarations out of Contract; expose HTTP explicitly through endpoint modules.
 - A contract method takes exactly one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
-- Controller-style HTTP methods use `[HttpEndpoint]`; JSON-RPC and memory contracts must not.
+- IHttpEndpointModule owns HTTP routing/binding/results; HttpContext.InvokeAsync uses the generated Descriptor and the HTTP application-policy boundary.
 - A generated server container is a `partial` class inheriting `ApplicationService<TService>`.
-- Register each server with `builder.AddApplicationService<TServer>()`; the host maps applicable transports during `BuildAsync()`.
+- Register each server with `builder.AddApplicationService<TServer>()`; native HTTP modules are registered through AutoInject(Singleton) and mapped at BuildAsync().
 - Generated server invocation and handler methods are asynchronous and receive `Context` explicitly.
 
 ## Program.cs Baseline

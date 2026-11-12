@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
@@ -19,6 +20,8 @@ builder.AddApplicationService<DemoDownstreamService>();
 
 builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' is required."));
+builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
+builder.Services.AddProblemDetails();
 
 builder.AddOidcServer(o =>
 {
@@ -71,6 +74,7 @@ builder.Services.AddRazorComponents()
 
 var app = await builder.BuildAsync();
 
+app.UseStatusCodePages();
 app.MapOpenApi();
 app.UseAntiforgery();
 

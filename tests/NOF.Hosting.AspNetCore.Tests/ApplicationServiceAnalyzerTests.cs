@@ -3,10 +3,12 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using NOF.Contract;
 using NOF.Contract.SourceGenerator;
+using NOF.Hosting.AspNetCore;
+using NOF.Hosting.SourceGenerator;
 using System.Collections.Immutable;
 using Xunit;
-using HttpRpcStyle = NOF.Contract.HttpRpcStyle;
-using HttpVerb = NOF.Contract.HttpVerb;
+using HttpRpcStyle = NOF.Hosting.AspNetCore.HttpRpcStyle;
+using HttpVerb = NOF.Hosting.AspNetCore.HttpVerb;
 
 namespace NOF.SourceGenerator.Tests;
 
@@ -31,7 +33,7 @@ public class ApplicationServiceAnalyzerTests
         var extraReferences = _refs.Select(t => t.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
 
-        var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ApplicationServiceAnalyzer());
+        var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ApplicationServiceAnalyzer(), new HttpApplicationServiceAnalyzer());
         var compilationWithAnalyzers = compilation.WithAnalyzers(analyzers);
         return await compilationWithAnalyzers.GetAnalyzerDiagnosticsAsync();
     }
@@ -85,6 +87,7 @@ public class ApplicationServiceAnalyzerTests
         var routePrefixLiteral = SymbolDisplay.FormatLiteral(routePrefix, quote: true);
         var source = $$"""
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -111,6 +114,7 @@ public class ApplicationServiceAnalyzerTests
         var routePrefixLiteral = SymbolDisplay.FormatLiteral(routePrefix, quote: true);
         var source = $$"""
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -131,6 +135,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -151,6 +156,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -171,6 +177,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -188,6 +195,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -209,6 +217,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -228,6 +237,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -252,6 +262,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -275,6 +286,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -299,6 +311,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace App
             {
                 [HttpEndpoint(HttpVerb.Post, "/api/items")]
@@ -318,6 +331,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace App
             {
                 [HttpEndpoint(HttpVerb.Put, "/api/items/{id}")]
@@ -347,6 +361,7 @@ public class ApplicationServiceAnalyzerTests
         var source = $$"""
             using System;
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             public sealed class UpdateItemRequest
             {
@@ -388,6 +403,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace App
             {
                 [HttpEndpoint(HttpVerb.Post, "/api/items")]
@@ -408,6 +424,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -434,6 +451,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System;
 
             namespace App;
@@ -471,6 +489,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Threading.Tasks;
 
             namespace App;
@@ -494,6 +513,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Threading.Tasks;
 
             namespace App;
@@ -514,6 +534,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Threading;
             using System.Threading.Tasks;
 
@@ -537,6 +558,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -558,6 +580,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -579,6 +602,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -600,13 +624,14 @@ public class ApplicationServiceAnalyzerTests
         const string source = """
             using NOF.Abstraction;
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Collections.Generic;
 
             namespace App;
 
             public record Query(string Value);
 
-            public union CustomResult(Success, Failure) : IRpcResponse<CustomResult>
+            public union CustomResult(Success, Failure)
             {
                 public static CustomResult CreateFailure(Failure failure) => failure;
                 public static CustomResult CreateEmptyResponse() => new Success();
@@ -627,6 +652,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
 
             namespace App;
 
@@ -647,6 +673,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Threading.Tasks;
 
             namespace App;
@@ -669,6 +696,7 @@ public class ApplicationServiceAnalyzerTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using System.Threading.Tasks;
 
             namespace App;

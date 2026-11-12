@@ -45,8 +45,9 @@ must identify that prerequisite and must not bypass protected-main review gates.
 Client generation is completely removed: retain proto-style contracts and generated
 server operations, including static InvokeAsync entries. No interface/HTTP/Local Client
 is emitted. HTTP metadata is optional and server-only. Consumers own remote HTTP
-integrations; the sample has explicit UI ports/adapters. The native endpoint-module
-design remains future work, not an implemented framework API.
+integrations; the sample has explicit UI ports/adapters. Native IHttpEndpointModule, generated operation descriptors and an HTTP policy bridge
+are implemented with the configuration CRUD slice. HttpEndpoint/HTTP generators move
+to Hosting; IRpcResponse and generated response-specific rejection factories are removed.
 
 Choose option 3. A use case accepts a typed request and execution context and returns
 its declared business response. Responses may be DTOs, nullable values, Result<T>,
@@ -58,7 +59,7 @@ Retain service contracts, generated operation bases and the existing
 represented by that model, not a second public handler hierarchy beside RPC.
 Evolve RPC-centered service/server/handler contracts into transport-independent
 application service equivalents. Ordinary DTOs and business unions must not require
-IRpcResponse or a mandatory transport declaration. RPC becomes an adapter.
+an RPC outcome interface or transport declaration. RPC becomes an adapter.
 
 Operation identity is the service contract plus operation, not the request/response
 pair. Different operations may share those models while retaining distinct behavior
@@ -130,8 +131,8 @@ recovery behavior, licensing and migration costs first.
 2. **Policy and context split:** migrate shared application rules to the application
    pipeline and protocol rules to adapters. Preserve security behavior at every stage;
    do not silently remove authentication/authorization while avoiding duplicate checks.
-3. **Pure outcomes and codecs:** remove IRpcResponse and JSON metadata from core
-   business outcomes, retaining wire classification in codecs and generated metadata.
+3. **Pure outcomes and codecs:** IRpcResponse is removed. Continue separating JSON
+   metadata from business outcomes, retaining wire classification in adapter codecs.
    Coordinate clients and server contracts when the wire shape changes.
 4. **Persistence boundaries:** introduce aggregate-oriented write ports, separate read
    models and narrow the universal ORM facade with provider parity tests.

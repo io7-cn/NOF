@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using NOF.Application.SourceGenerator;
 using NOF.Contract;
 using NOF.Contract.SourceGenerator;
+using NOF.Hosting.AspNetCore;
+using NOF.Hosting.SourceGenerator;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;
 

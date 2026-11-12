@@ -4,19 +4,18 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace NOF.Contract.SourceGenerator;
+namespace NOF.Hosting.SourceGenerator;
 /// <summary>Analyzes RPC service declarations for source generation.</summary>
 
 public static class ApplicationServiceHelpers
 {
-    public const string HttpEndpointAttributeFqn = "NOF.Contract.HttpEndpointAttribute";
+    public const string HttpEndpointAttributeFqn = "NOF.Hosting.AspNetCore.HttpEndpointAttribute";
     public const string ParsableFqn = "System.IParsable<TSelf>";
-    public const string TransportOverAttributeFqn = "NOF.Contract.TransportOverAttribute";
-    public const string TransportOverHttpAttributeFqn = "NOF.Contract.TransportOverHttpAttribute";
-    public const string TransportOverMemoryAttributeFqn = "NOF.Contract.TransportOverMemoryAttribute";
+    public const string TransportOverAttributeFqn = "NOF.Hosting.AspNetCore.TransportOverAttribute";
+    public const string TransportOverHttpAttributeFqn = "NOF.Hosting.AspNetCore.TransportOverHttpAttribute";
+    public const string TransportOverMemoryAttributeFqn = "NOF.Hosting.AspNetCore.TransportOverMemoryAttribute";
     public const string SummaryAttributeFqn = "NOF.Contract.SummaryAttribute";
     public const string ApplicationServiceInterfaceFqn = "NOF.Contract.IApplicationService";
-    public const string ResultInterfaceFqn = "NOF.Contract.IRpcResponse<TSelf>";
     public const string StreamingResultFqn = "System.Collections.Generic.IAsyncEnumerable<T>";
     public const string ResultFqn = "NOF.Contract.Result";
     public const string GenericResultFqn = "NOF.Contract.Result<T>";

@@ -81,10 +81,9 @@ public class ResultTests
     public void Boundary_PreservesFailureAndRejectsEmptyOrWrongSuccessType()
     {
         Result result = Result.Fail("forbidden", "Denied");
-        Assert.Same(result.ExpectFailure(), RpcResponse.Require<Result<string>>(result).ExpectFailure());
-        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(Result.Success()));
-        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(default(Result<string>)));
-        Assert.Throws<InvalidOperationException>(() => Result<int>.CreateEmptyResponse());
+        Assert.Same(result.ExpectFailure(), RpcResponse.Require<Result<string>>(result, static failure => failure).ExpectFailure());
+        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(Result.Success(), static failure => failure));
+        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(default(Result<string>), static failure => failure));
     }
 
     [Fact]

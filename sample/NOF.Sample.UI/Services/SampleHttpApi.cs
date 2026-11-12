@@ -2,6 +2,7 @@ using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace NOF.Sample.UI.Services;
@@ -13,12 +14,27 @@ public abstract class SampleHttpApi(HttpClient httpClient)
 
     protected Task<TResponse> SendOutcomeAsync<TRequest,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TResponse>(
-        HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct)
-        where TResponse : IRpcResponse<TResponse>
+        HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct,
+        Func<NOF.Abstraction.Failure, TResponse> createFailure)
+        where TResponse : IUnion
         => SendAsync(method, uri, request, context,
-            static (response, token) => HttpRpcTransportResultReader.ReadAsync(response,
-                JsonSerializerOptions.NOF.GetRequiredTypeInfo<TResponse>(), token),
+            (response, token) => HttpRpcTransportResultReader.ReadAsync(response,
+                JsonSerializerOptions.NOF.GetRequiredTypeInfo<TResponse>(), token, createFailure),
             ct);
+
+    protected Task<Result> SendCommandAsync<TRequest>(HttpMethod method, string uri,
+        TRequest request, Context context, CancellationToken ct)
+        => SendAsync(method, uri, request, context, static async (response, token) =>
+            response.IsSuccessStatusCode ? Result.Success()
+                : await HttpRpcTransportResultReader.ReadFailureAsync<Result>(response, token, static failure => failure), ct);
+
+    protected Task<Result<TPayload>> SendResourceAsync<TRequest, TPayload>(HttpMethod method, string uri,
+        TRequest request, Context context, CancellationToken ct)
+        => SendAsync(method, uri, request, context, static async (response, token) =>
+            response.IsSuccessStatusCode
+                ? (Result<TPayload>)await HttpRpcTransportResultReader.ReadValueAsync(response,
+                    JsonSerializerOptions.NOF.GetRequiredTypeInfo<TPayload>(), token)
+                : await HttpRpcTransportResultReader.ReadFailureAsync<Result<TPayload>>(response, token, static failure => failure), ct);
 
     protected Task<TResponse> SendValueAsync<TRequest, TResponse>(
         HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct)
@@ -36,8 +52,8 @@ public abstract class SampleHttpApi(HttpClient httpClient)
                     return Result.Stream(SseResponseReader.ReadAsync(response,
                         JsonSerializerOptions.NOF.GetRequiredTypeInfo<TItem>(), token));
                 }
-                return await HttpRpcTransportResultReader.ReadAsync(response,
-                    JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<IAsyncEnumerable<TItem>>>(), token);
+                return await HttpRpcTransportResultReader.ReadFailureAsync<Result<IAsyncEnumerable<TItem>>>(response,
+                    token, static failure => failure);
             }, ct, streaming: true);
 
     private async Task<TResponse> SendAsync<TRequest, TResponse>(

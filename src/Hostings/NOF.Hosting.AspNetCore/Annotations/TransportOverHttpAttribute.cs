@@ -1,6 +1,7 @@
+using NOF.Contract;
 using NOF.Internal;
 
-namespace NOF.Contract;
+namespace NOF.Hosting.AspNetCore;
 
 /// <summary>
 /// Declares that an RPC service contract is transported over HTTP.

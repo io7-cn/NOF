@@ -47,4 +47,7 @@
     <Compile Include="..\Common\SourceGenerator\*.cs" Link="SourceGenerator\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NOF.Hosting.SourceGenerator\NOF.Hosting.SourceGenerator.csproj"  />
+  </ItemGroup>
 </Project>

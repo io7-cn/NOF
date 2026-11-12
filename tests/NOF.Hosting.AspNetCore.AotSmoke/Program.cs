@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Routing;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
@@ -27,10 +28,10 @@ builder.Services.AddRequestInboundMiddleware<ValidateReadOrder>();
 
 await using var app = await builder.BuildAsync();
 app.MapOpenApi();
-app.MapGet("/native/orders/{id}", NativeReadOrderAsync);
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
+    scope.ServiceProvider.ResolveDaemonServices();
     var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
     Expect(preview.Label == "preview", "Service operations sharing input/output models did not retain separate identities");
     var plainValue = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
@@ -51,10 +52,10 @@ var id = Guid.NewGuid();
 var updated = await PutOrderAsync(http, id, "shipped");
 Expect(updated is OrderDto updatedSuccess && updatedSuccess == new OrderDto(id, "shipped", "default"), "Generated PUT did not bind the path and body");
 
-var read = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=7");
+var read = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=7", static failure => failure);
 Expect(read is OrderDto readSuccess && readSuccess == new OrderDto(id, "7", "read"), "Generated GET did not bind the path and query");
 
-var withMessage = await GetOutcomeAsync<Result<Success<OrderDto>>>(http, $"/orders/{id}/with-message");
+var withMessage = await GetOutcomeAsync<Result<Success<OrderDto>>>(http, $"/orders/{id}/with-message", static failure => failure);
 Expect(withMessage is Success<OrderDto> messagePayload && messagePayload.Data.Id == id && messagePayload.Message == "Read from cache",
     "The optional success wrapper did not retain its data and message");
 
@@ -80,9 +81,21 @@ using var native = await raw.GetAsync($"/native/orders/{id}?page=7");
 native.EnsureSuccessStatusCode();
 var nativeOrder = await JsonSerializer.DeserializeAsync(await native.Content.ReadAsStreamAsync(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
 Expect(nativeOrder == new OrderDto(id, "7", "read"), "Native HTTP did not return the use case's plain DTO");
+using var nativeUpdate = await raw.PutAsync($"/native/orders/{id}",
+    new StringContent($$"""{"id":"{{Guid.NewGuid()}}","state":"native"}""", Encoding.UTF8, "application/json"));
+nativeUpdate.EnsureSuccessStatusCode();
+var nativeUpdatedOrder = await JsonSerializer.DeserializeAsync(await nativeUpdate.Content.ReadAsStreamAsync(),
+    JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
+Expect(nativeUpdatedOrder == new OrderDto(id, "native", "default"),
+    "Native module body binding did not preserve path identity or return a plain resource");
+using var nativeProtected = await raw.GetAsync($"/native/protected/{id}");
+Expect(nativeProtected.StatusCode == HttpStatusCode.Unauthorized && nativeProtected.Headers.WwwAuthenticate.Count > 0,
+    "Native endpoint module lost application authorization");
+var nativePlain = await GetValueAsync<OrderDto>(raw, $"/native/plain/{id}");
+Expect(nativePlain.Label == "local", "Native module could not invoke an undecorated service contract");
 using var nativeDenied = await raw.GetAsync($"/native/orders/{id}?page=-1");
 Expect(nativeDenied.StatusCode == HttpStatusCode.BadRequest, "Native HTTP did not map an application policy rejection");
-var rpcDenied = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=-1");
+var rpcDenied = await GetOutcomeAsync<Result<OrderDto>>(http, $"/orders/{id}?page=-1", static failure => failure);
 Expect(rpcDenied is Failure readFailure && readFailure.Code == "order.page", "RPC did not map the same use case policy rejection");
 using var forged = await raw.PutAsync($"/orders/{id}",
     new StringContent($$"""{"id":"{{Guid.NewGuid()}}","state":"raw"}""", Encoding.UTF8, "application/json"));
@@ -109,7 +122,7 @@ var culture = CultureInfo.CurrentCulture;
 try
 {
     CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-    var result = await GetOutcomeAsync<Result<string>>(http, "/orders/lookup/" + Uri.EscapeDataString(lookup.Slug!) + "/Shipped/2026-04-10/2026-04-10T09:15:00.0001234Z/12.5/w-17/45/9.75");
+    var result = await GetOutcomeAsync<Result<string>>(http, "/orders/lookup/" + Uri.EscapeDataString(lookup.Slug!) + "/Shipped/2026-04-10/2026-04-10T09:15:00.0001234Z/12.5/w-17/45/9.75", static failure => failure);
     Expect(result is string lookupSuccess && lookupSuccess == "café #1?|Shipped|2026-04-10|2026-04-10T09:15:00.0001234Z|12.5|17|45|9.75",
         "Server binding did not read scalar and custom path values");
 }
@@ -162,38 +175,24 @@ static void Expect(bool condition, string message)
     }
 }
 
-static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> NativeReadOrderAsync(
-    Guid id, int? page, IServiceProvider services, CancellationToken cancellationToken)
-{
-    try
-    {
-        return TypedResults.Ok(await OrderServer.ReadValue.InvokeAsync(services, new ReadOrderRequest { Id = id, Page = page }, Context.Empty, cancellationToken));
-    }
-    catch (ServiceRejectedException rejected)
-    {
-        return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest,
-            title: rejected.Failure.Code, detail: rejected.Failure.Message);
-    }
-}
-
 static async Task<T> GetValueAsync<T>(HttpClient http, string uri, bool allowNull = false)
 {
     using var response = await http.GetAsync(uri);
     return await HttpRpcTransportResultReader.ReadValueAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), default, allowNull);
 }
 
-static async Task<T> GetOutcomeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(HttpClient http, string uri)
-    where T : IRpcResponse<T>
+static async Task<T> GetOutcomeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(HttpClient http, string uri, Func<Failure, T> createFailure)
+    where T : System.Runtime.CompilerServices.IUnion
 {
     using var response = await http.GetAsync(uri);
-    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), default);
+    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), default, createFailure);
 }
 
 static async Task<Result<OrderDto>> PutOrderAsync(HttpClient http, Guid id, string state)
 {
     using var response = await http.PutAsync($"/orders/{id}", new StringContent(
         JsonSerializer.Serialize(new UpdateBody(state), JsonSerializerOptions.NOF.GetRequiredTypeInfo<UpdateBody>()), Encoding.UTF8, "application/json"));
-    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<OrderDto>>(), default);
+    return await HttpRpcTransportResultReader.ReadAsync(response, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<OrderDto>>(), default, static failure => failure);
 }
 
 public sealed record UpdateBody(string State);
@@ -454,3 +453,47 @@ public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : Delega
 [JsonSerializable(typeof(Result<OrderDto>))]
 [JsonSerializable(typeof(Result<string>))]
 public partial class SmokeJsonContext : JsonSerializerContext;
+
+[AutoInject(ServiceLifetime.Singleton)]
+public sealed class SmokeEndpointModule : IHttpEndpointModule
+{
+    public void Map(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapGet("/native/orders/{id}", ReadAsync).AddEndpointFilter<ServiceRejectionHttpFilter>();
+        endpoints.MapPut("/native/orders/{id}", UpdateAsync).AddEndpointFilter<ServiceRejectionHttpFilter>();
+        endpoints.MapGet("/native/protected/{id}", ReadProtectedAsync)
+            .AddEndpointFilter<ServiceRejectionHttpFilter>();
+        endpoints.MapGet("/native/plain/{id}", ReadPlainAsync);
+    }
+
+    public static Task<Result<OrderDto>> ReadProtectedAsync(Guid id, HttpContext http, CancellationToken ct)
+        => http.InvokeAsync(OrderServer.ReadProtected.Descriptor, new ReadOrderRequest { Id = id }, ct);
+
+    public static async Task<Ok<OrderDto>> ReadPlainAsync(Guid id, HttpContext http, CancellationToken ct)
+        => TypedResults.Ok(await http.InvokeAsync(PlainOrderService.Read.Descriptor, new ReadOrderRequest { Id = id }, ct));
+
+    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> UpdateAsync(
+        Guid id, UpdateBody body, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(OrderServer.Update.Descriptor,
+            new UpdateOrderRequest { Id = id, Status = body.State }, ct)).Value switch
+        {
+            OrderDto order => TypedResults.Ok(order),
+            Failure failure => TypedResults.Problem(statusCode: 400, detail: failure.Message),
+            _ => throw new InvalidOperationException("Update returned no outcome.")
+        };
+
+    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ReadAsync(
+        Guid id, int? page, HttpContext http, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return TypedResults.Ok(await http.InvokeAsync(OrderServer.ReadValue.Descriptor,
+                new ReadOrderRequest { Id = id, Page = page }, cancellationToken));
+        }
+        catch (ServiceRejectedException rejected) when (rejected.Failure.Code == "order.page")
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest,
+                title: rejected.Failure.Code, detail: rejected.Failure.Message);
+        }
+    }
+}

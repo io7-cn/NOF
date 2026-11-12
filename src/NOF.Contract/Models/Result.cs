@@ -5,7 +5,7 @@ namespace NOF.Contract;
 
 /// <summary>Contains a payload-free success or a business failure.</summary>
 [JsonUnion(TypeClassifier = typeof(ResultJsonTypeClassifier))]
-public union Result(Success, Failure) : IRpcResponse<Result>
+public union Result(Success, Failure)
 {
     /// <summary>Creates a payload-free success with an optional user-facing message.</summary>
     public static Result Success(string message = "") => new(new Success(message));
@@ -37,13 +37,11 @@ public union Result(Success, Failure) : IRpcResponse<Result>
     public static Result<Page<T>> Page<T>(IEnumerable<T> items, int? totalCount = null)
         => Success(new Page<T>(items.ToArray(), totalCount));
 
-    /// <inheritdoc />
+    /// <summary>Creates a result containing the specified business failure.</summary>
     public static Result CreateFailure(Failure failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
         return failure;
     }
 
-    /// <inheritdoc />
-    public static Result CreateEmptyResponse() => Success();
 }

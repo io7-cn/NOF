@@ -89,7 +89,7 @@ public sealed class JsonRpcHttpClientTests
             new Dictionary<string, string?> { ["x-test"] = "header" },
             JsonSerializerOptions.NOF.GetRequiredTypeInfo<Ping>(),
             JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<Pong>>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(capturedRequest);
         Assert.Equal("2.0", capturedRequest.RootElement.GetProperty("jsonrpc").GetString());
@@ -130,7 +130,7 @@ public sealed class JsonRpcHttpClientTests
             [],
             JsonSerializerOptions.NOF.GetRequiredTypeInfo<Ping>(),
             JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<Pong>>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectFailure());
         Assert.Equal("-32601", result.ExpectFailure().Code);

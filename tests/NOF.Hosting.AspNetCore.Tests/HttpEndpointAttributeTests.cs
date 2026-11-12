@@ -1,3 +1,4 @@
+using NOF.Hosting.AspNetCore;
 using Xunit;
 
 namespace NOF.Contract.Tests;

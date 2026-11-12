@@ -8,8 +8,8 @@ breaking change from NOF 11. Rebuild contracts, servers and clients together.
 ## Values are the success cases
 
 ```csharp
-public union Result<T>(T, Failure) : IRpcResponse<Result<T>>;
-public union Result(Success, Failure) : IRpcResponse<Result>;
+public union Result<T>(T, Failure);
+public union Result(Success, Failure);
 ```
 
 `Result<T>` contains `T` directly. `Success<T>` is optional metadata containing
@@ -118,15 +118,13 @@ an initial successful value does not promise successful completion of the stream
 
 ## Boundaries, deployment and rollback
 
-`IRpcResponse<TSelf>` extends `IUnion` and supplies static `CreateFailure` and
-`CreateEmptyResponse` factories. It has no success flag or reflective payload
-projection. Custom response unions use the shared Abstraction failure.
-`RpcResponse.Require<TResponse>` preserves an exact declared response type or
-propagates a shared failure through its static factory; it rejects an absent case
-or a different successful response type. An empty successful HTTP body is valid
-for payload-free Result only. Marked failure bodies on non-success HTTP statuses
-preserve the business code and message; other bodies become diagnostics with the
-numeric HTTP status as the code. OAuth endpoints retain their standard protocol.
+`IRpcResponse<TSelf>` and its empty-response factory are removed. Result and custom
+business unions carry no RPC outcome interface. Generated service invocation reports
+policy rejection with ServiceRejectedException; REST adapters map it independently of
+business Failure cases. Optional legacy protocol readers accept explicit failure and
+empty-body conversion delegates. HTTP metadata belongs to Hosting, not Contract.
+Native REST endpoints return resource DTOs, 201/204 or ProblemDetails rather than a
+mandatory Result envelope. OAuth endpoints retain their standard protocol.
 
 Match successful `T` directly, opt into `Success<T>` for messages, replace failure
 reads with `failure.Code/Message`, and move `Extra` metadata into explicit DTOs.

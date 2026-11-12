@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
@@ -22,7 +22,5 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<Compile Include="..\SourceGenerator.Shared\HttpRoutePrefix.cs" Link="Shared\HttpRoutePrefix.cs" />
-	</ItemGroup>
+
 </Project>

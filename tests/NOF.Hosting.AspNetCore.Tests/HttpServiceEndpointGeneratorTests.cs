@@ -1,5 +1,7 @@
 using Microsoft.CodeAnalysis;
 using NOF.Contract.SourceGenerator;
+using NOF.Hosting.AspNetCore;
+using NOF.Hosting.SourceGenerator;
 using Xunit;
 
 namespace NOF.Contract.Tests;
@@ -11,6 +13,7 @@ public class HttpServiceEndpointGeneratorTests
     {
         var source = $$"""
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace App;
             public sealed class UpdateRequest
             {
@@ -41,6 +44,7 @@ public class HttpServiceEndpointGeneratorTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace App;
             public record Query(long Id);
             public record Dto(long Id);

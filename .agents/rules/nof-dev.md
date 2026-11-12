@@ -28,9 +28,9 @@ Use this file when contributing to the NOF framework itself.
 
 ## Current Runtime Patterns
 
-- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions need no IRpcResponse constraint. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
+- Application services: declare IApplicationService contracts and partial ApplicationService<TService> containers; implement generated Service.Operation overrides. DTOs, nullable values and business unions are ordinary responses; IRpcResponse is removed. AddApplicationPart automatically registers scoped operation implementations; register containers with AddApplicationService<TService>(). Operation identity is service contract plus operation, so input/output models may be shared. See docs/en/design/application-requests.md.
 
-- RPC: `IApplicationService`, optional `[TransportOverHttp(...)]` or `[TransportOverMemory]` metadata, `ApplicationService<TService>`, generated server operation entries, and `AddApplicationService<TServer>()`.
+- RPC: `IApplicationService`, `ApplicationService<TService>`, generated server operation entries, and `AddApplicationService<TServer>()`.
 - Messaging: plain payload types plus `CommandHandler<T>` / `NotificationHandler<T>`; all handler and dispatch APIs receive `Context`.
 - In-memory events: `InMemoryEventHandler<T>`, `IEventPublisher`, and optional `PublishAsEvent()` ambient convenience.
 - Transactional outbox: asynchronous `DeferSendAsync(...)` / `DeferPublishAsync(...)`, plus ordered variants, followed by `IDbContext.SaveChangesAsync()`.
@@ -41,7 +41,7 @@ Use this file when contributing to the NOF framework itself.
 - Registries: `EventHandlerRegistry`, `MappingRegistry`, `CommandHandlerRegistry`, `NotificationHandlerRegistry`, and `ApplicationServiceRegistry` are singleton instances stored in DI and freeze on first read. Do not reintroduce a process-wide type registry.
 - Ambient helpers: `Mapper`, `IdGenerator`, and `EventPublisher` are scoped through daemon-service resolution; `Context.Current` follows the current async execution flow. Explicit APIs remain the primary runtime contracts.
 
-Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. Optional HTTP annotations generate server metadata only. Dedicated REST endpoint-module APIs remain future work.
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. HTTP annotations/generators have moved to Hosting; keep them out of Contract.
 
 Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 

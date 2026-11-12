@@ -97,6 +97,6 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("nameof(global::App.IMyService.Ping)] = new global::NOF.Application.ServiceOperationMapping(typeof(Ping), typeof(global::App.PingRequest), typeof(global::NOF.Contract.Result))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Get)] = new global::NOF.Application.ServiceOperationMapping(typeof(Get), typeof(global::App.GetRequest), typeof(global::NOF.Contract.Result<global::App.MyDto>))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Contract.Result))", generatedCode);
-        Assert.Contains("static failure => global::NOF.Contract.Result<global::App.MyDto>.CreateFailure(failure)", generatedCode);
+        Assert.DoesNotContain("CreateFailure", generatedCode);
     }
 }

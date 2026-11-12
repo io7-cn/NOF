@@ -38,7 +38,7 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
 
         if (dto is null)
         {
-            return Result.Fail("404", "Config node not found.");
+            return Result.Fail(ConfigNodeErrorCodes.NotFound, "Config node not found.");
         }
 
         await _cache.SetAsync(

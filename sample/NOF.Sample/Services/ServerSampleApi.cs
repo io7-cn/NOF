@@ -7,8 +7,13 @@ namespace NOF.Sample.Services;
 /// <summary>Connects the sample UI port to server operations without generated clients.</summary>
 public sealed class ServerSampleApi(IServiceProvider services) : ISampleApi
 {
-    public Task<Result> CreateConfigNodeAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
-        => NOFSampleService.CreateConfigNode.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<Result> CreateConfigNodeAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await NOFSampleService.CreateConfigNode.InvokeAsync(services, request, context, cancellationToken)).Value switch
+        {
+            CreatedConfigNode => Result.Success(),
+            NOF.Abstraction.Failure failure => failure,
+            _ => throw new InvalidOperationException("Create did not return a business outcome.")
+        };
 
     public Task<Result> DeleteConfigNodeAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
         => NOFSampleService.DeleteConfigNode.InvokeAsync(services, request, context, cancellationToken);

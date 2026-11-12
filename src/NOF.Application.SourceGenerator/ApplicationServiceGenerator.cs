@@ -112,11 +112,10 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 sb.AppendLine("        public override bool AllowsNullResponse => true;");
             }
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var outcomeFactory = method.ReturnType.AllInterfaces.Any(static contract =>
-                contract.OriginalDefinition.ToDisplayString() == "NOF.Contract.IRpcResponse<TSelf>")
-                ? $"static failure => {responseType}.CreateFailure(failure), " : string.Empty;
             var allowNull = method.ReturnType.NullableAnnotation == NullableAnnotation.Annotated
                 || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+            sb.AppendLine("        /// <summary>Identifies this operation for host adapters without transport metadata.</summary>");
+            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<{responseType}> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Contract.Context context,");
@@ -125,7 +124,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);");
             sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IApplicationServiceInvoker>(services);");
             sb.AppendLine($"            var execution = await invoker.InvokeAsync<{serviceTypeName}>(nameof({serviceTypeName}.{method.Name}), request, context, cancellationToken).ConfigureAwait(false);");
-            sb.AppendLine($"            return execution.Require<{responseType}>({outcomeFactory}allowNull: {(allowNull ? "true" : "false")});");
+            sb.AppendLine($"            return execution.Require<{responseType}>(allowNull: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine();

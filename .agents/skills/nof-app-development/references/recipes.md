@@ -126,3 +126,11 @@ var result = await OrderService.GetOrder.InvokeAsync(services, request, context,
 This generated server entry runs authorization, tenant and invocation-scope policies.
 No client interface or HTTP/Local Client is generated. Remote callers maintain their
 own HTTP integration, as demonstrated by the sample UI API ports/adapters.
+
+## HTTP endpoint module
+
+Use IHttpEndpointModule with AutoInject(ServiceLifetime.Singleton). Map native ASP.NET
+Core endpoints, construct business requests from HTTP inputs and call
+http.InvokeAsync(Service.Operation.Descriptor, request, ct). Use
+ServiceRejectionHttpFilter for policy rejection and feature-owned TypedResults for
+business failures. Keep HttpEndpoint/transport annotations out of Contract.

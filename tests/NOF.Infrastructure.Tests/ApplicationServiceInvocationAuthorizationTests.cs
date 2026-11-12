@@ -175,7 +175,6 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
     }
 }
 
-[TransportOverMemory]
 public partial interface IProtectedFleetService : IApplicationService
 {
     [RequirePermission("fleet.read")]

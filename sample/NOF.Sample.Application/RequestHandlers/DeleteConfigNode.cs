@@ -24,7 +24,7 @@ public class DeleteConfigNode : NOFSampleService.DeleteConfigNode
             .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return Result.Fail(ConfigNodeErrorCodes.NotFound, "Node not found.");
         }
 
         // 检查是否有子节点
@@ -34,7 +34,7 @@ public class DeleteConfigNode : NOFSampleService.DeleteConfigNode
         var hasChildren = children?.HasChildren() ?? false;
         if (hasChildren)
         {
-            return Result.Fail("400", "Cannot delete node with children.");
+            return Result.Fail(ConfigNodeErrorCodes.HasChildren, "Cannot delete node with children.");
         }
 
         node.MarkAsDeleted();

@@ -91,7 +91,6 @@ public sealed class HostTenantInboundMiddlewareTests
     }
 }
 
-[TransportOverMemory]
 public interface IHostTenantTestService : IApplicationService
 {
     [UseHostTenant]

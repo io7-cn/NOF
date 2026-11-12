@@ -15,7 +15,7 @@ public sealed class NOFSampleHarnessTests
     {
         await using var host = await CreateHostAsync();
 
-        var createResult = await host.CallAsync<Result>(
+        var createResult = await host.CallAsync<Result<CreatedConfigNode>>(
             static (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "root-a" },
                 context,
@@ -51,7 +51,7 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var createParent = await scope.CallAsync<Result>(
+            var createParent = await scope.CallAsync<Result<CreatedConfigNode>>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
@@ -65,7 +65,7 @@ public sealed class NOFSampleHarnessTests
                     cancellationToken));
             var root = Assert.Single(roots.Nodes);
 
-            var createChild = await scope.CallAsync<Result>(
+            var createChild = await scope.CallAsync<Result<CreatedConfigNode>>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,

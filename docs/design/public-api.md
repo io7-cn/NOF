@@ -1,133 +1,14 @@
 # Public API Overview
 
-## Current Model
+The application programming model is proto-style IApplicationService declarations,
+partial ApplicationService containers and generated Service.Operation overrides.
+IRpcResponse and all client generation are removed. Policies reject execution separately
+from business response unions.
 
-Application service contracts inherit IApplicationService and keep generated Service.Operation overrides independently of transport. See the [application request guide](../en/design/application-requests.md). The interface rules below describe the RPC adapter surface.
+Native HTTP APIs live in IHttpEndpointModule, using ASP.NET Core binding and TypedResults.
+Generated Service.Operation.Descriptor identifies an application operation for
+HttpContext.InvokeAsync. Contract references no Hosting package or HTTP annotation.
+Legacy HTTP/RPC metadata and diagnostics now belong to Hosting.
 
-NOF RPC contracts are interface-first and method-based.
-
-```csharp
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IUserService : IApplicationService
-{
-    [HttpEndpoint(HttpVerb.Get, "/api/users/get")]
-    Result<UserDto> GetUser(GetUserRequest request);
-
-    [HttpEndpoint(HttpVerb.Get, "/api/users/watch")]
-    Result<IAsyncEnumerable<UserEvent>> WatchUsers(WatchUsersRequest request);
-}
-```
-
-## Service Interface Rules
-
-- RPC interfaces implement `IApplicationService`.
-- Each RPC method takes exactly one request object.
-- Service methods are synchronous on the contract surface: no `Task`, no `ValueTask`, no `CancellationToken`.
-- Method overloading is not supported.
-- `void` return types are not supported.
-- Server-streaming methods return `Result<IAsyncEnumerable<T>>` on the contract surface.
-- Controller RPC operation templates can bind a required path segment such as `{id}` to the request's `Id` property. Supported property types include `string`, enums, `IParsable<TSelf>`, and types with a compatible public static `TryParse`.
-
-## Application Implementation Model
-
-Application-side implementations use `ApplicationService<TService>` and generated nested handler base classes:
-
-```csharp
-public partial class UserService : ApplicationService<IUserService>;
-
-public class GetUser : UserService.GetUser
-{
-    public override Task<Result<UserDto>> HandleAsync(GetUserRequest request, Context context, CancellationToken cancellationToken)
-    {
-        return Task.FromResult(Result.Success(new UserDto(request.Id, "Alice")));
-    }
-}
-```
-
-Call `UserService.GetUser.InvokeAsync(services, request, context, ct)` on the server.
-This generated operation entry executes application pipelines through
-`IApplicationServiceInvoker`. NOF generates no client interface, HTTP Client or Local
-Client. Remote callers maintain their own HTTP integrations.
-
-Streaming methods are implemented with the same generated handler model:
-
-```csharp
-public class WatchUsers : UserService.WatchUsers
-{
-    public override Task<Result<IAsyncEnumerable<UserEvent>>> HandleAsync(WatchUsersRequest request, Context context, CancellationToken cancellationToken)
-    {
-        return Task.FromResult(Result.Stream(Stream()));
-
-        async IAsyncEnumerable<UserEvent> Stream()
-        {
-            yield return new UserEvent("connected");
-            await Task.Delay(1000, cancellationToken);
-            yield return new UserEvent("updated");
-        }
-    }
-}
-```
-
-## HTTP Exposure
-
-`NOF.Hosting.AspNetCore` maps registered RPC servers automatically during application initialization:
-
-```csharp
-builder.AddApplicationService<UserService>();
-```
-
-Modules and plugins that receive only `IServiceCollection` can call
-`services.AddApplicationService<UserService>()` directly. This registration API belongs to
-`NOF.Application` in the `Microsoft.Extensions.DependencyInjection` namespace and
-requires no host builder or infrastructure package. The builder API delegates to
-it. Both register a scoped server and update the collection-local `ApplicationServiceRegistry`;
-repeated registration is idempotent, and the last server registered for a contract
-wins. Register before the registry is first read. Host initialization still owns
-transport setup and endpoint mapping.
-
-OpenAPI service registration happens during builder creation. Call `app.MapOpenApi()` explicitly when you want to expose the document.
-
-When the mapped RPC method returns `Result<IAsyncEnumerable<T>>`, `NOF.Hosting.AspNetCore` exposes it as an SSE endpoint and application-owned HTTP callers consume the stream.
-
-## RPC Transport Declaration
-
-An application service contract is local by default. It may explicitly choose one transport adapter:
-
-```csharp
-[TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc")]
-public interface IUserService : IApplicationService;
-```
-
-Use `[TransportOverMemory]` or omit transport metadata for in-process use. Neither
-exposes automatic HTTP routes. Server invocation remains available through the
-generated operation; each `IApplicationServiceTransport` independently checks metadata.
-
-`TransportOverAttribute` is abstract and belongs to `NOF.Contract`, so callers and implementations read the same transport metadata from the RPC service interface. The analyzer rejects multiple transport declarations, as well as transport attributes placed on interfaces that do not inherit `IApplicationService`. The route prefix is optional. During automatic endpoint registration, `ControllerRpc` prepends it to each operation route, while `JsonRpc` uses it as the single JSON-RPC endpoint route. A JSON-RPC contract without a route prefix is mapped at `/`.
-
-Registering the server through `AddApplicationService<UserService>()` exposes it using the transport style and route prefix declared by the contract.
-
-The declaration generates server HTTP binding metadata only; it supplies no network proxy.
-
-Because the endpoint is bound to one RPC server, the JSON-RPC method key is only the contract operation name, such as `GetUser`. Request inbound middleware continues to run before the handler. Business `IResult` values are encoded as the JSON-RPC `result`; protocol failures are encoded as `error`.
-
-Methods on a `JsonRpc` contract must not declare `[HttpEndpoint]`: JSON-RPC always uses the service-level route prefix and the RPC operation name. `ControllerRpc` methods may use `[HttpEndpoint]` to select their HTTP verb and operation route.
-
-JSON-RPC supports unary calls and streaming calls with object `params`. Streaming responses use SSE, with each `data` payload containing a JSON-RPC response envelope for one stream item. Batch calls and notifications are intentionally excluded.
-
-## Diagnostics
-
-Current RPC analyzer diagnostics include:
-
-- `NOF200`: `[HttpEndpoint]` request type must be a reference type.
-- `NOF201`: legacy class-level HTTP endpoint metadata does not support route parameters.
-- `NOF202`: class request with explicit constructors must include a public parameterless constructor.
-- `NOF207`: invalid RPC method signature.
-- `NOF208`: service method overloads are not supported.
-- `NOF209`: `void` return types are not supported.
-- `NOF211`: a transport attribute can only be declared on an interface inheriting `IApplicationService`.
-- `NOF212`: an RPC service contract cannot declare multiple `TransportOverAttribute` implementations.
-- `NOF213`: methods on a JSON-RPC contract must not declare `[HttpEndpoint]`.
-- `NOF215`: an HTTP RPC route prefix is invalid.
-- `NOF216`: methods on an in-memory RPC contract must not declare `[HttpEndpoint]`.
-- `NOF217`: a Controller RPC path template cannot be bound to its request object.
-- `NOF300`: a class inheriting `ApplicationService<TService>` must be `partial`.
+See the [service API and migration guide](../en/design/application-requests.md) and
+[complete configuration REST implementation](../en/design/configuration-rest.md).

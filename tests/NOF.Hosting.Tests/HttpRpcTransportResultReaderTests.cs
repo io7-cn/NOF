@@ -16,7 +16,7 @@ public sealed class HttpRpcTransportResultReaderTests
         {
             Content = new StringContent("""{"$kind":"failure","code":"permission.denied","message":"Access denied"}""", Encoding.UTF8, "application/json")
         };
-        var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None);
+        var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None, static failure => failure);
         Assert.Equal("permission.denied", result.ExpectFailure().Code);
         Assert.Equal("Access denied", result.ExpectFailure().Message);
     }
@@ -26,8 +26,8 @@ public sealed class HttpRpcTransportResultReaderTests
     {
         using var response = new HttpResponseMessage(HttpStatusCode.NoContent);
         await Assert.ThrowsAsync<InvalidOperationException>(() => HttpRpcTransportResultReader.ReadAsync(
-            response, CreateTypeInfo<Result<TokenResponse>>(), CancellationToken.None));
-        Assert.NotNull((await HttpRpcTransportResultReader.ReadAsync(response, CreateTypeInfo<Result>(), CancellationToken.None)).ExpectSuccess());
+            response, CreateTypeInfo<Result<TokenResponse>>(), CancellationToken.None, static failure => failure));
+        Assert.NotNull((await HttpRpcTransportResultReader.ReadAsync(response, CreateTypeInfo<Result>(), CancellationToken.None, static failure => failure, static () => Result.Success())).ExpectSuccess());
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class HttpRpcTransportResultReaderTests
         var result = await HttpRpcTransportResultReader.ReadAsync(
             response,
             CreateTypeInfo<Result<TokenResponse>>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectFailure());
         Assert.Equal("conflict", result.ExpectFailure().Code);
@@ -65,7 +65,7 @@ public sealed class HttpRpcTransportResultReaderTests
         var result = await HttpRpcTransportResultReader.ReadAsync(
             response,
             CreateTypeInfo<Result<TokenResponse>>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectSuccess());
         Assert.Equal("abc", result.ExpectSuccess()!.Token);
@@ -82,7 +82,7 @@ public sealed class HttpRpcTransportResultReaderTests
                 "application/json")
         };
 
-        var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None);
+        var result = await HttpRpcTransportResultReader.ReadFailureAsync<Result<TokenResponse>>(response, CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectFailure());
         Assert.Equal("401", result.ExpectFailure().Code);
@@ -98,7 +98,7 @@ public sealed class HttpRpcTransportResultReaderTests
         var result = await HttpRpcTransportResultReader.ReadAsync(
             response,
             CreateTypeInfo<Result>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectFailure());
         Assert.Equal("302", result.ExpectFailure().Code);
@@ -118,7 +118,7 @@ public sealed class HttpRpcTransportResultReaderTests
         var result = await HttpRpcTransportResultReader.ReadAsync(
             response,
             CreateTypeInfo<Result<TokenResponse>>(),
-            CancellationToken.None);
+            CancellationToken.None, static failure => failure);
 
         Assert.NotNull(result.ExpectFailure());
 

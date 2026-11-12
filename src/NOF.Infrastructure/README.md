@@ -173,10 +173,11 @@ while application authorization and tenant policies still run. Authorization and
 handler resolution. Inject the invoker directly when an adapter must match the
 `ServiceCompleted`/`ServiceRejected` outcome instead of using typed `InvokeAsync`.
 
-Undecorated and `[TransportOverMemory]` contracts remain local. Each
-`IApplicationServiceTransport` checks metadata independently; the built-in HTTP
-transport maps only explicitly HTTP-decorated services. HTTP binding and serializer
-metadata generation remains server-only. See the [migration guide](../../docs/en/design/application-requests.md).
+Plain contracts expose no HTTP routes. Native IHttpEndpointModule instances in the HTTP
+host own routing and use HttpContext.InvokeAsync with generated operation descriptors.
+Optional legacy transport metadata now belongs to Hosting rather than Contract.
+Each IApplicationServiceTransport independently checks its host-owned metadata.
+See the [REST implementation](../../docs/en/design/configuration-rest.md).
 
 ## RPC Server Transport Extension Point
 

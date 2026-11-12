@@ -1,12 +1,13 @@
+using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace NOF.Contract;
+namespace NOF.Hosting.AspNetCore;
 
-/// <summary>Identifies a generated Controller RPC route in a contract assembly.</summary>
+/// <summary>Identifies a generated Controller RPC route in a host adapter assembly.</summary>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 public abstract class GeneratedHttpRpcRouteAttribute : Attribute
 {

@@ -16,7 +16,7 @@ NOF 面向 HTTP、本地调用、后台任务和消息消费者，支持 DDD 与
 ASP.NET Core 提供 HTTP 能力，NOF 提供应用执行约定、领域边界，以及可靠持久化和消息语义。
 DDD 不要求微服务部署，也不要求每个实体继承框架基类；简单 CRUD 可以保持简单。
 
-现有 ServiceOperation 强制 IRpcResponse，入站上下文使用 IUnion 响应。Failure 已统一到
+此前的 RPC Handler 强制 IRpcResponse，入站上下文使用 IUnion 响应。Failure 已统一到
 Abstraction，但 JSON 判别字段以及 Result 的传输工厂仍耦合了业务值和协议。
 Domain 的 IRepository 暴露 LINQ、跟踪和 Attach 操作。把类型移进 Abstraction，
 不等于它的接口就已传输无关。
@@ -36,7 +36,8 @@ Native AOT。已发布版本及标签不可变；依赖未合并变更时须记�
 
 完全移除 Client 生成：保留 proto 风格契约及生成的服务端操作（包括静态 InvokeAsync），
 不生成接口、HTTP 或 Local Client。HTTP 元数据可选且仅用于服务端，远程 HTTP 集成由
-调用方维护，示例使用显式 UI 接口及适配器。原生端点模块设计仍属后续工作，尚未成为框架 API。
+调用方维护，示例使用显式 UI 接口及适配器。已实现原生 IHttpEndpointModule、生成的操作描述符及 HTTP 策略桥接，配置 CRUD 已落地。
+HttpEndpoint 和 HTTP 生成器迁入 Hosting；IRpcResponse 及生成的结果专用拒绝工厂已移除。
 
 选择方案 3。用例接收类型明确的请求和执行上下文，返回声明的业务结果。
 返回值可以是 DTO、可空值、Result<T> 或业务 Union，核心不要求 RPC 响应接口。
@@ -101,7 +102,7 @@ Command/Notification 的消息出站投递管线继续保留。
    通过同一个服务操作模型验证原生 ASP.NET Core 和 RPC 适配器，保持授权/租户检查有效。
 2. **策略与上下文拆分**：共享应用规则迁入应用管线，协议规则留在适配器。
    保持每一步的安全行为，避免为去重而静默移除认证或授权。
-3. **纯结果与编解码器**：移除核心业务结果上的 IRpcResponse 和 JSON 元数据，
+3. **纯结果与编解码器**：IRpcResponse 已移除，继续分离核心业务结果上的 JSON 元数据，
    协议分类由编解码器和源生成元数据承担；协议变化时协调客户端与服务端。
 4. **持久化边界**：建立面向聚合的写端口，分离读取模型，以 Provider 对等测试收窄通用 ORM 外观。
 5. **可选集成**：简化宿主包装，按实际消费者需求和维护成本评估协议、UI、存储及状态机模块。

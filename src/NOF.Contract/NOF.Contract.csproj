@@ -13,12 +13,11 @@
     <!-- NuGet Package Settings -->
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Contract</PackageId>
-    <Description>Contract layer for the NOF Framework — requests, commands, notifications, Result type, and HTTP endpoint attributes with source generation.</Description>
+    <Description>Contract layer for the NOF Framework — transport-independent application service contracts, messages and business outcomes.</Description>
   </PropertyGroup>	
 
 	<ItemGroup>
 		<ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
-		<Compile Include="..\SourceGenerator.Shared\HttpRoutePrefix.cs" Link="Internal\HttpRoutePrefix.cs" />
 		<None Include="..\NOF.Contract.SourceGenerator\bin\$(Configuration)\netstandard2.0\NOF.Contract.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
 	</ItemGroup>
 

@@ -1,4 +1,5 @@
-namespace NOF.Contract;
+using NOF.Contract;
+namespace NOF.Hosting.AspNetCore;
 
 /// <summary>
 /// Marks a service method to be exposed as an HTTP endpoint.

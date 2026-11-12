@@ -1,10 +1,10 @@
-# Application services and generated operations
+# Application services and HTTP endpoint modules
 
-[简体中文](../../zh-CN/design/application-requests.md) · [Architecture decision](0001-application-core-and-adapters.md)
+[简体中文](../../zh-CN/design/application-requests.md) · [Configuration REST example](configuration-rest.md) · [Architecture decision](0001-application-core-and-adapters.md)
 
-An application service operation is the use case. Keep the proto-style service contract,
-generated `Service.Operation` base and override workflow. Client generation is completely
-removed: NOF generates no client interfaces, HTTP clients or local clients.
+An application service operation is the use case. Keep the proto-style contract,
+generated `Service.Operation` base and override workflow. Contracts contain business
+requests/responses and application policy metadata, with no HTTP route or binding declarations.
 
 ```csharp
 public interface IOrderService : IApplicationService
@@ -12,9 +12,7 @@ public interface IOrderService : IApplicationService
     OrderDto? Find(FindOrderRequest request);
     Result<OrderDto> Save(SaveOrderRequest request);
 }
-
 public partial class OrderService : ApplicationService<IOrderService>;
-
 public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 {
     public override Task<OrderDto?> HandleAsync(
@@ -23,91 +21,109 @@ public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 }
 ```
 
-Contracts declare one input and a synchronous business return type. Context,
-CancellationToken and Task belong to the generated server API. DTOs, nullable values,
-business unions and optional Result responses are supported. `Success<T>` remains an
-optional wrapper for successful message metadata; IRpcResponse is not required.
+Each declaration has one reference-type input and a synchronous business return.
+Context, CancellationToken and Task belong to the generated server API. DTOs, nullable
+values and business unions are supported. `IRpcResponse<TSelf>` is removed; `Result<T>`
+is a business union, not a transport contract. `Success<T>` is an optional message wrapper.
+No client interfaces, HTTP Clients or Local Clients are generated.
 
-## Registration and invocation
+## Registration and local invocation
 
 ```csharp
 builder.AddApplicationPart(typeof(OrderService).Assembly);
 builder.AddApplicationService<OrderService>();
-
 var order = await OrderService.Find.InvokeAsync(services, request, context, ct);
 ```
 
-Register the service container once. Application-part initialization registers operation
-implementations as scoped services; no per-operation host registration is needed.
-NOF hosts already add the calling assembly; add a separate Application assembly once.
-Generated static InvokeAsync is server invocation glue, not a transport-selected client.
-It resolves IApplicationServiceInvoker, creates a fresh invocation scope and executes
-the inbound application policies. Context items flow directly; the caller's scoped
-identity is cloned into the invocation scope. Local calls do not encode HTTP headers
-or repeat bearer-token authentication; application authorization still runs. Do not resolve and call HandleAsync directly, which
-would bypass these policies. Identity is service contract plus operation name; operations
-may share request/response types while retaining different implementations and policies.
+Application-part initialization registers operation implementations as scoped services.
+Register the service container once, not individual operations. NOF hosts already add
+the calling assembly; add a separate Application assembly once. Operation identity is
+contract plus operation name, so operations may share request/response models.
 
-## HTTP adapters and callers
+Local invocation creates a fresh scope, transfers Context items and clones the caller's
+scoped identity. It runs authorization/tenant policies before handler resolution and
+propagates caller cancellation. It does not serialize headers or reauthenticate tokens.
+Do not directly resolve and invoke HandleAsync, which bypasses these policies.
 
-An undecorated contract exposes no automatic HTTP routes. TransportOverMemory remains
-an explicit local-only declaration. Optional TransportOverHttp/HttpEndpoint metadata
-continues to support the existing server HTTP adapter, including controller and JSON-RPC
-routes, server binding, serialization metadata, SSE and OpenAPI. It emits no client code.
+## Native HTTP endpoint modules
 
-Native ASP.NET Core endpoints can call Service.Operation.InvokeAsync and return native
-TypedResults, files or other host results. Handlers need no IResult or HttpContext.
-Endpoint authorization belongs to the host; invocation also executes NOF application
-authorization and tenant policies. A dedicated REST endpoint-module API remains future
-work; the current implementation does not introduce a new endpoint DSL.
+`IHttpEndpointModule` groups routes in the HTTP adapter. Use native MapGet/MapPost,
+route/body/query binding, TypedResults, endpoint filters and OpenAPI metadata.
+`[AutoInject(ServiceLifetime.Singleton)]` registers a module when its assembly is added
+as an application part; host initialization calls Map once. A host needs no per-operation
+registration or centralized collection of paths, bindings and status mappings.
 
-Remote callers maintain their own HTTP integration or use external tooling against the
-HTTP API. A Contract reference no longer supplies a network proxy. The sample UI uses
-application-owned ISampleApi/IOAuthDemoApi ports: server adapters call InvokeAsync; WASM
-and MAUI adapters use explicit HttpClient calls. These adapters are sample code, not
-framework-generated output. Their HTTP method, path, binding and codec choices are
-maintained with the corresponding server endpoints.
+```csharp
+[AutoInject(ServiceLifetime.Singleton)]
+public sealed class OrderEndpoints : IHttpEndpointModule
+{
+    public void Map(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
+        {
+            var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
+            return order is null ? Results.NotFound() : Results.Ok(order);
+        }).AddEndpointFilter<ServiceRejectionHttpFilter>();
+    }
+}
+```
 
-## Execution semantics
+Each generated operation exposes a typed `Descriptor` containing contract identity,
+operation name and nullability, with no HTTP dependency. `HttpContext.InvokeAsync`
+uses it to run HTTP authentication and the application inbound pipeline. It preserves
+policy response headers and returns the declared business value. The descriptor avoids
+string operation names or repeated request/response generic arguments at the endpoint.
 
-An explicit nullable response permits null; a non-nullable operation returning null is
-an execution error. Completed Failure/business union values remain business values.
-Policies use RequestInboundContext.Reject(failure), separately from SetResponse(value).
-Handler resolution follows policies and normalized context binding. Caller-requested
-cancellation propagates rather than becoming failure.
+`ServiceRejectionHttpFilter` maps execution rejection to native ProblemDetails, honoring
+authorization status/challenge headers. Completed business failures remain business
+values and are mapped by the feature module. Use ASP.NET Core AddProblemDetails and
+status-code/exception middleware according to the host's error policy. HTTP authorization,
+files, content negotiation and other web facilities remain native ASP.NET Core concerns.
 
-ServiceExecution distinguishes completed values (including null) from policy rejection.
-It is an invocation outcome, never a wire envelope or handler return contract. Static
-InvokeAsync reports rejection as ServiceRejectedException for ordinary responses; explicit
-IRpcResponse outcomes retain a statically emitted failure factory, preserving Result
-behavior without reflection. Adapters needing explicit rejection mapping can inject
-IApplicationServiceInvoker and match ServiceCompleted/ServiceRejected themselves.
+For Native AOT, use endpoint methods with explicit response signatures when the service
+container is generated in the same compilation. ASP.NET Core's request-delegate generator
+cannot infer a lambda return type from another generator's not-yet-visible output.
 
-Request/response outbound abstractions are also removed: IRequestOutboundPipelineExecutor,
-RequestOutboundHandlerDelegate, IRequestOutboundMiddleware, RequestOutboundContext and
-AddRequestOutboundMiddleware. Native HttpClient DelegatingHandler owns remote token/header
-behavior and .NET HTTP tracing. The sample downstream handler reads per-call request
-options rather than depending on a service contract. Command/Notification outbound
-pipelines remain part of reliable messaging. HTTP ingress header filtering is configured
-through HttpRequestHeaderOptions (renamed from HttpHeaderOutboundOptions).
+The sample implements configuration CRUD, files, active-file selection, configuration
+queries and SSE in ConfigNodeEndpoints. OAuth demo routes live in a separate module.
+Its Contract project references no Hosting package and contains no HTTP annotations.
+See the [complete REST example](configuration-rest.md) for requests, handlers, routes,
+host registration and verification.
+
+## Execution and transport boundaries
+
+ServiceExecution distinguishes completed business values (including declared null)
+from policy rejection. It is an invocation outcome, never a wire envelope or handler
+return contract. All generated typed InvokeAsync entries report policy rejection as
+ServiceRejectedException, including operations returning Result. No result-specific
+failure factory is generated. Business Failure cases remain ordinary returned values.
+
+Legacy controller/JSON-RPC adapters remain available in the HTTP hosting package.
+HttpEndpoint, HttpVerb, transport annotations, route metadata and HTTP generators have
+moved from Contract to Hosting. They are optional host-owned compatibility facilities;
+the sample's pure contracts and REST modules do not use them. Contract's analyzer only
+validates transport-independent service signatures. Legacy outcome readers accept
+explicit caller-owned failure/empty-body conversion delegates instead of an RPC outcome
+interface. Result no longer defines CreateEmptyResponse.
+
+Request/response outbound executor/delegate/context/middleware APIs and client generation
+remain removed. Remote callers maintain HttpClient integrations and DelegatingHandler;
+Command/Notification outbound delivery pipelines remain supported.
 
 ## Breaking migration
 
 | Previous API | Current API |
 | --- | --- |
-| IRpcService | IApplicationService |
-| `RpcServer<TService>` | `ApplicationService<TService>` |
-| `RpcHandler<TRequest,TResponse>` | generated Service.Operation / `ServiceOperation<TRequest,TResponse>` |
-| `AddRpcServer<TService>`() | `AddApplicationService<TService>`() |
-| `IRpcClient<TService>` / `IApplicationServiceClient<TService>` | removed, no replacement client marker |
-| Generated I…ServiceClient / Http…ServiceClient | application-maintained HTTP integration |
-| Generated Local…ServiceClient | Service.Operation.InvokeAsync(services, request, context, ct) |
-| AddLocalApplicationServiceClient / GetRpcClient | removed; test `CallAsync<TResult>` accepts an invocation delegate |
-| Mandatory transport declaration / IRpcResponse | optional HTTP metadata; plain, nullable or union business response |
+| IRpcService / RpcServer / AddRpcServer | IApplicationService / ApplicationService / AddApplicationService |
+| Generated clients and client marker | removed; explicit HTTP integration or server InvokeAsync |
+| Contract HttpEndpoint / transport annotations | HTTP endpoint modules; legacy metadata belongs to Hosting |
+| IRpcResponse and CreateEmptyResponse | removed; business unions and explicit adapter conversion |
+| Generated Result failure projection on rejection | ServiceRejectedException; HTTP filter maps policy rejection |
+| String operation identity at native endpoints | generated Service.Operation.Descriptor |
+| AddRequestHandler / separate executor hierarchy | generated operation override and application-part registration |
 
-Remove prototype IRequestHandler/IRequestExecutor/AddRequestHandler and forwarding classes.
-Implement the generated operation override directly. Replace the old Failure overload of
-SetResponse with Reject. Upgrade contracts, implementations, callers and host packages
-together. Generated source files left by custom build tooling must be removed as well.
-The AOT smoke covers DTOs, nullable returns, business unions, shared models, policy
-rejection, server HTTP binding and native HTTP/local calls with no generated clients.
+Upgrade contracts, implementations, adapters and hosts together. Replace SetResponse's
+former failure overload with Reject for policies. Preserve Result Failure cases as
+business data. Rebuild generated output; remove stale client files from custom build
+tooling. Existing tags/releases remain immutable; rollback restores a coherent earlier
+package/caller set.

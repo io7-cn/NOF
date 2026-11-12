@@ -1,0 +1,229 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
+using NOF.Application;
+using NOF.Contract;
+using NOF.Hosting;
+using NOF.Hosting.AspNetCore;
+using NOF.Infrastructure;
+using NOF.Infrastructure.EntityFrameworkCore;
+using NOF.Sample.Application;
+using NOF.Sample.Endpoints;
+using NOF.Sample.UI.Services;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Xunit;
+
+namespace NOF.Sample.Tests;
+
+public sealed class ConfigNodeRestTests
+{
+    [Fact]
+    public async Task NativeModule_ShouldCreateReadMoveAndDeleteRealNodes()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var parent = await CreateAsync(http, "parent");
+        var child = await CreateAsync(http, "child", parent);
+        var resource = await http.GetFromJsonAsync<ConfigNodeDto>($"/api/config-nodes/{child}");
+        Assert.Equal("child", resource!.Name);
+        Assert.Equal(parent, resource.ParentId);
+        var children = await http.GetFromJsonAsync<GetConfigNodeChildrenResponse>($"/api/config-nodes/{parent}/children");
+        Assert.Equal([child], children!.ChildrenIds);
+
+        using var blockedDelete = await http.DeleteAsync($"/api/config-nodes/{parent}");
+        Assert.Equal(HttpStatusCode.Conflict, blockedDelete.StatusCode);
+        using var move = await http.PatchAsJsonAsync($"/api/config-nodes/{child}/parent", new { parentId = (long?)null, nodeId = parent });
+        Assert.Equal(HttpStatusCode.NoContent, move.StatusCode);
+        var roots = await http.GetFromJsonAsync<List<ConfigNodeDto>>("/api/config-nodes");
+        Assert.Equal(2, roots!.Count);
+        Assert.Null(roots.Single(node => node.Id == child).ParentId);
+
+        using var deleted = await http.DeleteAsync($"/api/config-nodes/{parent}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        using var missing = await http.GetAsync($"/api/config-nodes/{parent}");
+        await AssertProblemAsync(missing, HttpStatusCode.NotFound, ConfigNodeErrorCodes.NotFound);
+        using var deleteChild = await http.DeleteAsync($"/api/config-nodes/{child}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteChild.StatusCode);
+    }
+
+    [Fact]
+    public async Task NativeModule_ShouldMapBusinessFailuresAndRejectMalformedInput()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var id = await CreateAsync(http, "existing");
+        using var duplicate = await http.PostAsJsonAsync("/api/config-nodes", new { name = "existing" });
+        await AssertProblemAsync(duplicate, HttpStatusCode.Conflict, ConfigNodeErrorCodes.NameConflict);
+        using var unknownParent = await http.PostAsJsonAsync("/api/config-nodes", new { name = "orphan", parentId = long.MaxValue });
+        await AssertProblemAsync(unknownParent, HttpStatusCode.UnprocessableEntity, ConfigNodeErrorCodes.ParentNotFound);
+        using var self = await http.PatchAsJsonAsync($"/api/config-nodes/{id}/parent", new { parentId = id });
+        await AssertProblemAsync(self, HttpStatusCode.Conflict, ConfigNodeErrorCodes.ParentCycle);
+        var child = await CreateAsync(http, "child", id);
+        using var cycle = await http.PatchAsJsonAsync($"/api/config-nodes/{id}/parent", new { parentId = child });
+        await AssertProblemAsync(cycle, HttpStatusCode.Conflict, ConfigNodeErrorCodes.ParentCycle);
+        using var missingParentField = await http.PatchAsJsonAsync($"/api/config-nodes/{child}/parent", new { nodeId = id });
+        Assert.Equal(HttpStatusCode.BadRequest, missingParentField.StatusCode);
+        using var blank = await http.PostAsJsonAsync("/api/config-nodes", new { name = " " });
+        Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
+    }
+
+    [Fact]
+    public async Task UiHttpAdapter_ShouldUseTheRealRestModule_ForFilesAndQueries()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var api = new HttpSampleApi(http);
+        Assert.IsType<Success>((await api.CreateConfigNodeAsync(new() { Name = "ui" }, Context.Empty)).Value);
+        var root = Assert.Single((await api.GetRootConfigNodesAsync(new(), Context.Empty)).Nodes);
+        Assert.IsType<Success>((await api.AddOrUpdateConfigFileAsync(new()
+        { NodeId = root.Id, FileName = "settings.json", Content = "{\"port\":8080}" }, Context.Empty)).Value);
+        Assert.IsType<Success>((await api.SetActiveFileAsync(new()
+        { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
+        var node = (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectSuccess().Node;
+        Assert.Equal("settings.json", node.ActiveFileName);
+        Assert.Single(node.ConfigFiles);
+        Assert.IsType<Success>((await api.RemoveConfigFileAsync(new()
+        { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
+        Assert.IsType<Success>((await api.DeleteConfigNodeAsync(new() { Id = root.Id }, Context.Empty)).Value);
+        Assert.Equal(ConfigNodeErrorCodes.NotFound,
+            (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectFailure().Code);
+    }
+
+    [Fact]
+    public async Task NativeModule_ShouldKeepTenantIsolationAndNotExposeLegacyRoutes()
+    {
+        await using var app = await CreateAppAsync(relational: true);
+        using var first = app.GetTestClient();
+        first.DefaultRequestHeaders.Add(NOFAbstractionConstants.Transport.Headers.TenantId, "tenant-a");
+        var id = await CreateAsync(first, "private");
+        using var second = app.GetTestClient();
+        second.DefaultRequestHeaders.Add(NOFAbstractionConstants.Transport.Headers.TenantId, "tenant-b");
+        using var invisible = await second.GetAsync($"/api/config-nodes/{id}");
+        Assert.Equal(HttpStatusCode.NotFound, invisible.StatusCode);
+        using var oldRoute = await first.PostAsJsonAsync("/rpc/NOFSample/CreateConfigNode", new { name = "legacy" });
+        Assert.Equal(HttpStatusCode.NotFound, oldRoute.StatusCode);
+    }
+
+    [Fact]
+    public async Task NativeBridge_ShouldPreservePolicyRejectionAndOpenApiMetadata()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        using var protectedResponse = await http.GetAsync("/policy-probe");
+        Assert.Equal(HttpStatusCode.Unauthorized, protectedResponse.StatusCode);
+        Assert.NotEmpty(protectedResponse.Headers.WwwAuthenticate);
+        Assert.Equal(0, app.Services.GetRequiredService<PolicyProbe>().Constructed);
+        using var document = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
+        var paths = document.RootElement.GetProperty("paths");
+        var create = paths.GetProperty("/api/config-nodes").GetProperty("post");
+        Assert.True(create.GetProperty("responses").TryGetProperty("201", out _));
+        var move = paths.GetProperty("/api/config-nodes/{id}/parent").GetProperty("patch");
+        Assert.True(move.GetProperty("responses").TryGetProperty("204", out _));
+        Assert.DoesNotContain("nodeId", move.GetProperty("requestBody").GetRawText());
+    }
+
+    [Fact]
+    public void ContractAssembly_ShouldContainNoHttpAnnotationsOrRpcOutcomeInterface()
+    {
+        var contract = typeof(IApplicationService).Assembly;
+        Assert.Null(contract.GetType("NOF.Contract.HttpEndpointAttribute"));
+        Assert.Null(contract.GetType("NOF.Contract.TransportOverHttpAttribute"));
+        Assert.Null(contract.GetType("NOF.Contract.IRpcResponse`1"));
+        Assert.DoesNotContain(typeof(INOFSampleService).GetCustomAttributes(false), static attribute => attribute is TransportOverAttribute);
+        Assert.DoesNotContain(typeof(INOFSampleService).Assembly.GetReferencedAssemblies(),
+            static assembly => assembly.Name!.StartsWith("NOF.Hosting", StringComparison.Ordinal));
+    }
+
+    private static async Task<long> CreateAsync(HttpClient http, string name, long? parentId = null)
+    {
+        using var response = await http.PostAsJsonAsync("/api/config-nodes", new { name, parentId });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = (await response.Content.ReadFromJsonAsync<CreatedConfigNode>())!;
+        Assert.EndsWith($"/api/config-nodes/{created.Id}", response.Headers.Location!.ToString());
+        using var follow = await http.GetAsync(response.Headers.Location);
+        Assert.Equal(HttpStatusCode.OK, follow.StatusCode);
+        return created.Id;
+    }
+
+    private static async Task AssertProblemAsync(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        Assert.Equal(status, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(code, problem.RootElement.GetProperty("code").GetString());
+    }
+
+    private static async Task<WebApplication> CreateAppAsync(bool relational = false)
+    {
+        var builder = NOFWebApplicationBuilder.Create([]);
+        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
+        builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
+        builder.AddApplicationService<NOFSampleService>();
+        builder.AddApplicationService<PolicyProbeService>();
+        builder.Services.AddSingleton<PolicyProbe>();
+        builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "rest-test:{tenantId}:");
+        builder.Services.AddProblemDetails();
+        if (relational)
+        {
+            builder.UseDbContext<RestConfigDbContext>()
+                .WithTenantMode(TenantMode.DatabasePerTenant)
+                .WithConnectionString($"Data Source=rest-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
+                .WithOptions(static (options, connection) => options.UseSqlite(connection));
+        }
+        var app = await builder.BuildAsync();
+        app.UseStatusCodePages();
+        app.MapOpenApi();
+        await app.StartAsync();
+        return app;
+    }
+}
+
+public sealed class RestConfigDbContext(DbContextOptions<RestConfigDbContext> options) : NOFDbContext(options)
+{
+    protected override void OnModelCreating(ModelBuilder model)
+    {
+        base.OnModelCreating(model);
+        model.Entity<ConfigNode>(node =>
+        {
+            node.HasKey(value => value.Id);
+            node.OwnsMany(value => value.ConfigFiles, file =>
+            {
+                file.WithOwner().HasForeignKey("NodeId");
+                file.Property<long>("Id").ValueGeneratedOnAdd();
+                file.HasKey("Id");
+            });
+        });
+        model.Entity<NOF.Sample.Application.Entities.ConfigNodeChildren>().HasKey(value => value.NodeId);
+    }
+}
+
+public interface IPolicyProbeService : IApplicationService
+{
+    [RequirePermission("config.read")]
+    string Read(Empty request);
+}
+
+public partial class PolicyProbeService : ApplicationService<IPolicyProbeService>;
+public sealed class PolicyProbe { public int Constructed { get; set; } }
+
+public sealed class PolicyProbeHandler : PolicyProbeService.Read
+{
+    public PolicyProbeHandler(PolicyProbe probe) => probe.Constructed++;
+    public override Task<string> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult("secret");
+}
+
+[AutoInject(ServiceLifetime.Singleton)]
+public sealed class PolicyProbeEndpoints : IHttpEndpointModule
+{
+    public void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
+        => endpoints.MapGet("/policy-probe", async (HttpContext http, CancellationToken ct)
+            => await http.InvokeAsync(PolicyProbeService.Read.Descriptor, new Empty(), ct))
+            .AddEndpointFilter<ServiceRejectionHttpFilter>();
+}

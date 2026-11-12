@@ -70,6 +70,7 @@ public class NOFWebApplicationBuilder : IHostApplicationBuilder
         builder.Services.TryAddSingleton<HttpEndpointMappingState>();
         builder.Services.AddApplicationServiceTransport<AspNetCoreApplicationServiceTransport>();
         builder.Services.AddInitializationStep(new HealthCheckInitializationStep());
+        builder.Services.TryAddInitializationStep(new HttpEndpointModuleInitializationStep());
         builder.Services.AddOpenApi(options =>
         {
             options.AddDocumentTransformer(static (document, _, _) =>

@@ -9,6 +9,8 @@ using NOF.Contract;
 using NOF.Contract.SourceGenerator;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
+using NOF.Hosting.AspNetCore;
+using NOF.Hosting.SourceGenerator;
 using NOF.Infrastructure;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;
@@ -27,6 +29,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             using NOF.Abstraction;
             using NOF.Application;
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             using NOF.Domain;
             using System.Threading;
             using System.Threading.Tasks;

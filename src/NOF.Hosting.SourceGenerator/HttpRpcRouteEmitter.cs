@@ -4,7 +4,7 @@ using System;
 using System.Linq;
 using System.Text;
 
-namespace NOF.Contract.SourceGenerator;
+namespace NOF.Hosting.SourceGenerator;
 
 /// <summary>Emits server-only HTTP binding and JSON body metadata.</summary>
 public static class HttpRpcRouteEmitter
@@ -22,13 +22,13 @@ public static class HttpRpcRouteEmitter
         var usesQuery = endpoint.Method is HttpVerb.Get or HttpVerb.Delete;
 
         sb.AppendLine("        /// <summary>Provides generated server route binding and wire metadata.</summary>");
-        sb.AppendLine($"        public sealed class {name} : global::NOF.Contract.GeneratedHttpRpcRoute<{service}, {response}>");
+        sb.AppendLine($"        public sealed class {name} : global::NOF.Hosting.AspNetCore.GeneratedHttpRpcRoute<{service}, {response}>");
         sb.AppendLine("        {");
         sb.AppendLine($"            public {name}() {{ }}");
         sb.AppendLine($"            public override string OperationName => nameof({service}.@{method.OperationName});");
         sb.AppendLine($"            public override string Template => {Literal(route)};");
-        sb.AppendLine($"            public override global::NOF.Contract.HttpVerb Verb => global::NOF.Contract.HttpVerb.{endpoint.Method};");
-        sb.AppendLine("            public override global::System.Collections.Generic.IReadOnlyList<global::NOF.Contract.HttpRpcRouteParameter> Parameters { get; } =");
+        sb.AppendLine($"            public override global::NOF.Hosting.AspNetCore.HttpVerb Verb => global::NOF.Hosting.AspNetCore.HttpVerb.{endpoint.Method};");
+        sb.AppendLine("            public override global::System.Collections.Generic.IReadOnlyList<global::NOF.Hosting.AspNetCore.HttpRpcRouteParameter> Parameters { get; } =");
         sb.AppendLine("            [");
         foreach (var (parameter, property, _) in binding.Path)
         {

@@ -172,7 +172,6 @@ public sealed class HttpEndpointRegistrationTests
             => Task.FromResult(Result.Success(new EchoResponse(request.Value)));
     }
 
-    [TransportOverMemory]
     public interface IMemoryRpcService : IApplicationService
     {
         Result<EchoResponse> MemoryEcho(EchoRequest request);

@@ -9,10 +9,8 @@ description: Add a Context-aware request/response operation with NOF RPC contrac
 ```csharp
 using NOF.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc, "api/orders")]
 public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "get")]
     Result<GetOrderResponse> GetOrder(GetOrderRequest request);
 }
 
@@ -22,7 +20,7 @@ public sealed record GetOrderResponse(string Id, string Name);
 
 An application service contract is local by default and may opt into one transport adapter. Every method takes one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
 
-For JSON-RPC, use `[TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc/orders")]` and remove method-level `[HttpEndpoint]`. For in-process-only calls, use `[TransportOverMemory]` and remove `[HttpEndpoint]`.
+Keep HTTP routing in an IHttpEndpointModule, outside Contract. See docs/en/design/configuration-rest.md for the complete CRUD slice.
 
 ## 2. Define the Application Service Container
 
@@ -58,7 +56,7 @@ builder.AddApplicationService<OrderService>();
 var app = await builder.BuildAsync();
 ```
 
-`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the server and its transport metadata. During `BuildAsync()`, ASP.NET Core automatically maps controller/JSON-RPC endpoints; memory contracts are not exposed.
+`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the server and its transport metadata. During BuildAsync(), registered IHttpEndpointModule instances map native endpoints. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
 
 ## 5. Invoke the Server Operation
 

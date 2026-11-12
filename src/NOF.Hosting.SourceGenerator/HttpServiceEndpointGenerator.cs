@@ -6,7 +6,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 
-namespace NOF.Contract.SourceGenerator;
+namespace NOF.Hosting.SourceGenerator;
 
 /// <summary>Generates only server-side HTTP route binding and serialization metadata.</summary>
 [Generator]
@@ -60,7 +60,7 @@ public sealed class HttpServiceEndpointGenerator : IIncrementalGenerator
                     continue;
                 }
                 var name = HttpRpcRouteEmitter.GetName(info, index++);
-                attributes.AppendLine($"[assembly: global::NOF.Contract.GeneratedHttpRpcRouteAttribute<{qualified}.{name}>]");
+                attributes.AppendLine($"[assembly: global::NOF.Hosting.AspNetCore.GeneratedHttpRpcRouteAttribute<{qualified}.{name}>]");
                 var prefix = (transport.RoutePrefix ?? string.Empty).Trim('/');
                 var template = string.IsNullOrEmpty(prefix) ? route.Trim('/') : prefix + "/" + route.Trim('/');
                 HttpRpcRouteEmitter.Emit(body, info, endpoint, binding, name, template);

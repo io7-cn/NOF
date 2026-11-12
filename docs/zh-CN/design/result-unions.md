@@ -8,8 +8,8 @@ JSON 协议兼容性。契约、服务端和客户端需要一起重新构建及
 ## 成功分支直接是业务值
 
 ```csharp
-public union Result<T>(T, Failure) : IRpcResponse<Result<T>>;
-public union Result(Success, Failure) : IRpcResponse<Result>;
+public union Result<T>(T, Failure);
+public union Result(Success, Failure);
 ```
 
 `Result<T>` 直接包含 `T`。`Success<T>` 是可选的消息包装，包含非空 `Data` 和
@@ -111,13 +111,11 @@ switch (result)
 
 ## 边界、部署和回滚
 
-`IRpcResponse<TSelf>` 继承 `IUnion`，提供静态 `CreateFailure` 和
-`CreateEmptyResponse` 工厂，没有成功标志或反射数据投影。自定义响应联合类型
-使用 Abstraction 中的共享 Failure。`RpcResponse.Require<TResponse>` 保留精确匹配
-的响应类型，或通过静态工厂传播共享失败；缺少分支或成功类型不匹配时会拒绝响应。
-成功 HTTP 空响应体只适用于无数据 Result。非成功 HTTP 状态码上的带标记失败会
-保留业务代码和消息；其他响应体使用 HTTP 数字状态码及诊断文本。
-OAuth 端点继续返回标准协议。
+删除 `IRpcResponse<TSelf>` 及空响应工厂。Result 和自定义业务联合类型不再实现 RPC 结果接口。
+生成的服务调用通过 ServiceRejectedException 报告策略拒绝，REST 适配器将其与业务 Failure
+分开映射。可选的旧协议读取器接受显式失败和空响应转换委托。HTTP 元数据属于 Hosting，
+不属于 Contract。原生 REST 端点返回资源 DTO、201/204 或 ProblemDetails，没有强制 Result 包装。
+OAuth 端点继续使用标准协议。
 
 迁移时直接匹配成功的 `T`，需要消息时选择 `Success<T>`，错误改读
 `failure.Code/Message`，并把 `Extra` 改成 DTO 显式字段。部署时协调升级整个

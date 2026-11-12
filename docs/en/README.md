@@ -44,3 +44,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Result Union migration](design/result-unions.md)
 - [Application core and adapters (ADR 0001)](design/0001-application-core-and-adapters.md)
 - [Application request implementation guide](design/application-requests.md)
+
+- [Configuration node REST implementation](design/configuration-rest.md)

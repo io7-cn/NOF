@@ -16,11 +16,11 @@ The current generator inputs are:
 | Application | `MappableGenerator` | User mapping declaration, attributes, and mapped source/destination types |
 | Application | `ApplicationServiceGenerator` | User `ApplicationService<TService>` and RPC service contract |
 | Application | `ApplicationServiceAutoInjectGenerator` | User `Server.Operation` base-type syntax, `ApplicationService<TService>`, and RPC service contract |
-| Contract | `HttpServiceEndpointGenerator` | User service contract and optional HTTP server metadata |
+| Hosting | `HttpServiceEndpointGenerator` | Optional host-owned legacy HTTP adapter declarations |
 
 `ApplicationServiceGenerator` emits server operation bases, mappings and typed static
-`Service.Operation.InvokeAsync` entry points. `HttpServiceEndpointGenerator` emits
-only server binding/serialization metadata. Client-interface, HTTP-client and
+`Service.Operation.InvokeAsync` entry points and transport-neutral typed descriptors. `HttpServiceEndpointGenerator` emits
+only server binding/serialization metadata in Hosting. Contract retains only transport-neutral signature analysis. Client-interface, HTTP-client and
 Local-client generators and their shared naming conventions have been removed.
 
 The regression suite runs every generator together in one compilation in both normal and reversed order. This represents a monolithic application that references every NOF package and prevents generator ordering from becoming an implicit contract.

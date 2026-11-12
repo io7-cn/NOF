@@ -1,4 +1,5 @@
-namespace NOF.Contract;
+using NOF.Contract;
+namespace NOF.Hosting.AspNetCore;
 
 /// <summary>
 /// Declares the transport used by an RPC service contract.

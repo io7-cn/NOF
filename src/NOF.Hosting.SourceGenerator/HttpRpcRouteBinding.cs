@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NOF.Contract.SourceGenerator;
+namespace NOF.Hosting.SourceGenerator;
 
 /// <summary>Shares the binding rules for parameterized Controller RPC routes.</summary>
 public sealed class HttpRpcRouteBinding

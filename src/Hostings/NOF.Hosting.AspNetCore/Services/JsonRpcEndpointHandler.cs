@@ -129,7 +129,7 @@ public static class JsonRpcEndpointHandler
                             serializer);
                     }
 
-                    var failure = RpcResponse.Require<Result>(execution.Response as System.Runtime.CompilerServices.IUnion);
+                    var failure = RpcResponse.Require<Result>(execution.Response as System.Runtime.CompilerServices.IUnion, static failure => failure);
                     var failurePayload = serializer.Serialize(failure, typeof(Result));
                     return CreateResult(id, failurePayload);
                 }

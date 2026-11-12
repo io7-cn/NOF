@@ -11,7 +11,7 @@ public union ServiceExecution(ServiceCompleted, ServiceRejected)
 {
     /// <summary>Returns the declared business value, or adapts/reports a policy rejection.</summary>
     /// <typeparam name="T">The operation's declared response type.</typeparam>
-    /// <param name="createFailure">An optional statically generated failure factory for an outcome contract.</param>
+    /// <param name="createFailure">An optional caller-owned conversion for adapters handling rejection.</param>
     /// <param name="allowNull">Whether the operation explicitly declares a nullable response.</param>
     public T Require<T>(Func<Failure, T>? createFailure = null, bool allowNull = false)
     {
@@ -25,7 +25,7 @@ public union ServiceExecution(ServiceCompleted, ServiceRejected)
         }
         if (completed.Response is T typed)
         {
-            if (createFailure is not null && typed is IUnion { Value: null })
+            if (typed is IUnion { Value: null })
             {
                 throw new InvalidOperationException("The outcome response contains no case.");
             }

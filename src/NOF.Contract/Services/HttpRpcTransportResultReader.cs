@@ -1,6 +1,7 @@
 using NOF.Abstraction;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -42,15 +43,15 @@ public static class HttpRpcTransportResultReader
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(fallbackTypeInfo);
 
-        var fallbackResult = await ReadAsync(response, fallbackTypeInfo, cancellationToken).ConfigureAwait(false);
-        return RpcResponse.Require<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(fallbackResult);
+        var fallbackResult = await ReadAsync(response, fallbackTypeInfo, cancellationToken, static failure => (Result)failure, static () => Result.Success()).ConfigureAwait(false);
+        return RpcResponse.Require<Result<global::System.Collections.Generic.IAsyncEnumerable<TItem>>>(fallbackResult, static failure => failure);
     }
 
     public static async Task<T> ReadAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(
         HttpResponseMessage response,
         JsonTypeInfo<T> successTypeInfo,
-        CancellationToken cancellationToken)
-        where T : IRpcResponse<T>
+        CancellationToken cancellationToken, Func<Failure, T> createFailure, Func<T>? createEmptyResponse = null)
+        where T : IUnion
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(successTypeInfo);
@@ -59,7 +60,7 @@ public static class HttpRpcTransportResultReader
         {
             if (IsBodyEmpty(response))
             {
-                return T.CreateEmptyResponse();
+                return createEmptyResponse is not null ? createEmptyResponse() : throw new InvalidOperationException($"The HTTP response for {typeof(T).Name} is empty.");
             }
 
             var payload = await HttpContentJsonExtensions.ReadFromJsonAsync(response.Content, successTypeInfo, cancellationToken).ConfigureAwait(false)
@@ -72,18 +73,18 @@ public static class HttpRpcTransportResultReader
             return payload;
         }
 
-        return await ReadFailureAsync<T>(response, cancellationToken).ConfigureAwait(false);
+        return await ReadFailureAsync(response, cancellationToken, createFailure).ConfigureAwait(false);
     }
 
     public static async Task<T> ReadFailureAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] T>(
         HttpResponseMessage response,
-        CancellationToken cancellationToken)
-        where T : IRpcResponse<T>
+        CancellationToken cancellationToken, Func<Failure, T> createFailure)
+        where T : IUnion
     {
         ArgumentNullException.ThrowIfNull(response);
 
         var failure = await CreateTransportFailureAsync(response, cancellationToken).ConfigureAwait(false);
-        return T.CreateFailure(failure);
+        return createFailure(failure);
     }
 
     private static bool IsBodyEmpty(HttpResponseMessage response)
@@ -110,6 +111,13 @@ public static class HttpRpcTransportResultReader
             {
                 using var document = JsonDocument.Parse(body);
                 var root = document.RootElement;
+                if (root.ValueKind == JsonValueKind.Object
+                    && root.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String
+                    && root.TryGetProperty("code", out var problemCode) && problemCode.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(problemCode.GetString()))
+                {
+                    return new Failure(problemCode.GetString()!, detail.GetString()!);
+                }
                 if (root.ValueKind == JsonValueKind.Object
                     && root.EnumerateObject().Count() == 3
                     && root.TryGetProperty("$kind", out var kind) && kind.ValueKind == JsonValueKind.String && kind.ValueEquals("failure")

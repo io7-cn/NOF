@@ -26,3 +26,8 @@
   href: ../en/design/0001-application-core-and-adapters.md
 - name: Application request guide
   href: ../en/design/application-requests.md
+
+- name: Configuration REST implementation
+  href: ../en/design/configuration-rest.md
+- name: 配置节点 REST 实现
+  href: ../zh-CN/design/configuration-rest.md

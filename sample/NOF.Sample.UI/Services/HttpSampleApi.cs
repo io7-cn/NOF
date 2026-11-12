@@ -1,41 +1,61 @@
+using NOF.Abstraction;
 using NOF.Contract;
 
 namespace NOF.Sample.UI.Services;
 
-/// <summary>Explicit HTTP integration owned by the sample UI.</summary>
-public sealed class HttpSampleApi(HttpClient httpClient)
-    : SampleHttpApi(httpClient), ISampleApi
+/// <summary>Application-owned integration with the sample REST API.</summary>
+public sealed class HttpSampleApi(HttpClient httpClient) : SampleHttpApi(httpClient), ISampleApi
 {
     public Task<Result> CreateConfigNodeAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<CreateConfigNodeRequest, Result>(HttpMethod.Post, "./rpc/NOFSample/CreateConfigNode", request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Post, "./api/config-nodes", request, context, cancellationToken);
 
     public Task<Result> DeleteConfigNodeAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<DeleteConfigNodeRequest, Result>(HttpMethod.Delete, Query("./rpc/NOFSample/DeleteConfigNode", ("Id", request.Id)), request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Delete, $"./api/config-nodes/{request.Id}", request, context, cancellationToken);
 
     public Task<Result> AddOrUpdateConfigFileAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<AddOrUpdateConfigFileRequest, Result>(HttpMethod.Put, "./rpc/NOFSample/AddOrUpdateConfigFile", request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Put, $"./api/config-nodes/{request.NodeId}/files/{Uri.EscapeDataString(request.FileName)}",
+            new FileBody(request.Content), context, cancellationToken);
 
     public Task<Result> RemoveConfigFileAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<RemoveConfigFileRequest, Result>(HttpMethod.Delete, Query("./rpc/NOFSample/RemoveConfigFile", ("NodeId", request.NodeId), ("FileName", request.FileName)), request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Delete, $"./api/config-nodes/{request.NodeId}/files/{Uri.EscapeDataString(request.FileName)}",
+            request, context, cancellationToken);
 
     public Task<Result> SetActiveFileAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<SetActiveFileRequest, Result>(HttpMethod.Patch, "./rpc/NOFSample/SetActiveFile", request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Put, $"./api/config-nodes/{request.NodeId}/active-file", new ActiveFileBody(request.FileName), context, cancellationToken);
 
     public Task<Result> UpdateConfigNodeParentAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<UpdateConfigNodeParentRequest, Result>(HttpMethod.Patch, "./rpc/NOFSample/UpdateConfigNodeParent", request, context, cancellationToken);
+        => SendCommandAsync(HttpMethod.Patch, $"./api/config-nodes/{request.NodeId}/parent", new ParentBody(request.NewParentId), context, cancellationToken);
 
     public Task<Result<GetConfigNodeChildrenResponse>> GetConfigNodeChildrenAsync(GetConfigNodeChildrenRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<GetConfigNodeChildrenRequest, Result<GetConfigNodeChildrenResponse>>(HttpMethod.Get, Query("./rpc/NOFSample/GetConfigNodeChildren", ("Id", request.Id)), request, context, cancellationToken);
+        => SendResourceAsync<GetConfigNodeChildrenRequest, GetConfigNodeChildrenResponse>(HttpMethod.Get,
+            $"./api/config-nodes/{request.Id}/children", request, context, cancellationToken);
 
-    public Task<Result<GetConfigNodeByIdResponse>> GetConfigNodeByIdAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<GetConfigNodeByIdRequest, Result<GetConfigNodeByIdResponse>>(HttpMethod.Get, Query("./rpc/NOFSample/GetConfigNodeById", ("Id", request.Id)), request, context, cancellationToken);
+    public async Task<Result<GetConfigNodeByIdResponse>> GetConfigNodeByIdAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await SendResourceAsync<GetConfigNodeByIdRequest, ConfigNodeDto>(HttpMethod.Get,
+            $"./api/config-nodes/{request.Id}", request, context, cancellationToken)).Value switch
+        {
+            ConfigNodeDto node => new GetConfigNodeByIdResponse { Node = node },
+            Failure failure => failure,
+            _ => throw new InvalidOperationException("The REST response contained no outcome.")
+        };
 
-    public Task<GetRootConfigNodesResponse> GetRootConfigNodesAsync(GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendValueAsync<GetRootConfigNodesRequest, GetRootConfigNodesResponse>(HttpMethod.Get, "./rpc/NOFSample/GetRootConfigNodes", request, context, cancellationToken);
+    public async Task<GetRootConfigNodesResponse> GetRootConfigNodesAsync(GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken = default)
+        => new()
+        {
+            Nodes = await SendValueAsync<GetRootConfigNodesRequest, List<ConfigNodeDto>>(HttpMethod.Get,
+            "./api/config-nodes", request, context, cancellationToken)
+        };
 
     public Task<Result<GetConfigurationResponse>> GetConfigurationAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendOutcomeAsync<GetConfigurationRequest, Result<GetConfigurationResponse>>(HttpMethod.Get, Query("./rpc/NOFSample/GetConfiguration", ("AppName", request.AppName)), request, context, cancellationToken);
+        => SendResourceAsync<GetConfigurationRequest, GetConfigurationResponse>(HttpMethod.Get,
+            Query("./api/configuration", ("appName", request.AppName)), request, context, cancellationToken);
 
-    public Task<Result<global::System.Collections.Generic.IAsyncEnumerable<SampleStreamEvent>>> WatchSampleStreamAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken = default)
-        => SendStreamAsync<WatchSampleStreamRequest, SampleStreamEvent>(HttpMethod.Get, Query("./rpc/NOFSample/WatchSampleStream", ("Topic", request.Topic), ("Count", request.Count), ("IntervalMilliseconds", request.IntervalMilliseconds), ("ForceFailure", request.ForceFailure)), request, context, cancellationToken);
+    public Task<Result<IAsyncEnumerable<SampleStreamEvent>>> WatchSampleStreamAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken = default)
+        => SendStreamAsync<WatchSampleStreamRequest, SampleStreamEvent>(HttpMethod.Get,
+            Query("./api/sample-events", ("topic", request.Topic), ("count", request.Count),
+                ("intervalMilliseconds", request.IntervalMilliseconds), ("forceFailure", request.ForceFailure)), request, context, cancellationToken);
+
+    public sealed record FileBody(string Content);
+    public sealed record ParentBody(long? ParentId);
+    public sealed record ActiveFileBody(string? FileName);
 }

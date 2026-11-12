@@ -26,7 +26,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return Result.Fail(ConfigNodeErrorCodes.NotFound, "Node not found.");
         }
 
         var newParentId = request.NewParentId.HasValue
@@ -36,17 +36,21 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         // Check whether the target parent exists (unless moving to root).
         if (newParentId.HasValue)
         {
+            if (newParentId.Value == nodeId)
+            {
+                return Result.Fail(ConfigNodeErrorCodes.ParentCycle, "Cannot move a node under itself.");
+            }
             var parentNode = await _dbContext.Set<ConfigNode>()
                 .FirstOrDefaultAsync(configNode => configNode.Id == newParentId.Value, cancellationToken);
             if (parentNode is null)
             {
-                return Result.Fail("404", "Target parent node not found.");
+                return Result.Fail(ConfigNodeErrorCodes.ParentNotFound, "Target parent node not found.");
             }
 
             // Prevent cyclic parent relationship.
             if (await IsDescendant(nodeId, newParentId.Value, cancellationToken))
             {
-                return Result.Fail("400", "Cannot move a node under its descendant.");
+                return Result.Fail(ConfigNodeErrorCodes.ParentCycle, "Cannot move a node under its descendant.");
             }
         }
 

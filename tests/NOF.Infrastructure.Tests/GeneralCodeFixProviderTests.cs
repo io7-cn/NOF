@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using NOF.CodeFixes;
 using NOF.Contract;
 using NOF.Domain;
+using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Collections.Immutable;
 using Xunit;
@@ -19,6 +20,7 @@ public sealed class GeneralCodeFixProviderTests
     [
         typeof(IValueObject<>),
         typeof(IApplicationService),
+        typeof(HttpEndpointAttribute),
         typeof(DbContext),
         typeof(NOFDbContext),
     ];
@@ -131,6 +133,7 @@ public sealed class GeneralCodeFixProviderTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace Test;
             [TransportOverMemory]
             public interface IService { }
@@ -211,6 +214,7 @@ public sealed class GeneralCodeFixProviderTests
     {
         const string source = """
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
             namespace Test;
             [TransportOverMemory]
             [TransportOverHttp(HttpRpcStyle.JsonRpc)]
@@ -527,6 +531,7 @@ public sealed class GeneralCodeFixProviderTests
             "NOF212",
             """
                 using NOF.Contract;
+                using NOF.Hosting.AspNetCore;
                 namespace Test;
                 [TransportOverMemory]
                 [TransportOverHttp(HttpRpcStyle.JsonRpc)]

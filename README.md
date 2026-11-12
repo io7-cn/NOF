@@ -104,10 +104,8 @@ NOF RPC contracts can expose server-streaming operations by returning `Result<IA
 public record WatchOrdersRequest(Guid CustomerId);
 public record OrderEvent(Guid OrderId, string Status);
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
 public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "/api/orders/watch")]
     Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
 }
 ```
@@ -125,7 +123,7 @@ if (result is IAsyncEnumerable<OrderEvent> events)
 }
 ```
 
-When the service is exposed through `NOF.Hosting.AspNetCore`, NOF uses .NET 11 server-sent events for HTTP streaming endpoints.
+HTTP endpoint modules in `NOF.Hosting.AspNetCore` use native ASP.NET Core server-sent events. HTTP route declarations stay outside Contract; `IRpcResponse` has been removed. See the [complete configuration REST example](docs/en/design/configuration-rest.md) ([简体中文](docs/zh-CN/design/configuration-rest.md)).
 
 ## Architecture
 

@@ -65,7 +65,7 @@ public sealed class AttributeRemovalCodeFixProvider : CodeFixProvider
     {
         for (var current = type; current is not null; current = current.BaseType)
         {
-            if (current.ToDisplayString() == "NOF.Contract.TransportOverAttribute")
+            if (current.ToDisplayString() == "NOF.Hosting.AspNetCore.TransportOverAttribute")
             {
                 return true;
             }

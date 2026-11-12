@@ -36,3 +36,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [Result 联合类型迁移](design/result-unions.md)
 - [应用执行核心与适配器（ADR 0001）](design/0001-application-core-and-adapters.md)
 - [应用请求实现指南](design/application-requests.md)
+
+- [配置节点 REST 实现](design/configuration-rest.md)

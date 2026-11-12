@@ -37,9 +37,12 @@ public class ServiceExecutionTests
         var failure = new Failure("403", "Forbidden");
         ServiceExecution rejected = new ServiceRejected(failure);
         Assert.Same(failure, Assert.Throws<ServiceRejectedException>(() => rejected.Require<Reply>()).Failure);
+        Assert.Same(failure, Assert.Throws<ServiceRejectedException>(() => rejected.Require<Result<Reply>>()).Failure);
         Assert.Same(failure, rejected.Require<Result<Reply>>(Result<Reply>.CreateFailure).Value);
         Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result<Reply>)))
             .Require<Result<Reply>>(Result<Reply>.CreateFailure));
+        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result<Reply>)))
+            .Require<Result<Reply>>());
     }
 
     [Fact]

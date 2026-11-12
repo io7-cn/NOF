@@ -59,8 +59,8 @@ public static class JsonRpcHttpClient
         IEnumerable<KeyValuePair<string, string?>> headers,
         JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TResponse> responseTypeInfo,
-        CancellationToken cancellationToken)
-        where TResponse : IRpcResponse<TResponse>
+        CancellationToken cancellationToken, Func<Failure, TResponse> createFailure)
+        where TResponse : IUnion
     {
         ValidateRequestArguments(httpClient, endpoint, method, request, headers, requestTypeInfo);
         ArgumentNullException.ThrowIfNull(responseTypeInfo);
@@ -71,10 +71,10 @@ public static class JsonRpcHttpClient
         using var response = await httpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            return await HttpRpcTransportResultReader.ReadFailureAsync<TResponse>(response, cancellationToken).ConfigureAwait(false);
+            return await HttpRpcTransportResultReader.ReadFailureAsync(response, cancellationToken, createFailure).ConfigureAwait(false);
         }
 
-        return await ReadResponseEnvelopeAsync(response, id, responseTypeInfo, cancellationToken).ConfigureAwait(false);
+        return await ReadResponseEnvelopeAsync(response, id, responseTypeInfo, cancellationToken, createFailure).ConfigureAwait(false);
     }
 
     public static Task<Result<IAsyncEnumerable<TItem>>> SendStreamingAsync<TRequest, TItem>(
@@ -83,7 +83,7 @@ public static class JsonRpcHttpClient
         JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo, CancellationToken cancellationToken)
         => SendStreamingCoreAsync<TRequest, TItem, Result<IAsyncEnumerable<TItem>>>(httpClient, endpoint, method,
             request, headers, requestTypeInfo, itemTypeInfo, fallbackTypeInfo,
-            static (items, _) => Result.Stream(items), cancellationToken);
+            static (items, _) => Result.Stream(items), static failure => failure, cancellationToken);
 
     /// <summary>Reads an SSE stream whose successful payload explicitly carries a message.</summary>
     public static Task<Result<Success<IAsyncEnumerable<TItem>>>> SendStreamingWithMessageAsync<TRequest, TItem>(
@@ -92,14 +92,14 @@ public static class JsonRpcHttpClient
         JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo, CancellationToken cancellationToken)
         => SendStreamingCoreAsync<TRequest, TItem, Result<Success<IAsyncEnumerable<TItem>>>>(httpClient, endpoint, method,
             request, headers, requestTypeInfo, itemTypeInfo, fallbackTypeInfo,
-            static (items, message) => Result.WithMessage(items, message), cancellationToken);
+            static (items, message) => Result.WithMessage(items, message), static failure => failure, cancellationToken);
 
     private static async Task<TResponse> SendStreamingCoreAsync<TRequest, TItem, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TResponse>(
         HttpClient httpClient, string endpoint, string method, TRequest request,
         IEnumerable<KeyValuePair<string, string?>> headers, JsonTypeInfo<TRequest> requestTypeInfo,
         JsonTypeInfo<TItem> itemTypeInfo, JsonTypeInfo<Result> fallbackTypeInfo,
-        Func<IAsyncEnumerable<TItem>, string, TResponse> createSuccess, CancellationToken cancellationToken)
-        where TResponse : IRpcResponse<TResponse>
+        Func<IAsyncEnumerable<TItem>, string, TResponse> createSuccess, Func<Failure, TResponse> createFailure, CancellationToken cancellationToken)
+        where TResponse : IUnion
     {
         ValidateRequestArguments(httpClient, endpoint, method, request, headers, requestTypeInfo);
         ArgumentNullException.ThrowIfNull(itemTypeInfo);
@@ -119,7 +119,7 @@ public static class JsonRpcHttpClient
             {
                 return await HttpRpcTransportResultReader.ReadFailureAsync<TResponse>(
                     response,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, createFailure).ConfigureAwait(false);
             }
         }
 
@@ -134,8 +134,8 @@ public static class JsonRpcHttpClient
 
         using (response)
         {
-            var fallback = await ReadResponseEnvelopeAsync(response, id, fallbackTypeInfo, cancellationToken).ConfigureAwait(false);
-            return RpcResponse.Require<TResponse>(fallback);
+            var fallback = await ReadResponseEnvelopeAsync(response, id, fallbackTypeInfo, cancellationToken, static failure => (Result)failure).ConfigureAwait(false);
+            return RpcResponse.Require(fallback, createFailure);
         }
     }
 
@@ -144,8 +144,8 @@ public static class JsonRpcHttpClient
         HttpResponseMessage response,
         string expectedId,
         JsonTypeInfo<TResponse> responseTypeInfo,
-        CancellationToken cancellationToken)
-        where TResponse : IRpcResponse<TResponse>
+        CancellationToken cancellationToken, Func<Failure, TResponse> createFailure)
+        where TResponse : IUnion
     {
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -167,7 +167,7 @@ public static class JsonRpcHttpClient
         if (root.TryGetProperty("error", out var errorElement)
             && errorElement.ValueKind == JsonValueKind.Object)
         {
-            return TResponse.CreateFailure(ReadError(errorElement));
+            return createFailure(ReadError(errorElement));
         }
 
         throw new InvalidOperationException("JSON-RPC response must contain either a result or an error object.");

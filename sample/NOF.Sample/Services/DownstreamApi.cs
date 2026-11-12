@@ -17,5 +17,5 @@ public sealed class DownstreamApi(HttpClient httpClient)
     public Task<Result<ConsumeDemoAccessTokenResponse>> InspectAccessTokenAsync(
         Empty request, Context context, CancellationToken cancellationToken = default)
         => SendOutcomeAsync<Empty, Result<ConsumeDemoAccessTokenResponse>>(HttpMethod.Post,
-            "./rpc/OAuthChainDemo/Downstream/Inspect", request, context, cancellationToken);
+            "./rpc/OAuthChainDemo/Downstream/Inspect", request, context, cancellationToken, static failure => failure);
 }

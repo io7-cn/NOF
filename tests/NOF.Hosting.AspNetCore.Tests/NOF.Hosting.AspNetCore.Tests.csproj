@@ -30,4 +30,10 @@
     <ProjectReference Include="..\..\src\NOF.Abstraction\NOF.Abstraction.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NOF.Hosting.SourceGenerator\NOF.Hosting.SourceGenerator.csproj" />
+    <ProjectReference Include="..\..\src\NOF.Contract.SourceGenerator\NOF.Contract.SourceGenerator.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <Compile Include="..\Common\SourceGenerator\*.cs" Link="SourceGenerator\%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
