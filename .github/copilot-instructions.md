@@ -38,7 +38,7 @@ Use lowercase issue-linked topic branches and submit changes to `main` for requi
 
 ## Key Patterns
 
-- Results are native `Result(Success, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. `Success<T>` optionally carries data and Message; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
+- Results are native `Result(Empty, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. Success/Success<T> wrappers are removed; successful messages belong to business DTOs; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
 - Application contracts are declared as `IApplicationService` interfaces with one request parameter and a declared business response per method. DTOs, nullable values and business unions are supported; HTTP routes belong exclusively in native IHttpEndpointModule implementations; legacy HTTP RPC adapters and annotations are deleted.
 - Application implementations use `ApplicationService<TService>` and generated nested handler base classes.
 - `AddApplicationService<T>()` registers a service container; application parts automatically register operation implementations. During `BuildAsync()`, registered IHttpEndpointModule instances map explicit native routes. Contracts carry no HTTP declarations.

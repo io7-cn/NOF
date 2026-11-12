@@ -12,19 +12,20 @@ public class ResultTests
         Result<int> result = 42;
         Assert.IsType<int>(result.Value);
         Assert.Equal(42, result.ExpectSuccess());
-        Assert.Equal("hello", Result.Success<string>("hello").ExpectSuccess());
+        Assert.Equal("hello", Result.Success("hello").ExpectSuccess());
         Result<bool> falseValue = false;
         Assert.False(falseValue.ExpectSuccess());
     }
 
     [Fact]
-    public void SuccessWrapper_IsExplicitAndRetainsMessage()
+    public void PayloadFreeSuccess_UsesExistingEmptyType_WithoutMetadata()
     {
-        Result<Success<int>> result = new Success<int>(42, "Loaded from cache");
-        var (data, message) = result.ExpectSuccess();
-        Assert.Equal((42, "Loaded from cache"), (data, message));
-        Assert.Equal("Saved", Result.Success("Saved").ExpectSuccess().Message);
-        Assert.Equal("Loaded", Result.WithMessage(42, "Loaded").ExpectSuccess().Message);
+        Result result = Empty.Instance;
+        Assert.Same(Empty.Instance, result.ExpectSuccess());
+        Assert.Same(Empty.Instance, Result.Success().ExpectSuccess());
+        Assert.Null(typeof(Result).Assembly.GetType("NOF.Contract.Success"));
+        Assert.Null(typeof(Result).Assembly.GetType("NOF.Contract.Success`1"));
+        Assert.DoesNotContain(typeof(Result).GetMethods(), method => method.Name == "WithMessage");
     }
 
     [Fact]
@@ -44,8 +45,6 @@ public class ResultTests
     public void Construction_RejectsMissingDataAndFailureDetails()
     {
         Assert.Throws<ArgumentNullException>(() => Result.Success<string>(null!));
-        Assert.Throws<ArgumentNullException>(() => new Success<string>(null!));
-        Assert.Throws<ArgumentNullException>(() => new Success(null!));
         Assert.Throws<ArgumentException>(() => new Failure("", "Missing"));
         Assert.Throws<ArgumentNullException>(() => new Failure("invalid", null!));
     }
@@ -57,20 +56,16 @@ public class ResultTests
         Assert.Equal([1, 2], page.Items);
         Assert.Equal(5, page.TotalCount);
         Assert.Throws<ArgumentOutOfRangeException>(() => new Page<int>([], -1));
-        var wrapped = Result.WithMessage(page, "Page loaded").ExpectSuccess();
-        Assert.Same(page, wrapped.Data);
     }
 
     [Fact]
-    public async Task Stream_IsBareUnlessMessageWrapperIsSelected()
+    public async Task Stream_IsAnOrdinaryTypedPayload()
     {
         var stream = Items();
         var bare = Result.Stream(stream);
         Assert.Same(stream, bare.ExpectSuccess());
-        var wrapped = Result.WithMessage(stream, "Stream opened").ExpectSuccess();
-        Assert.Equal("Stream opened", wrapped.Message);
         var items = new List<int>();
-        await foreach (var item in wrapped.Data)
+        await foreach (var item in bare.ExpectSuccess())
         {
             items.Add(item);
         }
@@ -92,15 +87,15 @@ public class ResultTests
     [InlineData("Saved")]
     [InlineData("")]
     [InlineData("保存成功\r\nMore detail")]
-    public void Json_OptionalWrapper_RoundTripsMessage(string message)
+    public void Json_BusinessDto_OwnsItsSuccessfulMessage(string message)
     {
-        var json = JsonSerializer.Serialize(Result.WithMessage(42, message), JsonSerializerOptions.NOF);
+        var json = JsonSerializer.Serialize(Result.Success(new ImportReceipt(42, message)), JsonSerializerOptions.NOF);
         using var document = JsonDocument.Parse(json);
-        Assert.Equal(42, document.RootElement.GetProperty("data").GetInt32());
+        Assert.Equal(42, document.RootElement.GetProperty("importedCount").GetInt32());
         Assert.Equal(message, document.RootElement.GetProperty("message").GetString());
         Assert.False(document.RootElement.TryGetProperty("kind", out _));
-        var success = JsonSerializer.Deserialize<Result<Success<int>>>(json, JsonSerializerOptions.NOF).ExpectSuccess();
-        Assert.Equal(42, success.Data);
+        var success = JsonSerializer.Deserialize<Result<ImportReceipt>>(json, JsonSerializerOptions.NOF).ExpectSuccess();
+        Assert.Equal(42, success.ImportedCount);
         Assert.Equal(message, success.Message);
     }
 
@@ -134,13 +129,17 @@ public class ResultTests
     }
 
     [Fact]
-    public void Json_SourceGeneratedMetadata_SupportsRawWrappedPageAndFailureCases()
+    public void Json_SourceGeneratedMetadata_SupportsEmptyBusinessDtoPageAndFailureCases()
     {
         var context = new ResultTestJsonContext(new JsonSerializerOptions(JsonSerializerOptions.NOF));
+        var empty = JsonSerializer.Serialize(Result.Success(), context.Result);
+        Assert.Equal("{}", empty);
+        Assert.IsType<Empty>(JsonSerializer.Deserialize(empty, context.Result).Value);
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Result>("{\"message\":\"Saved\"}", context.Result));
         var plain = JsonSerializer.Serialize<Result<int>>(42, context.ResultInt32);
         Assert.Equal(42, JsonSerializer.Deserialize(plain, context.ResultInt32).ExpectSuccess());
-        var wrapped = JsonSerializer.Serialize(Result.WithMessage(42, "Loaded"), context.ResultSuccessInt32);
-        Assert.Equal("Loaded", JsonSerializer.Deserialize(wrapped, context.ResultSuccessInt32).ExpectSuccess().Message);
+        var receipt = JsonSerializer.Serialize(Result.Success(new ImportReceipt(42, "Loaded")), context.ResultImportReceipt);
+        Assert.Equal("Loaded", JsonSerializer.Deserialize(receipt, context.ResultImportReceipt).ExpectSuccess().Message);
         var page = JsonSerializer.Serialize(Result.Page([1, 2], 5), context.ResultPageInt32);
         Assert.Equal(5, JsonSerializer.Deserialize(page, context.ResultPageInt32).ExpectSuccess().TotalCount);
         var failureJson = JsonSerializer.Serialize<Result<int>>(Result.Fail("bad", "Invalid"), context.ResultInt32);

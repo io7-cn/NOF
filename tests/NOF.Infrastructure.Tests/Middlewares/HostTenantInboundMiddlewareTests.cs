@@ -26,7 +26,7 @@ public sealed class HostTenantInboundMiddlewareTests
             typeof(IHostTenantTestService), method,
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "untrusted")], default);
 
-        Assert.IsType<Success>(Assert.IsType<Result>(result.Response).Value);
+        Assert.IsType<Empty>(Assert.IsType<Result>(result.Response).Value);
         var probe = provider.GetRequiredService<TenantProbe>();
         Assert.Equal(expectedTenant, probe.DependencyTenant);
         Assert.Equal(expectedTenant, probe.HandlerTenant);
@@ -56,7 +56,7 @@ public sealed class HostTenantInboundMiddlewareTests
         var result = await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(scope.ServiceProvider,
             typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!, new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
-        Assert.IsType<Success>(result.Require<Result>(Result.CreateFailure).Value);
+        Assert.IsType<Empty>(result.Require<Result>(Result.CreateFailure).Value);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
         Assert.Equal("caller", Context.Current.TenantId);
 

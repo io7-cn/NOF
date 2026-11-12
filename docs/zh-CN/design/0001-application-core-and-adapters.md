@@ -86,7 +86,7 @@ Command/Notification 的消息出站投递管线继续保留。
 | UI、存储、缓存、映射及状态机 | 可选模块 | 以独立价值维护，不成为核心强制依赖 |
 
 共享 Failure 保持为业务值。后续将判别字段、JSON 配置，以及 RPC 的空响应/失败构造
-移到编解码器和适配器；成功 Message 继续使用可选 Success<T>，不强制包装普通成功值。
+移到编解码器和适配器；成功 Message 属于业务 DTO。Success/Success<T> 已移除，无返回值 Result 使用 Empty。
 
 执行上下文使用经过确认的业务身份和租户信息。适配器把原始头和 Claims 转换成该上下文。
 复用 Activity/OpenTelemetry，不另建追踪运行时。环境访问只作可选便利，显式上下文是可测试契约。

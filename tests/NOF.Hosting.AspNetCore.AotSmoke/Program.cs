@@ -36,6 +36,10 @@ using (var scope = app.Services.CreateScope())
 await app.StartAsync();
 using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 var id = Guid.NewGuid();
+var savedJson = JsonSerializer.Serialize(Result.Success(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result>());
+Expect(savedJson == "{}", "Payload-free success serialized metadata");
+Expect(JsonSerializer.Deserialize(savedJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result>()) is Empty,
+    "Payload-free union did not round-trip without reflection");
 using var update = await http.PutAsync($"/native/orders/{id}", new StringContent(
     $$"""{"id":"{{Guid.NewGuid()}}","state":"shipped"}""", Encoding.UTF8, "application/json"));
 update.EnsureSuccessStatusCode();
@@ -47,8 +51,8 @@ using var nullable = await http.GetAsync($"/native/nullable/{id}");
 Expect(nullable.StatusCode == HttpStatusCode.NoContent, "Nullable resource did not map to 204");
 using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
 Expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
-var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", JsonSerializerOptions.NOF.GetRequiredTypeInfo<Success<OrderDto>>());
-Expect(withMessage!.Data.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
+var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderReadReceipt>());
+Expect(withMessage!.Order.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
 using var denied = await http.GetAsync($"/native/protected/{id}");
 Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count > 0,
     "Native endpoint lost application authorization");
@@ -101,7 +105,7 @@ public interface IOrderService : IApplicationService
     OrderDto Preview(ReadOrderRequest request);
     OrderDto? Find(ReadOrderRequest request);
     PlainDecision Decide(ReadOrderRequest request);
-    Result<Success<OrderDto>> ReadWithMessage(ReadOrderRequest request);
+    Result<OrderReadReceipt> ReadWithMessage(ReadOrderRequest request);
     [RequirePermission("order.read")]
     Result<OrderDto> ReadProtected(ReadOrderRequest request);
 }
@@ -123,6 +127,7 @@ public sealed class ReadOrderRequest
 }
 
 public sealed record OrderDto(Guid Id, string Status, string Label);
+public sealed record OrderReadReceipt(OrderDto Order, string Message);
 
 public partial class OrderServer : ApplicationService<IOrderService>;
 
@@ -221,14 +226,15 @@ public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
 
 public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 {
-    public override Task<Result<Success<OrderDto>>> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.WithMessage(new OrderDto(request.Id, "cached", "read"), "Read from cache"));
+    public override Task<Result<OrderReadReceipt>> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult(Result.Success(new OrderReadReceipt(new OrderDto(request.Id, "cached", "read"), "Read from cache")));
 }
 
 
+[JsonSerializable(typeof(Result))]
 [JsonSerializable(typeof(OrderDto))]
 [JsonSerializable(typeof(UpdateBody))]
-[JsonSerializable(typeof(Success<OrderDto>))]
+[JsonSerializable(typeof(OrderReadReceipt))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 public partial class SmokeJsonContext : JsonSerializerContext;
 
@@ -258,8 +264,8 @@ public sealed class SmokeEndpointModule : IHttpEndpointModule
             Failure failure => TypedResults.Problem(statusCode: 404, detail: failure.Message),
             _ => throw new InvalidOperationException("No outcome")
         };
-    public static async Task<Ok<Success<OrderDto>>> MessageAsync(Guid id, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok((await http.InvokeAsync(OrderServer.ReadWithMessage.Descriptor, new ReadOrderRequest { Id = id }, ct)).Value as Success<OrderDto>
+    public static async Task<Ok<OrderReadReceipt>> MessageAsync(Guid id, HttpContext http, CancellationToken ct)
+        => TypedResults.Ok((await http.InvokeAsync(OrderServer.ReadWithMessage.Descriptor, new ReadOrderRequest { Id = id }, ct)).Value as OrderReadReceipt
             ?? throw new InvalidOperationException("Message handler returned no resource"));
     public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> UpdateAsync(Guid id, UpdateBody body, HttpContext http, CancellationToken ct)
         => (await http.InvokeAsync(OrderServer.Update.Descriptor,

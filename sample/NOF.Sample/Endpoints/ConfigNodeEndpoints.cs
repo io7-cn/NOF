@@ -135,7 +135,7 @@ public sealed class ConfigNodeEndpoints : IHttpEndpointModule
 
     public static Results<NoContent, ProblemHttpResult> ToCommandResult(Result result) => result.Value switch
     {
-        Success => TypedResults.NoContent(),
+        Empty => TypedResults.NoContent(),
         Failure failure => ToProblem(failure),
         _ => throw new InvalidOperationException("Command did not return a business outcome.")
     };

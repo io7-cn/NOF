@@ -27,7 +27,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var authorization = await initialAccessTokenHandler
             .HandleAsync(httpRequest, cancellationToken)
             .ConfigureAwait(false);
-        if (authorization is not Success authorizationSuccess)
+        if (authorization is not Empty)
         {
             var authorizationFailure = authorization switch
             {
@@ -196,7 +196,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         var result = await registrationRepository
             .DeleteAsync(clientId, registrationAccessToken, cancellationToken)
             .ConfigureAwait(false);
-        if (result is not Success resultSuccess)
+        if (result is not Empty)
         {
             var resultFailure = result switch
             {

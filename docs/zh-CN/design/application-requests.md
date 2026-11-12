@@ -22,7 +22,8 @@ public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 
 每个声明只有一个引用类型请求和同步业务返回值。Context、CancellationToken、Task 属于
 生成的服务端 API。支持 DTO、可空值和业务联合类型。删除 `IRpcResponse<TSelf>`，
-`Result<T>` 只是业务联合类型，`Success<T>` 只是可选的成功消息包装。
+`Result<T>` 只是业务联合类型；无返回值 Result 使用 Empty，成功消息属于业务 DTO。
+Success 和 Success<T> 已删除。
 不生成客户端接口、HTTP Client 或 Local Client。
 
 ## 注册与本地调用

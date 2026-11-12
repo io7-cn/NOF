@@ -8,6 +8,6 @@ namespace NOF.Contract;
 internal static class ResultAssertions
 {
     public static T ExpectSuccess<T>(this Result<T> result) => Assert.IsAssignableFrom<T>(result.Value);
-    public static Success ExpectSuccess(this Result result) => Assert.IsType<Success>(result.Value);
+    public static Empty ExpectSuccess(this Result result) => Assert.IsType<Empty>(result.Value);
     public static Failure ExpectFailure(this IUnion result) => Assert.IsType<Failure>(result.Value);
 }

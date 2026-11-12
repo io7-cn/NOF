@@ -108,7 +108,7 @@ application policies. Remote HTTP behavior belongs to native DelegatingHandler a
 Keep shared Failure as a business value. Move wire discriminators, JSON configuration
 and RPC empty-response/failure construction out of that value/core Result in a later
 compatible migration step. Preserve explicit successful Message metadata as an
-optional Success<T> payload, not a requirement for ordinary successful responses.
+explicit business DTO field. Success/Success<T> wrappers are removed; payload-free Result uses Empty.
 
 Execution context should expose verified semantic identity/tenant metadata. Adapters
 translate raw headers and claims into that context. Reuse Activity/OpenTelemetry

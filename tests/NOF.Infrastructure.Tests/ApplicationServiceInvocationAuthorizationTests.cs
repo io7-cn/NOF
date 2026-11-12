@@ -63,7 +63,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var execution = await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.InspectContext),
             new ContextCheckRequest(key, value), context);
 
-        Assert.IsType<Success>(execution.Require<Result>(Result.CreateFailure).Value);
+        Assert.IsType<Empty>(execution.Require<Result>(Result.CreateFailure).Value);
         Assert.True(callerUser.User.IsAuthenticated);
         Assert.Contains(callerUser.User.Claims, static claim => claim.Type == ClaimTypes.Permission && claim.Value == "fleet.read");
         Assert.Equal("tenant-a", context.TenantId);

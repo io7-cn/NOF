@@ -14,6 +14,9 @@ public class ServiceExecutionTests
         var dto = new Reply("read");
         ServiceExecution completed = new ServiceCompleted(dto);
         Assert.Same(dto, completed.Require<Reply>());
+        completed = new ServiceCompleted(Result.Success());
+        Assert.Same(Empty.Instance, completed.Require<Result>().Value);
+        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result))).Require<Result>());
         var failure = new Failure("business.closed", "Closed");
         completed = new ServiceCompleted(failure);
         Assert.Same(failure, completed.Require<Failure>());

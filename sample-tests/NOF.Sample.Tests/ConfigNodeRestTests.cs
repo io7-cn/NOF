@@ -78,18 +78,18 @@ public sealed class ConfigNodeRestTests
         await using var app = await CreateAppAsync();
         using var http = app.GetTestClient();
         var api = new HttpSampleApi(http);
-        Assert.IsType<Success>((await api.CreateConfigNodeAsync(new() { Name = "ui" }, Context.Empty)).Value);
+        Assert.IsType<Empty>((await api.CreateConfigNodeAsync(new() { Name = "ui" }, Context.Empty)).Value);
         var root = Assert.Single((await api.GetRootConfigNodesAsync(new(), Context.Empty)).Nodes);
-        Assert.IsType<Success>((await api.AddOrUpdateConfigFileAsync(new()
+        Assert.IsType<Empty>((await api.AddOrUpdateConfigFileAsync(new()
         { NodeId = root.Id, FileName = "settings.json", Content = "{\"port\":8080}" }, Context.Empty)).Value);
-        Assert.IsType<Success>((await api.SetActiveFileAsync(new()
+        Assert.IsType<Empty>((await api.SetActiveFileAsync(new()
         { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
         var node = (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectSuccess().Node;
         Assert.Equal("settings.json", node.ActiveFileName);
         Assert.Single(node.ConfigFiles);
-        Assert.IsType<Success>((await api.RemoveConfigFileAsync(new()
+        Assert.IsType<Empty>((await api.RemoveConfigFileAsync(new()
         { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
-        Assert.IsType<Success>((await api.DeleteConfigNodeAsync(new() { Id = root.Id }, Context.Empty)).Value);
+        Assert.IsType<Empty>((await api.DeleteConfigNodeAsync(new() { Id = root.Id }, Context.Empty)).Value);
         Assert.Equal(ConfigNodeErrorCodes.NotFound,
             (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectFailure().Code);
     }

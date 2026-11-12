@@ -246,7 +246,7 @@
                 FileName = _selectedFile,
                 Content = _fileContent
             }, NOF.Contract.Context.Empty);
-            if (result is Success)
+            if (result is NOF.Contract.Empty)
             {
                 Message.Success("保存成功");
                 await LoadNode();
@@ -328,7 +328,7 @@
             Name = _createNodeModel.Name,
             ParentId = _creatingChildFor
         }, NOF.Contract.Context.Empty);
-        if (result is Success)
+        if (result is NOF.Contract.Empty)
         {
             Message.Success("节点创建成功");
             _createNodeModalVisible = false;
@@ -349,7 +349,7 @@
         {
             Id = nodeId
         }, NOF.Contract.Context.Empty);
-        if (result is Success)
+        if (result is NOF.Contract.Empty)
         {
             Message.Success("节点删除成功");
             if (_selectedNode == nodeId)
@@ -401,7 +401,7 @@
                 FileName = _fileModel.Name,
                 Content = _fileModel.Content
             }, NOF.Contract.Context.Empty);
-            if (result is Success)
+            if (result is NOF.Contract.Empty)
             {
                 Message.Success("文件保存成功");
                 _fileModalVisible = false;
@@ -423,7 +423,7 @@
                 NodeId = _selectedNode.Value,
                 FileName = _selectedFile!
             }, NOF.Contract.Context.Empty);
-            if (result is Success)
+            if (result is NOF.Contract.Empty)
             {
                 Message.Success("文件删除成功");
                 if (_selectedFile == fileName)
@@ -449,7 +449,7 @@
                 NodeId = _selectedNode.Value,
                 FileName = fileName
             }, NOF.Contract.Context.Empty);
-            if (result is Success)
+            if (result is NOF.Contract.Empty)
             {
                 Message.Success("已设为激活文件");
                 await LoadNode();

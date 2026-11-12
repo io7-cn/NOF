@@ -9,20 +9,18 @@ breaking change from NOF 11. Rebuild contracts, servers and clients together.
 
 ```csharp
 public union Result<T>(T, Failure);
-public union Result(Success, Failure);
+public union Result(Empty, Failure);
 ```
 
-`Result<T>` contains `T` directly. `Success<T>` is optional metadata containing
-non-null `Data` and `Message`; select it explicitly as the payload type when a
-successful response needs a message. Payload-free `Result` uses `Success`, whose
-message defaults to an empty string. Ordinary DTOs can also define their own
-message properties without using a framework wrapper.
+`Result<T>` contains `T` directly. Payload-free `Result` uses the existing `Empty`
+type. `Success` and `Success<T>` are removed; successful messages belong to explicit
+business response DTOs. No replacement generic message wrapper is provided.
 
 ```csharp
 Result<OrderDto> loaded = order;
-Result<Success<OrderDto>> withMessage = new Success<OrderDto>(order, "Loaded from cache");
+Result<ImportReceipt> imported = new ImportReceipt(42, "Import completed");
 Result<OrderDto> missing = new Failure("order.not_found", "Order not found");
-Result saved = new Success("Saved");
+Result saved = Empty.Instance;
 
 string Describe(Result<OrderDto> outcome) => outcome switch
 {
@@ -30,18 +28,21 @@ string Describe(Result<OrderDto> outcome) => outcome switch
     Failure failure => $"{failure.Code}: {failure.Message}",
     null => throw new InvalidOperationException("Uninitialized result")
 };
+
+public sealed record ImportReceipt(int ImportedCount, string Message);
 ```
 
 Match the payload itself. There is no `IsSuccess`, `Extra`, `IResult`, `FailResult`,
 `ResultProjection` or `Result.From`. The compiler-generated union `Value` contains
 the selected value/case as an object; use typed patterns for application code.
-A default/null union has no selected value and is rejected at RPC boundaries.
+A default/null union has no selected value and is rejected at application boundaries.
 
 Construction helpers are `Result.Success(data)`, `Result.Fail(code, message)`,
 `Result.Page(items, totalCount)` and `Result.Stream(items)`.
-`Result.WithMessage(data, message)` returns `Result<Success<T>>`.
-Use `Result.Success<string>(text)` for a string payload;
-`Result.Success("Saved")` creates a payload-free successful message.
+`Result.Success()` returns the explicit Empty case. `Result.Success("Saved")` now
+creates `Result<string>` containing the string itself. Remove calls to WithMessage
+and declare a business DTO for successful message data. A default Result remains
+uninitialized and must not be treated as success.
 
 ## One shared failure
 
@@ -62,19 +63,20 @@ System.Text.Json writes the active value directly:
 
 ```json
 {"id":42}
-{"data":{"id":42},"message":"Loaded from cache"}
-{"message":"Saved"}
+{"importedCount":42,"message":"Import completed"}
+{}
 {"$kind":"failure","code":"order.not_found","message":"Missing"}
 ```
 
-These represent `Result<OrderDto>`, `Result<Success<OrderDto>>`, payload-free
+These represent `Result<OrderDto>`, `Result<ImportReceipt>`, payload-free
 `Result`, and a shared failure respectively. A custom native union classifier
 selects failures by the reserved root `$kind: "failure"` marker; it does not infer
 failure from `code` and `message` fields. Scalar, DTO, collection and dictionary
 payloads are supported, including successful DTOs with error-like property names.
 
 The root `$kind` property is reserved by the Result protocol. If successful data
-needs this property, select `Result<Success<T>>` so it appears inside `data`.
+needs this property, define a business DTO that nests the data under another field.
+Empty accepts only an empty JSON object; old message-only successes are rejected.
 Invalid markers, malformed failures and mixed failure/payload fields are rejected.
 The old `isSuccess/value/extra` envelope is not a supported compatibility format.
 
@@ -87,8 +89,8 @@ also included in NOF's built-in context.
 
 Replace `PaginatedResult<T>` with `Result<Page<T>>`; successful `Page<T>` has typed
 `Items` and optional `TotalCount`. Replace `StreamingResult<T>` with
-`Result<IAsyncEnumerable<T>>`. If a stream needs a successful message, declare
-`Result<Success<IAsyncEnumerable<T>>>`. Both forms support server SSE endpoints and corresponding
+`Result<IAsyncEnumerable<T>>`. Stream messages belong to event DTOs or explicit
+application-defined events. These streams support server SSE endpoints and corresponding
 `Task<Result<...>>` server invocation return types. HTTP callers maintain their own
 SSE reader; no client is generated.
 
@@ -113,8 +115,8 @@ switch (result)
 The endpoint module maps a pre-stream failure to ProblemDetails and a successful stream
 to native TypedResults.ServerSentEvents. Callers use the platform SseParser. There is no
 NOF streaming response envelope or message header. If a stream needs message metadata,
-model it explicitly in event DTOs or an application-defined event. Success<T>.Message
-remains valid business data; each adapter decides how to represent it. Exceptions during
+model it explicitly in event DTOs or an application-defined event. Each adapter
+decides how to represent successful business message data. Exceptions during
 enumeration remain stream failures; initial success does not promise stream completion.
 
 ## Boundaries, deployment and rollback
@@ -127,7 +129,8 @@ are deleted without a compatibility layer. HTTP routing belongs to endpoint modu
 Native REST endpoints return resource DTOs, 201/204 or ProblemDetails rather than a
 mandatory Result envelope. OAuth endpoints retain their standard protocol.
 
-Match successful `T` directly, opt into `Success<T>` for messages, replace failure
+Match successful `T` directly, use Empty for payload-free success and business DTOs
+for successful messages, replace failure
 reads with `failure.Code/Message`, and move `Extra` metadata into explicit DTOs.
 Deploy a coordinated major-version upgrade or separately versioned routes. Rollback
 restores the complete NOF 11 client/contract/server set and its original wire format.

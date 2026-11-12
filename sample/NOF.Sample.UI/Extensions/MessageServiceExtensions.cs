@@ -12,10 +12,10 @@ public static class NOFSampleWebUIExtensions
         {
             switch (result)
             {
-                case Success success:
-                    if (showSuccess)
+                case NOF.Contract.Empty:
+                    if (showSuccess && successMessage is not null)
                     {
-                        messageService.Success(successMessage ?? success.Message);
+                        messageService.Success(successMessage);
                     }
                     break;
                 case Failure failure:
@@ -40,25 +40,6 @@ public static class NOFSampleWebUIExtensions
                         messageService.Success(successMessage);
                     }
                     return value;
-                case null:
-                    throw new InvalidOperationException("The response contains no outcome case.");
-            }
-        }
-
-        /// <summary>Unwraps successful data with explicitly selected message metadata.</summary>
-        public T? UnwrapWithMessage<T>(Result<Success<T>> result, string? successMessage = null, bool showSuccess = false)
-        {
-            switch (result)
-            {
-                case Success<T> success:
-                    if (showSuccess)
-                    {
-                        messageService.Success(successMessage ?? success.Message);
-                    }
-                    return success.Data;
-                case Failure failure:
-                    messageService.Error(failure.Message);
-                    return default;
                 case null:
                     throw new InvalidOperationException("The response contains no outcome case.");
             }

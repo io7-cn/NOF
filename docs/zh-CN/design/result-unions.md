@@ -9,19 +9,18 @@ JSON 协议兼容性。契约、服务端和客户端需要一起重新构建及
 
 ```csharp
 public union Result<T>(T, Failure);
-public union Result(Success, Failure);
+public union Result(Empty, Failure);
 ```
 
-`Result<T>` 直接包含 `T`。`Success<T>` 是可选的消息包装，包含非空 `Data` 和
-`Message`；成功响应需要消息时，显式声明 `Result<Success<T>>`。
-无业务数据的 `Result` 使用 `Success`，消息默认为空字符串。
-业务 DTO 也可以自行定义消息字段，不必使用框架包装。
+`Result<T>` 直接包含 `T`，无返回值的 `Result` 复用现有 `Empty` 类型。
+`Success` 和 `Success<T>` 已删除；成功消息属于具体业务响应 DTO，框架不再提供
+通用消息包装类型。
 
 ```csharp
 Result<OrderDto> loaded = order;
-Result<Success<OrderDto>> withMessage = new Success<OrderDto>(order, "从缓存加载成功");
+Result<ImportReceipt> imported = new ImportReceipt(42, "导入完成");
 Result<OrderDto> missing = new Failure("order.not_found", "订单不存在");
-Result saved = new Success("保存成功");
+Result saved = Empty.Instance;
 
 string Describe(Result<OrderDto> outcome) => outcome switch
 {
@@ -29,17 +28,19 @@ string Describe(Result<OrderDto> outcome) => outcome switch
     Failure failure => $"{failure.Code}: {failure.Message}",
     null => throw new InvalidOperationException("结果未初始化")
 };
+
+public sealed record ImportReceipt(int ImportedCount, string Message);
 ```
 
 匹配成功值本身。移除 `IsSuccess`、`Extra`、`IResult`、`FailResult`、
 `ResultProjection` 和 `Result.From`。编译器生成的 `Value` 是选中的值或分支对象，
-应用代码使用类型模式匹配。默认联合值没有分支，RPC 边界会拒绝它。
+应用代码使用类型模式匹配。默认联合值没有分支，应用调用边界会拒绝它。
 
 构造辅助方法包括 `Result.Success(data)`、`Result.Fail(code, message)`、
 `Result.Page(items, totalCount)` 和 `Result.Stream(items)`。
-`Result.WithMessage(data, message)` 返回 `Result<Success<T>>`。
-字符串数据使用 `Result.Success<string>(text)`；`Result.Success("保存成功")`
-表示无业务数据的成功消息。
+`Result.Success()` 返回显式 Empty 分支。`Result.Success("保存成功")` 现在返回
+包含该字符串的 `Result<string>`。删除 WithMessage 调用，需要成功消息时声明业务 DTO。
+默认 Result 仍是未初始化值，不能当作成功。
 
 ## 唯一的共享 Failure
 
@@ -59,18 +60,18 @@ System.Text.Json 直接序列化选中的业务值：
 
 ```json
 {"id":42}
-{"data":{"id":42},"message":"从缓存加载成功"}
-{"message":"保存成功"}
+{"importedCount":42,"message":"导入完成"}
+{}
 {"$kind":"failure","code":"order.not_found","message":"订单不存在"}
 ```
 
-依次表示 `Result<OrderDto>`、`Result<Success<OrderDto>>`、无数据的 `Result`
+依次表示 `Result<OrderDto>`、`Result<ImportReceipt>`、无数据的 `Result`
 和共享失败。原生联合类型的自定义分类器通过根级保留标记 `$kind: "failure"`
 选择失败分支，不会仅凭 `code`、`message` 字段判断失败。支持标量、DTO、集合和
 字典，包括包含这些同名字段的成功 DTO。
 
-Result 协议保留根级 `$kind` 字段。如果成功数据需要这个字段，应显式使用
-`Result<Success<T>>`，让它位于 `data` 内。无效标记、不完整失败以及混入业务数据
+Result 协议保留根级 `$kind` 字段。如果成功数据需要这个字段，应定义业务 DTO，
+把该数据嵌套到另一字段中。Empty 只接受空 JSON 对象；旧消息对象会被拒绝。无效标记、不完整失败以及混入业务数据
 的失败对象会被拒绝。旧的 `isSuccess/value/extra` 信封不属于兼容协议。
 
 分类器使用源生成的联合类型分支元数据，不通过反射构造闭合泛型转换器。
@@ -81,8 +82,8 @@ Native AOT 应用需要在 JSON 上下文中注册具体结果和数据类型；
 
 `PaginatedResult<T>` 改为 `Result<Page<T>>`，成功值有显式 `Items` 和可选的
 `TotalCount`。`StreamingResult<T>` 改为 `Result<IAsyncEnumerable<T>>`。
-流需要成功消息时声明 `Result<Success<IAsyncEnumerable<T>>>`。
-两种形式都支持服务端 SSE 端点，服务端调用返回对应的 `Task<Result<...>>`。
+流的成功消息放入事件 DTO 或应用自定义事件中。流支持服务端 SSE 端点，
+服务端调用返回对应的 `Task<Result<...>>`。
 HTTP 调用方自行维护 SSE 读取逻辑，不再生成客户端。
 
 ```csharp
@@ -105,8 +106,7 @@ switch (result)
 
 端点模块将开始传输前的失败映射为 ProblemDetails，将成功流映射为原生
 TypedResults.ServerSentEvents，调用方使用平台 SseParser。不再有 NOF 流式响应包装或消息头。
-需要消息元数据时，使用显式事件 DTO 或应用自定义事件。Success<T>.Message 仍是有效业务数据，
-各适配器决定其传输表示。枚举期间的异常属于流传输失败，初始成功不保证整个流完成。
+需要消息元数据时，使用显式事件 DTO 或应用自定义事件，各适配器决定业务消息的传输表示。枚举期间的异常属于流传输失败，初始成功不保证整个流完成。
 
 ## 边界、部署和回滚
 
@@ -116,7 +116,7 @@ TypedResults.ServerSentEvents，调用方使用平台 SseParser。不再有 NOF 
 HTTP 路由由端点模块管理。原生 REST 端点返回资源 DTO、201/204 或 ProblemDetails，没有强制 Result 包装。
 OAuth 端点继续使用标准协议。
 
-迁移时直接匹配成功的 `T`，需要消息时选择 `Success<T>`，错误改读
+迁移时直接匹配成功的 `T`，无返回值成功使用 Empty，成功消息使用业务 DTO，错误改读
 `failure.Code/Message`，并把 `Extra` 改成 DTO 显式字段。部署时协调升级整个
 主版本，或提供独立版本的 API 路由。回滚时恢复完整的 NOF 11 客户端、契约、
 服务端及原有协议。

@@ -15,7 +15,8 @@ receive those execution arguments. DTOs, nullable values and business unions wor
 without response marker interfaces. No client code is generated.
 
 `Result<T>` is native `union (T, NOF.Abstraction.Failure)`. Match successful T directly;
-use optional `Success<T>` only when successful message metadata is needed. Result has
+payload-free Result uses Empty. Success/Success<T> and WithMessage are removed; successful
+messages belong to business response DTOs. Result has
 no IRpcResponse interface or empty-response factory. Policy rejection belongs to the
 execution outcome, separately from returned business failures.
 

@@ -476,7 +476,7 @@ public static partial class NOFOidcServerExtensions
         {
             case Failure failure:
                 return Fail("invalid_grant", failure.Message);
-            case Success:
+            case Empty:
                 break;
             default:
                 throw new InvalidOperationException("The response contains no outcome case.");

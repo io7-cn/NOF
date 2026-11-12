@@ -5,10 +5,10 @@ namespace NOF.Contract;
 
 /// <summary>Contains a payload-free success or a business failure.</summary>
 [JsonUnion(TypeClassifier = typeof(ResultJsonTypeClassifier))]
-public union Result(Success, Failure)
+public union Result(Empty, Failure)
 {
-    /// <summary>Creates a payload-free success with an optional user-facing message.</summary>
-    public static Result Success(string message = "") => new(new Success(message));
+    /// <summary>Creates an explicit payload-free success.</summary>
+    public static Result Success() => new(Empty.Instance);
 
     /// <summary>Returns the successful value directly, without a wrapper.</summary>
     public static Result<T> Success<T>(T data)
@@ -16,9 +16,6 @@ public union Result(Success, Failure)
         ArgumentNullException.ThrowIfNull(data);
         return new(data);
     }
-
-    /// <summary>Creates an explicitly wrapped payload with a successful message.</summary>
-    public static Result<Success<T>> WithMessage<T>(T data, string message) => new Success<T>(data, message);
 
     /// <summary>Creates a business failure.</summary>
     public static Failure Fail(string code, string message) => new(code, message);

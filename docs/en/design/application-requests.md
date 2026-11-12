@@ -24,7 +24,8 @@ public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 Each declaration has one reference-type input and a synchronous business return.
 Context, CancellationToken and Task belong to the generated server API. DTOs, nullable
 values and business unions are supported. `IRpcResponse<TSelf>` is removed; `Result<T>`
-is a business union, not a transport contract. `Success<T>` is an optional message wrapper.
+is a business union, not a transport contract. Payload-free Result uses Empty; successful messages belong to business DTOs. Success
+and Success<T> are removed.
 No client interfaces, HTTP Clients or Local Clients are generated.
 
 ## Registration and local invocation
