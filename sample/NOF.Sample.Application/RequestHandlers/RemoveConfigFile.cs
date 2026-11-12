@@ -2,7 +2,6 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using Outcome = NOF.Sample.INOFSampleService.RemoveConfigFileResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -17,7 +16,7 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
         _cache = cache;
     }
 
-    public override async Task<Outcome> HandleAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.Of(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
@@ -25,12 +24,12 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
 
         if (node is null)
         {
-            return new Outcome.NotFound("Node not found.");
+            return new NotFound("Node not found.");
         }
 
         if (!ConfigFileName.IsValid(request.FileName))
         {
-            return new Outcome.InvalidInput("File name must contain 1–100 nonblank characters.");
+            return new InvalidInput("File name must contain 1–100 nonblank characters.");
         }
         var fileName = ConfigFileName.Of(request.FileName);
         node.RemoveConfigFile(fileName);

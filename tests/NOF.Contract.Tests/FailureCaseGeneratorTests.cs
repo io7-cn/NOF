@@ -1,8 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
 using NOF.Contract.SourceGenerator;
-using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using Xunit;
@@ -18,8 +16,8 @@ public sealed class FailureCaseGeneratorTests
         public sealed record ConflictDetails(long NodeId);
         public partial interface IService : IApplicationService
         {
-            [FailureCase("404", Name = "NotFound")]
-            [FailureCase<ConflictDetails>("10001", Name = "CanNotDeleteNode")]
+            [FailureCase("NotFound", "404")]
+            [FailureCase("CanNotDeleteNode", typeof(ConflictDetails))]
             string Delete(Query request);
         }
         """;
@@ -30,12 +28,31 @@ public sealed class FailureCaseGeneratorTests
         var output = Generate(Contract, out var run);
         Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var source = run.GeneratedTrees.Single().ToString();
-        Assert.Contains("public union DeleteResult(string, global::IService.DeleteResult.NotFound, global::IService.DeleteResult.CanNotDeleteNode)", source);
+        Assert.Contains("public union Result(string, global::IService.DeleteOperation.NotFound, global::IService.DeleteOperation.CanNotDeleteNode)", source);
         Assert.Contains("public global::ConflictDetails Error", source);
-        Assert.Contains("public global::NOF.Contract.Error Error", source);
+        Assert.Contains("public string ErrorCode", source);
+        Assert.Contains("public string Message", source);
         Assert.Contains("Match<TResult>", source);
         Assert.DoesNotContain("NOF.Domain", source);
+        Assert.DoesNotContain("NOF.Application", source);
         Assert.DoesNotContain("NOF.Abstraction.Failure", source);
+    }
+
+    [Fact]
+    public void ContractOperationBase_ExposesInheritedResultAndCaseTypes()
+    {
+        var output = Generate(Contract + """
+
+            public sealed class Handler : IService.DeleteOperation
+            {
+                public override System.Threading.Tasks.Task<Result> HandleAsync(
+                    Query request, Context context, System.Threading.CancellationToken ct)
+                    => System.Threading.Tasks.Task.FromResult<Result>(new NotFound("missing"));
+            }
+            """, out _);
+        Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.Equal(typeof(IApplicationService).Assembly, typeof(ServiceOperation).Assembly);
+        Assert.DoesNotContain(typeof(ServiceOperation).Assembly.GetReferencedAssemblies(), assembly => assembly.Name == "NOF.Application");
     }
 
     [Theory]
@@ -52,33 +69,39 @@ public sealed class FailureCaseGeneratorTests
             public record Query;
             public partial interface IService : IApplicationService
             {
-                [FailureCase({{Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true)}})]
+                [FailureCase("Failed", {{Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true)}})]
                 string Run(Query query);
-                [FailureCase({{Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true)}}, Name = "NotFound")]
+                [FailureCase("NotFound", {{Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true)}})]
                 string Find(Query query);
             }
             public static class Handler
             {
-                public static IService.RunResult Run() => new IService.RunResult.Failed("missing");
-                public static IService.FindResult Find() => new IService.FindResult.NotFound("missing");
+                public static IService.RunOperation.Result Run() => new IService.RunOperation.Failed("missing");
+                public static IService.FindOperation.Result Find() => new IService.FindOperation.NotFound("missing");
             }
             """;
         var output = Generate(source, out var run);
         Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var generated = run.GeneratedTrees.Single().ToString();
-        Assert.Contains("const string Code = " + Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true), generated);
+        Assert.Contains("get => " + Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true), generated);
         Assert.Contains("public sealed record Failed", generated);
         Assert.Contains("public sealed record NotFound", generated);
     }
 
     [Theory]
     [InlineData("[FailureCase(\"\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\", Name = \"One\")][FailureCase(\"A\", Name = \"Two\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\", Name = \"Match\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\", Name = \"Value\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\", Name = \"var\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\", Name = \"not-valid\")]", "string", true)]
-    [InlineData("[FailureCase(\"A\")][FailureCase(\"B\", Name = \"A\")]", "string", true)]
+    [InlineData("[FailureCase(\"Same\")][FailureCase(\"Same\", \"B\")]", "string", true)]
+    [InlineData("[FailureCase(\"Match\")]", "string", true)]
+    [InlineData("[FailureCase(\"Value\")]", "string", true)]
+    [InlineData("[FailureCase(\"Descriptor\")]", "string", true)]
+    [InlineData("[FailureCase(\"Result\")]", "string", true)]
+    [InlineData("[FailureCase(\"var\")]", "string", true)]
+    [InlineData("[FailureCase(\"not-valid\")]", "string", true)]
+    [InlineData("[FailureCase(\"404\")]", "string", true)]
+    [InlineData("[FailureCase(\"class\")]", "string", true)]
+    [InlineData("[FailureCase(\"NotFound\", \" \")]", "string", true)]
+    [InlineData("[FailureCase(\"Custom\", typeof(void))]", "string", true)]
+    [InlineData("[FailureCase(\"Custom\", typeof(System.Collections.Generic.List<>))]", "string", true)]
     [InlineData("[FailureCase(\"A\")]", "Result", true)]
     [InlineData("[FailureCase(\"A\")]", "string?", true)]
     [InlineData("[FailureCase(\"A\")]", "string", false)]
@@ -105,7 +128,7 @@ public sealed class FailureCaseGeneratorTests
 
             public static class Handler
             {
-                public static IService.DeleteResult Run() => new NOF.Abstraction.Failure("other", "undeclared");
+                public static IService.DeleteOperation.Result Run() => new NOF.Abstraction.Failure("other", "undeclared");
             }
             """, out _);
         Assert.Contains(output.GetDiagnostics(), diagnostic => diagnostic.Id == "CS0029");
@@ -121,13 +144,13 @@ public sealed class FailureCaseGeneratorTests
                 public static string Run()
                 {
                     var options = System.Text.Json.JsonSerializerOptions.NOF;
-                    IService.DeleteResult failure = new IService.DeleteResult.CanNotDeleteNode(new ConflictDetails(42));
+                    IService.DeleteOperation.Result failure = new IService.DeleteOperation.CanNotDeleteNode(new ConflictDetails(42));
                     var json = System.Text.Json.JsonSerializer.Serialize(failure, options);
-                    var restored = System.Text.Json.JsonSerializer.Deserialize<IService.DeleteResult>(json, options);
+                    var restored = System.Text.Json.JsonSerializer.Deserialize<IService.DeleteOperation.Result>(json, options);
                     var id = restored.Match(value => -1L, error => -2L, error => error.Error.NodeId);
                     try
                     {
-                        System.Text.Json.JsonSerializer.Deserialize<IService.DeleteResult>("{\"$failure\":\"UNDECLARED\",\"error\":{}}", options);
+                        System.Text.Json.JsonSerializer.Deserialize<IService.DeleteOperation.Result>("{\"$failure\":\"UNDECLARED\",\"error\":{}}", options);
                         return "accepted undeclared error";
                     }
                     catch (System.Text.Json.JsonException) { return id.ToString(); }
@@ -141,54 +164,104 @@ public sealed class FailureCaseGeneratorTests
         Assert.Equal("42", assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null));
     }
 
-    [Theory]
-    [InlineData("Read();", "NOF230")]
-    [InlineData("_ = Read();", "NOF230")]
-    [InlineData("ReadAsync();", "NOF230")]
-    [InlineData("_ = ReadAsync();", "NOF230")]
-    [InlineData("await ReadAsync();", "NOF230")]
-    [InlineData("var ignored = Read() switch { string value => value };", "NOF231")]
-    [InlineData("var ignored = Read() switch { string value => value, _ => \"ignored\" };", "NOF232")]
-    [InlineData("var ignored = Read() switch { object value => value.ToString(), null => \"empty\" };", "NOF232")]
-    [InlineData("var ignored = Read() switch { not null => \"ignored\", null => \"empty\" };", "NOF232")]
-    [InlineData("switch (Read()) { case string value: break; }", "NOF231")]
-    public async Task CheckedOutcomes_RejectIgnoredOrIncompleteHandling(string body, string expected)
+    [Fact]
+    public void NamedFailures_DefaultCodeAndCustomDataRoundTripWithoutSharedErrorWrapper()
     {
-        var source = Contract + $$"""
-
-            public static class Consumer
+        var output = Generate("""
+            using NOF.Contract;
+            using System.Text.Json;
+            public sealed record Query;
+            public readonly record struct Details(int Count);
+            public partial interface IService : IApplicationService
             {
-                public static IService.DeleteResult Read() => "ok";
-                public static System.Threading.Tasks.Task<IService.DeleteResult> ReadAsync()
-                    => System.Threading.Tasks.Task.FromResult(Read());
-                public static async System.Threading.Tasks.Task Run() { {{body}} }
+                [FailureCase("Missing")]
+                [FailureCase("Denied", "404")]
+                [FailureCase("Hidden", "404")]
+                [FailureCase("Conflict", typeof(Details))]
+                string Run(Query request);
             }
-            """;
-        var output = Generate(source, out _);
-        var diagnostics = await output.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new ExpectedOutcomeAnalyzer()))
-            .GetAnalyzerDiagnosticsAsync();
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == expected && diagnostic.Severity == DiagnosticSeverity.Error);
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    var options = System.Text.Json.JsonSerializerOptions.NOF;
+                    IService.RunOperation.Result missing = new IService.RunOperation.Missing("missing");
+                    var json = System.Text.Json.JsonSerializer.Serialize(missing, options);
+                    var restored = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(json, options);
+                    IService.RunOperation.Result custom = new IService.RunOperation.Conflict(new Details(42));
+                    var customJson = System.Text.Json.JsonSerializer.Serialize(custom, options);
+                    var restoredCustom = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(customJson, options);
+                    IService.RunOperation.Result hidden = new IService.RunOperation.Hidden("hidden");
+                    var restoredHidden = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(
+                        System.Text.Json.JsonSerializer.Serialize(hidden, options), options);
+                    return restored is IService.RunOperation.Missing { ErrorCode: "Missing", Message: "missing" }
+                        && new IService.RunOperation.Denied().ErrorCode == "404"
+                        && restoredHidden is IService.RunOperation.Hidden { ErrorCode: "404" }
+                        && restoredCustom is IService.RunOperation.Conflict { Error.Count: 42 }
+                        && typeof(IService.RunOperation.Conflict).GetProperty("ErrorCode") == null
+                        && typeof(IService.RunOperation.Missing).GetProperty("Error") == null
+                        && !customJson.Contains("errorCode");
+                }
+            }
+            """, out _);
+        using var stream = new MemoryStream();
+        var emitted = output.Emit(stream);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        var assembly = Assembly.Load(stream.ToArray());
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
     }
 
     [Fact]
-    public async Task ExhaustiveMatch_ConsumesAllCasesWithoutCheckedDiagnostics()
+    public void NativeUnionCompiler_WarnsWhenSwitchExpressionOmitsFailureCases()
     {
         var output = Generate(Contract + """
 
             public static class Consumer
             {
-                public static string Run(IService.DeleteResult result) => result switch
+                public static string Run(IService.DeleteOperation.Result result) => result switch
                 {
                     string value => value,
-                    IService.DeleteResult.NotFound error => error.Error.Message,
-                    IService.DeleteResult.CanNotDeleteNode error => error.Error.NodeId.ToString(),
                     null => throw new System.InvalidOperationException()
                 };
             }
             """, out _);
-        var diagnostics = await output.WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new ExpectedOutcomeAnalyzer()))
-            .GetAnalyzerDiagnosticsAsync();
-        Assert.Empty(diagnostics);
+        Assert.Contains(output.GetDiagnostics(), diagnostic => diagnostic.Id == "CS8509");
+    }
+
+    [Fact]
+    public void NativeUnionCompiler_AcceptsExhaustiveSwitchAndOrdinaryDiscardSemantics()
+    {
+        var output = Generate(Contract + """
+
+            public static class Consumer
+            {
+                public static IService.DeleteOperation.Result Read() => "ok";
+                public static void Ignore() { Read(); _ = Read(); }
+                public static string Run(IService.DeleteOperation.Result result) => result switch
+                {
+                    string value => value,
+                    IService.DeleteOperation.NotFound error => error.Message,
+                    IService.DeleteOperation.CanNotDeleteNode error => error.Error.NodeId.ToString(),
+                    null => throw new System.InvalidOperationException()
+                };
+            }
+            """, out _);
+        Assert.DoesNotContain(output.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+            || diagnostic.Id is "CS8509" or "CS8655");
+    }
+
+    [Fact]
+    public void ImplementationFailureDeclarations_ReportDeclarationError()
+    {
+        Generate("""
+            using NOF.Contract;
+            public sealed class Handler
+            {
+                [FailureCase("Missing")]
+                public string Run(object request) => "ok";
+            }
+            """, out var run);
+        Assert.Contains(run.Diagnostics, diagnostic => diagnostic.Id == "NOF220");
     }
 
     private static CSharpCompilation Generate(string source, out GeneratorDriverRunResult run)

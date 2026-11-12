@@ -15,8 +15,10 @@ receive those execution arguments. DTOs, nullable values and business unions wor
 without response marker interfaces. No client code is generated.
 
 Use FailureCase on partial service methods to declare expected failures. The method
-return is the successful type; generated IService.OperationResult includes one distinct
-case per declared code. Codes are opaque strings and case names are independent.
+return is the successful type; generated IService.<Operation>Operation.Result includes one distinct
+case per required name. Use FailureCase("NotFound"), FailureCase("NotFound", "404"),
+or FailureCase("Conflict", typeof(MyError)). Message cases expose ErrorCode/Message;
+custom cases expose typed Error without an imposed code. Invalid names report NOF220.
 See [expected failures](../../docs/en/design/expected-failures.md).
 
 `Result<T>` is native `union (T, NOF.Abstraction.Failure)`. Match successful T directly;
@@ -43,3 +45,8 @@ dotnet add package NOF.Contract
 ## License
 
 Apache-2.0
+
+Generated Contract operation bases own nested Result and failure types. ServiceOperation
+and its generic form also live in this package. Application-derived operations inherit
+the canonical types so handlers use Task<Result> and new Case(...). No factories or
+expected-outcome marker/analyzer are generated; native C# checks switch expressions.

@@ -2,7 +2,6 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using Outcome = NOF.Sample.INOFSampleService.AddOrUpdateConfigFileResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -17,7 +16,7 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
         _cache = cache;
     }
 
-    public override async Task<Outcome> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.Of(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
@@ -25,16 +24,16 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
 
         if (node is null)
         {
-            return new Outcome.NotFound("Node not found.");
+            return new NotFound("Node not found.");
         }
 
         if (!ConfigFileName.IsValid(request.FileName))
         {
-            return new Outcome.InvalidInput("File name must contain 1–100 nonblank characters.");
+            return new InvalidInput("File name must contain 1–100 nonblank characters.");
         }
         if (!ConfigContent.IsValid(request.Content))
         {
-            return new Outcome.InvalidInput("Configuration content must be a JSON object.");
+            return new InvalidInput("Configuration content must be a JSON object.");
         }
         var fileName = ConfigFileName.Of(request.FileName);
         var content = ConfigContent.Of(request.Content);

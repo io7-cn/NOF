@@ -3,7 +3,6 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
 using NOF.Sample.Application.Repositories;
-using Outcome = NOF.Sample.INOFSampleService.CreateConfigNodeResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -20,24 +19,24 @@ public class CreateConfigNode : NOFSampleService.CreateConfigNode
         _cache = cache;
     }
 
-    public override async Task<Outcome> HandleAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken)
     {
         if (!ConfigNodeName.IsValid(request.Name))
         {
-            return new Outcome.InvalidInput("Node name must contain 1–100 nonblank characters.");
+            return new InvalidInput("Node name must contain 1–100 nonblank characters.");
         }
         var name = ConfigNodeName.Of(request.Name);
         var parentId = request.ParentId.HasValue ? ConfigNodeId.Of(request.ParentId.Value) : (ConfigNodeId?)null;
 
         if (await _dbContext.Set<ConfigNode>().ExistsByNameAsync(name, cancellationToken))
         {
-            return new Outcome.NameConflict("Node with same name already exists.");
+            return new NameConflict("Node with same name already exists.");
         }
 
         if (parentId.HasValue && !await _dbContext.Set<ConfigNode>()
                 .AnyAsync(node => node.Id == parentId.Value, cancellationToken))
         {
-            return new Outcome.ParentNotFound("Parent node not found.");
+            return new ParentNotFound("Parent node not found.");
         }
 
         var node = ConfigNode.Create(name, parentId);

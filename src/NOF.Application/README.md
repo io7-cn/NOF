@@ -236,3 +236,7 @@ The host selects an `IObjectStorageRider`; application handlers continue to depe
 Apache-2.0
 
 [FailureCase declarations](../../docs/en/design/expected-failures.md) expand operation return types into Contract-owned closed outcomes; registration, descriptors and local invocation all use that generated response type.
+
+Generated operations inherit Contract-owned operation bases. Handler overrides use
+Task<Result> and new NotFound(...) with the original Contract case identity.
+No Create<Name> factories or custom expected-outcome analyzer are generated.

@@ -32,10 +32,10 @@ public class ApplicationServiceGeneratorTests
             typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>), typeof(IApplicationService), typeof(ServiceOperation<,>));
         Assert.Empty(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
-        Assert.Contains("class Read : global::NOF.Application.ServiceOperation<global::App.Query, global::App.Dto>", code);
-        Assert.Contains("class Preview : global::NOF.Application.ServiceOperation<global::App.Query, global::App.Dto>", code);
-        Assert.Contains("class Find : global::NOF.Application.ServiceOperation<global::App.Query, global::App.Dto?>", code);
-        Assert.Contains("class Count : global::NOF.Application.ServiceOperation<global::App.Query, int?>", code);
+        Assert.Contains("class Read : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto>", code);
+        Assert.Contains("class Preview : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto>", code);
+        Assert.Contains("class Find : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto?>", code);
+        Assert.Contains("class Count : global::NOF.Contract.ServiceOperation<global::App.Query, int?>", code);
         Assert.Equal(2, code.Split("public override bool AllowsNullResponse => true;").Length - 1);
         Assert.DoesNotContain("IRpcResponse", code);
         Assert.Contains("Task<global::App.Dto?> InvokeAsync(", code);
@@ -91,9 +91,9 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("partial class MyService : global::NOF.Application.IApplicationServiceImplementation", generatedCode);
         Assert.Contains("protected override global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> GetHandlerMappings()", generatedCode);
         Assert.Contains("public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __rpcHandlerMappings;", generatedCode);
-        Assert.Contains("public abstract class Ping : global::NOF.Application.ServiceOperation<global::App.PingRequest, global::NOF.Contract.Result>", generatedCode);
-        Assert.Contains("public abstract class Get : global::NOF.Application.ServiceOperation<global::App.GetRequest, global::NOF.Contract.Result<global::App.MyDto>>", generatedCode);
-        Assert.Contains("public abstract class Archive : global::NOF.Application.ServiceOperation<global::App.ArchiveRequest, global::NOF.Contract.Result>", generatedCode);
+        Assert.Contains("public abstract class Ping : global::NOF.Contract.ServiceOperation<global::App.PingRequest, global::NOF.Contract.Result>", generatedCode);
+        Assert.Contains("public abstract class Get : global::NOF.Contract.ServiceOperation<global::App.GetRequest, global::NOF.Contract.Result<global::App.MyDto>>", generatedCode);
+        Assert.Contains("public abstract class Archive : global::NOF.Contract.ServiceOperation<global::App.ArchiveRequest, global::NOF.Contract.Result>", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Ping)] = new global::NOF.Application.ServiceOperationMapping(typeof(Ping), typeof(global::App.PingRequest), typeof(global::NOF.Contract.Result))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Get)] = new global::NOF.Application.ServiceOperationMapping(typeof(Get), typeof(global::App.GetRequest), typeof(global::NOF.Contract.Result<global::App.MyDto>))", generatedCode);
         Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Contract.Result))", generatedCode);

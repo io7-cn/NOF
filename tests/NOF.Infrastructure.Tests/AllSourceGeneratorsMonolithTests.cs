@@ -74,7 +74,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public partial interface IDemoService : IApplicationService
             {
-                [FailureCase("monolith.unavailable", Name = "Unavailable")]
+                [FailureCase("Unavailable", "monolith.unavailable")]
                 Empty Ping(PingRequest request);
             }
 
@@ -82,8 +82,13 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed class PingHandler : DemoServer.Ping
             {
-                public override Task<IDemoService.PingResult> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
-                    => Task.FromResult<IDemoService.PingResult>(Empty.Instance);
+                public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                    => Task.FromResult<Result>(request.Value switch
+                    {
+                        "constructor" => new Unavailable("missing"),
+                        "factory" => new Unavailable("missing"),
+                        _ => Empty.Instance
+                    });
             }
             """;
 
@@ -128,7 +133,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
         Assert.DoesNotContain("ServiceClient", generatedCode);
-        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.IDemoService.PingResult> InvokeAsync", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.IDemoService.PingOperation.Result> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
     }
 }

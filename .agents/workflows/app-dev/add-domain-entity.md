@@ -48,8 +48,8 @@ using NOF.Contract;
 
 public partial interface IOrderService : IApplicationService
 {
-    [FailureCase("404001", Name = "NotFound")]
-    [FailureCase("400002", Name = "InvalidStatus")]
+    [FailureCase("NotFound", "404001")]
+    [FailureCase("InvalidStatus", "400002")]
     Empty Confirm(ConfirmOrderRequest request);
 }
 ```

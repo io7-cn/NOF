@@ -2,7 +2,6 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using Outcome = NOF.Sample.INOFSampleService.UpdateConfigNodeParentResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -19,7 +18,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         _cache = cache;
     }
 
-    public override async Task<Outcome> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
     {
         var nodeId = ConfigNodeId.Of(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
@@ -27,7 +26,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
 
         if (node is null)
         {
-            return new Outcome.NotFound("Node not found.");
+            return new NotFound("Node not found.");
         }
 
         var newParentId = request.NewParentId.HasValue
@@ -39,19 +38,19 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         {
             if (newParentId.Value == nodeId)
             {
-                return new Outcome.ParentCycle("Cannot move a node under itself.");
+                return new ParentCycle("Cannot move a node under itself.");
             }
             var parentNode = await _dbContext.Set<ConfigNode>()
                 .FirstOrDefaultAsync(configNode => configNode.Id == newParentId.Value, cancellationToken);
             if (parentNode is null)
             {
-                return new Outcome.ParentNotFound("Target parent node not found.");
+                return new ParentNotFound("Target parent node not found.");
             }
 
             // Prevent cyclic parent relationship.
             if (await IsDescendant(nodeId, newParentId.Value, cancellationToken))
             {
-                return new Outcome.ParentCycle("Cannot move a node under its descendant.");
+                return new ParentCycle("Cannot move a node under its descendant.");
             }
         }
 

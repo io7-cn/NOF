@@ -106,7 +106,10 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var responseType = ExpectedFailureModel.ResponseTypeName(method);
             var requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-            sb.AppendLine($"    public abstract class {method.Name} : global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>");
+            var failureDeclarations = ExpectedFailureModel.Declarations(method);
+            var operationBase = failureDeclarations.Length > 0 ? ExpectedFailureModel.OperationTypeName(method)
+                : $"global::NOF.Contract.ServiceOperation<{requestTypeName}, {responseType}>";
+            sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
             sb.AppendLine("    {");
             if (ExpectedFailureModel.AllowsNull(method))
             {

@@ -12,19 +12,19 @@ modules own routes, binding, status codes and response schemas.
 ```csharp
 public partial interface INOFSampleService : IApplicationService
 {
-    [FailureCase("config_node.name_conflict", Name = "NameConflict")]
-    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
-    [FailureCase("config_node.invalid_input", Name = "InvalidInput")]
+    [FailureCase("NameConflict", "config_node.name_conflict")]
+    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
+    [FailureCase("InvalidInput", "config_node.invalid_input")]
     CreatedConfigNode CreateConfigNode(CreateConfigNodeRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
+    [FailureCase("NotFound", "config_node.not_found")]
     GetConfigNodeByIdResponse GetConfigNodeById(GetConfigNodeByIdRequest request);
     GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
-    [FailureCase("config_node.parent_cycle", Name = "ParentCycle")]
-    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
+    [FailureCase("NotFound", "config_node.not_found")]
+    [FailureCase("ParentCycle", "config_node.parent_cycle")]
+    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
     Empty UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
-    [FailureCase<NodeHasChildrenError>("config_node.has_children", Name = "HasChildren")]
+    [FailureCase("NotFound", "config_node.not_found")]
+    [FailureCase("HasChildren", typeof(NodeHasChildrenError))]
     Empty DeleteConfigNode(DeleteConfigNodeRequest request);
     // File, children, configuration and stream operations remain ordinary business declarations.
 }
@@ -68,8 +68,13 @@ nodes.MapPatch("/{id:long}/parent", MoveAsync);
 
 public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(
     long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-    => ToCommandResult(await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct));
+    => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
+        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct))
+        .Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(error.ErrorCode, error.Message, 404),
+            error => ToProblem(error.ErrorCode, error.Message, 409),
+            error => ToProblem(error.ErrorCode, error.Message, 422));
 ```
 
 Business errors become application/problem+json with detail and code: missing node is

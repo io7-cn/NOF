@@ -21,6 +21,13 @@ public sealed class FailureCaseGenerator : IIncrementalGenerator
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        var misplaced = context.SyntaxProvider.CreateSyntaxProvider(
+            static (node, _) => node is MethodDeclarationSyntax { AttributeLists.Count: > 0 },
+            static (syntax, _) => syntax.SemanticModel.GetDeclaredSymbol(syntax.Node) as IMethodSymbol)
+            .Where(static method => method != null && method.ContainingType.TypeKind != TypeKind.Interface
+                && ExpectedFailureModel.Declarations(method).Length > 0);
+        context.RegisterSourceOutput(misplaced, static (output, method) =>
+            Report(output, method!, "Declare FailureCase on the IApplicationService contract method, not its implementation."));
         var services = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is InterfaceDeclarationSyntax,
             static (syntax, _) => syntax.SemanticModel.GetDeclaredSymbol(syntax.Node) as INamedTypeSymbol)
@@ -59,7 +66,7 @@ public sealed class FailureCaseGenerator : IIncrementalGenerator
         foreach (var method in methods)
         {
             var declarations = ExpectedFailureModel.Declarations(method);
-            var resultName = method.Name + "Result";
+            var resultName = method.Name + "Operation";
             var nullable = method.ReturnType.NullableAnnotation == NullableAnnotation.Annotated
                 || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
             if (method.IsStatic || method.Parameters.Length != 1 || method.TypeParameters.Length != 0 || method.ReturnsVoid || nullable
@@ -69,23 +76,26 @@ public sealed class FailureCaseGenerator : IIncrementalGenerator
                 || service.GetMembers(resultName).Length != 0
                 || service.GetMembers(method.Name).OfType<IMethodSymbol>().Count() != 1)
             {
-                Report(output, method, "FailureCase methods require one request, a non-nullable synchronous success type (not Result), a unique operation name and an unused <Operation>Result name.");
+                Report(output, method, "FailureCase methods require one request, a non-nullable synchronous success type (not Result), a unique operation name and an unused <Operation>Operation name.");
                 continue;
             }
             var names = new HashSet<string>(StringComparer.Ordinal);
-            var codes = new HashSet<string>(StringComparer.Ordinal);
             var valid = true;
             foreach (var declaration in declarations)
             {
                 var name = ExpectedFailureModel.CaseName(declaration);
-                if (declarations.Length > 1 && string.IsNullOrWhiteSpace(ExpectedFailureModel.ExplicitCaseName(declaration))
-                    || string.IsNullOrWhiteSpace(ExpectedFailureModel.Code(declaration)) || !ExpectedFailureModel.ValidName(name)
-                    || name == resultName || name is "Match" or "JsonClassifier" or "Code" or "Error" or "Kind"
+                if (!ExpectedFailureModel.ValidName(name)
+                    || !ExpectedFailureModel.HasCustomError(declaration) && string.IsNullOrWhiteSpace(ExpectedFailureModel.Code(declaration))
+                    || ExpectedFailureModel.HasCustomError(declaration) && (ExpectedFailureModel.ErrorType(declaration) is not { } errorType
+                        || errorType.TypeKind == TypeKind.Error || errorType.SpecialType == SpecialType.System_Void
+                        || errorType is INamedTypeSymbol { IsUnboundGenericType: true }
+                        || errorType.IsRefLikeType || errorType.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
+                    || name == resultName || name == method.Name || name is "Result" or "RequestType" or "ResponseType" or "AllowsNullResponse" or "HandleAsync" or "Descriptor" or "InvokeAsync" or "Match" or "JsonClassifier" or "ErrorCode" or "Message" or "Error" or "Kind"
                         or "Value" or "Equals" or "GetHashCode" or "ToString" or "GetType" or "Deconstruct" or "EqualityContract" or "PrintMembers"
-                    || !names.Add(name) || !codes.Add(ExpectedFailureModel.Code(declaration))
+                    || !names.Add(name)
                     || declaration.AttributeClass?.TypeArguments.Any(type => type.TypeKind == TypeKind.Error) == true)
                 {
-                    Report(output, method, "Error codes are arbitrary nonblank strings, independent of C# names. Declare a unique valid Name for every failure when an operation has multiple failures; a single unnamed case is Failed. Error codes must be unique and error data types must be declared.");
+                    Report(output, method, "Each FailureCase requires a unique valid C# name that does not collide with operation members. The optional second argument is either a nonblank error code or a closed usable error data type; omitting it defaults the error code to the name.");
                     valid = false;
                 }
             }
@@ -103,70 +113,91 @@ public sealed class FailureCaseGenerator : IIncrementalGenerator
 
     private static void EmitOutcome(StringBuilder source, IMethodSymbol method, AttributeData[] failures)
     {
-        var result = method.Name + "Result";
+        var result = "Result";
+        var operationType = ExpectedFailureModel.OperationTypeName(method);
         var resultType = ExpectedFailureModel.ResultTypeName(method);
         var success = method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        source.AppendLine("    /// <summary>The closed set of declared business outcomes for this operation.</summary>");
-        source.AppendLine("    [global::NOF.Contract.ExpectedOutcome]");
-        source.Append("    [global::System.Text.Json.Serialization.JsonUnion(TypeClassifier = typeof(").Append(resultType).AppendLine(".JsonClassifier))]");
-        source.Append("    public union ").Append(result).Append('(').Append(success);
-        foreach (var failure in failures)
-        {
-            source.Append(", ").Append(resultType).Append('.').Append(ExpectedFailureModel.CaseName(failure));
-        }
-        source.AppendLine(")\n    {");
+        var request = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        source.AppendLine("    /// <summary>Contract-owned operation base with inherited outcome and failure types.</summary>");
+        source.Append("    public abstract class ").Append(method.Name).Append("Operation : global::NOF.Contract.ServiceOperation<")
+            .Append(request).Append(", ").Append(resultType).AppendLine(">\n    {");
         foreach (var failure in failures)
         {
             var name = ExpectedFailureModel.CaseName(failure);
             var error = ExpectedFailureModel.ErrorTypeName(failure);
-            var code = SymbolDisplay.FormatLiteral(ExpectedFailureModel.Code(failure), true);
+            var marker = SymbolDisplay.FormatLiteral(name, true);
             source.AppendLine("        /// <summary>A declared expected failure with operation-specific identity.</summary>");
             source.AppendLine("        [global::System.Text.Json.Serialization.JsonUnmappedMemberHandling(global::System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]");
             source.Append("        public sealed record ").Append(name).AppendLine("\n        {");
-            source.AppendLine("            /// <summary>The stable failure code.</summary>");
-            source.Append("            public const string Code = ").Append(code).AppendLine(";");
-            source.AppendLine("            /// <summary>Gets the failure's typed error data.</summary>");
-            source.AppendLine("            [global::System.Text.Json.Serialization.JsonRequired]");
-            source.Append("            public ").Append(error).AppendLine(" Error { get; init { global::System.ArgumentNullException.ThrowIfNull(value); field = value; } }");
-            source.AppendLine("            /// <summary>Creates the expected failure with explicit error data.</summary>");
-            source.AppendLine("            [global::System.Text.Json.Serialization.JsonConstructor]");
-            source.Append("            public ").Append(name).Append('(').Append(error).AppendLine(" error)\n            {");
-            source.AppendLine("                global::System.ArgumentNullException.ThrowIfNull(error);\n                Error = error;\n            }");
-            if (failure.AttributeClass?.Arity == 0)
+            if (ExpectedFailureModel.HasCustomError(failure))
             {
+                source.AppendLine("            /// <summary>Gets the failure's custom error data.</summary>");
+                source.AppendLine("            [global::System.Text.Json.Serialization.JsonRequired]");
+                source.Append("            public ").Append(error).AppendLine(" Error { get; init { global::System.ArgumentNullException.ThrowIfNull(value); field = value; } }");
+                source.AppendLine("            /// <summary>Creates the expected failure with custom error data.</summary>");
+                source.AppendLine("            [global::System.Text.Json.Serialization.JsonConstructor]");
+                source.Append("            public ").Append(name).Append('(').Append(error).AppendLine(" error)\n            {");
+                source.AppendLine("                global::System.ArgumentNullException.ThrowIfNull(error);\n                Error = error;\n            }");
+            }
+            else
+            {
+                var code = SymbolDisplay.FormatLiteral(ExpectedFailureModel.Code(failure), true);
+                source.AppendLine("            /// <summary>Gets the declared error code.</summary>");
+                source.Append("            public string ErrorCode { get => ").Append(code).Append("; init { if (value != ").Append(code).AppendLine(") { throw new global::System.Text.Json.JsonException(\"Unexpected error code.\"); } } }");
+                source.AppendLine("            /// <summary>Gets the failure message.</summary>");
+                source.AppendLine("            [global::System.Text.Json.Serialization.JsonRequired]");
+                source.AppendLine("            public string Message { get; init { global::System.ArgumentNullException.ThrowIfNull(value); field = value; } }");
                 source.AppendLine("            /// <summary>Creates the expected failure with a message.</summary>");
-                source.Append("            public ").Append(name).AppendLine("(string message = \"\") : this(new global::NOF.Contract.Error(message)) { }");
+                source.AppendLine("            [global::System.Text.Json.Serialization.JsonConstructor]");
+                source.Append("            public ").Append(name).AppendLine("(string message = \"\") { global::System.ArgumentNullException.ThrowIfNull(message); Message = message; }");
             }
             source.AppendLine("            /// <summary>Gets the reserved JSON failure discriminator.</summary>");
             source.AppendLine("            [global::System.Text.Json.Serialization.JsonPropertyName(\"$failure\")]");
             source.AppendLine("            [global::System.Text.Json.Serialization.JsonRequired]");
-            source.AppendLine("            public string Kind\n            {\n                get => Code;\n                init\n                {\n                    if (value != Code) { throw new global::System.Text.Json.JsonException(\"Unexpected failure code.\"); }\n                }\n            }\n        }");
+            source.AppendLine("            public string Kind\n            {\n                get => ").Append(marker).Append(";\n                init\n                {\n                    if (value != ").Append(marker).Append(") { throw new global::System.Text.Json.JsonException(\"Unexpected failure code.\"); }\n                }\n            }\n        }");
         }
-        source.AppendLine("        /// <summary>Handles every declared business outcome explicitly.</summary>");
-        source.Append("        public TResult Match<TResult>(global::System.Func<").Append(success).Append(", TResult> onSuccess");
-        for (var i = 0; i < failures.Length; i++)
-        {
-            source.Append(", global::System.Func<").Append(resultType).Append('.').Append(ExpectedFailureModel.CaseName(failures[i])).Append(", TResult> onCase").Append(ExpectedFailureModel.CaseName(failures[i]));
-        }
-        source.AppendLine(") => this switch\n        {");
-        source.Append("            ").Append(success).AppendLine(" value => onSuccess(value),");
-        for (var i = 0; i < failures.Length; i++)
-        {
-            source.Append("            ").Append(resultType).Append('.').Append(ExpectedFailureModel.CaseName(failures[i])).Append(" value => onCase").Append(ExpectedFailureModel.CaseName(failures[i])).AppendLine("(value),");
-        }
-        source.AppendLine("            null => throw new global::System.InvalidOperationException(\"The operation returned no outcome.\")\n        };");
-        source.AppendLine("        /// <summary>Classifies generated cases without reflection or a shared open failure case.</summary>");
-        source.AppendLine("        public sealed class JsonClassifier : global::System.Text.Json.Serialization.JsonTypeClassifierFactory\n        {");
-        source.AppendLine("            /// <inheritdoc />");
-        source.Append("            public override bool CanClassify(global::System.Text.Json.Serialization.JsonTypeClassifierContext context) => context.DeclaringType == typeof(").Append(resultType).AppendLine(");");
-        source.AppendLine("            /// <inheritdoc />");
-        source.AppendLine("            public override global::System.Text.Json.Serialization.JsonTypeClassifier CreateJsonClassifier(global::System.Text.Json.Serialization.JsonTypeClassifierContext context, global::System.Text.Json.JsonSerializerOptions options) => Classify;");
-        source.AppendLine("            private static global::System.Type Classify(ref global::System.Text.Json.Utf8JsonReader reader)\n            {\n                var copy = reader;\n                if (copy.TokenType == global::System.Text.Json.JsonTokenType.StartObject)\n                {\n                    while (copy.Read() && copy.TokenType != global::System.Text.Json.JsonTokenType.EndObject)\n                    {\n                        if (copy.TokenType != global::System.Text.Json.JsonTokenType.PropertyName) { throw new global::System.Text.Json.JsonException(); }\n                        var marker = copy.ValueTextEquals(\"$failure\");\n                        if (!copy.Read()) { throw new global::System.Text.Json.JsonException(); }\n                        if (marker)\n                        {\n                            if (copy.TokenType != global::System.Text.Json.JsonTokenType.String) { throw new global::System.Text.Json.JsonException(); }\n                            return copy.GetString() switch\n                            {");
+        var outcome = new StringBuilder();
+        outcome.AppendLine("    /// <summary>The closed set of declared business outcomes for this operation.</summary>");
+        outcome.Append("    [global::System.Text.Json.Serialization.JsonUnion(TypeClassifier = typeof(").Append(resultType).AppendLine(".JsonClassifier))]");
+        outcome.Append("    public union ").Append(result).Append('(').Append(success);
         foreach (var failure in failures)
         {
-            source.Append("                                ").Append(SymbolDisplay.FormatLiteral(ExpectedFailureModel.Code(failure), true)).Append(" => typeof(").Append(resultType).Append('.').Append(ExpectedFailureModel.CaseName(failure)).AppendLine("),");
+            outcome.Append(", ").Append(operationType).Append('.').Append(ExpectedFailureModel.CaseName(failure));
         }
-        source.AppendLine("                                _ => throw new global::System.Text.Json.JsonException(\"Undeclared failure code.\")\n                            };\n                        }\n                        copy.Skip();\n                    }\n                }");
-        source.Append("                return typeof(").Append(success).AppendLine(");\n            }\n        }\n    }");
+        outcome.AppendLine(")\n    {");
+        outcome.AppendLine("        /// <summary>Handles every declared business outcome explicitly.</summary>");
+        outcome.Append("        public TResult Match<TResult>(global::System.Func<").Append(success).Append(", TResult> onSuccess");
+        for (var i = 0; i < failures.Length; i++)
+        {
+            outcome.Append(", global::System.Func<").Append(operationType).Append('.').Append(ExpectedFailureModel.CaseName(failures[i])).Append(", TResult> onCase").Append(ExpectedFailureModel.CaseName(failures[i]));
+        }
+        outcome.AppendLine(") => this switch\n        {");
+        outcome.Append("            ").Append(success).AppendLine(" value => onSuccess(value),");
+        for (var i = 0; i < failures.Length; i++)
+        {
+            outcome.Append("            ").Append(operationType).Append('.').Append(ExpectedFailureModel.CaseName(failures[i])).Append(" value => onCase").Append(ExpectedFailureModel.CaseName(failures[i])).AppendLine("(value),");
+        }
+        outcome.AppendLine("            null => throw new global::System.InvalidOperationException(\"The operation returned no outcome.\")\n        };");
+        outcome.AppendLine("        /// <summary>Classifies generated cases without reflection or a shared open failure case.</summary>");
+        outcome.AppendLine("        public sealed class JsonClassifier : global::System.Text.Json.Serialization.JsonTypeClassifierFactory\n        {");
+        outcome.AppendLine("            /// <inheritdoc />");
+        outcome.Append("            public override bool CanClassify(global::System.Text.Json.Serialization.JsonTypeClassifierContext context) => context.DeclaringType == typeof(").Append(resultType).AppendLine(");");
+        outcome.AppendLine("            /// <inheritdoc />");
+        outcome.AppendLine("            public override global::System.Text.Json.Serialization.JsonTypeClassifier CreateJsonClassifier(global::System.Text.Json.Serialization.JsonTypeClassifierContext context, global::System.Text.Json.JsonSerializerOptions options) => Classify;");
+        outcome.AppendLine("            private static global::System.Type Classify(ref global::System.Text.Json.Utf8JsonReader reader)\n            {\n                var copy = reader;\n                if (copy.TokenType == global::System.Text.Json.JsonTokenType.StartObject)\n                {\n                    while (copy.Read() && copy.TokenType != global::System.Text.Json.JsonTokenType.EndObject)\n                    {\n                        if (copy.TokenType != global::System.Text.Json.JsonTokenType.PropertyName) { throw new global::System.Text.Json.JsonException(); }\n                        var marker = copy.ValueTextEquals(\"$failure\");\n                        if (!copy.Read()) { throw new global::System.Text.Json.JsonException(); }\n                        if (marker)\n                        {\n                            if (copy.TokenType != global::System.Text.Json.JsonTokenType.String) { throw new global::System.Text.Json.JsonException(); }\n                            return copy.GetString() switch\n                            {");
+        foreach (var failure in failures)
+        {
+            outcome.Append("                                ").Append(SymbolDisplay.FormatLiteral(ExpectedFailureModel.CaseName(failure), true)).Append(" => typeof(").Append(operationType).Append('.').Append(ExpectedFailureModel.CaseName(failure)).AppendLine("),");
+        }
+        outcome.AppendLine("                                _ => throw new global::System.Text.Json.JsonException(\"Undeclared failure code.\")\n                            };\n                        }\n                        copy.Skip();\n                    }\n                }");
+        outcome.Append("                return typeof(").Append(success).AppendLine(");\n            }\n        }\n    }");
+        foreach (var line in outcome.ToString().Split('\n'))
+        {
+            if (line.Length > 0)
+            {
+                source.Append("    ").AppendLine(line.TrimEnd('\r'));
+            }
+        }
+        source.AppendLine("    }");
     }
 }

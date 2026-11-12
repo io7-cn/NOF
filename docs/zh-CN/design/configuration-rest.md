@@ -11,19 +11,19 @@ NOF.Sample.Application，HTTP 适配器放在 NOF.Sample/Endpoints。宿主只�
 ```csharp
 public partial interface INOFSampleService : IApplicationService
 {
-    [FailureCase("config_node.name_conflict", Name = "NameConflict")]
-    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
-    [FailureCase("config_node.invalid_input", Name = "InvalidInput")]
+    [FailureCase("NameConflict", "config_node.name_conflict")]
+    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
+    [FailureCase("InvalidInput", "config_node.invalid_input")]
     CreatedConfigNode CreateConfigNode(CreateConfigNodeRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
+    [FailureCase("NotFound", "config_node.not_found")]
     GetConfigNodeByIdResponse GetConfigNodeById(GetConfigNodeByIdRequest request);
     GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
-    [FailureCase("config_node.parent_cycle", Name = "ParentCycle")]
-    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
+    [FailureCase("NotFound", "config_node.not_found")]
+    [FailureCase("ParentCycle", "config_node.parent_cycle")]
+    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
     Empty UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
-    [FailureCase("config_node.not_found", Name = "NotFound")]
-    [FailureCase<NodeHasChildrenError>("config_node.has_children", Name = "HasChildren")]
+    [FailureCase("NotFound", "config_node.not_found")]
+    [FailureCase("HasChildren", typeof(NodeHasChildrenError))]
     Empty DeleteConfigNode(DeleteConfigNodeRequest request);
     // 文件、子节点、配置查询和流式操作也是普通业务声明。
 }
@@ -64,8 +64,13 @@ nodes.MapPatch("/{id:long}/parent", MoveAsync);
 
 public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(
     long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-    => ToCommandResult(await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct));
+    => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
+        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct))
+        .Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(error.ErrorCode, error.Message, 404),
+            error => ToProblem(error.ErrorCode, error.Message, 409),
+            error => ToProblem(error.ErrorCode, error.Message, 422));
 ```
 
 业务失败返回 application/problem+json，包含 detail 和 code：节点不存在为 404，父节点不存在为

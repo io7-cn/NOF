@@ -3,7 +3,6 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
 using NOF.Sample.Application.Repositories;
-using Outcome = NOF.Sample.INOFSampleService.GetConfigNodeByIdResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -18,7 +17,7 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
         _cache = cache;
     }
 
-    public override async Task<Outcome> HandleAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken)
     {
         var nodeId = ConfigNodeId.Of(request.Id);
         var cacheKey = new ConfigNodeByIdCacheKey(nodeId);
@@ -39,7 +38,7 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
 
         if (dto is null)
         {
-            return new Outcome.NotFound("Config node not found.");
+            return new NotFound("Config node not found.");
         }
 
         await _cache.SetAsync(
