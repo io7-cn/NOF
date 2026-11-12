@@ -18,7 +18,7 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
 
     public override async Task<Result> HandleAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
+        var id = ConfigNodeId.From(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
             .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
 
@@ -27,11 +27,15 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
             return new NotFound("Node not found.");
         }
 
-        if (request.FileName is { Length: > 0 } && !ConfigFileName.IsValid(request.FileName))
+        ConfigFileName? fileName = null;
+        if (!string.IsNullOrEmpty(request.FileName))
         {
-            return new InvalidInput("File name must contain 1–100 nonblank characters.");
+            if (!ConfigFileName.TryFrom(request.FileName, out var parsedFileName))
+            {
+                return new InvalidInput("File name must contain 1–100 nonblank characters.");
+            }
+            fileName = parsedFileName;
         }
-        var fileName = string.IsNullOrEmpty(request.FileName) ? (ConfigFileName?)null : ConfigFileName.Of(request.FileName);
         node.SetActiveFileName(fileName);
         await _dbContext.SaveChangesAsync(cancellationToken);
 

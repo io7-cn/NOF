@@ -114,7 +114,7 @@ public sealed class NOFSampleHarnessTests
 
             var projection = await scope.GetRequiredService<IDbContext>()
                 .Set<ConfigNodeChildren>()
-                .FirstOrDefaultAsync(entity => entity.NodeId == ConfigNodeId.Of(parentId));
+                .FirstOrDefaultAsync(entity => entity.NodeId == ConfigNodeId.From(parentId));
 
             Assert.NotNull(projection);
             Assert.Single(projection.ChildrenIds);

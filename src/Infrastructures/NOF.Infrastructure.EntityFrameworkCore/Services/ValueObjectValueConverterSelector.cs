@@ -13,7 +13,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 /// <para>
 /// The value object must expose:
 /// <list type="bullet">
-///   <item>A static <c>Of(TPrimitive)</c> factory method.</item>
+///   <item>A static <c>From(TPrimitive)</c> factory method.</item>
 ///   <item>An explicit cast operator to <c>TPrimitive</c>.</item>
 /// </list>
 /// </para>
@@ -22,7 +22,7 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
 {
     private static readonly ConcurrentDictionary<Type, ValueConverterInfo?> _cache = new();
     private static readonly Type _interfaceOpenType = typeof(IValueObject<>);
-    private static readonly string _ofMethodName = "Of";
+    private static readonly string _fromMethodName = "From";
 
     public ValueObjectValueConverterSelector(ValueConverterSelectorDependencies dependencies)
         : base(dependencies) { }
@@ -53,10 +53,10 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
             return null;
         }
 
-        var ofMethod = voType.GetMethod(_ofMethodName,
+        var fromMethod = voType.GetMethod(_fromMethodName,
             BindingFlags.Public | BindingFlags.Static,
             null, [primitiveType], null);
-        if (ofMethod is null)
+        if (fromMethod is null)
         {
             return null;
         }
@@ -70,7 +70,7 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
         }
 
         var converterType = typeof(ValueObjectConverter<,>).MakeGenericType(voType, primitiveType);
-        var converterInstance = (ValueConverter)Activator.CreateInstance(converterType, ofMethod, castMethod)!;
+        var converterInstance = (ValueConverter)Activator.CreateInstance(converterType, fromMethod, castMethod)!;
 
         return new ValueConverterInfo(
             modelClrType: voType,
@@ -90,10 +90,10 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
 /// </summary>
 public sealed class ValueObjectConverter<TValueObject, TPrimitive> : ValueConverter<TValueObject, TPrimitive>
 {
-    public ValueObjectConverter(MethodInfo ofMethod, MethodInfo castMethod)
+    public ValueObjectConverter(MethodInfo fromMethod, MethodInfo castMethod)
         : base(
             vo => (TPrimitive)castMethod.Invoke(null, new object?[] { vo })!,
-            primitive => (TValueObject)ofMethod.Invoke(null, new object?[] { primitive })!)
+            primitive => (TValueObject)fromMethod.Invoke(null, new object?[] { primitive })!)
     {
     }
 }

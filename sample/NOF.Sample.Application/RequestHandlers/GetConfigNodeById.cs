@@ -19,7 +19,7 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
 
     public override async Task<Result> HandleAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken)
     {
-        var nodeId = ConfigNodeId.Of(request.Id);
+        var nodeId = ConfigNodeId.From(request.Id);
         var cacheKey = new ConfigNodeByIdCacheKey(nodeId);
 
         var cachedValue = await _cache.GetAsync(cacheKey, cancellationToken: cancellationToken);

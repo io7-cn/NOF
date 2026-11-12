@@ -20,15 +20,14 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
     public override async Task<Result> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
     {
-        if (!ConfigNodeName.IsValid(request.AppName))
+        if (!ConfigNodeName.TryFrom(request.AppName, out var appName))
         {
             return new InvalidInput("Application name must contain 1–100 nonblank characters.");
         }
-        var appNameStr = request.AppName;
+        var appNameStr = (string)appName;
         var appCacheKey = new ConfigResultCacheKey(appNameStr);
 
         // 1. Find App Node
-        var appName = ConfigNodeName.Of(appNameStr);
         var appNodeDto = await GetNodeByNameAsync(appName, cancellationToken);
 
         if (appNodeDto is null)
@@ -41,7 +40,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
         // Check versions
         var maxVersion = 0L;
-        foreach (var versionKey in fullPath.Select(node => new ConfigNodeVersionCacheKey(ConfigNodeId.Of(node.Id))))
+        foreach (var versionKey in fullPath.Select(node => new ConfigNodeVersionCacheKey(ConfigNodeId.From(node.Id))))
         {
             var version = await _cache.GetAsync(versionKey, cancellationToken: cancellationToken);
             version.IfSome(versionVal =>
@@ -145,7 +144,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
         while (current.ParentId.HasValue)
         {
-            var parent = await GetNodeByIdAsync(ConfigNodeId.Of(current.ParentId.Value), cancellationToken);
+            var parent = await GetNodeByIdAsync(ConfigNodeId.From(current.ParentId.Value), cancellationToken);
             if (parent is null)
             {
                 break;

@@ -21,12 +21,11 @@ public class CreateConfigNode : NOFSampleService.CreateConfigNode
 
     public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken)
     {
-        if (!ConfigNodeName.IsValid(request.Name))
+        if (!ConfigNodeName.TryFrom(request.Name, out var name))
         {
             return new InvalidInput("Node name must contain 1–100 nonblank characters.");
         }
-        var name = ConfigNodeName.Of(request.Name);
-        var parentId = request.ParentId.HasValue ? ConfigNodeId.Of(request.ParentId.Value) : (ConfigNodeId?)null;
+        var parentId = request.ParentId.HasValue ? ConfigNodeId.From(request.ParentId.Value) : (ConfigNodeId?)null;
 
         if (await _dbContext.Set<ConfigNode>().ExistsByNameAsync(name, cancellationToken))
         {

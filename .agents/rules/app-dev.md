@@ -91,10 +91,12 @@ await dbContext.SaveChangesAsync(cancellationToken);
 
 ## Source Generators and Conventions
 
-- Construct `IValueObject<T>` values through generated `Of(...)` / `New(...)`; never use `default` or parameterless `new()` (`NOF018`).
+- Construct `IValueObject<T>` values through generated `From(...)` / `New(...)`; never use `default` or parameterless `new()` (`NOF018`).
 - Use `[ValueObjectLength]` on string-backed value objects instead of duplicating maximum lengths in persistence mapping.
 - Declare mappings on a `partial static` class with `[Mappable<TSource, TDestination>]`.
 - Filter, order, and page before `ProjectTo<TDestination>()`; `NOF025` reports server-side shaping after projection.
 - Add every assembly containing generated initializers with `AddApplicationPart(...)`.
 
 Declared expected failures use Contract FailureCase(name), FailureCase(name, errorCode), or FailureCase(name, typeof(CustomError)). The first argument is always a unique valid C# branch name; invalid declarations report NOF220. Default cases expose ErrorCode (defaulting to the name) and Message; custom cases expose typed Error without an imposed code or message. Service methods declare the successful type; generated IService.<Operation>Operation.Result is used by operation overrides, Descriptor and InvokeAsync. Contract operation bases own the canonical Result and sealed failure cases. Application operations inherit them, so handlers use Task<Result> and new Case(...). No CreateCase factories, shared Error wrapper, ExpectedOutcomeAttribute or NOF230/231/232 analyzer remain; native C# union switch-expression exhaustiveness checks apply. Ignoring results and catch-all arms follow ordinary C# semantics. ServiceOperation abstractions live in NOF.Contract. Do not use the removed Domain FailureAttribute, static failure holders, failure.Throw or Failure-accepting exception constructors. Domain returns its own business values without depending on Contract. See docs/en/design/expected-failures.md.
+
+Value objects implement static bool IsValid and optional Normalize. Generated From throws for invalid values; TryFrom returns false with default out for expected invalid input and never catches user-hook exceptions. Of and Validate are removed; legacy Validate is NOF019. Use TryFrom at application input boundaries to avoid validating twice. See docs/en/design/value-objects.md.

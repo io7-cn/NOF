@@ -29,17 +29,11 @@ public readonly partial struct EmailAddress : IValueObject<string>
 {
     public static string Normalize(string value) => value.Trim().ToLowerInvariant();
 
-    public static void Validate(string value)
-    {
-        if (!value.Contains('@'))
-        {
-            throw new DomainValidationException("Invalid email format.");
-        }
-    }
+    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value) && value.Contains('@');
 }
 ```
 
-Construct values through `EmailAddress.Of(...)` and extract the primitive with an explicit cast. `default(EmailAddress)` and `new EmailAddress()` are invalid (`NOF018`).
+Construct values through `EmailAddress.From(...)` and extract the primitive with an explicit cast. `default(EmailAddress)` and `new EmailAddress()` are invalid (`NOF018`).
 
 ## 2. Declare Expected Application Failures in Contract
 
@@ -138,7 +132,7 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         Context context,
         CancellationToken cancellationToken)
     {
-        var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
+        var order = Order.Create(EmailAddress.From(request.CustomerEmail));
         dbContext.Set<Order>().Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Empty.Instance;

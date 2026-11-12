@@ -107,7 +107,7 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         Context context,
         CancellationToken cancellationToken)
     {
-        var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
+        var order = Order.Create(EmailAddress.From(request.CustomerEmail));
         dbContext.Set<Order>().Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Empty.Instance;

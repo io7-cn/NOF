@@ -18,7 +18,7 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
 
     public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
+        var id = ConfigNodeId.From(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
             .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
 
@@ -27,11 +27,10 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
             return new NotFound("Node not found.");
         }
 
-        if (!ConfigFileName.IsValid(request.FileName))
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName))
         {
             return new InvalidInput("File name must contain 1–100 nonblank characters.");
         }
-        var fileName = ConfigFileName.Of(request.FileName);
         node.RemoveConfigFile(fileName);
         await _dbContext.SaveChangesAsync(cancellationToken);
 

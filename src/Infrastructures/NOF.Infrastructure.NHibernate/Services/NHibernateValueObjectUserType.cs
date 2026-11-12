@@ -56,7 +56,7 @@ public sealed class NHibernateValueObjectUserType<TValueObject, TPrimitive> : IU
     private static Func<TPrimitive, TValueObject> BuildFactory()
     {
         var method = typeof(TValueObject).GetMethod(
-            "Of",
+            "From",
             BindingFlags.Public | BindingFlags.Static,
             binder: null,
             [typeof(TPrimitive)],
@@ -65,7 +65,7 @@ public sealed class NHibernateValueObjectUserType<TValueObject, TPrimitive> : IU
         if (method is null)
         {
             throw new InvalidOperationException(
-                $"Value object '{typeof(TValueObject).FullName}' must expose a public static Of({typeof(TPrimitive).Name}) factory.");
+                $"Value object '{typeof(TValueObject).FullName}' must expose a public static From({typeof(TPrimitive).Name}) factory.");
         }
 
         var value = Expression.Parameter(typeof(TPrimitive), "value");

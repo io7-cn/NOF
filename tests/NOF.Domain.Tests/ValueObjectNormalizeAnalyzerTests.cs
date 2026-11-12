@@ -28,7 +28,35 @@ public sealed class ValueObjectNormalizeAnalyzerTests
     }
 
     [Fact]
-    public async Task Normalize_CallingOf_ReportsNOF013()
+    public async Task LegacyValidate_ReportsMigrationError()
+    {
+        var diagnostics = await GetDiagnosticsAsync("""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static void Validate(string value) { }
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF019" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Theory]
+    [InlineData("From(value)")]
+    [InlineData("TryFrom(value, out _)")]
+    public async Task IsValid_CannotReenterConstruction(string call)
+    {
+        var diagnostics = await GetDiagnosticsAsync($$"""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static bool IsValid(string value) { {{call}}; return true; }
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF013" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public async Task Normalize_CallingFrom_ReportsNOF013()
     {
         const string source = """
             using NOF.Domain;
@@ -36,7 +64,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
 
             public readonly partial struct TenantId : IValueObject<string>
             {
-                public static string Normalize(string value) => (string)Of(value);
+                public static string Normalize(string value) => (string)From(value);
             }
             """;
 
@@ -45,7 +73,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
     }
 
     [Fact]
-    public async Task Normalize_CallingValidate_ReportsNOF014()
+    public async Task Normalize_CallingIsValid_ReportsNOF014()
     {
         const string source = """
             using NOF.Domain;
@@ -55,11 +83,11 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             {
                 public static string Normalize(string value)
                 {
-                    Validate(value);
+                    IsValid(value);
                     return value.Trim();
                 }
 
-                public static void Validate(string value) { }
+                public static bool IsValid(string value) => true;
             }
             """;
 

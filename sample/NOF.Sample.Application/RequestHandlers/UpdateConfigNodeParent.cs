@@ -20,7 +20,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
 
     public override async Task<Result> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
     {
-        var nodeId = ConfigNodeId.Of(request.NodeId);
+        var nodeId = ConfigNodeId.From(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
             .FirstOrDefaultAsync(configNode => configNode.Id == nodeId, cancellationToken);
 
@@ -30,7 +30,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         }
 
         var newParentId = request.NewParentId.HasValue
-            ? ConfigNodeId.Of(request.NewParentId.Value)
+            ? ConfigNodeId.From(request.NewParentId.Value)
             : (ConfigNodeId?)null;
 
         // Check whether the target parent exists (unless moving to root).

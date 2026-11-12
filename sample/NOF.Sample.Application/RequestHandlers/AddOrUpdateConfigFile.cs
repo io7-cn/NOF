@@ -18,7 +18,7 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
 
     public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
+        var id = ConfigNodeId.From(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
             .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
 
@@ -27,16 +27,14 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
             return new NotFound("Node not found.");
         }
 
-        if (!ConfigFileName.IsValid(request.FileName))
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName))
         {
             return new InvalidInput("File name must contain 1–100 nonblank characters.");
         }
-        if (!ConfigContent.IsValid(request.Content))
+        if (!ConfigContent.TryFrom(request.Content, out var content))
         {
             return new InvalidInput("Configuration content must be a JSON object.");
         }
-        var fileName = ConfigFileName.Of(request.FileName);
-        var content = ConfigContent.Of(request.Content);
 
         node.AddOrUpdateConfigFile(fileName, content);
         await _dbContext.SaveChangesAsync(cancellationToken);

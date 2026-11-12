@@ -1,35 +1,25 @@
 namespace NOF.Domain;
 
-/// <summary>
-/// Marks a <c>readonly partial struct</c> as a value object wrapping <typeparamref name="T"/>.
-/// The source generator will produce:
-/// <list type="bullet">
-///   <item>A private validated constructor accepting the primitive value.</item>
-///   <item>A static <c>Of(T)</c> factory method that validates and returns the value object.</item>
-///   <item>An explicit cast operator from the value object to <typeparamref name="T"/>.</item>
-///   <item>A nested <c>JsonConverter</c> and a <c>[JsonConverter]</c> attribute on the struct.</item>
-///   <item><c>Equals</c>, <c>GetHashCode</c>, and <c>ToString</c> delegating to the primitive.</item>
-///   <item>An initialization marker that prevents CLR zero-initialization from masquerading as a validated value.</item>
-/// </list>
-/// <para>Construct value objects through <c>Of(T)</c> or another generated factory. Direct <c>default</c> and parameterless <c>new()</c> expressions are reported by diagnostic <c>NOF018</c>.</para>
-/// <para>Override <see cref="Normalize"/> to normalize incoming primitive values before validation and construction.</para>
-/// <para>Override <see cref="Validate"/> to add custom validation logic.</para>
-/// </summary>
-/// <typeparam name="T">The underlying primitive type (e.g. <c>string</c>, <c>int</c>, <c>Guid</c>).</typeparam>
+/// <summary>Declares the normalization and validity rules of a generated value object.</summary>
+/// <typeparam name="T">The non-null primitive type.</typeparam>
+/// <remarks>
+/// Implement on a readonly partial struct. The generator supplies From, TryFrom,
+/// primitive conversion, equality, initialization checks and JSON conversion.
+/// From throws ArgumentException for invalid values; TryFrom returns false and
+/// leaves its out parameter at default. Exceptions from user hooks propagate unchanged.
+/// Validation receives the normalized value; generated length constraints run first.
+/// Construct values through generated factories rather than default or new().
+/// </remarks>
 public interface IValueObject<T> where T : notnull
 {
-    /// <summary>
-    /// Normalizes the primitive value before validation and construction.
-    /// Override this method to trim, canonicalize, or otherwise normalize input values.
-    /// </summary>
-    /// <param name="value">The primitive value to normalize.</param>
-    /// <returns>The normalized primitive value.</returns>
+    /// <summary>Normalizes input before checking generated constraints and IsValid.</summary>
+    /// <param name="value">The non-null input value.</param>
+    /// <returns>The normalized value.</returns>
     static virtual T Normalize(T value) => value;
 
-    /// <summary>
-    /// Validates the primitive value after normalization and before constructing the value object.
-    /// Override this method to add custom validation logic that throws on invalid input.
-    /// </summary>
-    /// <param name="value">The primitive value to validate.</param>
-    static virtual void Validate(T value) { }
+    /// <summary>Determines whether the normalized value satisfies custom business rules.</summary>
+    /// <param name="value">The normalized value, already checked against generated constraints.</param>
+    /// <returns>True if the value is valid; otherwise false.</returns>
+    /// <remarks>Return false for expected invalid input. Hook exceptions are not caught by TryFrom.</remarks>
+    static virtual bool IsValid(T value) => true;
 }

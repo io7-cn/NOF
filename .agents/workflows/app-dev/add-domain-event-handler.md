@@ -50,7 +50,7 @@ public sealed class CreateOrderHandler(
         Context context,
         CancellationToken cancellationToken)
     {
-        var order = Order.Create(EmailAddress.Of(command.CustomerEmail));
+        var order = Order.Create(EmailAddress.From(command.CustomerEmail));
         dbContext.Set<Order>().Add(order);
 
         await publisher.DeferPublishAsync(

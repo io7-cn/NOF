@@ -40,3 +40,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [配置节点 REST 实现](design/configuration-rest.md)
 
 - [声明可预期失败](design/expected-failures.md)
+
+- [值对象构造](design/value-objects.md)

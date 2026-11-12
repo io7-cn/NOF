@@ -165,8 +165,8 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Theory]
-    [InlineData("NOF013", "Of(value);")]
-    [InlineData("NOF014", "Validate(value);")]
+    [InlineData("NOF013", "From(value);")]
+    [InlineData("NOF014", "IsValid(value);")]
     public async Task NormalizeFix_RemovesStandaloneInvocation(string diagnosticId, string invocation)
     {
         var source = $$"""
@@ -178,8 +178,8 @@ public sealed class GeneralCodeFixProviderTests
                     {{invocation}}
                 }
 
-                private static void Of(string value) { }
-                private static void Validate(string value) { }
+                private static void From(string value) { }
+                private static bool IsValid(string value) => true;
             }
             """;
 
@@ -199,15 +199,15 @@ public sealed class GeneralCodeFixProviderTests
             namespace Test;
             public static class Value
             {
-                public static string Normalize(string value) => Of(value);
-                private static string Of(string value) => value;
+                public static string Normalize(string value) => From(value);
+                private static string From(string value) => value;
             }
             """;
 
         var (_, actions) = await GetCodeActionsAsync(
             source,
             "NOF013",
-            "Of(value)",
+            "From(value)",
             new RemoveNormalizeInvocationCodeFixProvider());
 
         Assert.Empty(actions);
@@ -358,16 +358,16 @@ public sealed class GeneralCodeFixProviderTests
                     {
                         public static void Normalize(string value)
                         {
-                            Of(value);
+                            From(value);
                         }
 
-                        private static void Of(string value) { }
+                        private static void From(string value) { }
                     }
                     """,
-                "Of(value)",
+                "From(value)",
                 new RemoveNormalizeInvocationCodeFixProvider(),
-                "RemoveInvocationFromNormalize",
-                static text => !text.Contains("Of(value);", StringComparison.Ordinal)),
+                "RemoveInvocationFromValueObjectHook",
+                static text => !text.Contains("From(value);", StringComparison.Ordinal)),
             new SolutionFixAllCase(
                 "value object ordering",
                 "NOF015",

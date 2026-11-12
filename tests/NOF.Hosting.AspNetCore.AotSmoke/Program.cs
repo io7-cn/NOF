@@ -14,6 +14,12 @@ using System.Text.Json.Serialization;
 
 JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(static options =>
     options.TypeInfoResolverChain.Add(SmokeJsonContext.Default));
+Expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
+Expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
+Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _), "Custom IsValid rule was skipped by TryFrom");
+var nameJson = JsonSerializer.Serialize(nodeName, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
+Expect((string)JsonSerializer.Deserialize(nameJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
+    "Value-object From conversion did not round-trip without reflection");
 var builder = NOFWebApplicationBuilder.Create(args);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
@@ -269,6 +275,8 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 
 [JsonSerializable(typeof(NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
 [JsonSerializable(typeof(Empty))]
+[JsonSerializable(typeof(NOF.Sample.ConfigNodeName))]
+[JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(OrderDto))]
 [JsonSerializable(typeof(UpdateBody))]
 [JsonSerializable(typeof(OrderReadReceipt))]

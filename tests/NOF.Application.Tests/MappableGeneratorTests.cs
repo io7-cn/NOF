@@ -634,7 +634,7 @@ public class MappableGeneratorTests
         {
             private readonly string _value;
             private OrderName(string value) { _value = value; }
-            public static OrderName Of(string value) => new(value);
+            public static OrderName From(string value) => new(value);
             public static explicit operator string(OrderName vo) => vo._value;
             public string GetUnderlyingValue() => _value;
         }
@@ -690,8 +690,8 @@ public class MappableGeneratorTests
 
         var result = RunGenerator(source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
-        // Should wrap via OrderName.Of(...)
-        Assert.Contains("OrderName.Of(src.Name)", code);
+        // Should wrap via OrderName.From(...)
+        Assert.Contains("OrderName.From(src.Name)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -738,7 +738,7 @@ public class MappableGeneratorTests
                 {
                     private readonly int _value;
                     private Score(int value) { _value = value; }
-                    public static Score Of(int value) => new(value);
+                    public static Score From(int value) => new(value);
                     public static explicit operator int(Score vo) => vo._value;
                     public int GetUnderlyingValue() => _value;
                 }
@@ -753,7 +753,7 @@ public class MappableGeneratorTests
 
         var result = RunGenerator(source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("Score.Of(src.Score)", code);
+        Assert.Contains("Score.From(src.Score)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -772,7 +772,7 @@ public class MappableGeneratorTests
                 {
                     private readonly string _value;
                     private FirstName(string value) { _value = value; }
-                    public static FirstName Of(string value) => new(value);
+                    public static FirstName From(string value) => new(value);
                     public static explicit operator string(FirstName vo) => vo._value;
                     public string GetUnderlyingValue() => _value;
                 }
@@ -780,7 +780,7 @@ public class MappableGeneratorTests
                 {
                     private readonly string _value;
                     private DisplayName(string value) { _value = value; }
-                    public static DisplayName Of(string value) => new(value);
+                    public static DisplayName From(string value) => new(value);
                     public static explicit operator string(DisplayName vo) => vo._value;
                     public string GetUnderlyingValue() => _value;
                 }
@@ -798,7 +798,7 @@ public class MappableGeneratorTests
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should NOT auto-unwrap and rewrap; should fall back to mapper
         Assert.Contains("MappingReference.Map<", code);
-        Assert.DoesNotContain("DisplayName.Of(", code);
+        Assert.DoesNotContain("DisplayName.From(", code);
     }
 
     // =======================================================================
@@ -921,7 +921,7 @@ public class MappableGeneratorTests
         Assert.Contains("(string)src.Name)", code);
         // Reverse: string 閳?OrderName (wrap)
         Assert.Contains("MappingRegistration.Of<global::Test.OrderDto, global::Test.Order>", code);
-        Assert.Contains("OrderName.Of(src.Name)", code);
+        Assert.Contains("OrderName.From(src.Name)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -999,7 +999,7 @@ public class MappableGeneratorTests
                 {
                     private readonly long _value;
                     private NodeId(long value) { _value = value; }
-                    public static NodeId Of(long value) => new(value);
+                    public static NodeId From(long value) => new(value);
                     public static explicit operator long(NodeId vo) => vo._value;
                     public long GetUnderlyingValue() => _value;
                 }
@@ -1035,7 +1035,7 @@ public class MappableGeneratorTests
                 {
                     private readonly long _value;
                     private NodeId(long value) { _value = value; }
-                    public static NodeId Of(long value) => new(value);
+                    public static NodeId From(long value) => new(value);
                     public static explicit operator long(NodeId vo) => vo._value;
                     public long GetUnderlyingValue() => _value;
                 }
@@ -1052,7 +1052,7 @@ public class MappableGeneratorTests
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should unwrap Nullable<long>, then wrap via NodeId.Of
         Assert.Contains(".HasValue", code);
-        Assert.Contains("NodeId.Of(", code);
+        Assert.Contains("NodeId.From(", code);
     }
 
     // =======================================================================

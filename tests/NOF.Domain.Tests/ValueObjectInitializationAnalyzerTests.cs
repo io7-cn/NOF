@@ -48,7 +48,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
 
         var diagnostic = Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF018");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.Contains("Name.Of(...)", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains("Name.From(...)", diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
             public readonly struct Point;
             public static class Usage
             {
-                public static Name CreateName() => Name.Of("valid");
+                public static Name CreateName() => Name.From("valid");
                 public static Point CreatePoint() => new();
                 public static Point DefaultPoint() => default;
             }
