@@ -7,10 +7,11 @@ generated `Service.Operation` base and override workflow. Contracts contain busi
 requests/responses and application policy metadata, with no HTTP route or binding declarations.
 
 ```csharp
-public interface IOrderService : IApplicationService
+public partial interface IOrderService : IApplicationService
 {
     OrderDto? Find(FindOrderRequest request);
-    Result<OrderDto> Save(SaveOrderRequest request);
+    [FailureCase("Rejected")]
+    OrderDto Save(SaveOrderRequest request);
 }
 public partial class OrderService : ApplicationService<IOrderService>;
 public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
@@ -23,9 +24,9 @@ public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 
 Each declaration has one reference-type input and a synchronous business return.
 Context, CancellationToken and Task belong to the generated server API. DTOs, nullable
-values and business unions are supported. `IRpcResponse<TSelf>` is removed; `Result<T>`
-is a business union, not a transport contract. Payload-free Result uses Empty; successful messages belong to business DTOs. Success
-and Success<T> are removed.
+values and business unions are supported. IRpcResponse and generic Contract Result types
+are removed. FailureCase generates a closed operation-specific Result inherited by its
+handler. Empty represents payload-free success; successful messages belong to business DTOs.
 No client interfaces, HTTP Clients or Local Clients are generated.
 
 ## Registration and local invocation

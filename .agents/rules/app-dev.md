@@ -27,7 +27,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 - Persistence: `IDbContext`, `IDbContextFactory`, `IRepository<T>`, provider-neutral async LINQ extensions.
 - Caching and mapping: `ICacheService`, `CacheKey<T>`, `IMapper`, `ProjectTo<TDestination>()`.
 - Match the successful `T` itself or shared `NOF.Abstraction.Failure`. Payload-free Result is union(Empty, Failure). Success/Success<T> and WithMessage are removed; successful messages belong to explicit business DTOs. Do not use removed `IsSuccess`, `Extra` or reflective result projections. See `docs/en/design/result-unions.md`.
-- Results and request models: `Result`, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>`.
+- Responses: plain business values, Empty, Optional<T>, or FailureCase-generated operation-specific Result unions. Generic Contract Result types are removed.
 
 Commands and notifications are plain payload objects; inheriting the corresponding handler base opts a handler into generated registration.
 

@@ -4,23 +4,23 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public interface IOAuthClientRegistrationRepository
 {
-    Task<Result<OAuthClientRegistrationSecretDescriptor>> RegisterAsync(
+    Task<OAuthClientRegistration> RegisterAsync(
         CreateOAuthClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientRegistrationSecretDescriptor>> GetAsync(
+    Task<OAuthClientRegistration> GetAsync(
         string clientId,
         string registrationAccessToken,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientRegistrationSecretDescriptor>> UpdateAsync(
+    Task<OAuthClientRegistration> UpdateAsync(
         string clientId,
         string registrationAccessToken,
         string? currentClientSecret,
         UpdateOAuthClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result> DeleteAsync(
+    Task<OAuthMutation> DeleteAsync(
         string clientId,
         string registrationAccessToken,
         CancellationToken cancellationToken = default);

@@ -54,7 +54,7 @@ public partial interface IOrderService : IApplicationService
 }
 ```
 
-The generator creates IOrderService.ConfirmResult and distinct case types. Domain
+The generator creates IOrderService.ConfirmOperation.Result and distinct case types. Domain
 methods return their own business values; Application maps those values to the declared
 cases. Error codes do not determine C# names. No static failure-holder class or
 DomainException conversion is needed.
@@ -133,7 +133,7 @@ The handler is registered by its generated assembly initializer when the contain
 ```csharp
 public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
 {
-    public override async Task<Result> HandleAsync(
+    public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
@@ -141,7 +141,7 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
         dbContext.Set<Order>().Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Result.Success();
+        return Empty.Instance;
     }
 }
 ```

@@ -130,3 +130,5 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 - [DDD 服务设计](https://learn.microsoft.com/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/ddd-oriented-microservice)
 - [ASP.NET Core 响应](https://learn.microsoft.com/aspnet/core/fundamentals/minimal-apis/responses)
 - [EF Core 事务](https://learn.microsoft.com/ef/core/saving/transactions)
+
+更新：通用 Contract Result/Result<T> 及消息头、字典便利扩展已删除。请使用当前[操作结果迁移指南](result-unions.md)。

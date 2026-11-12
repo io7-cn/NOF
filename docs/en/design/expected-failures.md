@@ -99,7 +99,7 @@ invariants/programmer misuse; technical exceptions and cancellation propagate no
 
 The former Domain FailureAttribute, static-holder generator, failure.Throw extension
 and exception constructors accepting Failure are removed. Shared Abstraction.Failure
-still represents policy rejection and supports existing open Result APIs; it is not an
+still represents policy rejection for transport and protocol adapters; it is not an
 implicit escape branch in a generated checked outcome. Authentication/tenant rejection
 continues through ServiceRejectedException, independently of declared business failures.
 
@@ -130,7 +130,7 @@ Migrate `[FailureCase("404", Name = "NotFound")]` to
 uses the branch Name instead of its old code; update serialized consumers together.
 
 Update contract signatures, handler return types, callers and adapters together. Existing
-unannotated DTO/nullable/Result methods retain their behavior. Supported declarations are
+unannotated DTO/nullable/business-union methods retain their behavior. Supported declarations are
 top-level, non-generic partial service interfaces, unique non-generic operations with one
 request and a non-nullable synchronous success type. Use explicit data types for optional
 success values. Runtime speed relative to returned Result values is not assumed; avoiding

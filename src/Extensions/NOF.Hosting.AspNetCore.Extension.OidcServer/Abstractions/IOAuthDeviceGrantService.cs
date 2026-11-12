@@ -4,24 +4,24 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public interface IOAuthDeviceGrantService
 {
-    Task<Result<OAuthDeviceAuthorizationResponse>> CreateAsync(
+    Task<OAuthDeviceAuthorization> CreateAsync(
         CreateOAuthDeviceGrantRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthDeviceAuthorizationDescriptor>> GetPendingAsync(
+    Task<OAuthDeviceInspection> GetPendingAsync(
         string userCode,
         CancellationToken cancellationToken = default);
 
-    Task<Result> ApproveAsync(
+    Task<OAuthMutation> ApproveAsync(
         string userCode,
         string subject,
         CancellationToken cancellationToken = default);
 
-    Task<Result> DenyAsync(
+    Task<OAuthMutation> DenyAsync(
         string userCode,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthTokenEndpointResponse>> RedeemAsync(
+    Task<OAuthTokenGrant> RedeemAsync(
         string deviceCode,
         string clientId,
         CancellationToken cancellationToken = default);

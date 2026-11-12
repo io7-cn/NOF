@@ -104,7 +104,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(MappableAttribute<,>),
             typeof(ApplicationService<>),
             typeof(IApplicationService),
-            typeof(Result),
+            typeof(NOF.Testing.TestOutcome),
             typeof(IValueObject<>),
             typeof(FailureCaseAttribute),
             typeof(ApplicationServiceInvoker),

@@ -10,7 +10,7 @@ public class UnionOutcomeTests
     [Fact]
     public void AuthorizationOutcome_ShouldPreserveDenialAndMatchEveryCase()
     {
-        var failure = Result.Fail("403", "Permission required");
+        var failure = NOF.Testing.TestOutcome.Fail("403", "Permission required");
         InboundAuthorizationResult allowed = InboundAuthorizationResult.Success;
         InboundAuthorizationResult denied = new InboundAuthorizationResult.Denied(failure, 403, ["orders.read"]);
 

@@ -9,9 +9,10 @@ description: Add a Context-aware request/response operation with NOF application
 ```csharp
 using NOF.Contract;
 
-public interface IOrderService : IApplicationService
+public partial interface IOrderService : IApplicationService
 {
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
+    [FailureCase("NotFound", "404")]
+    GetOrderResponse GetOrder(GetOrderRequest request);
 }
 
 public sealed record GetOrderRequest(string Id);
@@ -37,12 +38,12 @@ The `partial` modifier is required (`NOF300`). The generator creates one nested 
 ```csharp
 public sealed class GetOrder : OrderService.GetOrder
 {
-    public override Task<Result<GetOrderResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "demo")));
+        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "demo"));
     }
 }
 ```

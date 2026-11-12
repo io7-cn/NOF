@@ -9,21 +9,22 @@ NOF has four handler shapes. A concrete class may inherit only one command, noti
 ## RPC Pattern
 
 ```csharp
-public interface IOrderService : IApplicationService
+public partial interface IOrderService : IApplicationService
 {
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
+    [FailureCase("NotFound", "404")]
+    GetOrderResponse GetOrder(GetOrderRequest request);
 }
 
 public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
-    public override Task<Result<GetOrderResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "demo")));
+        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "demo"));
     }
 }
 ```

@@ -5,7 +5,7 @@ Transport-independent application service declarations, messages and business ou
 ```csharp
 public interface IOrderService : IApplicationService
 {
-    Result<OrderDto> Get(GetOrderRequest request);
+    OrderDto Get(GetOrderRequest request);
 }
 ```
 
@@ -21,11 +21,12 @@ or FailureCase("Conflict", typeof(MyError)). Message cases expose ErrorCode/Mess
 custom cases expose typed Error without an imposed code. Invalid names report NOF220.
 See [expected failures](../../docs/en/design/expected-failures.md).
 
-`Result<T>` is native `union (T, NOF.Abstraction.Failure)`. Match successful T directly;
-payload-free Result uses Empty. Success/Success<T> and WithMessage are removed; successful
-messages belong to business response DTOs. Result has
-no IRpcResponse interface or empty-response factory. Policy rejection belongs to the
-execution outcome, separately from returned business failures.
+Generic Result/Result<T>, their factories and JSON classifier are removed. Only generated
+operation-specific Result unions remain. Return ordinary DTOs, nullable values, Empty or
+business unions for unannotated operations. Success wrappers are removed; successful
+messages belong to business response DTOs. Policy rejection remains separate.
+DictionaryExtensions and ContextExtensions are removed; use normal dictionaries and
+Context.WithItem/WithItems. Transport adapters own header decoding.
 
 Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint, HTTP verbs, transport annotations and
 protocol readers are deleted. Contracts need no Hosting reference. Native HTTP modules

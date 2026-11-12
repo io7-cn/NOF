@@ -1,125 +1,45 @@
-# NOF 12 的 Result 联合类型
+# NOF 12 操作专属结果 Union
 
-[English](../../en/design/result-unions.md) · [开发指南](../README.md)
+[English](../../en/design/result-unions.md) · [声明失败](expected-failures.md)
 
-NOF 12 在 .NET 11 上使用 C# 15 原生联合类型，破坏 NOF 11 的源码、二进制和
-JSON 协议兼容性。契约、服务端和客户端需要一起重新构建及部署。
+NOF 12 使用 .NET 11 和 C# 15 原生 Union。Contract 不再提供通用 Result、Result<T>、
+相关工厂或 ResultJsonTypeClassifier；Success 和 Success<T> 包装也已删除。
+契约、实现和调用方需要同步升级，不提供兼容别名。
 
-## 成功分支直接是业务值
-
-```csharp
-public union Result<T>(T, Failure);
-public union Result(Empty, Failure);
-```
-
-`Result<T>` 直接包含 `T`，无返回值的 `Result` 复用现有 `Empty` 类型。
-`Success` 和 `Success<T>` 已删除；成功消息属于具体业务响应 DTO，框架不再提供
-通用消息包装类型。
+在 partial 服务契约上声明成功业务值及预期失败：
 
 ```csharp
-Result<OrderDto> loaded = order;
-Result<ImportReceipt> imported = new ImportReceipt(42, "导入完成");
-Result<OrderDto> missing = new Failure("order.not_found", "订单不存在");
-Result saved = Empty.Instance;
-
-string Describe(Result<OrderDto> outcome) => outcome switch
+public partial interface IOrderService : IApplicationService
 {
-    OrderDto value => $"订单 {value.Id}",
-    Failure failure => $"{failure.Code}: {failure.Message}",
-    null => throw new InvalidOperationException("结果未初始化")
-};
+    [FailureCase("NotFound", "404")]
+    OrderDto Get(GetOrderRequest request);
+}
 
-public sealed record ImportReceipt(int ImportedCount, string Message);
-```
-
-匹配成功值本身。移除 `IsSuccess`、`Extra`、`IResult`、`FailResult`、
-`ResultProjection` 和 `Result.From`。编译器生成的 `Value` 是选中的值或分支对象，
-应用代码使用类型模式匹配。默认联合值没有分支，应用调用边界会拒绝它。
-
-构造辅助方法包括 `Result.Success(data)`、`Result.Fail(code, message)`、
-`Result.Page(items, totalCount)` 和 `Result.Stream(items)`。
-`Result.Success()` 返回显式 Empty 分支。`Result.Success("保存成功")` 现在返回
-包含该字符串的 `Result<string>`。删除 WithMessage 调用，需要成功消息时声明业务 DTO。
-默认 Result 仍是未初始化值，不能当作成功。
-
-## 唯一的共享 Failure
-
-`NOF.Abstraction.Failure` 是唯一的共享失败值，包含非空白 `Code` 和非 null
-`Message`，构造参数顺序为 `(code, message)`。Contract 和 Domain 不再各放一份，
-也不需要失败转换适配器。领域生成的失败可以直接作为任意 `Result<T>` 的返回值。
-`Result.Fail(existingFailure)` 返回同一个共享实例。
-
-声明式 UseCase 使用 [FailureCase 和生成的封闭结果](expected-failures.md)。旧 Domain
-FailureAttribute、静态成员承载类生成器和 failure.Throw 转换已删除。共享 Failure 继续
-用于策略拒绝和开放 Result API，不会隐式加入生成的 checked 结果。领域不变式异常与
-可预期业务失败分开处理。
-
-## JSON 和 Native AOT
-
-System.Text.Json 直接序列化选中的业务值：
-
-```json
-{"id":42}
-{"importedCount":42,"message":"导入完成"}
-{}
-{"$kind":"failure","code":"order.not_found","message":"订单不存在"}
-```
-
-依次表示 `Result<OrderDto>`、`Result<ImportReceipt>`、无数据的 `Result`
-和共享失败。原生联合类型的自定义分类器通过根级保留标记 `$kind: "failure"`
-选择失败分支，不会仅凭 `code`、`message` 字段判断失败。支持标量、DTO、集合和
-字典，包括包含这些同名字段的成功 DTO。
-
-Result 协议保留根级 `$kind` 字段。如果成功数据需要这个字段，应定义业务 DTO，
-把该数据嵌套到另一字段中。Empty 只接受空 JSON 对象；旧消息对象会被拒绝。无效标记、不完整失败以及混入业务数据
-的失败对象会被拒绝。旧的 `isSuccess/value/extra` 信封不属于兼容协议。
-
-分类器使用源生成的联合类型分支元数据，不通过反射构造闭合泛型转换器。
-Native AOT 应用需要在 JSON 上下文中注册具体结果和数据类型；共享 Failure 也已
-加入 NOF 内置的 JSON 元数据上下文。
-
-## 分页和流式响应
-
-`PaginatedResult<T>` 改为 `Result<Page<T>>`，成功值有显式 `Items` 和可选的
-`TotalCount`。`StreamingResult<T>` 改为 `Result<IAsyncEnumerable<T>>`。
-流的成功消息放入事件 DTO 或应用自定义事件中。流支持服务端 SSE 端点，
-服务端调用返回对应的 `Task<Result<...>>`。
-HTTP 调用方自行维护 SSE 读取逻辑，不再生成客户端。
-
-```csharp
-var result = await OrderService.Watch.InvokeAsync(services, request, Context.Empty, cancellationToken);
-switch (result)
+public partial class OrderService : ApplicationService<IOrderService>;
+public sealed class GetOrder : OrderService.Get
 {
-    case IAsyncEnumerable<OrderEvent> events:
-        await foreach (var item in events.WithCancellation(cancellationToken))
-        {
-            Console.WriteLine(item);
-        }
-        break;
-    case Failure failure:
-        Console.WriteLine(failure.Message);
-        break;
-    case null:
-        throw new InvalidOperationException("结果未初始化");
+    public override Task<Result> HandleAsync(
+        GetOrderRequest request, Context context, CancellationToken ct)
+        => Task.FromResult<Result>(new NotFound("订单不存在"));
 }
 ```
 
-端点模块将开始传输前的失败映射为 ProblemDetails，将成功流映射为原生
-TypedResults.ServerSentEvents，调用方使用平台 SseParser。不再有 NOF 流式响应包装或消息头。
-需要消息元数据时，使用显式事件 DTO 或应用自定义事件，各适配器决定业务消息的传输表示。枚举期间的异常属于流传输失败，初始成功不保证整个流完成。
+这里 Result 是继承的 IOrderService.GetOperation.Result，包含 OrderDto 和此操作专属的
+NotFound 分支，不是通用结果。Handler 直接返回 DTO、Empty.Instance 或生成的失败分支。
+Page<T> 和 IAsyncEnumerable<T> 都是普通业务值，成功消息属于业务 DTO。
 
-## 边界、部署和回滚
+无声明失败的操作直接返回 DTO、可空值、Empty 或应用自己的 Union。非 IApplicationService
+形态的协议接口可在所属包内声明具体业务 Union，例如 OAuth 令牌、客户端和设备服务。
+不会把通用 Result 换个名字放到框架其他层。示例 UI 的 UiResponse 属于应用自有展示接口。
+OAuth 应用服务与其他应用服务一样使用 FailureCase。
 
-删除 `IRpcResponse<TSelf>` 及空响应工厂。Result 和自定义业务联合类型不再实现 RPC 结果接口。
-生成的服务调用通过 ServiceRejectedException 报告策略拒绝，REST 适配器将其与业务 Failure
-分开映射。旧 HTTP RPC 适配器、注解及协议读取器已删除，不保留兼容层。
-HTTP 路由由端点模块管理。原生 REST 端点返回资源 DTO、201/204 或 ProblemDetails，没有强制 Result 包装。
-OAuth 端点继续使用标准协议。
+穷尽性由 C# 编译器检查 Union switch 表达式；NOF 不增加结果标记或检查分析器。
+生成的 Match 保留为可选便利方法。默认 Union 内容仍在调用边界被拒绝。
 
-迁移时直接匹配成功的 `T`，无返回值成功使用 Empty，成功消息使用业务 DTO，错误改读
-`failure.Code/Message`，并把 `Extra` 改成 DTO 显式字段。部署时协调升级整个
-主版本，或提供独立版本的 API 路由。回滚时恢复完整的 NOF 11 客户端、契约、
-服务端及原有协议。
+生成失败的 JSON 使用 $failure 分支名，携带 errorCode/message 或自定义错误数据。
+原生 HTTP 适配器显式映射到资源和 ProblemDetails，没有强制响应包装，消费者自行提供
+JSON 元数据。生成器与 AOT 限制参见声明失败指南。
 
-参考 [C# 联合类型](https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/union)
-和 [System.Text.Json 联合类型文档](https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/union-types)。
+删除 DictionaryExtensions.CreateOrCopy 和 ContextExtensions.CopyHeadersFrom/ReplaceHeadersFrom。
+直接构造字典，执行数据使用 Context.WithItem/WithItems；传输适配层负责解码消息头。
+集成测试继续覆盖消息头大小写和租户隔离行为。

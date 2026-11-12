@@ -88,7 +88,7 @@ Attribute、生成的失败类型和生成器都位于 Contract。Domain 不依�
 正常传播。
 
 删除旧 Domain FailureAttribute、静态成员承载类生成器、failure.Throw 扩展，以及接收
-Failure 的异常构造函数。Abstraction.Failure 继续用于策略拒绝和现有开放 Result API，
+Failure 的异常构造函数。Abstraction.Failure 继续用于策略拒绝和传输和协议适配器，
 不会隐式加入生成的封闭结果。认证和租户拒绝仍通过 ServiceRejectedException 独立传播。
 
 HTTP 模块显式将每个分支映射到原生 TypedResults/ProblemDetails。配置节点示例已将 CRUD、
@@ -106,7 +106,7 @@ JsonSerializerContext 中注册具体结果类型。System.Text.Json 生成器�
 另一生成器的输出。单项目原生 HTTP 适配器可先将内存结果映射为已有 DTO/ProblemDetails，
 无需序列化生成的 Union。测试覆盖单项目中的生成器顺序独立，以及独立契约的真实 Native AOT。
 
-契约签名、Handler 返回类型、调用方和适配器需一同升级。未标注的 DTO、可空值和 Result
+契约签名、Handler 返回类型、调用方和适配器需一同升级。未标注的 DTO、可空值和业务 Union
 方法保持原行为。目前支持顶层、非泛型的 partial 服务接口，以及不重名、非泛型、单请求、
 同步非空成功值的方法；可选成功值请使用显式数据类型。不能预先保证比返回 Result 更快：
 避免异常控制流不代表没有分配，具体性能仍需基准测试。

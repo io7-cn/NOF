@@ -131,13 +131,13 @@ public sealed class AuthorizationInboundMiddleware(
         {
             if (!isAuthenticated)
             {
-                return new(Result.Fail("401", "Please login first"), 401, []);
+                return new(new global::NOF.Abstraction.Failure("401", "Please login first"), 401, []);
             }
 
             if (!isHostOperation && (string.IsNullOrWhiteSpace(trustedTenant)
                 || normalizedTenant == NOFAbstractionConstants.Tenant.HostId))
             {
-                return new(Result.Fail("403", "An authenticated tenant is required"), 403, []);
+                return new(new global::NOF.Abstraction.Failure("403", "An authenticated tenant is required"), 403, []);
             }
         }
 
@@ -146,7 +146,7 @@ public sealed class AuthorizationInboundMiddleware(
             && context.TenantId != NOFAbstractionConstants.Tenant.HostId
             && !string.Equals(context.TenantId, normalizedTenant, StringComparison.Ordinal))
         {
-            return new(Result.Fail("403", "Request tenant does not match the authenticated tenant"), 403, []);
+            return new(new global::NOF.Abstraction.Failure("403", "Request tenant does not match the authenticated tenant"), 403, []);
         }
 
         return null;

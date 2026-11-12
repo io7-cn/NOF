@@ -7,18 +7,43 @@ namespace NOF.Sample.Services;
 /// <summary>Connects the sample UI port to server operations without generated clients.</summary>
 public sealed class ServerOAuthDemoApi(IServiceProvider services) : IOAuthDemoApi
 {
-    public Task<Result<CreateDemoOAuthClientResponse>> CreateClientAsync(CreateDemoOAuthClientRequest request, Context context, CancellationToken cancellationToken = default)
-        => OAuthChainDemoService.CreateClient.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<UiResponse<CreateDemoOAuthClientResponse>> CreateClientAsync(CreateDemoOAuthClientRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await OAuthChainDemoService.CreateClient.InvokeAsync(services, request, context, cancellationToken))
+            .Match<UiResponse<CreateDemoOAuthClientResponse>>(value => value,
+                rejected => new NOF.Abstraction.Failure(rejected.ErrorCode, rejected.Message),
+                unauthorized => new NOF.Abstraction.Failure(unauthorized.ErrorCode, unauthorized.Message),
+                forbidden => new NOF.Abstraction.Failure(forbidden.ErrorCode, forbidden.Message),
+                serverError => new NOF.Abstraction.Failure(serverError.ErrorCode, serverError.Message));
 
-    public Task<Result<DemoTokenResponse>> GetClientTokenAsync(GetDemoClientTokenRequest request, Context context, CancellationToken cancellationToken = default)
-        => OAuthChainDemoService.GetClientToken.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<UiResponse<DemoTokenResponse>> GetClientTokenAsync(GetDemoClientTokenRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await OAuthChainDemoService.GetClientToken.InvokeAsync(services, request, context, cancellationToken))
+            .Match<UiResponse<DemoTokenResponse>>(value => value,
+                rejected => new NOF.Abstraction.Failure(rejected.ErrorCode, rejected.Message),
+                unauthorized => new NOF.Abstraction.Failure(unauthorized.ErrorCode, unauthorized.Message),
+                forbidden => new NOF.Abstraction.Failure(forbidden.ErrorCode, forbidden.Message),
+                serverError => new NOF.Abstraction.Failure(serverError.ErrorCode, serverError.Message));
 
-    public Task<Result<DemoTokenResponse>> GetUserTokenAsync(GetDemoUserTokenRequest request, Context context, CancellationToken cancellationToken = default)
-        => OAuthChainDemoService.GetUserToken.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<UiResponse<DemoTokenResponse>> GetUserTokenAsync(GetDemoUserTokenRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await OAuthChainDemoService.GetUserToken.InvokeAsync(services, request, context, cancellationToken))
+            .Match<UiResponse<DemoTokenResponse>>(value => value,
+                rejected => new NOF.Abstraction.Failure(rejected.ErrorCode, rejected.Message),
+                unauthorized => new NOF.Abstraction.Failure(unauthorized.ErrorCode, unauthorized.Message),
+                forbidden => new NOF.Abstraction.Failure(forbidden.ErrorCode, forbidden.Message),
+                serverError => new NOF.Abstraction.Failure(serverError.ErrorCode, serverError.Message));
 
-    public Task<Result<DemoTokenResponse>> ExchangeTokenAsync(ExchangeDemoTokenRequest request, Context context, CancellationToken cancellationToken = default)
-        => OAuthChainDemoService.ExchangeToken.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<UiResponse<DemoTokenResponse>> ExchangeTokenAsync(ExchangeDemoTokenRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await OAuthChainDemoService.ExchangeToken.InvokeAsync(services, request, context, cancellationToken))
+            .Match<UiResponse<DemoTokenResponse>>(value => value,
+                rejected => new NOF.Abstraction.Failure(rejected.ErrorCode, rejected.Message),
+                unauthorized => new NOF.Abstraction.Failure(unauthorized.ErrorCode, unauthorized.Message),
+                forbidden => new NOF.Abstraction.Failure(forbidden.ErrorCode, forbidden.Message),
+                serverError => new NOF.Abstraction.Failure(serverError.ErrorCode, serverError.Message));
 
-    public Task<Result<ConsumeDemoAccessTokenResponse>> CallDownstreamAsync(CallDemoDownstreamRequest request, Context context, CancellationToken cancellationToken = default)
-        => OAuthChainDemoService.CallDownstream.InvokeAsync(services, request, context, cancellationToken);
+    public async Task<UiResponse<ConsumeDemoAccessTokenResponse>> CallDownstreamAsync(CallDemoDownstreamRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await OAuthChainDemoService.CallDownstream.InvokeAsync(services, request, context, cancellationToken))
+            .Match<UiResponse<ConsumeDemoAccessTokenResponse>>(value => value,
+                rejected => new NOF.Abstraction.Failure(rejected.ErrorCode, rejected.Message),
+                unauthorized => new NOF.Abstraction.Failure(unauthorized.ErrorCode, unauthorized.Message),
+                forbidden => new NOF.Abstraction.Failure(forbidden.ErrorCode, forbidden.Message),
+                serverError => new NOF.Abstraction.Failure(serverError.ErrorCode, serverError.Message));
 }

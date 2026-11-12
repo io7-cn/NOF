@@ -24,6 +24,13 @@ RPC contracts are declared on `IApplicationService` interfaces in the contract l
 
 ```csharp
 using NOF.Application;
+using NOF.Contract;
+
+public partial interface IOrderService : IApplicationService
+{
+    [FailureCase("NotFound", "404")]
+    OrderDto GetOrder(GetOrderRequest request);
+}
 
 public partial class OrderService : ApplicationService<IOrderService>;
 
@@ -36,32 +43,32 @@ public sealed class GetOrder : OrderService.GetOrder
         _dbContext = dbContext;
     }
 
-    public override async Task<Result<OrderDto>> HandleAsync(GetOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetOrderRequest request, Context context, CancellationToken cancellationToken)
     {
         var order = await _dbContext.Set<Order>()
             .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
         if (order is null)
         {
-            return Result.Fail("404", "Order not found");
+            return new NotFound("Order not found");
         }
 
-        return Result.Success(new OrderDto(order.Id, order.Status));
+        return new OrderDto(order.Id, order.Status);
     }
 }
 ```
 
 Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IApplicationServiceInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
 
-Streaming RPC handlers use the same generated nested `ServiceOperation<TRequest, Result<IAsyncEnumerable<T>>>` model:
+Streaming operations may directly return IAsyncEnumerable<T> when they declare no initial failure:
 
 ```csharp
 public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class Watch : OrderService.Watch
 {
-    public override Task<Result<IAsyncEnumerable<OrderEvent>>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<IAsyncEnumerable<OrderEvent>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Stream(Stream()));
+        return Task.FromResult(Stream());
 
         async IAsyncEnumerable<OrderEvent> Stream()
         {
@@ -73,7 +80,7 @@ public sealed class Watch : OrderService.Watch
 }
 ```
 
-The contract surface for the same method remains `Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);`.
+The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> Watch(WatchOrdersRequest request);`.
 
 ### Command Handlers
 

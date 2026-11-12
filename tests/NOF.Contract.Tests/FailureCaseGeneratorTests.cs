@@ -102,7 +102,6 @@ public sealed class FailureCaseGeneratorTests
     [InlineData("[FailureCase(\"NotFound\", \" \")]", "string", true)]
     [InlineData("[FailureCase(\"Custom\", typeof(void))]", "string", true)]
     [InlineData("[FailureCase(\"Custom\", typeof(System.Collections.Generic.List<>))]", "string", true)]
-    [InlineData("[FailureCase(\"A\")]", "Result", true)]
     [InlineData("[FailureCase(\"A\")]", "string?", true)]
     [InlineData("[FailureCase(\"A\")]", "string", false)]
     public void InvalidDeclarations_ReportActionableError(string attributes, string response, bool partial)

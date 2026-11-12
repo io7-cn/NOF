@@ -73,7 +73,7 @@ public sealed class CommandInboundPipelineExecutor
             MethodInfo = methodInfo,
             HandlerType = handlerType,
             MessageType = messageType
-        }.CopyHeadersFrom(headers);
+        }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
     }
     private static async ValueTask ExecuteCommandMiddlewareAsync(
         ICommandInboundMiddleware middleware,
@@ -163,7 +163,7 @@ public sealed class NotificationInboundPipelineExecutor
             MethodInfo = methodInfo,
             HandlerType = handlerType,
             MessageType = messageType
-        }.CopyHeadersFrom(headers);
+        }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
     }
     private static async ValueTask ExecuteNotificationMiddlewareAsync(
         INotificationInboundMiddleware middleware,
@@ -265,7 +265,7 @@ public sealed class RequestInboundPipelineExecutor
             HandlerMethodInfo = handlerMethodInfo,
             RequestType = requestType,
             ResponseType = responseType
-        }.CopyHeadersFrom(headers);
+        }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
     }
 
     private static async ValueTask ExecuteRequestHandlerAsync(
@@ -297,6 +297,23 @@ public sealed class RequestInboundPipelineExecutor
 
 public static class InboundContextReflection
 {
+    /// <summary>Decodes transported message headers into execution items.</summary>
+    public static IReadOnlyDictionary<object, object?> ReadHeaderItems(IEnumerable<KeyValuePair<string, string?>>? headers)
+    {
+        var items = new Dictionary<object, object?>();
+        if (headers is not null)
+        {
+            foreach (var (key, value) in headers)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    items[key] = value;
+                }
+            }
+        }
+        return items;
+    }
+
     public static MethodInfo ResolveServiceMethodInfo(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
         string methodName)

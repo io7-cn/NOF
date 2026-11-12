@@ -14,69 +14,104 @@ public static class OAuthChainDemoContextKeys
 
 public sealed class CreateClientHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.CreateClient
 {
-    public override Task<Result<CreateDemoOAuthClientResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         CreateDemoOAuthClientRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.CreateClientAsync(request, cancellationToken);
+        return (await backend.CreateClientAsync(request, cancellationToken)).Value switch
+        {
+            CreateDemoOAuthClientResponse value => value,
+            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
+            Failure { Code: "403" } failure => new Forbidden(failure.Message),
+            Failure { Code: "500" } failure => new ServerError(failure.Message),
+            Failure failure => new Rejected(failure.Message),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class GetClientTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.GetClientToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetDemoClientTokenRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.GetClientTokenAsync(request, cancellationToken);
+        return (await backend.GetClientTokenAsync(request, cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
+            Failure { Code: "403" } failure => new Forbidden(failure.Message),
+            Failure { Code: "500" } failure => new ServerError(failure.Message),
+            Failure failure => new Rejected(failure.Message),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class GetUserTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.GetUserToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetDemoUserTokenRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
         _ = request;
         _ = context;
-        return backend.GetUserTokenAsync(cancellationToken);
+        return (await backend.GetUserTokenAsync(cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
+            Failure { Code: "403" } failure => new Forbidden(failure.Message),
+            Failure { Code: "500" } failure => new ServerError(failure.Message),
+            Failure failure => new Rejected(failure.Message),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class ExchangeTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.ExchangeToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         ExchangeDemoTokenRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.ExchangeTokenAsync(request, cancellationToken);
+        return (await backend.ExchangeTokenAsync(request, cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
+            Failure { Code: "403" } failure => new Forbidden(failure.Message),
+            Failure { Code: "500" } failure => new ServerError(failure.Message),
+            Failure failure => new Rejected(failure.Message),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class CallDownstreamHandler(IDemoDownstreamApi downstreamClient) : OAuthChainDemoService.CallDownstream
 {
-    public override Task<Result<ConsumeDemoAccessTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         CallDemoDownstreamRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
         _ = context;
         var downstreamContext = Context.Empty.WithItem(OAuthChainDemoContextKeys.AccessToken, request.AccessToken);
-        return downstreamClient.InspectAccessTokenAsync(Empty.Instance, downstreamContext, cancellationToken);
+        return (await downstreamClient.InspectAccessTokenAsync(Empty.Instance, downstreamContext, cancellationToken))
+            .Match<Result>(value => value, rejected => new Rejected(rejected.Message),
+                unauthorized => new Unauthorized(unauthorized.Message), forbidden => new Forbidden(forbidden.Message),
+                serverError => new ServerError(serverError.Message));
     }
 }
 
 public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDownstreamService.InspectAccessToken
 {
-    public override Task<Result<ConsumeDemoAccessTokenResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         Empty request,
         Context context,
         CancellationToken cancellationToken)
@@ -87,7 +122,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
         if (!userContext.User.IsAuthenticated)
         {
-            return Task.FromResult<Result<ConsumeDemoAccessTokenResponse>>(Result.Fail("401", "Access token is required."));
+            return Task.FromResult<Result>(new Unauthorized("Access token is required."));
         }
 
         var scopes = userContext.User.FindAll("scope")
@@ -97,7 +132,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
             .ToArray();
         var actor = ResolveActor(userContext.User);
 
-        return Task.FromResult<Result<ConsumeDemoAccessTokenResponse>>(new ConsumeDemoAccessTokenResponse
+        return Task.FromResult<Result>(new ConsumeDemoAccessTokenResponse
         {
             IsAuthenticated = true,
             Subject = userContext.User.FindFirst("sub")?.Value,

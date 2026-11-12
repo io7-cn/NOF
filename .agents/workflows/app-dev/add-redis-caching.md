@@ -46,7 +46,7 @@ public sealed record OrderCacheKey(long OrderId)
 public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
     : OrderService.GetOrder
 {
-    public override async Task<Result<OrderDto>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
         var cached = await cache.GetAsync(key, cancellationToken);
         if (cached.HasValue)
         {
-            return Result.Success(cached.Value);
+            return cached.Value;
         }
 
         var order = await dbContext.Set<Order>()
@@ -63,12 +63,12 @@ public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
             .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
         if (order is null)
         {
-            return Result.Fail("404", "Order not found");
+            return new NotFound("Order not found");
         }
 
         var dto = new OrderDto(order.Id, order.Status);
         await cache.SetAsync(key, dto, cancellationToken: cancellationToken);
-        return Result.Success(dto);
+        return dto;
     }
 }
 ```

@@ -11,6 +11,17 @@ namespace NOF.Contract.Tests;
 public sealed class PureServiceContractTests
 {
     [Fact]
+    public void ContractSurface_DoesNotExposeGenericResultsOrTransportConvenienceExtensions()
+    {
+        var assembly = typeof(IApplicationService).Assembly;
+        Assert.Null(assembly.GetType("NOF.Contract.Result"));
+        Assert.Null(assembly.GetType("NOF.Contract.Result`1"));
+        Assert.Null(assembly.GetType("NOF.Contract.ResultJsonTypeClassifier"));
+        Assert.Null(assembly.GetType("NOF.Contract.ContextExtensions"));
+        Assert.Null(assembly.GetType("System.Collections.Generic.DictionaryExtensions"));
+    }
+
+    [Fact]
     public async Task PlainContract_AllowsConstructedRequestsAndNullableBusinessResponses()
     {
         const string source = """
@@ -21,7 +32,7 @@ public sealed class PureServiceContractTests
             public interface IService : IApplicationService
             {
                 Dto? Find(Query request);
-                Result<Dto> Save(Query request);
+                NOF.Testing.TestOutcome<Dto> Save(Query request);
             }
             """;
         Assert.Empty(await DiagnoseAsync(source));

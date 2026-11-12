@@ -140,11 +140,11 @@ public sealed class AuthenticationExtensionsTests
     {
         var tokenService = new TestTokenService
         {
-            IntrospectTokenResult = Result.Success(new IntrospectTokenResponse
+            IntrospectTokenResult = new IntrospectTokenResponse
             {
                 Active = true,
                 Claims = [new TokenClaim(OAuthClaimTypes.Scope, "openid profile")]
-            })
+            }
         };
         var handler = new DefaultOAuthInitialAccessTokenHandler(
             tokenService,
@@ -158,11 +158,11 @@ public sealed class AuthenticationExtensionsTests
         httpContext.Request.Headers.Authorization = "Bearer initial-access-token";
 
         var rejected = await handler.HandleAsync(httpContext.Request, CancellationToken.None);
-        tokenService.IntrospectTokenResult = Result.Success(new IntrospectTokenResponse
+        tokenService.IntrospectTokenResult = new IntrospectTokenResponse
         {
             Active = true,
             Claims = [new TokenClaim(OAuthClaimTypes.Scope, $"openid {OAuthScope.ClientRegistration}")]
-        });
+        };
         var accepted = await handler.HandleAsync(httpContext.Request, CancellationToken.None);
 
         Assert.NotNull(missing.ExpectFailure());
@@ -726,7 +726,7 @@ public sealed class AuthenticationExtensionsTests
         };
         var tokenService = new TestTokenService
         {
-            ValidateRefreshTokenResult = Result.Success(new ValidateRefreshTokenResponse
+            ValidateRefreshTokenResult = new ValidateRefreshTokenResponse
             {
                 TokenId = "refresh-token-id",
                 Claims =
@@ -735,7 +735,7 @@ public sealed class AuthenticationExtensionsTests
                     new TokenClaim(OAuthClaimTypes.Scope, "jobs.read"),
                     new TokenClaim(OAuthClaimTypes.ClientId, "other-client")
                 ]
-            })
+            }
         };
 
         var result = await Microsoft.AspNetCore.Routing.NOFOidcServerExtensions.TokenFromRefreshTokenAsync(
@@ -786,7 +786,7 @@ public sealed class AuthenticationExtensionsTests
         };
         var tokenService = new TestTokenService
         {
-            ValidateRefreshTokenResult = Result.Success(new ValidateRefreshTokenResponse
+            ValidateRefreshTokenResult = new ValidateRefreshTokenResponse
             {
                 TokenId = "refresh-token-id",
                 Claims =
@@ -795,7 +795,7 @@ public sealed class AuthenticationExtensionsTests
                     new TokenClaim(OAuthClaimTypes.Scope, "jobs.read offline_access"),
                     new TokenClaim(OAuthClaimTypes.ClientId, "service-a")
                 ]
-            })
+            }
         };
 
         var result = await Microsoft.AspNetCore.Routing.NOFOidcServerExtensions.TokenFromRefreshTokenAsync(
@@ -847,7 +847,7 @@ public sealed class AuthenticationExtensionsTests
         };
         var tokenService = new TestTokenService
         {
-            ValidateRefreshTokenResult = Result.Success(new ValidateRefreshTokenResponse
+            ValidateRefreshTokenResult = new ValidateRefreshTokenResponse
             {
                 TokenId = "refresh-token-id",
                 Claims =
@@ -856,7 +856,7 @@ public sealed class AuthenticationExtensionsTests
                     new TokenClaim(OAuthClaimTypes.Scope, "jobs.read"),
                     new TokenClaim(OAuthClaimTypes.ClientId, "service-a")
                 ]
-            })
+            }
         };
 
         var result = await Microsoft.AspNetCore.Routing.NOFOidcServerExtensions.TokenFromRefreshTokenAsync(
@@ -906,7 +906,7 @@ public sealed class AuthenticationExtensionsTests
         };
         var tokenService = new TestTokenService
         {
-            ValidateRefreshTokenResult = Result.Success(new ValidateRefreshTokenResponse
+            ValidateRefreshTokenResult = new ValidateRefreshTokenResponse
             {
                 TokenId = "refresh-token-id",
                 Claims =
@@ -915,7 +915,7 @@ public sealed class AuthenticationExtensionsTests
                     new TokenClaim(OAuthClaimTypes.Scope, "jobs.read offline_access"),
                     new TokenClaim(OAuthClaimTypes.ClientId, "public-app")
                 ]
-            })
+            }
         };
 
         var result = await Microsoft.AspNetCore.Routing.NOFOidcServerExtensions.TokenFromRefreshTokenAsync(
@@ -1875,11 +1875,11 @@ public sealed class AuthenticationExtensionsTests
 
     private sealed class AnonymousInitialAccessTokenHandler : IOAuthInitialAccessTokenHandler
     {
-        public Task<Result> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+        public Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
         {
             _ = request;
             _ = cancellationToken;
-            return Task.FromResult(Result.Success());
+            return Task.FromResult<OAuthMutation>(Empty.Instance);
         }
     }
 
@@ -1905,11 +1905,11 @@ public sealed class AuthenticationExtensionsTests
         public Task<IReadOnlyList<OAuthClientDescriptor>> ListAsync(CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<Result<OAuthClientDescriptor>> GetAsync(string clientId, CancellationToken cancellationToken = default)
+        public Task<OAuthClientLookup> GetAsync(string clientId, CancellationToken cancellationToken = default)
         {
             if (string.Equals(clientId, "service-a", StringComparison.Ordinal))
             {
-                return Task.FromResult(Result.Success(new OAuthClientDescriptor
+                return Task.FromResult<OAuthClientLookup>(new OAuthClientDescriptor
                 {
                     ClientId = "service-a",
                     DisplayName = "Service A",
@@ -1920,12 +1920,12 @@ public sealed class AuthenticationExtensionsTests
                     IsEnabled = true,
                     CreatedAtUtc = DateTime.UtcNow,
                     UpdatedAtUtc = DateTime.UtcNow
-                }));
+                });
             }
 
             if (string.Equals(clientId, "public-app", StringComparison.Ordinal))
             {
-                return Task.FromResult(Result.Success(new OAuthClientDescriptor
+                return Task.FromResult<OAuthClientLookup>(new OAuthClientDescriptor
                 {
                     ClientId = "public-app",
                     DisplayName = "Public App",
@@ -1936,12 +1936,12 @@ public sealed class AuthenticationExtensionsTests
                     IsEnabled = true,
                     CreatedAtUtc = DateTime.UtcNow,
                     UpdatedAtUtc = DateTime.UtcNow
-                }));
+                });
             }
 
             if (string.Equals(clientId, "multi-redirect-app", StringComparison.Ordinal))
             {
-                return Task.FromResult(Result.Success(new OAuthClientDescriptor
+                return Task.FromResult<OAuthClientLookup>(new OAuthClientDescriptor
                 {
                     ClientId = "multi-redirect-app",
                     DisplayName = "Multi Redirect App",
@@ -1952,22 +1952,22 @@ public sealed class AuthenticationExtensionsTests
                     IsEnabled = true,
                     CreatedAtUtc = DateTime.UtcNow,
                     UpdatedAtUtc = DateTime.UtcNow
-                }));
+                });
             }
 
-            return Task.FromResult<Result<OAuthClientDescriptor>>(Result.Fail("not_found", "OAuth client was not found."));
+            return Task.FromResult<OAuthClientLookup>(NOF.Testing.TestOutcome.Fail("not_found", "OAuth client was not found."));
         }
 
-        public Task<Result<OAuthClientSecretDescriptor>> CreateAsync(CreateOAuthClientRequest request, CancellationToken cancellationToken = default)
+        public Task<OAuthClientSecret> CreateAsync(CreateOAuthClientRequest request, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<Result<OAuthClientDescriptor>> UpdateAsync(string clientId, UpdateOAuthClientRequest request, CancellationToken cancellationToken = default)
+        public Task<OAuthClientLookup> UpdateAsync(string clientId, UpdateOAuthClientRequest request, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<Result<OAuthClientSecretDescriptor>> RotateSecretAsync(string clientId, CancellationToken cancellationToken = default)
+        public Task<OAuthClientSecret> RotateSecretAsync(string clientId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<Result> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
+        public Task<OAuthMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 
@@ -1975,16 +1975,16 @@ public sealed class AuthenticationExtensionsTests
     {
         public IssueTokenRequest? LastRequest { get; private set; }
         public RevokeRefreshTokenRequest? LastRevokeRequest { get; private set; }
-        public Result<ValidateRefreshTokenResponse> ValidateRefreshTokenResult { get; set; }
-            = Result.Fail("401", "Refresh token is invalid.");
-        public Result RevokeRefreshTokenResult { get; set; } = Result.Success();
-        public Result<IntrospectTokenResponse> IntrospectTokenResult { get; set; }
-            = Result.Success(new IntrospectTokenResponse { Active = false });
+        public RefreshTokenValidation ValidateRefreshTokenResult { get; set; }
+            = NOF.Testing.TestOutcome.Fail("401", "Refresh token is invalid.");
+        public OAuthMutation RevokeRefreshTokenResult { get; set; } = Empty.Instance;
+        public TokenIntrospection IntrospectTokenResult { get; set; }
+            = new IntrospectTokenResponse { Active = false };
 
-        public Task<Result<IssueTokenResponse>> IssueTokenAsync(IssueTokenRequest request, CancellationToken cancellationToken)
+        public Task<TokenIssuance> IssueTokenAsync(IssueTokenRequest request, CancellationToken cancellationToken)
         {
             LastRequest = request;
-            return Task.FromResult(Result.Success(new IssueTokenResponse
+            return Task.FromResult<TokenIssuance>(new IssueTokenResponse
             {
                 AccessToken = "access-token",
                 AccessTokenExpiresAtUtc = DateTime.UtcNow.Add(request.AccessTokenExpiration),
@@ -1995,19 +1995,19 @@ public sealed class AuthenticationExtensionsTests
                         Token = "refresh-token-issued",
                         ExpiresAtUtc = DateTime.UtcNow.Add(request.RefreshToken.Expiration)
                     }
-            }));
+            });
         }
 
-        public Task<Result<ValidateRefreshTokenResponse>> ValidateRefreshTokenAsync(ValidateRefreshTokenRequest request, CancellationToken cancellationToken)
+        public Task<RefreshTokenValidation> ValidateRefreshTokenAsync(ValidateRefreshTokenRequest request, CancellationToken cancellationToken)
             => Task.FromResult(ValidateRefreshTokenResult);
 
-        public Task<Result> RevokeRefreshTokenAsync(RevokeRefreshTokenRequest request, CancellationToken cancellationToken)
+        public Task<OAuthMutation> RevokeRefreshTokenAsync(RevokeRefreshTokenRequest request, CancellationToken cancellationToken)
         {
             LastRevokeRequest = request;
             return Task.FromResult(RevokeRefreshTokenResult);
         }
 
-        public Task<Result<IntrospectTokenResponse>> IntrospectTokenAsync(IntrospectTokenRequest request, CancellationToken cancellationToken)
+        public Task<TokenIntrospection> IntrospectTokenAsync(IntrospectTokenRequest request, CancellationToken cancellationToken)
             => Task.FromResult(IntrospectTokenResult);
     }
 

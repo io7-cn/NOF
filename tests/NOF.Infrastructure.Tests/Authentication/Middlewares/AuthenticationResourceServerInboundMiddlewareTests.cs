@@ -290,7 +290,7 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
             HandlerType = typeof(object),
             HandlerMethodInfo = serviceMethod,
             RequestType = typeof(object),
-            ResponseType = typeof(Result)
+            ResponseType = typeof(NOF.Testing.TestOutcome)
         };
     }
 

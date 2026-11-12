@@ -22,11 +22,11 @@ public sealed class HostTenantInboundMiddlewareTests
         using var provider = CreateProvider(authenticated: true);
         using var scope = provider.CreateScope();
         var pipeline = scope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>();
-        var result = await pipeline.ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(Result),
+        var result = await pipeline.ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(NOF.Testing.TestOutcome),
             typeof(IHostTenantTestService), method,
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "untrusted")], default);
 
-        Assert.IsType<Empty>(Assert.IsType<Result>(result.Response).Value);
+        Assert.IsType<Empty>(Assert.IsType<NOF.Testing.TestOutcome>(result.Response).Value);
         var probe = provider.GetRequiredService<TenantProbe>();
         Assert.Equal(expectedTenant, probe.DependencyTenant);
         Assert.Equal(expectedTenant, probe.HandlerTenant);
@@ -40,7 +40,7 @@ public sealed class HostTenantInboundMiddlewareTests
         using var provider = CreateProvider(authenticated: false);
         using var scope = provider.CreateScope();
         var result = await scope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>()
-            .ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(Result), typeof(IHostTenantTestService),
+            .ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(NOF.Testing.TestOutcome), typeof(IHostTenantTestService),
                 nameof(IHostTenantTestService.Host), null, default);
 
         Assert.Equal("401", Assert.IsType<Failure>(result.Rejection).Code);
@@ -56,7 +56,7 @@ public sealed class HostTenantInboundMiddlewareTests
         var result = await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(scope.ServiceProvider,
             typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!, new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
-        Assert.IsType<Empty>(result.Require<Result>(Result.CreateFailure).Value);
+        Assert.IsType<Empty>(result.Require<NOF.Testing.TestOutcome>(NOF.Testing.TestOutcome.CreateFailure).Value);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
         Assert.Equal("caller", Context.Current.TenantId);
 
@@ -95,15 +95,15 @@ public interface IHostTenantTestService : IApplicationService
 {
     [UseHostTenant]
     [RequirePermission]
-    Result Host(Empty request);
+    NOF.Testing.TestOutcome Host(Empty request);
 
     [Metadata("NOF.TENANT.USE_HOST", "true")]
-    Result MetadataHost(Empty request);
+    NOF.Testing.TestOutcome MetadataHost(Empty request);
 
-    Result Regular(Empty request);
+    NOF.Testing.TestOutcome Regular(Empty request);
 
     [Metadata(UseHostTenantAttribute.MetadataKey, "false")]
-    Result Disabled(Empty request);
+    NOF.Testing.TestOutcome Disabled(Empty request);
 }
 
 
@@ -121,7 +121,7 @@ public sealed class TenantDependency
     public string TenantId { get; } = Context.Current.TenantId;
 }
 
-public sealed class TenantProbeHandler : ServiceOperation<Empty, Result>
+public sealed class TenantProbeHandler : ServiceOperation<Empty, NOF.Testing.TestOutcome>
 {
     private readonly TenantProbe _probe;
 
@@ -131,7 +131,7 @@ public sealed class TenantProbeHandler : ServiceOperation<Empty, Result>
         probe.DependencyTenant = dependency.TenantId;
     }
 
-    public override Task<Result> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+    public override Task<NOF.Testing.TestOutcome> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
     {
         _probe.HandlerTenant = context.TenantId;
         _probe.AmbientTenant = Context.Current.TenantId;
@@ -140,7 +140,7 @@ public sealed class TenantProbeHandler : ServiceOperation<Empty, Result>
             throw new InvalidOperationException("Simulated handler failure.");
         }
 
-        return Task.FromResult(Result.Success());
+        return Task.FromResult(NOF.Testing.TestOutcome.Success());
     }
 }
 
@@ -149,7 +149,7 @@ public sealed class HostTenantTestServer : ApplicationService<IHostTenantTestSer
     private static readonly IReadOnlyDictionary<string, ServiceOperationMapping> _mappings =
         new Dictionary<string, ServiceOperationMapping>
         {
-            [nameof(IHostTenantTestService.Host)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(Result))
+            [nameof(IHostTenantTestService.Host)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome))
         };
 
     protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => _mappings;

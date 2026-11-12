@@ -37,7 +37,7 @@ public sealed class ApplicationServiceAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor VoidReturnNotSupported = new(
         "NOF209",
         "Void return is not supported",
-        "Method '{0}' on service interface '{1}' must not return void. Return a business value, such as Result when no payload is needed.",
+        "Method '{0}' on service interface '{1}' must not return void. Return a business value, such as Empty when no payload is needed.",
         "RpcService",
         DiagnosticSeverity.Error,
         true);

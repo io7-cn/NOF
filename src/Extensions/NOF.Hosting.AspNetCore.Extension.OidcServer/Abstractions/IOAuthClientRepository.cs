@@ -10,20 +10,20 @@ public interface IOAuthClientRepository
 
     Task<IReadOnlyList<OAuthClientDescriptor>> ListAsync(CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientDescriptor>> GetAsync(string clientId, CancellationToken cancellationToken = default);
+    Task<OAuthClientLookup> GetAsync(string clientId, CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientSecretDescriptor>> CreateAsync(
+    Task<OAuthClientSecret> CreateAsync(
         CreateOAuthClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientDescriptor>> UpdateAsync(
+    Task<OAuthClientLookup> UpdateAsync(
         string clientId,
         UpdateOAuthClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<Result<OAuthClientSecretDescriptor>> RotateSecretAsync(
+    Task<OAuthClientSecret> RotateSecretAsync(
         string clientId,
         CancellationToken cancellationToken = default);
 
-    Task<Result> DeleteAsync(string clientId, CancellationToken cancellationToken = default);
+    Task<OAuthMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default);
 }

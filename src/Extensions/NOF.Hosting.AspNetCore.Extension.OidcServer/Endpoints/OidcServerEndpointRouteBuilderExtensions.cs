@@ -281,7 +281,7 @@ public static partial class NOFOidcServerExtensions
         CancellationToken cancellationToken)
         => await endpoint.DeleteAsync(httpRequest, clientId, cancellationToken).ConfigureAwait(false);
 
-    internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromAuthorizationCodeAsync(
+    internal static async Task<OAuthTokenGrant> TokenFromAuthorizationCodeAsync(
         HttpRequest httpRequest,
         OAuthTokenRequest request,
         IServiceProvider serviceProvider,
@@ -323,7 +323,7 @@ public static partial class NOFOidcServerExtensions
                 return Fail("invalid_grant", "authorization code is invalid or expired.");
             }
 
-            return Result.Success(redeemed.Value.Response);
+            return redeemed.Value.Response;
         }
 
         if (authorizationCode.ExpiresAtUtc <= DateTime.UtcNow)
@@ -394,10 +394,10 @@ public static partial class NOFOidcServerExtensions
             },
             cancellationToken).ConfigureAwait(false);
 
-        return Result.Success(response);
+        return response;
     }
 
-    internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromRefreshTokenAsync(
+    internal static async Task<OAuthTokenGrant> TokenFromRefreshTokenAsync(
         HttpRequest httpRequest,
         OAuthTokenRequest request,
         IServiceProvider serviceProvider,
@@ -499,10 +499,10 @@ public static partial class NOFOidcServerExtensions
 
         return response is null
             ? Fail("invalid_grant", "refresh token subject is invalid.")
-            : Result.Success(response);
+            : response;
     }
 
-    internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromDeviceCodeAsync(
+    internal static async Task<OAuthTokenGrant> TokenFromDeviceCodeAsync(
         HttpRequest httpRequest,
         OAuthTokenRequest request,
         IServiceProvider serviceProvider,
@@ -561,7 +561,7 @@ public static partial class NOFOidcServerExtensions
             .ConfigureAwait(false);
     }
 
-    internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromTokenExchangeAsync(
+    internal static async Task<OAuthTokenGrant> TokenFromTokenExchangeAsync(
         HttpRequest httpRequest,
         OAuthTokenRequest request,
         IServiceProvider serviceProvider,
@@ -685,7 +685,7 @@ public static partial class NOFOidcServerExtensions
             null => Fail("server_error", "The token exchange handler returned an uninitialized result.")
         };
 
-        async Task<Result<OAuthTokenEndpointResponse>> IssueExchangedTokenAsync(OAuthTokenExchangeResult.Success success)
+        async Task<OAuthTokenGrant> IssueExchangedTokenAsync(OAuthTokenExchangeResult.Success success)
         {
             var response = await IssueTokenResponseAsync(
                 subjectService,
@@ -703,10 +703,10 @@ public static partial class NOFOidcServerExtensions
 
             return response is null
                 ? Fail("invalid_grant", "subject_token subject is invalid.")
-                : Result.Success(response);
+                : response;
         }
     }
-    internal static async Task<Result<OAuthTokenEndpointResponse>> TokenFromClientCredentialsAsync(
+    internal static async Task<OAuthTokenGrant> TokenFromClientCredentialsAsync(
         HttpRequest httpRequest,
         OAuthTokenRequest request,
         IServiceProvider serviceProvider,
@@ -789,13 +789,13 @@ public static partial class NOFOidcServerExtensions
             return Fail(issueResultFailure.Code, issueResultFailure.Message);
         }
 
-        return Result.Success(new OAuthTokenEndpointResponse
+        return new OAuthTokenEndpointResponse
         {
             AccessToken = issueResultSuccess.AccessToken,
             TokenType = "Bearer",
             ExpiresIn = (long)oauthOptions.AccessTokenExpiration.TotalSeconds,
             Scope = scopeText
-        });
+        };
     }
 
     internal static async ValueTask<ClaimsPrincipal?> ValidateAccessTokenAsync(
@@ -1015,8 +1015,8 @@ public static partial class NOFOidcServerExtensions
             },
             statusCode: statusCode);
 
-    internal static Result<OAuthTokenEndpointResponse> Fail(string code, string message)
-        => Result.Fail(code, message);
+    internal static OAuthTokenGrant Fail(string code, string message)
+        => new global::NOF.Abstraction.Failure(code, message);
 
     private static TService? ResolveService<TService>(IServiceProvider serviceProvider)
     {

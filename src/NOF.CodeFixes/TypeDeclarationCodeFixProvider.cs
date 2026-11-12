@@ -59,9 +59,9 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                 {
                     context.RegisterCodeFix(
                         CodeAction.Create(
-                            "Return NOF Result",
+                            "Return NOF Empty",
                             cancellationToken => ReplaceVoidReturnAsync(context.Document, method, cancellationToken),
-                            equivalenceKey: "ReturnNofResult"),
+                            equivalenceKey: "ReturnNofEmpty"),
                         diagnostic);
                 }
                 break;
@@ -264,7 +264,7 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
             document,
             method,
             method.WithReturnType(
-                SyntaxFactory.ParseTypeName("global::NOF.Contract.Result")
+                SyntaxFactory.ParseTypeName("global::NOF.Contract.Empty")
                     .WithTriviaFrom(method.ReturnType)
                     .WithAdditionalAnnotations(Formatter.Annotation)),
             cancellationToken);

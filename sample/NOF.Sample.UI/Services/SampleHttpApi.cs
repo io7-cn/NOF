@@ -13,38 +13,38 @@ public abstract class SampleHttpApi(HttpClient httpClient)
 {
     public static readonly HttpRequestOptionsKey<Context> ContextKey = new("NOF.Sample.ExecutionContext");
 
-    protected Task<Result> SendCommandAsync<TRequest>(HttpMethod method, string uri,
+    protected Task<UiResponse> SendCommandAsync<TRequest>(HttpMethod method, string uri,
         TRequest request, Context context, CancellationToken ct)
         => SendAsync(method, uri, request, context, static async (response, token) =>
-            response.IsSuccessStatusCode ? Result.Success()
-                : (Result)await ReadProblemAsync(response, token), ct);
+            response.IsSuccessStatusCode ? Empty.Instance
+                : (UiResponse)await ReadProblemAsync(response, token), ct);
 
-    protected Task<Result<TPayload>> SendResourceAsync<TRequest, TPayload>(HttpMethod method, string uri,
+    protected Task<UiResponse<TPayload>> SendResourceAsync<TRequest, TPayload>(HttpMethod method, string uri,
         TRequest request, Context context, CancellationToken ct)
         => SendAsync(method, uri, request, context, static async (response, token) =>
             response.IsSuccessStatusCode
-                ? (Result<TPayload>)await ReadResourceAsync<TPayload>(response, token)
-                : (Result<TPayload>)await ReadProblemAsync(response, token), ct);
+                ? (UiResponse<TPayload>)await ReadResourceAsync<TPayload>(response, token)
+                : (UiResponse<TPayload>)await ReadProblemAsync(response, token), ct);
 
     protected Task<TResponse> SendValueAsync<TRequest, TResponse>(
         HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct)
         => SendAsync(method, uri, request, context,
             static (response, token) => ReadResourceAsync<TResponse>(response, token), ct);
 
-    protected Task<Result<IAsyncEnumerable<TItem>>> SendStreamAsync<TRequest, TItem>(
+    protected Task<UiResponse<IAsyncEnumerable<TItem>>> SendStreamAsync<TRequest, TItem>(
         HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct)
         => SendAsync(method, uri, request, context,
             static async (response, token) =>
             {
                 if (response.IsSuccessStatusCode && response.Content.Headers.ContentType?.MediaType == "text/event-stream")
                 {
-                    return Result.Stream(ReadEventsAsync<TItem>(response, token));
+                    return (UiResponse<IAsyncEnumerable<TItem>>)ReadEventsAsync<TItem>(response, token);
                 }
                 if (response.IsSuccessStatusCode)
                 {
                     throw new InvalidOperationException("Expected a native SSE response.");
                 }
-                return await ReadProblemAsync(response, token);
+                return (UiResponse<IAsyncEnumerable<TItem>>)await ReadProblemAsync(response, token);
             }, ct, streaming: true);
 
     private static async Task<T> ReadResourceAsync<T>(HttpResponseMessage response, CancellationToken ct)

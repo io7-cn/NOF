@@ -201,7 +201,7 @@ public sealed class TracingInboundMiddleware(
                 requestName,
                 handlerName,
                 domainException.Message);
-            context.Reject(Result.Fail(domainException.ErrorCode, domainException.Message));
+            context.Reject(new global::NOF.Abstraction.Failure(domainException.ErrorCode, domainException.Message));
             return;
         }
 
@@ -211,6 +211,6 @@ public sealed class TracingInboundMiddleware(
             requestName,
             handlerName,
             exception.Message);
-        context.Reject(Result.Fail("500", "Internal server error"));
+        context.Reject(new global::NOF.Abstraction.Failure("500", "Internal server error"));
     }
 }

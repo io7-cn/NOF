@@ -33,21 +33,22 @@ await app.RunAsync();
 using NOF.Application;
 using NOF.Contract;
 
-public interface IOrderService : IApplicationService
+public partial interface IOrderService : IApplicationService
 {
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
+    [FailureCase("NotFound", "404")]
+    GetOrderResponse GetOrder(GetOrderRequest request);
 }
 
 public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
-    public override Task<Result<GetOrderResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "sample")));
+        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "sample"));
     }
 }
 ```
@@ -60,7 +61,7 @@ public static partial class Mappings;
 
 public sealed class GetOrder(IDbContext dbContext) : OrderService.GetOrder
 {
-    public override async Task<Result<GetOrderResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
@@ -72,8 +73,8 @@ public sealed class GetOrder(IDbContext dbContext) : OrderService.GetOrder
             .FirstOrDefaultAsync(cancellationToken);
 
         return response is null
-            ? Result.Fail("404", "Order not found")
-            : Result.Success(response);
+            ? new NotFound("Order not found")
+            : response;
     }
 }
 ```

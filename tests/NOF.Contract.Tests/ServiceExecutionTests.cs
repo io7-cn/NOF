@@ -14,9 +14,9 @@ public class ServiceExecutionTests
         var dto = new Reply("read");
         ServiceExecution completed = new ServiceCompleted(dto);
         Assert.Same(dto, completed.Require<Reply>());
-        completed = new ServiceCompleted(Result.Success());
-        Assert.Same(Empty.Instance, completed.Require<Result>().Value);
-        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result))).Require<Result>());
+        completed = new ServiceCompleted(NOF.Testing.TestOutcome.Success());
+        Assert.Same(Empty.Instance, completed.Require<NOF.Testing.TestOutcome>().Value);
+        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(NOF.Testing.TestOutcome))).Require<NOF.Testing.TestOutcome>());
         var failure = new Failure("business.closed", "Closed");
         completed = new ServiceCompleted(failure);
         Assert.Same(failure, completed.Require<Failure>());
@@ -40,12 +40,12 @@ public class ServiceExecutionTests
         var failure = new Failure("403", "Forbidden");
         ServiceExecution rejected = new ServiceRejected(failure);
         Assert.Same(failure, Assert.Throws<ServiceRejectedException>(() => rejected.Require<Reply>()).Failure);
-        Assert.Same(failure, Assert.Throws<ServiceRejectedException>(() => rejected.Require<Result<Reply>>()).Failure);
-        Assert.Same(failure, rejected.Require<Result<Reply>>(Result<Reply>.CreateFailure).Value);
-        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result<Reply>)))
-            .Require<Result<Reply>>(Result<Reply>.CreateFailure));
-        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(Result<Reply>)))
-            .Require<Result<Reply>>());
+        Assert.Same(failure, Assert.Throws<ServiceRejectedException>(() => rejected.Require<NOF.Testing.TestOutcome<Reply>>()).Failure);
+        Assert.Same(failure, rejected.Require<NOF.Testing.TestOutcome<Reply>>(NOF.Testing.TestOutcome<Reply>.CreateFailure).Value);
+        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(NOF.Testing.TestOutcome<Reply>)))
+            .Require<NOF.Testing.TestOutcome<Reply>>(NOF.Testing.TestOutcome<Reply>.CreateFailure));
+        Assert.Throws<InvalidOperationException>(() => ((ServiceExecution)new ServiceCompleted(default(NOF.Testing.TestOutcome<Reply>)))
+            .Require<NOF.Testing.TestOutcome<Reply>>());
     }
 
     public sealed record Reply(string Value);

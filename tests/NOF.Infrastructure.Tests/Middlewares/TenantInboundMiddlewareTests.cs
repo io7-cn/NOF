@@ -32,9 +32,7 @@ public class TenantInboundMiddlewareTests
         var middleware = new TenantInboundMiddleware();
         var message = new object();
         var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
-            .CopyHeadersFrom([
-                new KeyValuePair<string, string?>(NOFAbstractionConstants.Transport.Headers.TenantId, "tenanta")
-            ]);
+            .WithItem(NOFAbstractionConstants.Transport.Headers.TenantId, "tenanta");
         var tenantDuringNext = string.Empty;
 
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
@@ -55,9 +53,7 @@ public class TenantInboundMiddlewareTests
         var middleware = new TenantInboundMiddleware();
         var message = new object();
         var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
-            .CopyHeadersFrom([
-                new KeyValuePair<string, string?>("x-tenant-id", "tenanta")
-            ]);
+            .WithItem("x-tenant-id", "tenanta");
         var tenantDuringNext = string.Empty;
 
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);

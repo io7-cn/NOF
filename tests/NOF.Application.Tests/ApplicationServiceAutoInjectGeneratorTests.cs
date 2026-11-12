@@ -27,15 +27,15 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
                 public partial interface IMyService : IApplicationService
                 {
-                    Result Ping(PingRequest request);
+                    NOF.Testing.TestOutcome Ping(PingRequest request);
                 }
 
                 public partial class MyService : ApplicationService<IMyService>;
 
                 public sealed class PingHandler : MyService.Ping
                 {
-                    public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
-                        => Task.FromResult(Result.Success());
+                    public override Task<NOF.Testing.TestOutcome> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                        => Task.FromResult(NOF.Testing.TestOutcome.Success());
                 }
             }
             """;
@@ -45,8 +45,8 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(ServiceOperation<,>),
             typeof(IApplicationService),
             typeof(Context),
-            typeof(Result),
-            typeof(Result<>),
+            typeof(NOF.Testing.TestOutcome),
+            typeof(NOF.Testing.TestOutcome<>),
             typeof(ServiceDescriptor),
             typeof(AssemblyInitializeAttribute),
             typeof(ApplicationServiceRegistration),
@@ -80,7 +80,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             {
                 public partial interface IMyService : IApplicationService
                 {
-                    Result Run(RunRequest request);
+                    NOF.Testing.TestOutcome Run(RunRequest request);
                 }
 
                 public record RunRequest(string Value);
@@ -89,12 +89,12 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
                 public interface IUnrelated
                 {
-                    Result Run(RunRequest request);
+                    NOF.Testing.TestOutcome Run(RunRequest request);
                 }
 
                 public sealed class UnrelatedHandler : IUnrelated
                 {
-                    public Result Run(RunRequest request) => Result.Success();
+                    public NOF.Testing.TestOutcome Run(RunRequest request) => NOF.Testing.TestOutcome.Success();
                 }
             }
             """;
@@ -103,8 +103,8 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(ApplicationService<>),
             typeof(ServiceOperation<,>),
             typeof(IApplicationService),
-            typeof(Result),
-            typeof(Result<>),
+            typeof(NOF.Testing.TestOutcome),
+            typeof(NOF.Testing.TestOutcome<>),
             typeof(ServiceDescriptor),
             typeof(AssemblyInitializeAttribute),
             typeof(ApplicationServiceRegistration),
@@ -135,7 +135,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
             public interface IMyService : IApplicationService
             {
-                Result Ping(PingRequest request);
+                NOF.Testing.TestOutcome Ping(PingRequest request);
             }
 
             public partial class MyService : ApplicationService<IMyService>;
@@ -147,7 +147,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(ApplicationService<>),
             typeof(ServiceOperation<,>),
             typeof(IApplicationService),
-            typeof(Result),
+            typeof(NOF.Testing.TestOutcome),
             typeof(ServiceDescriptor),
             typeof(AssemblyInitializeAttribute),
             typeof(InitializedTypes));

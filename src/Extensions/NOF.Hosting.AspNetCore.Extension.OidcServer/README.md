@@ -88,8 +88,8 @@ using NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed class AnonymousClientRegistrationHandler : IOAuthInitialAccessTokenHandler
 {
-    public Task<Result> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success());
+    public Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+        => Task.FromResult<OAuthMutation>(Empty.Instance);
 }
 
 builder.Services.AddScoped<IOAuthInitialAccessTokenHandler, AnonymousClientRegistrationHandler>();
@@ -198,3 +198,7 @@ Device defaults are configurable with `DeviceCodeExpiration`, `DevicePollingInte
 ## License
 
 Apache-2.0
+
+OAuth protocol APIs return concrete native unions such as TokenIssuance, OAuthClientLookup
+and OAuthMutation. Application-service contracts use FailureCase. No generic Contract
+Result or replacement generic framework outcome is required.

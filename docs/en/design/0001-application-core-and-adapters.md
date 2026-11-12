@@ -168,3 +168,5 @@ tests, rather than speculative generality.
 - [DDD-oriented services](https://learn.microsoft.com/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/ddd-oriented-microservice)
 - [ASP.NET Core responses](https://learn.microsoft.com/aspnet/core/fundamentals/minimal-apis/responses)
 - [EF Core transactions](https://learn.microsoft.com/ef/core/saving/transactions)
+
+Update: generic Contract Result/Result<T> and header/dictionary convenience extensions have since been removed. Use the current [operation result migration](result-unions.md).

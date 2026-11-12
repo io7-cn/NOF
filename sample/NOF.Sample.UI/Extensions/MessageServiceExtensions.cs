@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Contract;
+using NOF.Sample.UI.Services;
 
 namespace AntDesign;
 
@@ -8,7 +9,7 @@ public static class NOFSampleWebUIExtensions
     extension(IMessageService messageService)
     {
         /// <summary>Displays a payload-free result's selected message.</summary>
-        public void ShowMessage(NOF.Contract.Result result, string? successMessage = null, bool showSuccess = false)
+        public void ShowMessage(UiResponse result, string? successMessage = null, bool showSuccess = false)
         {
             switch (result)
             {
@@ -27,7 +28,7 @@ public static class NOFSampleWebUIExtensions
         }
 
         /// <summary>Displays an error or caller-provided success message and returns the successful value.</summary>
-        public T? UnwrapWithMessage<T>(Result<T> result, string? successMessage = null, bool showSuccess = false)
+        public T? UnwrapWithMessage<T>(UiResponse<T> result, string? successMessage = null, bool showSuccess = false)
         {
             switch (result)
             {
@@ -46,7 +47,7 @@ public static class NOFSampleWebUIExtensions
         }
 
         /// <summary>Builds a message from a successful value.</summary>
-        public T? UnwrapWithMessage<T>(Result<T> result, Func<T, string> successMessageFactory, bool showSuccess = false)
+        public T? UnwrapWithMessage<T>(UiResponse<T> result, Func<T, string> successMessageFactory, bool showSuccess = false)
         {
             ArgumentNullException.ThrowIfNull(successMessageFactory);
             return messageService.UnwrapWithMessage(result,

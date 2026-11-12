@@ -100,3 +100,5 @@ describes coordinated deployment and rollback.
 - [Npgsql EF Core provider versions](https://www.nuget.org/packages/Npgsql.EntityFrameworkCore.PostgreSQL)
 
 Declared use cases can generate closed failure unions via [FailureCase](../en/design/expected-failures.md). The old Domain FailureAttribute/static-holder generator and failure-to-exception conversions are removed.
+
+Generic Contract Result/Result<T>, ResultJsonTypeClassifier, DictionaryExtensions and ContextExtensions are removed in the final API. See [operation-specific unions](../en/design/result-unions.md).

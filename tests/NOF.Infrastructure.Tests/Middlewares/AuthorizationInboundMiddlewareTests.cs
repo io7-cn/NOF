@@ -414,7 +414,7 @@ public sealed class AuthorizationInboundMiddlewareTests
             HandlerType = typeof(TestHandler),
             HandlerMethodInfo = handlerMethod,
             RequestType = typeof(TestRequest),
-            ResponseType = responseType ?? typeof(Result)
+            ResponseType = responseType ?? typeof(NOF.Testing.TestOutcome)
         };
     }
 

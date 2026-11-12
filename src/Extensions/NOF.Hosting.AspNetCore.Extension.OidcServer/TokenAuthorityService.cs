@@ -25,11 +25,11 @@ public sealed partial class TokenAuthorityService : ITokenService
         _options = options.Value;
     }
 
-    public async Task<Result<IssueTokenResponse>> IssueTokenAsync(IssueTokenRequest request, CancellationToken cancellationToken)
+    public async Task<TokenIssuance> IssueTokenAsync(IssueTokenRequest request, CancellationToken cancellationToken)
     {
         if (!TryCreateAccessClaims(request, out var accessClaims, out var accessClaimError))
         {
-            return Result.Fail("400", accessClaimError);
+            return new global::NOF.Abstraction.Failure("400", accessClaimError);
         }
 
         var now = DateTime.UtcNow;
@@ -74,15 +74,15 @@ public sealed partial class TokenAuthorityService : ITokenService
             };
         }
 
-        return Result.Success(new IssueTokenResponse
+        return new IssueTokenResponse
         {
             AccessToken = accessToken,
             AccessTokenExpiresAtUtc = accessTokenExpiresAtUtc,
             RefreshToken = refreshToken
-        });
+        };
     }
 
-    public async Task<Result<ValidateRefreshTokenResponse>> ValidateRefreshTokenAsync(
+    public async Task<RefreshTokenValidation> ValidateRefreshTokenAsync(
         ValidateRefreshTokenRequest request,
         CancellationToken cancellationToken)
     {
@@ -109,42 +109,42 @@ public sealed partial class TokenAuthorityService : ITokenService
 
             if (string.IsNullOrWhiteSpace(tokenId))
             {
-                return Result.Fail("400", "Invalid refresh token claims.");
+                return new global::NOF.Abstraction.Failure("400", "Invalid refresh token claims.");
             }
 
             if (await _revokedRefreshTokenRepository.IsRevokedAsync(tokenId, cancellationToken).ConfigureAwait(false))
             {
-                return Result.Fail("401", "Refresh token has been revoked.");
+                return new global::NOF.Abstraction.Failure("401", "Refresh token has been revoked.");
             }
 
-            return Result.Success(new ValidateRefreshTokenResponse
+            return new ValidateRefreshTokenResponse
             {
                 TokenId = tokenId,
                 Claims = ToTokenClaims(principal.Claims)
-            });
+            };
         }
         catch (Exception ex)
         {
-            return Result.Fail("401", ex.Message);
+            return new global::NOF.Abstraction.Failure("401", ex.Message);
         }
     }
 
-    public async Task<Result> RevokeRefreshTokenAsync(RevokeRefreshTokenRequest request, CancellationToken cancellationToken)
+    public async Task<OAuthMutation> RevokeRefreshTokenAsync(RevokeRefreshTokenRequest request, CancellationToken cancellationToken)
     {
         await _revokedRefreshTokenRepository
             .RevokeAsync(request.TokenId, request.Expiration, cancellationToken)
             .ConfigureAwait(false);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 
-    public async Task<Result<IntrospectTokenResponse>> IntrospectTokenAsync(
+    public async Task<TokenIntrospection> IntrospectTokenAsync(
         IntrospectTokenRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Token))
         {
-            return Result.Fail("400", "token is required.");
+            return new global::NOF.Abstraction.Failure("400", "token is required.");
         }
 
         var tokenTypeHint = request.TokenTypeHint?.Trim();
@@ -189,7 +189,7 @@ public sealed partial class TokenAuthorityService : ITokenService
         return CreateClaims(claims);
     }
 
-    private async Task<Result<IntrospectTokenResponse>> IntrospectAccessTokenAsync(
+    private async Task<TokenIntrospection> IntrospectAccessTokenAsync(
         IntrospectTokenRequest request,
         CancellationToken cancellationToken)
     {
@@ -217,14 +217,14 @@ public sealed partial class TokenAuthorityService : ITokenService
             if (validatedToken is not JwtSecurityToken jwt
                 || !string.Equals(jwt.Header.Typ, AccessTokenTypeHeader, StringComparison.OrdinalIgnoreCase))
             {
-                return Result.Success(new IntrospectTokenResponse
+                return new IntrospectTokenResponse
                 {
                     Active = false,
                     TokenType = OAuthTokenTypes.AccessToken
-                });
+                };
             }
 
-            return Result.Success(new IntrospectTokenResponse
+            return new IntrospectTokenResponse
             {
                 Active = true,
                 TokenType = OAuthTokenTypes.AccessToken,
@@ -232,19 +232,19 @@ public sealed partial class TokenAuthorityService : ITokenService
                     principal.Claims.Concat(
                         GetAudienceClaims(validatedToken)
                             .SelectMany(static claim => CreateClaims(claim))))
-            });
+            };
         }
         catch
         {
-            return Result.Success(new IntrospectTokenResponse
+            return new IntrospectTokenResponse
             {
                 Active = false,
                 TokenType = OAuthTokenTypes.AccessToken
-            });
+            };
         }
     }
 
-    private async Task<Result<IntrospectTokenResponse>> IntrospectRefreshTokenAsync(
+    private async Task<TokenIntrospection> IntrospectRefreshTokenAsync(
         IntrospectTokenRequest request,
         CancellationToken cancellationToken)
     {
@@ -257,19 +257,19 @@ public sealed partial class TokenAuthorityService : ITokenService
             cancellationToken).ConfigureAwait(false);
         if (validateResult is not ValidateRefreshTokenResponse validateResultSuccess)
         {
-            return Result.Success(new IntrospectTokenResponse
+            return new IntrospectTokenResponse
             {
                 Active = false,
                 TokenType = OAuthTokenTypes.RefreshToken
-            });
+            };
         }
 
-        return Result.Success(new IntrospectTokenResponse
+        return new IntrospectTokenResponse
         {
             Active = true,
             TokenType = OAuthTokenTypes.RefreshToken,
             Claims = validateResultSuccess.Claims
-        });
+        };
     }
 
     private static IEnumerable<TokenClaim> GetAudienceClaims(SecurityToken validatedToken)

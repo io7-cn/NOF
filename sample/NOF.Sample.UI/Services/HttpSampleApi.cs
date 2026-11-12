@@ -6,31 +6,31 @@ namespace NOF.Sample.UI.Services;
 /// <summary>Application-owned integration with the sample REST API.</summary>
 public sealed class HttpSampleApi(HttpClient httpClient) : SampleHttpApi(httpClient), ISampleApi
 {
-    public Task<Result> CreateConfigNodeAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> CreateConfigNodeAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Post, "./api/config-nodes", request, context, cancellationToken);
 
-    public Task<Result> DeleteConfigNodeAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> DeleteConfigNodeAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Delete, $"./api/config-nodes/{request.Id}", request, context, cancellationToken);
 
-    public Task<Result> AddOrUpdateConfigFileAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> AddOrUpdateConfigFileAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Put, $"./api/config-nodes/{request.NodeId}/files/{Uri.EscapeDataString(request.FileName)}",
             new FileBody(request.Content), context, cancellationToken);
 
-    public Task<Result> RemoveConfigFileAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> RemoveConfigFileAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Delete, $"./api/config-nodes/{request.NodeId}/files/{Uri.EscapeDataString(request.FileName)}",
             request, context, cancellationToken);
 
-    public Task<Result> SetActiveFileAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> SetActiveFileAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Put, $"./api/config-nodes/{request.NodeId}/active-file", new ActiveFileBody(request.FileName), context, cancellationToken);
 
-    public Task<Result> UpdateConfigNodeParentAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse> UpdateConfigNodeParentAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken = default)
         => SendCommandAsync(HttpMethod.Patch, $"./api/config-nodes/{request.NodeId}/parent", new ParentBody(request.NewParentId), context, cancellationToken);
 
-    public Task<Result<GetConfigNodeChildrenResponse>> GetConfigNodeChildrenAsync(GetConfigNodeChildrenRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse<GetConfigNodeChildrenResponse>> GetConfigNodeChildrenAsync(GetConfigNodeChildrenRequest request, Context context, CancellationToken cancellationToken = default)
         => SendResourceAsync<GetConfigNodeChildrenRequest, GetConfigNodeChildrenResponse>(HttpMethod.Get,
             $"./api/config-nodes/{request.Id}/children", request, context, cancellationToken);
 
-    public async Task<Result<GetConfigNodeByIdResponse>> GetConfigNodeByIdAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken = default)
+    public async Task<UiResponse<GetConfigNodeByIdResponse>> GetConfigNodeByIdAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken = default)
         => (await SendResourceAsync<GetConfigNodeByIdRequest, ConfigNodeDto>(HttpMethod.Get,
             $"./api/config-nodes/{request.Id}", request, context, cancellationToken)).Value switch
         {
@@ -46,11 +46,11 @@ public sealed class HttpSampleApi(HttpClient httpClient) : SampleHttpApi(httpCli
             "./api/config-nodes", request, context, cancellationToken)
         };
 
-    public Task<Result<GetConfigurationResponse>> GetConfigurationAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse<GetConfigurationResponse>> GetConfigurationAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken = default)
         => SendResourceAsync<GetConfigurationRequest, GetConfigurationResponse>(HttpMethod.Get,
             Query("./api/configuration", ("appName", request.AppName)), request, context, cancellationToken);
 
-    public Task<Result<IAsyncEnumerable<SampleStreamEvent>>> WatchSampleStreamAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken = default)
+    public Task<UiResponse<IAsyncEnumerable<SampleStreamEvent>>> WatchSampleStreamAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken = default)
         => SendStreamAsync<WatchSampleStreamRequest, SampleStreamEvent>(HttpMethod.Get,
             Query("./api/sample-events", ("topic", request.Topic), ("count", request.Count),
                 ("intervalMilliseconds", request.IntervalMilliseconds), ("forceFailure", request.ForceFailure)), request, context, cancellationToken);

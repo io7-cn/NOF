@@ -1,6 +1,6 @@
 namespace NOF.Contract;
 
-/// <summary>A page of query data; operation outcomes use Result&lt;Page&lt;T&gt;&gt;.</summary>
+/// <summary>A page of query data; operations may include it as a successful union case.</summary>
 /// <typeparam name="T">The item type.</typeparam>
 public sealed record Page<T>
 {

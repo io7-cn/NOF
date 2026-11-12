@@ -16,6 +16,9 @@ public sealed class OAuthChainDemoBackend(
     IOAuthClientRepository clientRepository,
     IOptions<OAuthAuthorizationServerOptions> authorizationServerOptions)
 {
+    public union ClientReply(CreateDemoOAuthClientResponse, Failure);
+    public union TokenReply(DemoTokenResponse, Failure);
+
     private static readonly string[] AllowedScopes = ["sample.read", "sample.write"];
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -23,7 +26,7 @@ public sealed class OAuthChainDemoBackend(
     private string TokenEndpoint => $"{Issuer}/token";
     private string AuthorizeEndpoint => $"{Issuer}/authorize";
 
-    public async Task<Result<CreateDemoOAuthClientResponse>> CreateClientAsync(
+    public async Task<ClientReply> CreateClientAsync(
         CreateDemoOAuthClientRequest request,
         CancellationToken cancellationToken)
     {
@@ -51,7 +54,7 @@ public sealed class OAuthChainDemoBackend(
 
         if (string.IsNullOrWhiteSpace(success.ClientSecret))
         {
-            return Result.Fail("500", "Created OAuth client did not return a client secret.");
+            return new global::NOF.Abstraction.Failure("500", "Created OAuth client did not return a client secret.");
         }
 
         return new CreateDemoOAuthClientResponse
@@ -62,7 +65,7 @@ public sealed class OAuthChainDemoBackend(
         };
     }
 
-    public async Task<Result<DemoTokenResponse>> GetClientTokenAsync(
+    public async Task<TokenReply> GetClientTokenAsync(
         GetDemoClientTokenRequest request,
         CancellationToken cancellationToken)
     {
@@ -79,7 +82,7 @@ public sealed class OAuthChainDemoBackend(
         return await SendTokenRequestAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<Result<DemoTokenResponse>> GetUserTokenAsync(CancellationToken cancellationToken)
+    public async Task<TokenReply> GetUserTokenAsync(CancellationToken cancellationToken)
     {
         var codeVerifier = CreateCodeVerifier();
         var codeChallenge = Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier)));
@@ -113,7 +116,7 @@ public sealed class OAuthChainDemoBackend(
         var redirectLocation = authorizeResponse.Headers.Location?.ToString();
         if (string.IsNullOrWhiteSpace(redirectLocation))
         {
-            return Result.Fail("500", "Authorization response did not contain redirect location.");
+            return new global::NOF.Abstraction.Failure("500", "Authorization response did not contain redirect location.");
         }
 
         var code = GetRequiredQueryValue(redirectLocation, "code");
@@ -132,7 +135,7 @@ public sealed class OAuthChainDemoBackend(
         return await SendTokenRequestAsync(tokenRequest, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<Result<DemoTokenResponse>> ExchangeTokenAsync(
+    public async Task<TokenReply> ExchangeTokenAsync(
         ExchangeDemoTokenRequest request,
         CancellationToken cancellationToken)
     {
@@ -154,7 +157,7 @@ public sealed class OAuthChainDemoBackend(
         return await SendTokenRequestAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<Result<DemoTokenResponse>> SendTokenRequestAsync(
+    private async Task<TokenReply> SendTokenRequestAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
@@ -168,7 +171,7 @@ public sealed class OAuthChainDemoBackend(
         var token = JsonSerializer.Deserialize<OAuthTokenResponseDocument>(payload, JsonOptions);
         if (token?.AccessToken is null)
         {
-            return Result.Fail("500", "Token response payload is invalid.");
+            return new global::NOF.Abstraction.Failure("500", "Token response payload is invalid.");
         }
 
         return new DemoTokenResponse
@@ -181,12 +184,12 @@ public sealed class OAuthChainDemoBackend(
         };
     }
 
-    private static async Task<Result<T>> CreateFailureAsync<T>(
+    private static async Task<Failure> CreateFailureAsync<T>(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
         var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Result.Fail(((int)response.StatusCode).ToString(), string.IsNullOrWhiteSpace(payload) ? response.ReasonPhrase ?? "Request failed." : payload);
+        return new global::NOF.Abstraction.Failure(((int)response.StatusCode).ToString(), string.IsNullOrWhiteSpace(payload) ? response.ReasonPhrase ?? "Request failed." : payload);
     }
 
     private static AuthenticationHeaderValue CreateBasicAuthorizationHeader(string clientId, string clientSecret)

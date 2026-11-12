@@ -54,9 +54,9 @@ var conflictData = new OrderConflict(id);
 Expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
     "Inherited constructor replaced error data");
 Expect(new ExpectedOrderService.Evaluate.Missing().ErrorCode == "404", "Inherited failure lost its declared ErrorCode");
-var savedJson = JsonSerializer.Serialize(Result.Success(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result>());
+var savedJson = JsonSerializer.Serialize(Empty.Instance, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>());
 Expect(savedJson == "{}", "Payload-free success serialized metadata");
-Expect(JsonSerializer.Deserialize(savedJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result>()) is Empty,
+Expect(JsonSerializer.Deserialize(savedJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>()) is Empty,
     "Payload-free union did not round-trip without reflection");
 using var update = await http.PutAsync($"/native/orders/{id}", new StringContent(
     $$"""{"id":"{{Guid.NewGuid()}}","state":"shipped"}""", Encoding.UTF8, "application/json"));
@@ -136,15 +136,15 @@ public sealed record UpdateBody
 }
 public interface IOrderService : IApplicationService
 {
-    Result<OrderDto> Update(UpdateOrderRequest request);
-    Result<OrderDto> Read(ReadOrderRequest request);
+    PlainDecision Update(UpdateOrderRequest request);
+    PlainDecision Read(ReadOrderRequest request);
     OrderDto ReadValue(ReadOrderRequest request);
     OrderDto Preview(ReadOrderRequest request);
     OrderDto? Find(ReadOrderRequest request);
     PlainDecision Decide(ReadOrderRequest request);
-    Result<OrderReadReceipt> ReadWithMessage(ReadOrderRequest request);
+    OrderReceipt ReadWithMessage(ReadOrderRequest request);
     [RequirePermission("order.read")]
-    Result<OrderDto> ReadProtected(ReadOrderRequest request);
+    PlainDecision ReadProtected(ReadOrderRequest request);
 }
 
 public sealed class UpdateOrderRequest
@@ -170,17 +170,17 @@ public partial class OrderServer : ApplicationService<IOrderService>;
 
 public sealed class UpdateOrderHandler : OrderServer.Update
 {
-    public override Task<Result<OrderDto>> HandleAsync(
+    public override Task<PlainDecision> HandleAsync(
         UpdateOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult<Result<OrderDto>>(request.Status == "fail"
-            ? Result.Fail("order.rejected", "Order rejected")
-            : Result.Success(new OrderDto(request.Id, request.Status, request.Label)));
+        => Task.FromResult<PlainDecision>(request.Status == "fail"
+            ? new Failure("order.rejected", "Order rejected")
+            : new OrderDto(request.Id, request.Status, request.Label));
 }
 
 public sealed class ReadOrderHandler : OrderServer.Read
 {
-    public override Task<Result<OrderDto>> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read")));
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
 }
 
 public sealed class ReadOrderValue : OrderServer.ReadValue
@@ -226,7 +226,6 @@ public interface IPlainOrderService : IApplicationService
     PlainDecision Decide(ReadOrderRequest request);
 }
 
-[JsonUnion(TypeClassifier = typeof(ResultJsonTypeClassifier))]
 public union PlainDecision(OrderDto, Failure);
 public partial class PlainOrderService : ApplicationService<IPlainOrderService>;
 
@@ -256,20 +255,20 @@ public sealed class DecideOrder : OrderServer.Decide
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
 {
-    public override Task<Result<OrderDto>> HandleAsync(
+    public override Task<PlainDecision> HandleAsync(
         ReadOrderRequest request, Context context, CancellationToken cancellationToken)
         => throw new InvalidOperationException("An anonymous request must not reach the protected handler");
 }
 
 public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 {
-    public override Task<Result<OrderReadReceipt>> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(new OrderReadReceipt(new OrderDto(request.Id, "cached", "read"), "Read from cache")));
+    public override Task<OrderReceipt> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderReceipt>(new OrderReadReceipt(new OrderDto(request.Id, "cached", "read"), "Read from cache"));
 }
 
 
 [JsonSerializable(typeof(NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
-[JsonSerializable(typeof(Result))]
+[JsonSerializable(typeof(Empty))]
 [JsonSerializable(typeof(OrderDto))]
 [JsonSerializable(typeof(UpdateBody))]
 [JsonSerializable(typeof(OrderReadReceipt))]
@@ -325,6 +324,8 @@ public sealed class SmokeEndpointModule : IHttpEndpointModule
     public static async Task<Ok<OrderDto>> ReadAsync(Guid id, int? page, HttpContext http, CancellationToken ct)
         => TypedResults.Ok(await http.InvokeAsync(OrderServer.ReadValue.Descriptor, new ReadOrderRequest { Id = id, Page = page }, ct));
 }
+
+public union OrderReceipt(OrderReadReceipt, Failure);
 
 public sealed record OrderConflict(Guid Id);
 public partial interface IExpectedOrderService : IApplicationService

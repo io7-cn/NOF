@@ -8,13 +8,13 @@ public sealed class DefaultOAuthInitialAccessTokenHandler(
     ITokenService tokenService,
     IOptions<OAuthAuthorizationServerOptions> options) : IOAuthInitialAccessTokenHandler
 {
-    public async Task<Result> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+    public async Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         if (!TryReadBearerToken(request, out var token))
         {
-            return Result.Fail("invalid_token", "an initial access token is required.");
+            return new global::NOF.Abstraction.Failure("invalid_token", "an initial access token is required.");
         }
 
         var introspection = await tokenService.IntrospectTokenAsync(
@@ -27,7 +27,7 @@ public sealed class DefaultOAuthInitialAccessTokenHandler(
             cancellationToken).ConfigureAwait(false);
         if (introspection is not IntrospectTokenResponse introspectionSuccess || !introspectionSuccess.Active)
         {
-            return Result.Fail("invalid_token", "initial access token is invalid.");
+            return new global::NOF.Abstraction.Failure("invalid_token", "initial access token is invalid.");
         }
 
         var requiredScope = options.Value.ClientRegistrationInitialAccessTokenScope;
@@ -37,8 +37,8 @@ public sealed class DefaultOAuthInitialAccessTokenHandler(
             .SelectMany(static value => value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToHashSet(StringComparer.Ordinal);
         return string.IsNullOrWhiteSpace(requiredScope) || scopes.Contains(requiredScope)
-            ? Result.Success()
-            : Result.Fail("insufficient_scope", $"initial access token must contain the '{requiredScope}' scope.");
+            ? Empty.Instance
+            : new global::NOF.Abstraction.Failure("insufficient_scope", $"initial access token must contain the '{requiredScope}' scope.");
     }
 
     internal static bool TryReadBearerToken(HttpRequest request, out string token)

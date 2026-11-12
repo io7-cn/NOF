@@ -20,7 +20,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         await using var callerScope = provider.CreateAsyncScope();
 
         var invoker = callerScope.ServiceProvider.GetRequiredService<IApplicationServiceInvoker>();
-        Result<GetFleetOverviewResponse> result = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.GetFleetOverview), new Empty(), Context.Empty)).Require<Result<GetFleetOverviewResponse>>(Result<GetFleetOverviewResponse>.CreateFailure);
+        NOF.Testing.TestOutcome<GetFleetOverviewResponse> result = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.GetFleetOverview), new Empty(), Context.Empty)).Require<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>(NOF.Testing.TestOutcome<GetFleetOverviewResponse>.CreateFailure);
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
         Assert.NotNull(result.ExpectFailure());
@@ -39,7 +39,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         userContext.User.AddIdentity(TestPrincipalFactory.CreateAuthenticatedIdentity((ClaimTypes.Permission, "fleet.read")));
 
         var invoker = callerScope.ServiceProvider.GetRequiredService<IApplicationServiceInvoker>();
-        Result<GetFleetOverviewResponse> result = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.GetFleetOverview), new Empty(), Context.Empty)).Require<Result<GetFleetOverviewResponse>>(Result<GetFleetOverviewResponse>.CreateFailure);
+        NOF.Testing.TestOutcome<GetFleetOverviewResponse> result = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.GetFleetOverview), new Empty(), Context.Empty)).Require<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>(NOF.Testing.TestOutcome<GetFleetOverviewResponse>.CreateFailure);
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
         Assert.NotNull(result.ExpectSuccess());
@@ -63,7 +63,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var execution = await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.InspectContext),
             new ContextCheckRequest(key, value), context);
 
-        Assert.IsType<Empty>(execution.Require<Result>(Result.CreateFailure).Value);
+        Assert.IsType<Empty>(execution.Require<NOF.Testing.TestOutcome>(NOF.Testing.TestOutcome.CreateFailure).Value);
         Assert.True(callerUser.User.IsAuthenticated);
         Assert.Contains(callerUser.User.Claims, static claim => claim.Type == ClaimTypes.Permission && claim.Value == "fleet.read");
         Assert.Equal("tenant-a", context.TenantId);
@@ -89,7 +89,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
                 Context.Empty.WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, "Bearer untrusted"));
         if (authenticated)
         {
-            Assert.IsType<GetFleetOverviewResponse>(execution.Require<Result<GetFleetOverviewResponse>>().Value);
+            Assert.IsType<GetFleetOverviewResponse>(execution.Require<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>().Value);
         }
         else
         {
@@ -108,8 +108,8 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var marker = callerScope.ServiceProvider.GetRequiredService<LocalScopeMarker>();
         var invoker = callerScope.ServiceProvider.GetRequiredService<IApplicationServiceInvoker>();
 
-        var firstResult = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.CheckScope), new ScopeCheckRequest(dbContext, marker), Context.Empty)).Require<Result>(Result.CreateFailure);
-        var secondResult = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.CheckScope), new ScopeCheckRequest(dbContext, marker), Context.Empty)).Require<Result>(Result.CreateFailure);
+        var firstResult = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.CheckScope), new ScopeCheckRequest(dbContext, marker), Context.Empty)).Require<NOF.Testing.TestOutcome>(NOF.Testing.TestOutcome.CreateFailure);
+        var secondResult = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.CheckScope), new ScopeCheckRequest(dbContext, marker), Context.Empty)).Require<NOF.Testing.TestOutcome>(NOF.Testing.TestOutcome.CreateFailure);
         var probe = callerScope.ServiceProvider.GetRequiredService<LocalScopeProbe>();
 
         Assert.NotNull(firstResult.ExpectSuccess());
@@ -178,26 +178,26 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
 public partial interface IProtectedFleetService : IApplicationService
 {
     [RequirePermission("fleet.read")]
-    Result<GetFleetOverviewResponse> GetFleetOverview(Empty request);
+    NOF.Testing.TestOutcome<GetFleetOverviewResponse> GetFleetOverview(Empty request);
 
-    Result CheckScope(ScopeCheckRequest request);
+    NOF.Testing.TestOutcome CheckScope(ScopeCheckRequest request);
 
     [RequirePermission("fleet.read")]
-    Result InspectContext(ContextCheckRequest request);
+    NOF.Testing.TestOutcome InspectContext(ContextCheckRequest request);
 }
 
 public sealed record ContextCheckRequest(object Key, object Value);
 
-public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<ContextCheckRequest, Result>
+public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<ContextCheckRequest, NOF.Testing.TestOutcome>
 {
-    public override Task<Result> HandleAsync(ContextCheckRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<NOF.Testing.TestOutcome> HandleAsync(ContextCheckRequest request, Context context, CancellationToken cancellationToken)
     {
         Assert.Same(request.Value, context[request.Key]);
         Assert.Same(context, Context.Current);
         Assert.Equal("tenant-a", context.TenantId);
         Assert.True(user.User.IsAuthenticated);
         user.Logout();
-        return Task.FromResult(Result.Success());
+        return Task.FromResult(NOF.Testing.TestOutcome.Success());
     }
 }
 
@@ -242,11 +242,11 @@ public sealed class ProtectedFleetServer : ApplicationService<IProtectedFleetSer
         new Dictionary<string, ServiceOperationMapping>
         {
             [nameof(IProtectedFleetService.GetFleetOverview)] =
-                new(typeof(GetFleetOverviewHandler), typeof(Empty), typeof(Result<GetFleetOverviewResponse>)),
+                new(typeof(GetFleetOverviewHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome<GetFleetOverviewResponse>)),
             [nameof(IProtectedFleetService.CheckScope)] =
-                new(typeof(ScopeCheckHandler), typeof(ScopeCheckRequest), typeof(Result)),
+                new(typeof(ScopeCheckHandler), typeof(ScopeCheckRequest), typeof(NOF.Testing.TestOutcome)),
             [nameof(IProtectedFleetService.InspectContext)] =
-                new(typeof(ContextCheckHandler), typeof(ContextCheckRequest), typeof(Result))
+                new(typeof(ContextCheckHandler), typeof(ContextCheckRequest), typeof(NOF.Testing.TestOutcome))
         };
 
     protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => _mappings;
@@ -272,16 +272,16 @@ public sealed class ScopeLifecycleDaemonService : IDaemonService, IAsyncDisposab
 public sealed class ScopeCheckHandler(
     IDbContext dbContext,
     LocalScopeMarker marker,
-    LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, Result>
+    LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, NOF.Testing.TestOutcome>
 {
-    public override Task<Result> HandleAsync(ScopeCheckRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<NOF.Testing.TestOutcome> HandleAsync(ScopeCheckRequest request, Context context, CancellationToken cancellationToken)
     {
         probe.HandlerUsedCallerScopeDbContext = ReferenceEquals(request.ExpectedDbContext, dbContext);
         probe.HandlerUsedCallerScopeMarker = ReferenceEquals(request.ExpectedMarker, marker);
         probe.HandlerScopeMarkers.Add(marker);
         probe.HandlerContext = context;
         new ScopeCheckEvent(dbContext, marker).PublishAsEvent();
-        return Task.FromResult(Result.Success());
+        return Task.FromResult(NOF.Testing.TestOutcome.Success());
     }
 }
 
@@ -324,12 +324,12 @@ public sealed class LocalScopedDbContext : IDbContext
         => throw new NotSupportedException();
 }
 
-public sealed class GetFleetOverviewHandler(InvocationRecorder recorder) : ServiceOperation<Empty, Result<GetFleetOverviewResponse>>
+public sealed class GetFleetOverviewHandler(InvocationRecorder recorder) : ServiceOperation<Empty, NOF.Testing.TestOutcome<GetFleetOverviewResponse>>
 {
-    public override Task<Result<GetFleetOverviewResponse>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+    public override Task<NOF.Testing.TestOutcome<GetFleetOverviewResponse>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
     {
         recorder.Count++;
-        return Task.FromResult(Result.Success(new GetFleetOverviewResponse("fleet")));
+        return Task.FromResult(NOF.Testing.TestOutcome.Success(new GetFleetOverviewResponse("fleet")));
     }
 }
 

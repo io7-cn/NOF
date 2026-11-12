@@ -321,10 +321,10 @@ public sealed class OAuthDeviceFlowTests
 
     private sealed class AnonymousInitialAccessTokenHandler : IOAuthInitialAccessTokenHandler
     {
-        public Task<Result> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+        public Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(Result.Success());
+            return Task.FromResult<OAuthMutation>(Empty.Instance);
         }
     }
 }

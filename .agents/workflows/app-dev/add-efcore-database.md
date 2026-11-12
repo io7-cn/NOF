@@ -102,7 +102,7 @@ Application handlers inject `IDbContext` or `IRepository<T>`, not EF Core `DbCon
 ```csharp
 public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
 {
-    public override async Task<Result> HandleAsync(
+    public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
@@ -110,7 +110,7 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
         dbContext.Set<Order>().Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return Result.Success();
+        return Empty.Instance;
     }
 }
 ```

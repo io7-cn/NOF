@@ -6,10 +6,11 @@
 override 工作流。契约只包含业务请求、响应和应用策略元数据，不再声明 HTTP 路由或绑定。
 
 ```csharp
-public interface IOrderService : IApplicationService
+public partial interface IOrderService : IApplicationService
 {
     OrderDto? Find(FindOrderRequest request);
-    Result<OrderDto> Save(SaveOrderRequest request);
+    [FailureCase("Rejected")]
+    OrderDto Save(SaveOrderRequest request);
 }
 public partial class OrderService : ApplicationService<IOrderService>;
 public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
@@ -21,9 +22,9 @@ public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 ```
 
 每个声明只有一个引用类型请求和同步业务返回值。Context、CancellationToken、Task 属于
-生成的服务端 API。支持 DTO、可空值和业务联合类型。删除 `IRpcResponse<TSelf>`，
-`Result<T>` 只是业务联合类型；无返回值 Result 使用 Empty，成功消息属于业务 DTO。
-Success 和 Success<T> 已删除。
+生成的服务端 API。支持 DTO、可空值和业务联合类型。IRpcResponse 和通用 Contract Result
+已删除。FailureCase 生成操作专属 Result，供 Handler 继承；Empty 表示无载荷成功，
+成功消息属于业务 DTO。
 不生成客户端接口、HTTP Client 或 Local Client。
 
 ## 注册与本地调用

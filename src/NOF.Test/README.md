@@ -9,7 +9,7 @@ await using var host = await NOFTestAppBuilder.Create()
     .AddInMemoryPersistence()
     .BuildTestHostAsync();
 
-var result = await host.CallAsync<Result<OrderDto>>(
+var result = await host.CallAsync<IOrderService.GetOperation.Result>(
     (services, context, ct) => OrderService.Get.InvokeAsync(
         services, new GetOrderRequest(orderId), context, ct),
     configure: scope => scope.SetTenant("tenant-a").SetUser("user-1", "Alice"));

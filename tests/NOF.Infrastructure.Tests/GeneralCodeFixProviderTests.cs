@@ -87,7 +87,7 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task VoidRpcReturnFix_ReturnsNofResult()
+    public async Task VoidRpcReturnFix_ReturnsEmpty()
     {
         const string source = """
             namespace Test;
@@ -103,7 +103,7 @@ public sealed class GeneralCodeFixProviderTests
             "Execute",
             new TypeDeclarationCodeFixProvider());
 
-        Assert.Contains("global::NOF.Contract.Result Execute", changed);
+        Assert.Contains("global::NOF.Contract.Empty Execute", changed);
     }
 
     [Fact]

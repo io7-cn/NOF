@@ -71,12 +71,10 @@ public sealed class FailureCaseGenerator : IIncrementalGenerator
                 || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
             if (method.IsStatic || method.Parameters.Length != 1 || method.TypeParameters.Length != 0 || method.ReturnsVoid || nullable
                 || method.ReturnType.ToDisplayString().StartsWith("System.Threading.Tasks.", StringComparison.Ordinal)
-                || method.ReturnType.ToDisplayString() == "NOF.Contract.Result"
-                || method.ReturnType.OriginalDefinition.ToDisplayString() == "NOF.Contract.Result<T>"
                 || service.GetMembers(resultName).Length != 0
                 || service.GetMembers(method.Name).OfType<IMethodSymbol>().Count() != 1)
             {
-                Report(output, method, "FailureCase methods require one request, a non-nullable synchronous success type (not Result), a unique operation name and an unused <Operation>Operation name.");
+                Report(output, method, "FailureCase methods require one request, a non-nullable synchronous success type a unique operation name and an unused <Operation>Operation name.");
                 continue;
             }
             var names = new HashSet<string>(StringComparer.Ordinal);

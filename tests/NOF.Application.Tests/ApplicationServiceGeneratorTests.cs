@@ -70,9 +70,9 @@ public class ApplicationServiceGeneratorTests
 
                 public partial interface IMyService : IApplicationService
                 {
-                    Result Ping(PingRequest request);
-                    Result<MyDto> Get(GetRequest request);
-                    Result Archive(ArchiveRequest request);
+                    NOF.Testing.TestOutcome Ping(PingRequest request);
+                    NOF.Testing.TestOutcome<MyDto> Get(GetRequest request);
+                    NOF.Testing.TestOutcome Archive(ArchiveRequest request);
                 }
 
                 public partial class MyService : ApplicationService<IMyService>;
@@ -85,18 +85,18 @@ public class ApplicationServiceGeneratorTests
             typeof(AutoInjectAttribute),
             typeof(Empty),
             typeof(IApplicationService),
-            typeof(Result));
+            typeof(NOF.Testing.TestOutcome));
         var generatedCode = result.GeneratedTrees.Single().GetRoot().ToFullString();
 
         Assert.Contains("partial class MyService : global::NOF.Application.IApplicationServiceImplementation", generatedCode);
         Assert.Contains("protected override global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> GetHandlerMappings()", generatedCode);
         Assert.Contains("public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __rpcHandlerMappings;", generatedCode);
-        Assert.Contains("public abstract class Ping : global::NOF.Contract.ServiceOperation<global::App.PingRequest, global::NOF.Contract.Result>", generatedCode);
-        Assert.Contains("public abstract class Get : global::NOF.Contract.ServiceOperation<global::App.GetRequest, global::NOF.Contract.Result<global::App.MyDto>>", generatedCode);
-        Assert.Contains("public abstract class Archive : global::NOF.Contract.ServiceOperation<global::App.ArchiveRequest, global::NOF.Contract.Result>", generatedCode);
-        Assert.Contains("nameof(global::App.IMyService.Ping)] = new global::NOF.Application.ServiceOperationMapping(typeof(Ping), typeof(global::App.PingRequest), typeof(global::NOF.Contract.Result))", generatedCode);
-        Assert.Contains("nameof(global::App.IMyService.Get)] = new global::NOF.Application.ServiceOperationMapping(typeof(Get), typeof(global::App.GetRequest), typeof(global::NOF.Contract.Result<global::App.MyDto>))", generatedCode);
-        Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Contract.Result))", generatedCode);
+        Assert.Contains("public abstract class Ping : global::NOF.Contract.ServiceOperation<global::App.PingRequest, global::NOF.Testing.TestOutcome>", generatedCode);
+        Assert.Contains("public abstract class Get : global::NOF.Contract.ServiceOperation<global::App.GetRequest, global::NOF.Testing.TestOutcome<global::App.MyDto>>", generatedCode);
+        Assert.Contains("public abstract class Archive : global::NOF.Contract.ServiceOperation<global::App.ArchiveRequest, global::NOF.Testing.TestOutcome>", generatedCode);
+        Assert.Contains("nameof(global::App.IMyService.Ping)] = new global::NOF.Application.ServiceOperationMapping(typeof(Ping), typeof(global::App.PingRequest), typeof(global::NOF.Testing.TestOutcome))", generatedCode);
+        Assert.Contains("nameof(global::App.IMyService.Get)] = new global::NOF.Application.ServiceOperationMapping(typeof(Get), typeof(global::App.GetRequest), typeof(global::NOF.Testing.TestOutcome<global::App.MyDto>))", generatedCode);
+        Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Testing.TestOutcome))", generatedCode);
         Assert.DoesNotContain("CreateFailure", generatedCode);
     }
 }
