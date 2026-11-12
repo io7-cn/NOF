@@ -36,14 +36,13 @@ Failure cases to their chosen HTTP response.
 Call app.MapOpenApi explicitly. Use native AddProblemDetails and error middleware in
 the host. HttpRequestHeaderOptions selects headers admitted into the application context.
 
-## Legacy RPC adapters
+## Breaking migration
 
-Optional HttpEndpoint, HttpVerb, TransportOverHttp, TransportOverMemory and generated
-route metadata now belong to this package, not Contract. HTTP-specific generators and
-diagnostics live in NOF.Hosting.SourceGenerator. Host-owned compatibility declarations
-can keep controller/JSON-RPC/SSE adapters. The service contract package has no HTTP
-annotations, and the sample uses native modules instead of annotated contracts.
-Neither path generates clients or requires IRpcResponse.
+Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint/transport annotations, automatic route
+mapping and protocol readers are deleted without a compatibility layer. Declare every
+HTTP route in an endpoint module. Use native TypedResults for resources and SSE,
+ProblemDetails for failures, and platform SseParser in application-owned integrations.
+There are no generated clients or required RPC outcome interfaces.
 
 See the [complete configuration REST example](../../../docs/en/design/configuration-rest.md)
 and [migration guide](../../../docs/en/design/application-requests.md).

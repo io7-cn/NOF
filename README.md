@@ -15,8 +15,8 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 .NET 10 release baseline.
 
 - **Clean Architecture** - layered packages (`Domain`, `Contract`, `Application`, `Infrastructure`) enforce separation of concerns
-- **CQRS & Messaging** - first-class `IApplicationService`, typed command/notification dispatch, handler pipelines, and streaming RPC support
-- **Source Generators** - compile-time code generation for RPC servers, HTTP endpoint mapping, DI registration, mapping registration, and failure definitions
+- **CQRS & Messaging** - first-class `IApplicationService`, typed command/notification dispatch, handler pipelines, and native HTTP streaming integration
+- **Source Generators** - compile-time code generation for application service operations, DI registration, mapping registration, and failure definitions
 - **Transactional Outbox** - reliable message delivery with inbox/outbox pattern built into EF Core infrastructure
 - **State Machines** - declarative, event-driven state machine builder with persistent context
 - **Multi-Tenancy** - tenant-aware persistence and deployment-aware runtime defaults
@@ -32,7 +32,7 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 - `Mapper`, `IdGenerator`, and `EventPublisher` expose ambient async-flow convenience APIs while still supporting explicit dependency paths.
 - Built-in in-memory cache state is isolated per host through DI singletons rather than process-wide mutable `static` fields.
 
-Application services keep generated Service.Operation overrides and support ordinary DTOs, nullable values and business unions. Local calls need no transport declaration; HTTP is explicit opt-in. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [migration guide](docs/en/design/application-requests.md).
+Application services keep generated Service.Operation overrides and support ordinary DTOs, nullable values and business unions. Local calls need no transport declaration; HTTP routes live in endpoint modules; legacy HTTP RPC adapters and annotations are deleted. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [migration guide](docs/en/design/application-requests.md).
 
 ## Packages
 
@@ -40,7 +40,7 @@ Application services keep generated Service.Operation overrides and support ordi
 | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, ambient headers, and in-memory event primitives                                       |
 | [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, failures, domain exceptions, and ID generation                                       |
-| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>`, HTTP endpoint attributes |
+| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>` |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - RPC servers, handlers, state machines, mapping, caching, and object-storage contracts              |
 | [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Hosting abstractions - builder contracts, step contracts, dependency ordering, and JWT outbound propagation             |
 | [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - runtime defaults, object storage, transactional messaging, OpenTelemetry, auth resource server, and service wiring |
@@ -130,7 +130,7 @@ HTTP endpoint modules in `NOF.Hosting.AspNetCore` use native ASP.NET Core server
 ```text
 NOF.Abstraction                <- Shared annotations, user context, in-memory events
 NOF.Domain                     <- Value objects, failures, domain utilities
-NOF.Contract                   <- RPC contracts, payload models, endpoint metadata
+NOF.Contract                   <- RPC contracts, payload models, business outcomes
 NOF.Application                <- RPC servers, handlers, state machines, mapping, caching
 NOF.Hosting        <- Host builder and step contracts
 NOF.Infrastructure             <- Builder defaults, shared runtime pipeline, and auth resource server

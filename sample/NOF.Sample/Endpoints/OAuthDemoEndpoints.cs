@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore;
 using NOF.Sample.Services;
@@ -14,32 +15,41 @@ public sealed class OAuthDemoEndpoints : IHttpEndpointModule
 {
     public void Map(IEndpointRouteBuilder endpoints)
     {
-        var demo = endpoints.MapGroup("/rpc/OAuthChainDemo").WithTags("OAuth demo")
+        var demo = endpoints.MapGroup("/api/oauth-demo").WithTags("OAuth demo")
             .AddEndpointFilter<ServiceRejectionHttpFilter>();
-        demo.MapPost("/CreateClient", CreateClientAsync);
-        demo.MapPost("/GetClientToken", GetClientTokenAsync);
-        demo.MapPost("/GetUserToken", GetUserTokenAsync);
-        demo.MapPost("/ExchangeToken", ExchangeTokenAsync);
-        demo.MapPost("/CallDownstream", CallDownstreamAsync);
-        demo.MapPost("/Downstream/Inspect", InspectAccessTokenAsync);
+        demo.MapPost("/clients", CreateClientAsync);
+        demo.MapPost("/tokens/client", GetClientTokenAsync);
+        demo.MapPost("/tokens/user", GetUserTokenAsync);
+        demo.MapPost("/tokens/exchange", ExchangeTokenAsync);
+        demo.MapPost("/downstream-inspections", CallDownstreamAsync);
+        endpoints.MapPost("/api/downstream/access-token-inspections", InspectAccessTokenAsync)
+            .AddEndpointFilter<ServiceRejectionHttpFilter>();
     }
 
-    public static async Task<Ok<Result<CreateDemoOAuthClientResponse>>> CreateClientAsync(CreateDemoOAuthClientRequest request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OAuthChainDemoService.CreateClient.Descriptor, request, ct));
+    public static async Task<Results<Ok<CreateDemoOAuthClientResponse>, ProblemHttpResult>> CreateClientAsync(CreateDemoOAuthClientRequest request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(OAuthChainDemoService.CreateClient.Descriptor, request, ct));
 
-    public static async Task<Ok<Result<DemoTokenResponse>>> GetClientTokenAsync(GetDemoClientTokenRequest request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OAuthChainDemoService.GetClientToken.Descriptor, request, ct));
+    public static async Task<Results<Ok<DemoTokenResponse>, ProblemHttpResult>> GetClientTokenAsync(GetDemoClientTokenRequest request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(OAuthChainDemoService.GetClientToken.Descriptor, request, ct));
 
-    public static async Task<Ok<Result<DemoTokenResponse>>> GetUserTokenAsync(GetDemoUserTokenRequest request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OAuthChainDemoService.GetUserToken.Descriptor, request, ct));
+    public static async Task<Results<Ok<DemoTokenResponse>, ProblemHttpResult>> GetUserTokenAsync(GetDemoUserTokenRequest request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(OAuthChainDemoService.GetUserToken.Descriptor, request, ct));
 
-    public static async Task<Ok<Result<DemoTokenResponse>>> ExchangeTokenAsync(ExchangeDemoTokenRequest request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OAuthChainDemoService.ExchangeToken.Descriptor, request, ct));
+    public static async Task<Results<Ok<DemoTokenResponse>, ProblemHttpResult>> ExchangeTokenAsync(ExchangeDemoTokenRequest request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(OAuthChainDemoService.ExchangeToken.Descriptor, request, ct));
 
-    public static async Task<Ok<Result<ConsumeDemoAccessTokenResponse>>> CallDownstreamAsync(CallDemoDownstreamRequest request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OAuthChainDemoService.CallDownstream.Descriptor, request, ct));
+    public static async Task<Results<Ok<ConsumeDemoAccessTokenResponse>, ProblemHttpResult>> CallDownstreamAsync(CallDemoDownstreamRequest request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(OAuthChainDemoService.CallDownstream.Descriptor, request, ct));
 
-    public static async Task<Ok<Result<ConsumeDemoAccessTokenResponse>>> InspectAccessTokenAsync(Empty request, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(DemoDownstreamService.InspectAccessToken.Descriptor, request, ct));
+    public static async Task<Results<Ok<ConsumeDemoAccessTokenResponse>, ProblemHttpResult>> InspectAccessTokenAsync(Empty request, HttpContext http, CancellationToken ct)
+        => ToResource(await http.InvokeAsync(DemoDownstreamService.InspectAccessToken.Descriptor, request, ct));
 
+    private static Results<Ok<T>, ProblemHttpResult> ToResource<T>(Result<T> result) => result.Value switch
+    {
+        T resource => TypedResults.Ok(resource),
+        Failure failure => TypedResults.Problem(
+            statusCode: int.TryParse(failure.Code, out var code) && code is >= 400 and <= 599 ? code : 400,
+            detail: failure.Message, extensions: new Dictionary<string, object?> { ["code"] = failure.Code }),
+        _ => throw new InvalidOperationException("The operation returned no business outcome.")
+    };
 }

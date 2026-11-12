@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
@@ -64,6 +65,15 @@ public sealed class TenantRequestAuthorizationTests
         builder.Services.AddTransient<StreamHandler>();
         builder.AddApplicationService<TenantServer>();
         await using var app = await builder.BuildAsync();
+        app.MapPost("/tenant", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
+            TypedResults.Ok((await http.InvokeAsync(new ServiceOperationDescriptor<Empty, Result<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)), request, ct)).ExpectSuccess()))
+            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
+        app.MapPost("/host", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
+            TypedResults.Ok((await http.InvokeAsync(new ServiceOperationDescriptor<Empty, Result<string>>(typeof(ITenantService), nameof(ITenantService.Host)), request, ct)).ExpectSuccess()))
+            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
+        app.MapPost("/stream", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
+            await http.InvokeAsync(new ServiceOperationDescriptor<Empty, Result<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)), request, ct))
+            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
         app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();
@@ -93,43 +103,37 @@ public sealed class TenantRequestAuthorizationTests
         if (expectedTenant is null)
         {
             Assert.Empty(resolvedTenants);
-            Assert.NotNull((await response.Content.ReadFromJsonAsync<Result>()).ExpectFailure());
+            Assert.NotNull(await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>());
         }
         else
         {
             Assert.Equal(expectedTenant, Assert.Single(resolvedTenants));
-            var result = await response.Content.ReadFromJsonAsync<Result<string>>();
-            Assert.NotNull(result.ExpectSuccess());
-            Assert.Equal(expectedTenant, result.ExpectSuccess());
+            Assert.Equal(expectedTenant, await response.Content.ReadFromJsonAsync<string>());
         }
 
         var endpoint = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>().Single(endpoint => endpoint.RoutePattern.RawText == path);
         var responses = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>();
-        Assert.Contains(responses, metadata => metadata.StatusCode == 401 && metadata.ContentTypes.Contains("application/json"));
-        Assert.Contains(responses, metadata => metadata.StatusCode == 403 && metadata.ContentTypes.Contains("application/json"));
+        Assert.Contains(responses, metadata => metadata.StatusCode == 401 && metadata.ContentTypes.Contains("application/problem+json"));
+        Assert.Contains(responses, metadata => metadata.StatusCode == 403 && metadata.ContentTypes.Contains("application/problem+json"));
 
         using var openApi = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var documentedResponses = openApi.RootElement.GetProperty("paths").GetProperty(path)
             .GetProperty("post").GetProperty("responses");
-        Assert.True(documentedResponses.GetProperty("401").GetProperty("content").TryGetProperty("application/json", out _));
-        Assert.True(documentedResponses.GetProperty("403").GetProperty("content").TryGetProperty("application/json", out _));
+        Assert.True(documentedResponses.GetProperty("401").GetProperty("content").TryGetProperty("application/problem+json", out _));
+        Assert.True(documentedResponses.GetProperty("403").GetProperty("content").TryGetProperty("application/problem+json", out _));
     }
 
-    [TransportOverHttp(HttpRpcStyle.ControllerRpc)]
     public interface ITenantService : IApplicationService
     {
         [RequirePermission]
-        [HttpEndpoint(HttpVerb.Post, "/tenant")]
         Result<string> Tenant(Empty request);
 
         [UseHostTenant]
         [RequirePermission("platform.manage")]
-        [HttpEndpoint(HttpVerb.Post, "/host")]
         Result<string> Host(Empty request);
 
         [RequirePermission]
-        [HttpEndpoint(HttpVerb.Post, "/stream")]
         Result<global::System.Collections.Generic.IAsyncEnumerable<string>> Stream(Empty request);
     }
 

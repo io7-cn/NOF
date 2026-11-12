@@ -134,9 +134,29 @@ public sealed class ConfigNodeRestTests
         Assert.Null(contract.GetType("NOF.Contract.HttpEndpointAttribute"));
         Assert.Null(contract.GetType("NOF.Contract.TransportOverHttpAttribute"));
         Assert.Null(contract.GetType("NOF.Contract.IRpcResponse`1"));
-        Assert.DoesNotContain(typeof(INOFSampleService).GetCustomAttributes(false), static attribute => attribute is TransportOverAttribute);
+        Assert.DoesNotContain(typeof(INOFSampleService).GetCustomAttributes(false),
+            static attribute => attribute.GetType().Name.StartsWith("TransportOver", StringComparison.Ordinal));
         Assert.DoesNotContain(typeof(INOFSampleService).Assembly.GetReferencedAssemblies(),
             static assembly => assembly.Name!.StartsWith("NOF.Hosting", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UiHttpAdapter_ShouldReadNativeSseAndProblemDetails()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var api = new HttpSampleApi(http);
+        var result = await api.WatchSampleStreamAsync(new() { Topic = "配置更新", Count = 2, IntervalMilliseconds = 1 }, Context.Empty);
+        var items = new List<SampleStreamEvent>();
+        await foreach (var item in result.ExpectSuccess())
+        {
+            items.Add(item);
+        }
+        Assert.Equal(4, items.Count);
+        Assert.Equal([0, 1, 2, 3], items.Select(item => item.Index));
+        Assert.All(items, item => Assert.Equal("配置更新", item.Topic));
+        var failure = await api.WatchSampleStreamAsync(new() { ForceFailure = true }, Context.Empty);
+        Assert.NotEmpty(failure.ExpectFailure().Message);
     }
 
     private static async Task<long> CreateAsync(HttpClient http, string name, long? parentId = null)

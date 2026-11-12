@@ -110,19 +110,20 @@ switch (result)
 }
 ```
 
-A pre-stream failure uses ordinary Failure JSON. An explicitly wrapped successful
-stream sends its message in `X-NOF-Result-Message` (Base64 UTF-8), which an application-owned HTTP reader can decode into `Success<IAsyncEnumerable<T>>`. Cross-origin browser applications
-must expose that header using `WithExposedHeaders(StreamingResponseMetadata.MessageHeader)`.
-Bare streams remain bare. Exceptions during enumeration remain stream failures;
-an initial successful value does not promise successful completion of the stream.
+The endpoint module maps a pre-stream failure to ProblemDetails and a successful stream
+to native TypedResults.ServerSentEvents. Callers use the platform SseParser. There is no
+NOF streaming response envelope or message header. If a stream needs message metadata,
+model it explicitly in event DTOs or an application-defined event. Success<T>.Message
+remains valid business data; each adapter decides how to represent it. Exceptions during
+enumeration remain stream failures; initial success does not promise stream completion.
 
 ## Boundaries, deployment and rollback
 
 `IRpcResponse<TSelf>` and its empty-response factory are removed. Result and custom
 business unions carry no RPC outcome interface. Generated service invocation reports
 policy rejection with ServiceRejectedException; REST adapters map it independently of
-business Failure cases. Optional legacy protocol readers accept explicit failure and
-empty-body conversion delegates. HTTP metadata belongs to Hosting, not Contract.
+business Failure cases. Legacy HTTP RPC adapters, annotations and protocol readers
+are deleted without a compatibility layer. HTTP routing belongs to endpoint modules.
 Native REST endpoints return resource DTOs, 201/204 or ProblemDetails rather than a
 mandatory Result envelope. OAuth endpoints retain their standard protocol.
 

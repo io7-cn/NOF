@@ -10,7 +10,7 @@ You are working in the **NOF (Neat Opinionated Framework)** repository, a modula
 src/
   NOF.Abstraction/            - shared annotations and ambient event publishing primitives
   NOF.Domain/                 - value objects, failures, domain exceptions, and ID generation
-  NOF.Contract/               - RPC contracts, request/response models, and HTTP endpoint metadata
+  NOF.Contract/               - application contracts, request/response models, and business outcomes
   NOF.Application/            - RPC servers, handlers, state machines, mapping, and caching abstractions
   NOF.Hosting.Abstraction/    - builder contracts and step contracts
   NOF.Infrastructure/         - builder defaults, EF Core integration, OpenTelemetry, and runtime pipeline
@@ -39,9 +39,9 @@ Use lowercase issue-linked topic branches and submit changes to `main` for requi
 ## Key Patterns
 
 - Results are native `Result(Success, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. `Success<T>` optionally carries data and Message; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
-- Application contracts are declared as `IApplicationService` interfaces with one request parameter and a declared business response per method. DTOs, nullable values and business unions are supported; transport metadata is optional.
+- Application contracts are declared as `IApplicationService` interfaces with one request parameter and a declared business response per method. DTOs, nullable values and business unions are supported; HTTP routes belong exclusively in native IHttpEndpointModule implementations; legacy HTTP RPC adapters and annotations are deleted.
 - Application implementations use `ApplicationService<TService>` and generated nested handler base classes.
-- `AddApplicationService<T>()` registers a service container; application parts automatically register operation implementations. ASP.NET Core maps only explicitly HTTP-declared contracts during `BuildAsync()`. Undecorated services are local-only.
+- `AddApplicationService<T>()` registers a service container; application parts automatically register operation implementations. During `BuildAsync()`, registered IHttpEndpointModule instances map explicit native routes. Contracts carry no HTTP declarations.
 - `NOFWebApplicationBuilder.Create(args)` always registers JSON, CORS, and OpenAPI services.
 - `app.MapOpenApi()` is an explicit host choice.
 - EF Core registration uses `UseDbContext<TDbContext>()` plus `WithTenantMode(...)`, `WithConnectionString(...)`, `WithOptions(...)`, and optional `MigrateOnInitialize()`.

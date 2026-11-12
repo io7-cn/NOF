@@ -97,7 +97,9 @@ app.MapOpenApi();
 
 共享 UI 接口由应用自行维护。ServerSampleApi 调用本地操作，HttpSampleApi 显式消费原生
 资源响应、201/204 和 ProblemDetails，WASM/MAUI 不再调用旧 /rpc/NOFSample 路径。
-OAuth 演示使用自己的端点模块，同时保持原有 URL。
+OAuth 演示使用 /api/oauth-demo，Downstream 检查使用
+/api/downstream/access-token-inspections，返回普通资源或 ProblemDetails。旧 RPC URL
+和协议读取器已删除；原生 SSE 调用方使用 System.Net.ServerSentEvents.SseParser。
 
 ## 实际源码和验证
 

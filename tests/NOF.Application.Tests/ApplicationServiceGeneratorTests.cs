@@ -29,7 +29,7 @@ public class ApplicationServiceGeneratorTests
             public partial class Orders : ApplicationService<IOrders>;
             """;
         var result = new ApplicationServiceGenerator().GetResultPostGen(source,
-            typeof(ApplicationService<>), typeof(IApplicationService), typeof(ServiceOperation<,>));
+            typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>), typeof(IApplicationService), typeof(ServiceOperation<,>));
         Assert.Empty(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
         Assert.Contains("class Read : global::NOF.Application.ServiceOperation<global::App.Query, global::App.Dto>", code);
@@ -80,7 +80,7 @@ public class ApplicationServiceGeneratorTests
             """;
 
         var result = new ApplicationServiceGenerator().GetResultPostGen(source,
-            typeof(ApplicationService<>),
+            typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>),
             typeof(ServiceOperation<,>),
             typeof(AutoInjectAttribute),
             typeof(Empty),

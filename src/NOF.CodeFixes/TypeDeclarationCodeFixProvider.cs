@@ -16,7 +16,7 @@ namespace NOF.CodeFixes;
 public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        ["NOF010", "NOF011", "NOF021", "NOF104", "NOF200", "NOF202", "NOF209", "NOF211", "NOF300", "NOF304"];
+        ["NOF010", "NOF011", "NOF021", "NOF104", "NOF200", "NOF209", "NOF300", "NOF304"];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -55,17 +55,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                         diagnostic);
                 }
                 break;
-            case "NOF202":
-                if (node.FirstAncestorOrSelf<ClassDeclarationSyntax>() is { } requestClass)
-                {
-                    context.RegisterCodeFix(
-                        CodeAction.Create(
-                            "Add public parameterless constructor",
-                            cancellationToken => AddParameterlessConstructorAsync(context.Document, requestClass, cancellationToken),
-                            equivalenceKey: "AddPublicParameterlessConstructor"),
-                        diagnostic);
-                }
-                break;
             case "NOF209":
                 if (node.FirstAncestorOrSelf<MethodDeclarationSyntax>() is { } method)
                 {
@@ -74,17 +63,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                             "Return NOF Result",
                             cancellationToken => ReplaceVoidReturnAsync(context.Document, method, cancellationToken),
                             equivalenceKey: "ReturnNofResult"),
-                        diagnostic);
-                }
-                break;
-            case "NOF211":
-                if (node.FirstAncestorOrSelf<InterfaceDeclarationSyntax>() is { } serviceInterface)
-                {
-                    context.RegisterCodeFix(
-                        CodeAction.Create(
-                            "Make interface an RPC service contract",
-                            cancellationToken => AddRpcServiceBaseAsync(context.Document, serviceInterface, cancellationToken),
-                            equivalenceKey: "AddIApplicationService"),
                         diagnostic);
                 }
                 break;
@@ -279,22 +257,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
         return ReplaceNodeAsync(document, declaration, updated.WithAdditionalAnnotations(Formatter.Annotation), cancellationToken);
     }
 
-    private static Task<Document> AddParameterlessConstructorAsync(
-        Document document,
-        ClassDeclarationSyntax declaration,
-        CancellationToken cancellationToken)
-    {
-        var constructor = SyntaxFactory.ConstructorDeclaration(declaration.Identifier)
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
-            .WithBody(SyntaxFactory.Block())
-            .WithAdditionalAnnotations(Formatter.Annotation);
-        return ReplaceNodeAsync(
-            document,
-            declaration,
-            declaration.AddMembers(constructor).WithAdditionalAnnotations(Formatter.Annotation),
-            cancellationToken);
-    }
-
     private static Task<Document> ReplaceVoidReturnAsync(
         Document document,
         MethodDeclarationSyntax method,
@@ -307,23 +269,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                     .WithTriviaFrom(method.ReturnType)
                     .WithAdditionalAnnotations(Formatter.Annotation)),
             cancellationToken);
-
-    private static Task<Document> AddRpcServiceBaseAsync(
-        Document document,
-        InterfaceDeclarationSyntax declaration,
-        CancellationToken cancellationToken)
-    {
-        var baseType = SyntaxFactory.SimpleBaseType(
-            SyntaxFactory.ParseTypeName("global::NOF.Contract.IApplicationService"));
-        var baseList = declaration.BaseList is null
-            ? SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(baseType))
-            : declaration.BaseList.AddTypes(baseType);
-        return ReplaceNodeAsync(
-            document,
-            declaration,
-            declaration.WithBaseList(baseList).WithAdditionalAnnotations(Formatter.Annotation),
-            cancellationToken);
-    }
 
     private static async Task<Document> ReplaceNodeAsync(
         Document document,

@@ -12,12 +12,24 @@ namespace NOF.SourceGenerator.Tests;
 public class ClientGenerationRemovalTests
 {
     [Fact]
+    public void HostingAnalyzerAssembly_ShouldContainNoHttpRouteGeneratorsOrTransportDiagnostics()
+    {
+        var types = typeof(NativeHostBuilderBuildAnalyzer).Assembly.GetTypes();
+        Assert.DoesNotContain(types, type => typeof(IIncrementalGenerator).IsAssignableFrom(type));
+        Assert.DoesNotContain(types, type => type.Name == "HttpApplicationServiceAnalyzer");
+        Assert.DoesNotContain(new NOF.CodeFixes.AttributeRemovalCodeFixProvider().FixableDiagnosticIds,
+            id => id != "NOF020");
+        Assert.DoesNotContain(new NOF.CodeFixes.TypeDeclarationCodeFixProvider().FixableDiagnosticIds,
+            id => id is "NOF202" or "NOF211");
+    }
+
+    [Fact]
     public void ShippedGeneratorAssemblies_DoNotExposeClientGenerators()
     {
         var assemblies = new[]
         {
             typeof(ApplicationServiceGenerator).Assembly,
-            typeof(HttpServiceEndpointGenerator).Assembly,
+            typeof(NativeHostBuilderBuildAnalyzer).Assembly,
             typeof(OutboundMiddlewareDispatcherInjectionAnalyzer).Assembly
         };
         foreach (var assembly in assemblies.Distinct())

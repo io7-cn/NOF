@@ -16,11 +16,9 @@ The current generator inputs are:
 | Application | `MappableGenerator` | User mapping declaration, attributes, and mapped source/destination types |
 | Application | `ApplicationServiceGenerator` | User `ApplicationService<TService>` and RPC service contract |
 | Application | `ApplicationServiceAutoInjectGenerator` | User `Server.Operation` base-type syntax, `ApplicationService<TService>`, and RPC service contract |
-| Hosting | `HttpServiceEndpointGenerator` | Optional host-owned legacy HTTP adapter declarations |
 
 `ApplicationServiceGenerator` emits server operation bases, mappings and typed static
-`Service.Operation.InvokeAsync` entry points and transport-neutral typed descriptors. `HttpServiceEndpointGenerator` emits
-only server binding/serialization metadata in Hosting. Contract retains only transport-neutral signature analysis. Client-interface, HTTP-client and
+`Service.Operation.InvokeAsync` entry points and transport-neutral typed descriptors. HTTP route generators are deleted. Contract retains only transport-neutral signature analysis. Client-interface, HTTP-client and
 Local-client generators and their shared naming conventions have been removed.
 
 The regression suite runs every generator together in one compilation in both normal and reversed order. This represents a monolithic application that references every NOF package and prevents generator ordering from becoming an implicit contract.
@@ -29,6 +27,6 @@ The regression suite runs every generator together in one compilation in both no
 
 NOF runtime packages ship a shared `NOF.CodeFixes` analyzer assembly beside their layer-specific source generator. A code fix is offered only when the diagnostic has a deterministic local transformation, including required type modifiers, invalid or duplicate attribute removal, value-object primitive ordering casts, daemon-service resolution, supported RPC request/signature corrections, direct `DbContext` base replacement, NOF host build routing, and value-object length migration.
 
-All provided code fixes support Fix All at document, project, and solution scope. For diagnostics with multiple valid actions, such as `NOF212`, Fix All repeats only the action selected by the developer; choosing to remove one transport does not remove the other transport attributes.
+All provided code fixes support Fix All at document, project, and solution scope. HTTP transport diagnostics and their code fixes are deleted along with the legacy adapters.
 
-Diagnostics that require a domain or API design choice deliberately remain analyzer-only. Examples include renaming overloaded operations, selecting a parsable query representation, inventing unique failure names/codes, or rewriting `Find` calls without a known key predicate.
+Diagnostics that require a domain or API design choice deliberately remain analyzer-only. Examples include renaming overloaded operations, inventing unique failure names/codes, or rewriting `Find` calls without a known key predicate.

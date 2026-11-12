@@ -342,6 +342,6 @@ public static class InboundContextReflection
             }
         }
 
-        throw new InvalidOperationException($"Unable to resolve RPC request type from handler '{handlerType.FullName}'.");
+        throw new InvalidOperationException($"Unable to resolve application service request type from handler '{handlerType.FullName}'.");
     }
 }

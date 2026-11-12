@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Hosting;
-using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore;
 
@@ -11,7 +10,7 @@ public sealed class HttpEndpointModuleInitializationStep : IApplicationInitializ
 {
     /// <inheritdoc />
     public TopologyComparison Compare(IApplicationInitializationStep other)
-        => other is ApplicationServiceTransportInitializationStep ? TopologyComparison.After : TopologyComparison.DoesNotMatter;
+        => other is DaemonServiceResolutionInitializationStep ? TopologyComparison.After : TopologyComparison.DoesNotMatter;
 
     /// <inheritdoc />
     public Task ExecuteAsync(IHost host)

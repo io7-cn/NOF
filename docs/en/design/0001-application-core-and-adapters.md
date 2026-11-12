@@ -44,10 +44,9 @@ must identify that prerequisite and must not bypass protected-main review gates.
 
 Client generation is completely removed: retain proto-style contracts and generated
 server operations, including static InvokeAsync entries. No interface/HTTP/Local Client
-is emitted. HTTP metadata is optional and server-only. Consumers own remote HTTP
+is emitted. HTTP routes are explicit native endpoint modules. Consumers own remote HTTP
 integrations; the sample has explicit UI ports/adapters. Native IHttpEndpointModule, generated operation descriptors and an HTTP policy bridge
-are implemented with the configuration CRUD slice. HttpEndpoint/HTTP generators move
-to Hosting; IRpcResponse and generated response-specific rejection factories are removed.
+are implemented with the configuration CRUD slice. Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint and HTTP route generators are deleted; IRpcResponse and generated response-specific rejection factories are removed.
 
 Choose option 3. A use case accepts a typed request and execution context and returns
 its declared business response. Responses may be DTOs, nullable values, Result<T>,
@@ -127,7 +126,7 @@ recovery behavior, licensing and migration costs first.
 
 1. **Application execution:** evolve generated service operations, preserve policy execution
    and explicit execution rejection. Provide a native ASP.NET Core vertical slice and
-   a supported RPC bridge. Keep legacy RPC authorization/tenant checks in force.
+   local invocation through the same operation model. Preserve authorization/tenant checks.
 2. **Policy and context split:** migrate shared application rules to the application
    pipeline and protocol rules to adapters. Preserve security behavior at every stage;
    do not silently remove authentication/authorization while avoiding duplicate checks.
@@ -151,8 +150,8 @@ context propagation, policy ordering, rejection before handler construction, ten
 isolation and authorization. Verify server HTTP metadata, explicit caller adapters and native AOT
 when their paths change. Keep domain tests independent of HTTP/database/broker hosts.
 
-Roll out entry points incrementally. Keep supported RPC adapters working while new
-application handlers are adopted. Record exact candidate evidence in the issue/PR,
+Upgrade all entry points together. Legacy HTTP RPC adapters have been removed without
+a compatibility layer; endpoint modules own HTTP routes and wire formats. Record exact candidate evidence in the issue/PR,
 not one-off reports in source control. Rollback restores the coherent previous
 package and host configuration set; do not mix incompatible contracts or wire codecs.
 

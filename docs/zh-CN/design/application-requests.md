@@ -85,10 +85,10 @@ ServiceExecution 区分完成值（包括声明允许的 null）和策略拒绝�
 ServiceRejectedException 报告策略拒绝，返回 Result 的操作也一样，不再生成结果专用失败工厂。
 业务 Failure 分支仍作为普通业务值返回。
 
-现有 Controller/JSON-RPC 适配器保留在 HTTP Hosting 包中。HttpEndpoint、HttpVerb、传输注解、
-路由元数据和 HTTP 生成器均从 Contract 移至 Hosting，仅作为可选的宿主兼容能力。
-示例的纯契约和 REST 模块不使用它们。Contract 分析器只验证传输无关的方法签名。
-旧协议结果读取器改为接受调用方显式提供的失败/空响应转换委托，不依赖 RPC 结果接口。
+旧 HTTP RPC 和 JSON-RPC 适配器已彻底删除，包括 HttpEndpoint、HttpVerb、传输注解、
+自动路由映射、传输注册、专用响应写入器及协议读取器，不保留兼容层。契约始终保持传输无关，
+Contract 分析器只验证服务签名。HTTP 路由在端点模块显式声明，响应使用原生 TypedResults
+和 ProblemDetails。SSE 使用 TypedResults.ServerSentEvents，调用方使用平台 SseParser。
 Result 不再定义 CreateEmptyResponse。
 
 请求/响应出站 executor、delegate、context、middleware API 和 Client 生成继续保持移除。
@@ -100,7 +100,7 @@ Result 不再定义 CreateEmptyResponse。
 | --- | --- |
 | IRpcService / RpcServer / AddRpcServer | IApplicationService / ApplicationService / AddApplicationService |
 | 生成客户端及 Client 标记 | 删除；显式 HTTP 集成或服务端 InvokeAsync |
-| Contract 中的 HttpEndpoint / 传输注解 | HTTP 端点模块；旧元数据属于 Hosting |
+| Contract 中的 HttpEndpoint / 传输注解 | 删除；HTTP 端点模块显式声明路由 |
 | IRpcResponse / CreateEmptyResponse | 删除；业务联合类型及适配器显式转换 |
 | 策略拒绝时自动构造 Result Failure | ServiceRejectedException；HTTP 过滤器映射策略拒绝 |
 | 原生端点里的操作名字符串 | Service.Operation.Descriptor |

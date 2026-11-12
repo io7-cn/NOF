@@ -104,7 +104,9 @@ resource from crossing database-per-tenant boundaries.
 The shared UI port remains application-owned. ServerSampleApi calls local operations;
 HttpSampleApi explicitly consumes native resource bodies, 201/204 and ProblemDetails.
 WASM/MAUI no longer call the former /rpc/NOFSample paths. OAuth demo endpoints use their
-own module while preserving their existing URLs.
+own module at /api/oauth-demo; downstream inspection uses /api/downstream/access-token-inspections.
+These return plain resources or ProblemDetails. Legacy RPC URLs and protocol readers
+are deleted. Native SSE consumers use System.Net.ServerSentEvents.SseParser.
 
 ## Executable sources and verification
 

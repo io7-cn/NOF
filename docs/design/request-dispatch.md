@@ -2,7 +2,7 @@
 
 ## Decision
 
-Application operations use generated ApplicationService<TService> containers independently of transport; see [ADR 0001](../en/design/0001-application-core-and-adapters.md) and the [implementation guide](../en/design/application-requests.md). RPC adapters continue to use IApplicationService and ApplicationService<TService>.
+Application operations use generated ApplicationService<TService> containers independently of transport; see [ADR 0001](../en/design/0001-application-core-and-adapters.md) and the [implementation guide](../en/design/application-requests.md). HTTP APIs use explicit endpoint modules; legacy RPC adapters are deleted.
 
 ## Current Invocation Model
 

@@ -10,7 +10,7 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 - in-memory cache and messaging riders
 - OpenTelemetry registration and transport middleware
 - JWT resource server validation and command/notification token propagation
-- `[UseHostTenant]` RPC execution after authorization, registered by default through `HostTenantInboundMiddleware`
+- `[UseHostTenant]` application execution after authorization, registered by default through `HostTenantInboundMiddleware`
 - ambient `IMapper` and `IIdGenerator` activation through scoped `IDaemonService` implementations
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
@@ -86,7 +86,7 @@ Tenant headers are routing input. The default inbound pipeline authenticates the
 normalizes the tenant header (missing means `host`), authorizes the operation, and then
 replaces the tenant with the authenticated identity's tenant when one is present.
 An authenticated identity without a tenant retains header-based selection by default.
-For public RPC hosts that require tenant-bound identities, enable both checks:
+For HTTP hosts that require tenant-bound identities, enable both checks:
 
 ```csharp
 builder.Services.Configure<TenantAuthorizationOptions>(options =>
@@ -96,12 +96,12 @@ builder.Services.Configure<TenantAuthorizationOptions>(options =>
 });
 ```
 
-The first option requires authentication for every RPC request, including operations
+The first option requires authentication for every application request, including operations
 marked `AllowAnonymous`. Ordinary operations additionally require a non-host identity
 tenant. The second rejects conflicting non-host request and identity tenants. Missing
 or `host` headers allow selection from the verified identity. Rejection occurs before
-handler dependency resolution, with HTTP 401 or 403 on Controller RPC. Both options
-default to false for compatibility. Custom endpoints outside RPC are unaffected.
+handler dependency resolution, with HTTP 401 or 403 through ServiceRejectionHttpFilter. Both options
+default to false for compatibility. Custom endpoints that bypass the NOF invocation bridge are unaffected.
 
 `[UseHostTenant]` deliberately changes execution tenancy after authorization. It is
 exempt from identity-tenant and mismatch checks, but strict mode still requires an
@@ -175,31 +175,9 @@ handler resolution. Inject the invoker directly when an adapter must match the
 
 Plain contracts expose no HTTP routes. Native IHttpEndpointModule instances in the HTTP
 host own routing and use HttpContext.InvokeAsync with generated operation descriptors.
-Optional legacy transport metadata now belongs to Hosting rather than Contract.
-Each IApplicationServiceTransport independently checks its host-owned metadata.
+Legacy HTTP RPC transports, IApplicationServiceTransport and automatic service-to-route
+initialization are deleted. Host endpoint modules explicitly select service operations.
 See the [REST implementation](../../docs/en/design/configuration-rest.md).
-
-## RPC Server Transport Extension Point
-
-`NOF.Infrastructure` owns the framework-level RPC server transport initialization step. Transport packages implement `IApplicationServiceTransport` and register the implementation in DI:
-
-```csharp
-public sealed class MyApplicationServiceTransport : IApplicationServiceTransport
-{
-    public TopologyComparison Compare(IApplicationServiceTransport other)
-        => TopologyComparison.DoesNotMatter;
-
-    public Task MapAsync(IHost host, ApplicationServiceRegistration registration)
-    {
-        // Inspect the contract metadata and map this registration.
-        return Task.CompletedTask;
-    }
-}
-
-services.AddApplicationServiceTransport<MyApplicationServiceTransport>();
-```
-
-At application initialization, NOF orders all registered transports through the normal topology mechanism and passes every `ApplicationServiceRegistration`, together with the built `IHost`, to each transport. The transport implementation owns applicability checks and mapping behavior.
 
 ## Persistence Providers
 

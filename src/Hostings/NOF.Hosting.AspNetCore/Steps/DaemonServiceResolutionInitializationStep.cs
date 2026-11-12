@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
-using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore;
 
 public sealed class DaemonServiceResolutionInitializationStep : IApplicationInitializationStep
 {
     public TopologyComparison Compare(IApplicationInitializationStep other)
-        => other is ApplicationServiceTransportInitializationStep
+        => other is HttpEndpointModuleInitializationStep
             ? TopologyComparison.Before
             : TopologyComparison.DoesNotMatter;
 

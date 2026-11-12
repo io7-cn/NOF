@@ -6,7 +6,7 @@ using System.Diagnostics;
 namespace NOF.Infrastructure;
 
 /// <summary>
-/// Applies contract-level host-tenant selection after authorization and before RPC handler resolution.
+/// Applies contract-level host-tenant selection after authorization and before application service handler resolution.
 /// </summary>
 public sealed class HostTenantInboundMiddleware : IRequestInboundMiddleware
 {

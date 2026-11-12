@@ -10,8 +10,8 @@ Use this file when building applications on top of NOF.
 
 ```text
 MyApp.Domain/      domain classes, value objects, failures, in-memory event payloads
-MyApp.Contract/    RPC contracts, request/response models, commands, notifications, DTOs
-MyApp.Application/ RPC servers and handlers, event handlers, mappings, cache keys
+MyApp.Contract/    application service contracts, request/response models, commands, notifications, DTOs
+MyApp.Application/ application services and handlers, event handlers, mappings, cache keys
 MyApp/             host, concrete persistence provider, Program.cs, appsettings
 ```
 
@@ -31,7 +31,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 
 Commands and notifications are plain payload objects; inheriting the corresponding handler base opts a handler into generated registration.
 
-Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. HTTP annotations/generators have moved to Hosting; keep them out of Contract.
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint/transport annotations, route generators and protocol readers are deleted without a compatibility layer. Explicit endpoint modules own all HTTP routes. Use native TypedResults.ServerSentEvents and platform SseParser for SSE.
 
 Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 

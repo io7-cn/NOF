@@ -20,7 +20,6 @@ public sealed class GeneralCodeFixProviderTests
     [
         typeof(IValueObject<>),
         typeof(IApplicationService),
-        typeof(HttpEndpointAttribute),
         typeof(DbContext),
         typeof(NOFDbContext),
     ];
@@ -89,26 +88,6 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task ParameterlessConstructorFix_AddsConstructor()
-    {
-        const string source = """
-            namespace Test;
-            public class Request
-            {
-                public Request(string value) { }
-            }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF202",
-            "Request",
-            new TypeDeclarationCodeFixProvider());
-
-        Assert.Matches(@"public\s+Request\s*\(\s*\)", changed);
-    }
-
-    [Fact]
     public async Task VoidRpcReturnFix_ReturnsNofResult()
     {
         const string source = """
@@ -126,26 +105,6 @@ public sealed class GeneralCodeFixProviderTests
             new TypeDeclarationCodeFixProvider());
 
         Assert.Contains("global::NOF.Contract.Result Execute", changed);
-    }
-
-    [Fact]
-    public async Task TransportContractFix_AddsRpcServiceBase()
-    {
-        const string source = """
-            using NOF.Contract;
-            using NOF.Hosting.AspNetCore;
-            namespace Test;
-            [TransportOverMemory]
-            public interface IService { }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF211",
-            "TransportOverMemory",
-            new TypeDeclarationCodeFixProvider());
-
-        Assert.Contains(": global::NOF.Contract.IApplicationService", changed);
     }
 
     [Fact]
@@ -189,9 +148,6 @@ public sealed class GeneralCodeFixProviderTests
 
     [Theory]
     [InlineData("NOF020")]
-    [InlineData("NOF211")]
-    [InlineData("NOF213")]
-    [InlineData("NOF216")]
     public async Task AttributeRemovalFix_RemovesDiagnosedAttribute(string diagnosticId)
     {
         const string source = """
@@ -207,27 +163,6 @@ public sealed class GeneralCodeFixProviderTests
             new AttributeRemovalCodeFixProvider());
 
         Assert.DoesNotContain("Obsolete", changed);
-    }
-
-    [Fact]
-    public async Task MultipleTransportFix_OffersOneRemovalPerTransport()
-    {
-        const string source = """
-            using NOF.Contract;
-            using NOF.Hosting.AspNetCore;
-            namespace Test;
-            [TransportOverMemory]
-            [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-            public interface IService : IApplicationService { }
-            """;
-
-        var (_, actions) = await GetCodeActionsAsync(
-            source,
-            "NOF212",
-            "IService",
-            new AttributeRemovalCodeFixProvider());
-
-        Assert.Equal(2, actions.Count);
     }
 
     [Theory]
@@ -405,7 +340,7 @@ public sealed class GeneralCodeFixProviderTests
                 static text => text.Contains("partial struct Value", StringComparison.Ordinal)),
             new SolutionFixAllCase(
                 "attribute removal",
-                "NOF213",
+                "NOF020",
                 """
                     namespace Test;
                     [System.Obsolete]
@@ -523,31 +458,7 @@ public sealed class GeneralCodeFixProviderTests
         }
     }
 
-    [Fact]
-    public async Task MultipleTransportFix_FixAllRemovesOnlySelectedTransport()
-    {
-        var testCase = new SolutionFixAllCase(
-            "selected transport removal",
-            "NOF212",
-            """
-                using NOF.Contract;
-                using NOF.Hosting.AspNetCore;
-                namespace Test;
-                [TransportOverMemory]
-                [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-                public interface IService : IApplicationService { }
-                """,
-            "IService",
-            new AttributeRemovalCodeFixProvider(),
-            "RemoveTransport:TransportOverMemoryAttribute",
-            static text => !text.Contains("TransportOverMemory", StringComparison.Ordinal)
-                && text.Contains("TransportOverHttp", StringComparison.Ordinal));
 
-        var changedDocuments = await ApplySolutionFixAllAsync(testCase);
-
-        Assert.Equal(2, changedDocuments.Length);
-        Assert.All(changedDocuments, text => Assert.True(testCase.IsFixed(text), text));
-    }
 
     private static async Task<string> ApplyFirstFixAsync(
         string source,

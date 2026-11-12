@@ -21,8 +21,4 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\NOF.Infrastructure\NOF.Infrastructure.csproj" />
 	</ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="..\..\SourceGenerator.Shared\HttpRoutePrefix.cs" Link="Internal\HttpRoutePrefix.cs" />
-  </ItemGroup>
 </Project>

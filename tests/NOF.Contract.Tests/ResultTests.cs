@@ -78,15 +78,6 @@ public class ResultTests
     }
 
     [Fact]
-    public void Boundary_PreservesFailureAndRejectsEmptyOrWrongSuccessType()
-    {
-        Result result = Result.Fail("forbidden", "Denied");
-        Assert.Same(result.ExpectFailure(), RpcResponse.Require<Result<string>>(result, static failure => failure).ExpectFailure());
-        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(Result.Success(), static failure => failure));
-        Assert.Throws<InvalidOperationException>(() => RpcResponse.Require<Result<string>>(default(Result<string>), static failure => failure));
-    }
-
-    [Fact]
     public void Json_PlainSuccess_DoesNotAddAWrapper()
     {
         Assert.Equal("42", JsonSerializer.Serialize<Result<int>>(42, JsonSerializerOptions.NOF));

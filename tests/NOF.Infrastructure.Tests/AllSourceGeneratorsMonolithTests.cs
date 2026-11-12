@@ -75,7 +75,6 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record PingRequest(string Value);
 
-            [TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc")]
             public interface IDemoService : IApplicationService
             {
                 Result Ping(PingRequest request);
@@ -102,7 +101,6 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(MappableAttribute<,>),
             typeof(ApplicationService<>),
             typeof(IApplicationService),
-            typeof(TransportOverHttpAttribute),
             typeof(Result),
             typeof(IValueObject<>),
             typeof(FailureAttribute),
@@ -117,8 +115,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             new HandlerRegistrationGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
-            new ApplicationServiceGenerator().AsSourceGenerator(),
-            new HttpServiceEndpointGenerator().AsSourceGenerator()
+            new ApplicationServiceGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {

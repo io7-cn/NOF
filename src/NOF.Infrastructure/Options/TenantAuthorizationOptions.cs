@@ -1,10 +1,10 @@
 namespace NOF.Infrastructure;
 
-/// <summary>Configures tenant trust checks for inbound RPC requests.</summary>
+/// <summary>Configures tenant trust checks for inbound application service requests.</summary>
 public class TenantAuthorizationOptions
 {
     /// <summary>
-    /// Requires an authenticated identity with a non-host tenant for ordinary RPC requests.
+    /// Requires an authenticated identity with a non-host tenant for ordinary application service requests.
     /// Host-tenant operations require authentication but may omit an identity tenant;
     /// they must declare their own platform permission requirements.
     /// Defaults to false for compatibility with single-tenant and header-based hosts.

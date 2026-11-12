@@ -98,13 +98,13 @@ return contract. All generated typed InvokeAsync entries report policy rejection
 ServiceRejectedException, including operations returning Result. No result-specific
 failure factory is generated. Business Failure cases remain ordinary returned values.
 
-Legacy controller/JSON-RPC adapters remain available in the HTTP hosting package.
-HttpEndpoint, HttpVerb, transport annotations, route metadata and HTTP generators have
-moved from Contract to Hosting. They are optional host-owned compatibility facilities;
-the sample's pure contracts and REST modules do not use them. Contract's analyzer only
-validates transport-independent service signatures. Legacy outcome readers accept
-explicit caller-owned failure/empty-body conversion delegates instead of an RPC outcome
-interface. Result no longer defines CreateEmptyResponse.
+Legacy HTTP RPC and JSON-RPC adapters are deleted, including HttpEndpoint, HttpVerb,
+transport annotations, automatic route mapping, transport registration, dedicated result
+writers and protocol readers. No compatibility layer remains. Contracts are always
+transport independent; Contract's analyzer validates service signatures only. Declare
+HTTP routes in endpoint modules and use native TypedResults and ProblemDetails.
+For SSE use TypedResults.ServerSentEvents and the platform SseParser on the caller.
+Result no longer defines CreateEmptyResponse.
 
 Request/response outbound executor/delegate/context/middleware APIs and client generation
 remain removed. Remote callers maintain HttpClient integrations and DelegatingHandler;
@@ -116,7 +116,7 @@ Command/Notification outbound delivery pipelines remain supported.
 | --- | --- |
 | IRpcService / RpcServer / AddRpcServer | IApplicationService / ApplicationService / AddApplicationService |
 | Generated clients and client marker | removed; explicit HTTP integration or server InvokeAsync |
-| Contract HttpEndpoint / transport annotations | HTTP endpoint modules; legacy metadata belongs to Hosting |
+| Contract HttpEndpoint / transport annotations | deleted; HTTP endpoint modules own explicit routes |
 | IRpcResponse and CreateEmptyResponse | removed; business unions and explicit adapter conversion |
 | Generated Result failure projection on rejection | ServiceRejectedException; HTTP filter maps policy rejection |
 | String operation identity at native endpoints | generated Service.Operation.Descriptor |

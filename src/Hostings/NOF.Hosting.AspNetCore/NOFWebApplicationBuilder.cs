@@ -67,8 +67,6 @@ public class NOFWebApplicationBuilder : IHostApplicationBuilder
                     !context.Request.Path.StartsWithSegments("/health")
                     && !context.Request.Path.StartsWithSegments("/alive")));
         builder.Services.AddInitializationStep(new DaemonServiceResolutionInitializationStep());
-        builder.Services.TryAddSingleton<HttpEndpointMappingState>();
-        builder.Services.AddApplicationServiceTransport<AspNetCoreApplicationServiceTransport>();
         builder.Services.AddInitializationStep(new HealthCheckInitializationStep());
         builder.Services.TryAddInitializationStep(new HttpEndpointModuleInitializationStep());
         builder.Services.AddOpenApi(options =>

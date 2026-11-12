@@ -25,18 +25,16 @@ app.MapOpenApi();
 await app.RunAsync();
 ```
 
-`BuildAsync()` runs initialization steps and maps registered RPC servers according to the transport declared on each contract.
+`BuildAsync()` runs initialization steps and maps registered IHttpEndpointModule instances using native ASP.NET Core routing.
 
-## Controller-Style RPC Contract + Handler
+## Application Service Contract + Handler
 
 ```csharp
 using NOF.Application;
 using NOF.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
 public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "api/orders/get")]
     Result<GetOrderResponse> GetOrder(GetOrderRequest request);
 }
 
@@ -133,4 +131,4 @@ Use IHttpEndpointModule with AutoInject(ServiceLifetime.Singleton). Map native A
 Core endpoints, construct business requests from HTTP inputs and call
 http.InvokeAsync(Service.Operation.Descriptor, request, ct). Use
 ServiceRejectionHttpFilter for policy rejection and feature-owned TypedResults for
-business failures. Keep HttpEndpoint/transport annotations out of Contract.
+business failures. Legacy HttpEndpoint/transport annotations and RPC adapters are deleted.

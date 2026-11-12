@@ -11,8 +11,8 @@ Read `../../rules/app-dev.md` first. Use `references/recipes.md` for application
 
 ```text
 MyApp.Domain/      domain types, value objects, failures, in-memory event payloads
-MyApp.Contract/    RPC contracts, requests/responses, commands, notifications, DTOs
-MyApp.Application/ RPC servers and handlers, message/event handlers, mappings, cache keys
+MyApp.Contract/    application service contracts, requests/responses, commands, notifications, DTOs
+MyApp.Application/ application services and handlers, message/event handlers, mappings, cache keys
 MyApp/             host and concrete persistence/transport configuration
 ```
 
@@ -24,7 +24,7 @@ Application code should remain provider-neutral by using `IDbContext` and `IRepo
 
 Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and OpenAPI, calling Service.Operation.InvokeAsync(services, request, context, ct). There is no separate IRequestHandler/IRequestExecutor API or RPC forwarding class. ServiceExecution is an internal invocation outcome, not a wire envelope. Preserve application authorization and tenant policies across entry points.
 
-Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. HTTP annotations/generators have moved to Hosting; keep them out of Contract.
+Client generation is completely removed: no client interfaces, HTTP clients or local clients. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint/transport annotations, route generators and protocol readers are deleted without a compatibility layer. Explicit endpoint modules own all HTTP routes. Use native TypedResults.ServerSentEvents and platform SseParser for SSE.
 
 Request/response outbound pipeline/context/middleware APIs are removed. Local invocation transfers Context and a cloned scoped identity directly into inbound policies; native HttpClient DelegatingHandler owns remote concerns. Command/Notification outbound messaging pipelines remain.
 
@@ -32,7 +32,7 @@ Request/response outbound pipeline/context/middleware APIs are removed. Local in
 
 | Concern | Declaration | Handler / registration |
 |---|---|---|
-| RPC | `IApplicationService` + optional transport attribute | generated nested base under `ApplicationService<TService>`; register with `AddApplicationService<TServer>()` |
+| RPC | `IApplicationService` | generated nested base under `ApplicationService<TService>`; register with `AddApplicationService<TServer>()` |
 | Command | plain payload | `CommandHandler<T>` |
 | Notification | plain payload | `NotificationHandler<T>` |
 | In-memory event | arbitrary payload | `InMemoryEventHandler<T>` |
@@ -75,8 +75,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 | Goal | Use |
 |---|---|
 | expose REST HTTP | IHttpEndpointModule, native MapGet/MapPost/TypedResults, generated operation Descriptor |
-| expose legacy JSON-RPC | optional host-owned metadata in NOF.Hosting.AspNetCore; do not reference Hosting from Contract |
-| keep RPC in process | plain contracts and Service.Operation.InvokeAsync |
+| invoke operations in process | plain contracts and Service.Operation.InvokeAsync |
 | persist application data | `IDbContext` / `IRepository<T>`; choose EF Core or NHibernate in the host |
 | cache data | `CacheKey<T>` + `ICacheService`; optionally replace the memory rider with Redis |
 | send cross-boundary work | `ICommandSender` / `INotificationPublisher`, passing the current `Context` |

@@ -103,18 +103,17 @@ switch (result)
 }
 ```
 
-开始传输前失败时返回普通 Failure JSON。显式包装的成功流通过
-`X-NOF-Result-Message` 响应头传递消息，编码为 Base64 UTF-8；应用自己维护的 HTTP 读取器可将其
-还原为 `Success<IAsyncEnumerable<T>>`。跨域浏览器应用需要通过
-`WithExposedHeaders(StreamingResponseMetadata.MessageHeader)` 暴露该响应头。
-裸流仍然返回裸流。枚举期间的异常属于流传输失败，初始成功并不保证整个流完成。
+端点模块将开始传输前的失败映射为 ProblemDetails，将成功流映射为原生
+TypedResults.ServerSentEvents，调用方使用平台 SseParser。不再有 NOF 流式响应包装或消息头。
+需要消息元数据时，使用显式事件 DTO 或应用自定义事件。Success<T>.Message 仍是有效业务数据，
+各适配器决定其传输表示。枚举期间的异常属于流传输失败，初始成功不保证整个流完成。
 
 ## 边界、部署和回滚
 
 删除 `IRpcResponse<TSelf>` 及空响应工厂。Result 和自定义业务联合类型不再实现 RPC 结果接口。
 生成的服务调用通过 ServiceRejectedException 报告策略拒绝，REST 适配器将其与业务 Failure
-分开映射。可选的旧协议读取器接受显式失败和空响应转换委托。HTTP 元数据属于 Hosting，
-不属于 Contract。原生 REST 端点返回资源 DTO、201/204 或 ProblemDetails，没有强制 Result 包装。
+分开映射。旧 HTTP RPC 适配器、注解及协议读取器已删除，不保留兼容层。
+HTTP 路由由端点模块管理。原生 REST 端点返回资源 DTO、201/204 或 ProblemDetails，没有强制 Result 包装。
 OAuth 端点继续使用标准协议。
 
 迁移时直接匹配成功的 `T`，需要消息时选择 `Success<T>`，错误改读

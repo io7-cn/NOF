@@ -11,7 +11,7 @@ public sealed record ApplicationServiceInvocationResolution(
 
 public sealed class ApplicationServiceInvocationResolver(
     IServiceProvider serviceProvider,
-    ApplicationServiceRegistry rpcServerRegistry)
+    ApplicationServiceRegistry applicationServiceRegistry)
 {
     public ApplicationServiceInvocationResolution Resolve<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService>(
         string operationName)
@@ -25,17 +25,17 @@ public sealed class ApplicationServiceInvocationResolver(
         ArgumentNullException.ThrowIfNull(serviceType);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
 
-        if (!rpcServerRegistry.TryGetImplementationType(serviceType, out var serverType))
+        if (!applicationServiceRegistry.TryGetImplementationType(serviceType, out var serverType))
         {
-            throw new InvalidOperationException($"RPC server is not registered for '{serviceType.FullName}'.");
+            throw new InvalidOperationException($"application service server is not registered for '{serviceType.FullName}'.");
         }
 
         var server = serviceProvider.GetRequiredService(serverType) as ApplicationService
-            ?? throw new InvalidOperationException($"Resolved RPC server '{serverType.FullName}' does not inherit ApplicationService.");
+            ?? throw new InvalidOperationException($"Resolved application service server '{serverType.FullName}' does not inherit ApplicationService.");
 
         if (!server.TryGetHandlerMapping(operationName, out var handlerMapping))
         {
-            throw new InvalidOperationException($"RPC handler mapping is missing for '{serviceType.FullName}.{operationName}'.");
+            throw new InvalidOperationException($"application service handler mapping is missing for '{serviceType.FullName}.{operationName}'.");
         }
 
         return new ApplicationServiceInvocationResolution(serverType, handlerMapping);

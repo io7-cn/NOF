@@ -9,10 +9,8 @@ NOF has four handler shapes. A concrete class may inherit only one command, noti
 ## RPC Pattern
 
 ```csharp
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
 public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "api/orders/get")]
     Result<GetOrderResponse> GetOrder(GetOrderRequest request);
 }
 

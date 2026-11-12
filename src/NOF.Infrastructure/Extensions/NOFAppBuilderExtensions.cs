@@ -37,7 +37,6 @@ public static partial class NOFInfrastructureExtensions
             builder.ConfigureNOFHostEnvironment();
             builder.Services.AddNOFApplication();
             builder.Services.AddInMemoryPersistence();
-            builder.Services.TryAddInitializationStep(new ApplicationServiceTransportInitializationStep());
             AddOpenTelemetry(builder);
 
             #region Core Services

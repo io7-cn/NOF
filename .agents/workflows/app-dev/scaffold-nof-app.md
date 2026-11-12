@@ -10,8 +10,8 @@ description: Scaffold a minimal NOF ASP.NET Core application with clean layers, 
 MyApp/
   MyApp/                    host, Program.cs, AppDbContext, appsettings.json
   MyApp.Domain/             domain classes, value objects, failures, events
-  MyApp.Application/        RPC servers and handlers, mappings, cache keys
-  MyApp.Contract/           RPC contracts, messages, DTOs
+  MyApp.Application/        application services and handlers, mappings, cache keys
+  MyApp.Contract/           application service contracts, messages, DTOs
 ```
 
 ## 1. Create the Solution and Projects
@@ -57,11 +57,9 @@ using NOF.Contract;
 
 namespace MyApp.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc, "api")]
 public interface IAppService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "health")]
-    Result<HealthResponse> Health(Empty request);
+    HealthResponse Health(Empty request);
 }
 
 public sealed record HealthResponse(string Status);
@@ -82,12 +80,12 @@ public partial class AppService : ApplicationService<IAppService>;
 
 public sealed class Health : AppService.Health
 {
-    public override Task<Result<HealthResponse>> HandleAsync(
+    public override Task<HealthResponse> HandleAsync(
         Empty request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new HealthResponse("ok")));
+        return Task.FromResult(new HealthResponse("ok"));
     }
 }
 ```
@@ -139,7 +137,24 @@ app.MapOpenApi();
 await app.RunAsync();
 ```
 
-## 8. Configure appsettings.json
+## 8. Map native HTTP endpoints
+
+Place a module in the host project. Application parts register it automatically:
+
+```csharp
+[AutoInject(ServiceLifetime.Singleton)]
+public sealed class HealthEndpoints : IHttpEndpointModule
+{
+    public void Map(IEndpointRouteBuilder endpoints)
+        => endpoints.MapGet("/api/health", async (HttpContext http, CancellationToken ct)
+            => TypedResults.Ok(await http.InvokeAsync(AppService.Health.Descriptor, new Empty(), ct)))
+            .AddEndpointFilter<ServiceRejectionHttpFilter>();
+}
+```
+
+Keep HTTP namespaces and module types in the host project; the Contract project references no Hosting package.
+
+## 9. Configure appsettings.json
 
 ```json
 {
@@ -153,6 +168,6 @@ await app.RunAsync();
 
 - `NOFWebApplicationBuilder.Create(args)` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
 - `AddApplicationPart(...)` executes generated assembly initializers; `AddApplicationService<T>()` explicitly registers the RPC server.
-- Applicable RPC endpoints are mapped automatically during `BuildAsync()`.
+- Registered IHttpEndpointModule instances map explicit HTTP endpoints during `BuildAsync()`.
 - Add RabbitMQ, Redis, or OIDC packages only when the application needs those providers.
 - Application handlers should inject `IDbContext` / `IRepository<T>`; keep EF Core types in the host.

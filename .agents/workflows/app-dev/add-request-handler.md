@@ -1,5 +1,5 @@
 ---
-description: Add a Context-aware request/response operation with NOF RPC contracts, generated server operations, and explicit service registration
+description: Add a Context-aware request/response operation with NOF application service contracts, generated server operations, and explicit service registration
 ---
 
 # Add a Request-Response Operation
@@ -56,7 +56,7 @@ builder.AddApplicationService<OrderService>();
 var app = await builder.BuildAsync();
 ```
 
-`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the server and its transport metadata. During BuildAsync(), registered IHttpEndpointModule instances map native endpoints. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
+`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. During BuildAsync(), registered IHttpEndpointModule instances map native endpoints. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
 
 ## 5. Invoke the Server Operation
 
