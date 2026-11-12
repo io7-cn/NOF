@@ -19,7 +19,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             typeof(IValueObject<>),
             typeof(Enumerable),
             typeof(Queryable));
-        GeneratorDriver generatorDriver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        GeneratorDriver generatorDriver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         generatorDriver.RunGeneratorsAndUpdateCompilation(compilation, out var generatedCompilation, out _);
 
         var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ValueObjectOrderingAnalyzer());

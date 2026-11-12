@@ -6,6 +6,7 @@ NOF keeps its runtime surface small by moving repetitive framework work into sou
 - [Result Union migration](../en/design/result-unions.md) ([简体中文](../zh-CN/design/result-unions.md)) — cases, successful messages, JSON, streaming and coordinated upgrades.
 - [Application core and adapters](../en/design/0001-application-core-and-adapters.md) ([简体中文](../zh-CN/design/0001-application-core-and-adapters.md)) — responsibilities and phased architecture decision.
 - [Request dispatch](request-dispatch.md) — how requests are routed through the framework.
+- [Declared expected failures](../en/design/expected-failures.md) ([简体中文](../zh-CN/design/expected-failures.md)) — closed operation outcomes and checked-result diagnostics.
 - [Application requests](../en/design/application-requests.md) ([简体中文](../zh-CN/design/application-requests.md)) — explicit registration, execution policies and native adapters.
 - [Handler registration](handler-registration.md) — compile-time discovery and dependency registration.
 - [Source generators](source-generators.md) — generated infrastructure and diagnostics.

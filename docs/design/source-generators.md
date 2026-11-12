@@ -10,7 +10,7 @@ The current generator inputs are:
 | --- | --- | --- |
 | Abstraction | `AutoInjectGenerator` | User class and `AutoInjectAttribute` |
 | Abstraction | `EventHandlerRegistrationGenerator` | User class and `InMemoryEventHandler<T>` |
-| Domain | `FailureGenerator` | User type and `FailureAttribute` |
+| Contract | `FailureCaseGenerator` | User partial service interface, success signatures and FailureCase attributes |
 | Domain | `ValueObjectGenerator` | User struct, `IValueObject<T>`, and `ValueObjectLengthAttribute` |
 | Application | `HandlerRegistrationGenerator` | User class and stable command/notification handler bases |
 | Application | `MappableGenerator` | User mapping declaration, attributes, and mapped source/destination types |
@@ -18,7 +18,7 @@ The current generator inputs are:
 | Application | `ApplicationServiceAutoInjectGenerator` | User `Server.Operation` base-type syntax, `ApplicationService<TService>`, and RPC service contract |
 
 `ApplicationServiceGenerator` emits server operation bases, mappings and typed static
-`Service.Operation.InvokeAsync` entry points and transport-neutral typed descriptors. HTTP route generators are deleted. Contract retains only transport-neutral signature analysis. Client-interface, HTTP-client and
+`Service.Operation.InvokeAsync` entry points and transport-neutral typed descriptors. HTTP route generators are deleted. Contract generates declared expected-outcome unions and validates transport-neutral signatures and checked-result consumption. Client-interface, HTTP-client and
 Local-client generators and their shared naming conventions have been removed.
 
 The regression suite runs every generator together in one compilation in both normal and reversed order. This represents a monolithic application that references every NOF package and prevents generator ordering from becoming an implicit contract.

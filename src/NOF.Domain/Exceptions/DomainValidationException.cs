@@ -1,4 +1,3 @@
-using NOF.Abstraction;
 namespace NOF.Domain;
 
 /// <summary>
@@ -22,19 +21,6 @@ public class DomainValidationException : DomainException
     /// <param name="innerException">The inner exception.</param>
     public DomainValidationException(string message, Exception innerException)
         : base("400", message, innerException)
-    {
-    }
-
-    /// <summary>Initializes a new instance from a <see cref="Failure"/>.</summary>
-    /// <param name="failure">The failure descriptor.</param>
-    public DomainValidationException(Failure failure) : base(failure)
-    {
-    }
-
-    /// <summary>Initializes a new instance from a <see cref="Failure"/> with an inner exception.</summary>
-    /// <param name="failure">The failure descriptor.</param>
-    /// <param name="innerException">The inner exception.</param>
-    public DomainValidationException(Failure failure, Exception innerException) : base(failure, innerException)
     {
     }
 

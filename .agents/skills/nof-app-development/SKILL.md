@@ -64,7 +64,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 | `[NewableValueObject]` | for `IValueObject<long>` only; generates `New()` and `New(IIdGenerator)` |
 | `[ValueObjectLength(max, MinimumLength = ...)]` | validates string length and supplies persistence maximum-length metadata |
 | `[AutoInject(ServiceLifetime...)]` | emits DI descriptors through an assembly initializer |
-| `[Failure(...)]` | generates static `Failure` members |
+| `[FailureCase("code", Name = "Case")]` | Contract generates a distinct case and closed operation result; codes are opaque values |
 | `[Mappable<TSource, TDestination>]` | generates expression mapping registration on a `partial static` class |
 | `IHttpEndpointModule` | maps native ASP.NET Core feature endpoints; use AutoInject(Singleton) for application-part registration |
 | `Service.Operation.Descriptor` | identifies a typed operation for HTTP adapter invocation without transport metadata |
@@ -90,3 +90,5 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 - Keep persistence-provider APIs out of the application layer.
 - Apply filtering, ordering, and paging before `ProjectTo<TDestination>()`.
 - Keep explicit paths available when ambient `Mapper`, `IdGenerator`, or `EventPublisher` conveniences make dependencies unclear.
+
+Declared expected failures use Contract FailureCase / FailureCase<TError>. Service methods declare the successful type; generated IService.OperationResult is used by operation overrides, Descriptor and InvokeAsync. Codes are opaque nonblank strings (including numeric codes); Name is independent and required for multiple failures, while a single unnamed case is Failed. Consume results with exhaustive switch expressions or Match. Do not use the removed Domain FailureAttribute, static failure holders, failure.Throw or Failure-accepting exception constructors. Domain returns its own business values without depending on Contract. See docs/en/design/expected-failures.md.

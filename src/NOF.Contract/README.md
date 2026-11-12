@@ -14,6 +14,11 @@ Context/CancellationToken/Async on the proto interface. Generated server operati
 receive those execution arguments. DTOs, nullable values and business unions work
 without response marker interfaces. No client code is generated.
 
+Use FailureCase on partial service methods to declare expected failures. The method
+return is the successful type; generated IService.OperationResult includes one distinct
+case per declared code. Codes are opaque strings and case names are independent.
+See [expected failures](../../docs/en/design/expected-failures.md).
+
 `Result<T>` is native `union (T, NOF.Abstraction.Failure)`. Match successful T directly;
 payload-free Result uses Empty. Success/Success<T> and WithMessage are removed; successful
 messages belong to business response DTOs. Result has

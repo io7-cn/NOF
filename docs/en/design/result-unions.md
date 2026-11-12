@@ -52,10 +52,11 @@ There are no parallel Contract or Domain definitions and no conversion adapter.
 A generated domain failure can be returned directly from any `Result<T>` handler.
 `Result.Fail(existingFailure)` returns that same shared instance.
 
-The `[Failure(name, message, errorCode)]` annotation remains in Domain; its generator
-now emits `NOF.Abstraction.Failure(code, message)`. Domain exceptions accept that
-shared value. Import `NOF.Domain` to use `failure.Throw()`: it is a Domain extension
-that throws `DomainException`, keeping Abstraction independent of Domain.
+Declared use cases should use [FailureCase and generated closed outcomes](expected-failures.md).
+The former Domain FailureAttribute/static-holder generator and failure.Throw conversion
+are removed. Shared Failure remains available for policy rejection and open Result APIs;
+it is not an implicit case of a generated checked outcome. Domain invariant exceptions
+remain separate from expected business failures.
 
 ## JSON and AOT
 

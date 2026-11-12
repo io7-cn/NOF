@@ -11,11 +11,34 @@ namespace NOF.Sample.Tests;
 public sealed class NOFSampleHarnessTests
 {
     [Fact]
+    public async Task ExpectedFailures_ShouldReturnDeclaredCasesAndTypedData_WithoutDomainExceptions()
+    {
+        await using var host = await CreateHostAsync();
+        var invalid = await host.CallAsync<INOFSampleService.CreateConfigNodeResult>(
+            static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
+                new CreateConfigNodeRequest { Name = " " }, context, ct));
+        Assert.NotEmpty(Assert.IsType<INOFSampleService.CreateConfigNodeResult.InvalidInput>(invalid.Value).Error.Message);
+
+        var parent = await host.CallAsync<INOFSampleService.CreateConfigNodeResult>(
+            static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
+                new CreateConfigNodeRequest { Name = "checked-parent" }, context, ct));
+        var id = Assert.IsType<CreatedConfigNode>(parent.Value).Id;
+        var child = await host.CallAsync<INOFSampleService.CreateConfigNodeResult>(
+            (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
+                new CreateConfigNodeRequest { Name = "checked-child", ParentId = id }, context, ct));
+        Assert.IsType<CreatedConfigNode>(child.Value);
+        var deleted = await host.CallAsync<INOFSampleService.DeleteConfigNodeResult>(
+            (services, context, ct) => NOFSampleService.DeleteConfigNode.InvokeAsync(services,
+                new DeleteConfigNodeRequest { Id = id }, context, ct));
+        Assert.Equal(id, Assert.IsType<INOFSampleService.DeleteConfigNodeResult.HasChildren>(deleted.Value).Error.NodeId);
+    }
+
+    [Fact]
     public async Task ServerInvocationHarness_ShouldCreateRootNode_AndQueryItBack()
     {
         await using var host = await CreateHostAsync();
 
-        var createResult = await host.CallAsync<Result<CreatedConfigNode>>(
+        var createResult = await host.CallAsync<INOFSampleService.CreateConfigNodeResult>(
             static (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "root-a" },
                 context,
@@ -24,7 +47,7 @@ public sealed class NOFSampleHarnessTests
                 .SetTenant("tenant-a")
                 .SetUser("user-1", "Alice"));
 
-        Assert.NotNull(createResult.ExpectSuccess());
+        Assert.NotNull(Assert.IsType<CreatedConfigNode>(createResult.Value));
 
         var roots = await host.CallAsync<GetRootConfigNodesResponse>(
             static (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
@@ -51,12 +74,12 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var createParent = await scope.CallAsync<Result<CreatedConfigNode>>(
+            var createParent = await scope.CallAsync<INOFSampleService.CreateConfigNodeResult>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
                     cancellationToken));
-            Assert.NotNull(createParent.ExpectSuccess());
+            Assert.NotNull(Assert.IsType<CreatedConfigNode>(createParent.Value));
 
             var roots = await scope.CallAsync<GetRootConfigNodesResponse>(
                 (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
@@ -65,12 +88,12 @@ public sealed class NOFSampleHarnessTests
                     cancellationToken));
             var root = Assert.Single(roots.Nodes);
 
-            var createChild = await scope.CallAsync<Result<CreatedConfigNode>>(
+            var createChild = await scope.CallAsync<INOFSampleService.CreateConfigNodeResult>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,
                     cancellationToken));
-            Assert.NotNull(createChild.ExpectSuccess());
+            Assert.NotNull(Assert.IsType<CreatedConfigNode>(createChild.Value));
 
             return root.Id;
         });
@@ -80,14 +103,14 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var parent = await scope.CallAsync<Result<GetConfigNodeByIdResponse>>(
+            var parent = await scope.CallAsync<INOFSampleService.GetConfigNodeByIdResult>(
                 (services, context, cancellationToken) => NOFSampleService.GetConfigNodeById.InvokeAsync(services,
                     new GetConfigNodeByIdRequest { Id = parentId },
                     context,
                     cancellationToken));
 
-            Assert.NotNull(parent.ExpectSuccess());
-            Assert.Equal("parent-b", parent.ExpectSuccess()!.Node.Name);
+            Assert.NotNull(Assert.IsType<GetConfigNodeByIdResponse>(parent.Value));
+            Assert.Equal("parent-b", Assert.IsType<GetConfigNodeByIdResponse>(parent.Value)!.Node.Name);
 
             var projection = await scope.GetRequiredService<IDbContext>()
                 .Set<ConfigNodeChildren>()

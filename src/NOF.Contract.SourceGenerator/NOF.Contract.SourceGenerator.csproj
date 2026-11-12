@@ -23,4 +23,7 @@
 	</ItemGroup>
 
 
+  <ItemGroup>
+    <Compile Include="..\SourceGenerator.Shared\ExpectedFailureModel.cs" Link="Shared\ExpectedFailureModel.cs" />
+  </ItemGroup>
 </Project>

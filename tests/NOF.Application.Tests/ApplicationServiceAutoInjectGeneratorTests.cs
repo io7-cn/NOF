@@ -55,7 +55,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
             new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
-        ]);
+        ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
         Assert.Empty(outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
@@ -113,7 +113,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
             new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
-        ]);
+        ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
         Assert.Empty(outputCompilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
@@ -151,7 +151,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(ServiceDescriptor),
             typeof(AssemblyInitializeAttribute),
             typeof(InitializedTypes));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ApplicationServiceAutoInjectGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
         driver = driver.RunGenerators(compilation);
 

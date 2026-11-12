@@ -46,3 +46,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Application request implementation guide](design/application-requests.md)
 
 - [Configuration node REST implementation](design/configuration-rest.md)
+
+- [Declared expected failures](design/expected-failures.md)

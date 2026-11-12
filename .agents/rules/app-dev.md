@@ -96,3 +96,5 @@ await dbContext.SaveChangesAsync(cancellationToken);
 - Declare mappings on a `partial static` class with `[Mappable<TSource, TDestination>]`.
 - Filter, order, and page before `ProjectTo<TDestination>()`; `NOF025` reports server-side shaping after projection.
 - Add every assembly containing generated initializers with `AddApplicationPart(...)`.
+
+Declared expected failures use Contract FailureCase / FailureCase<TError>. Service methods declare the successful type; generated IService.OperationResult is used by operation overrides, Descriptor and InvokeAsync. Codes are opaque nonblank strings (including numeric codes); Name is independent and required for multiple failures, while a single unnamed case is Failed. Consume results with exhaustive switch expressions or Match. Do not use the removed Domain FailureAttribute, static failure holders, failure.Throw or Failure-accepting exception constructors. Domain returns its own business values without depending on Contract. See docs/en/design/expected-failures.md.

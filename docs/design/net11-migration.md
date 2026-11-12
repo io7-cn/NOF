@@ -98,3 +98,5 @@ describes coordinated deployment and rollback.
 - [System.Text.Json union serialization](https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/union-types)
 - [ASP.NET Core 10 to 11 migration](https://learn.microsoft.com/aspnet/core/migration/100-to-110?view=aspnetcore-11.0)
 - [Npgsql EF Core provider versions](https://www.nuget.org/packages/Npgsql.EntityFrameworkCore.PostgreSQL)
+
+Declared use cases can generate closed failure unions via [FailureCase](../en/design/expected-failures.md). The old Domain FailureAttribute/static-holder generator and failure-to-exception conversions are removed.

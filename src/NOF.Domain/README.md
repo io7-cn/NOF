@@ -9,7 +9,7 @@ Domain primitives package for the [NOF Framework](https://github.com/XmmShp/NOF)
 - `IValueObject<T>` for source-generated value objects
 - `[NewableValueObject]` for `long`-backed ID value objects
 - `[ValueObjectLength]` for string-backed value-object length constraints shared with persistence providers
-- `Failure` and `[Failure(...)]` for strongly-typed failure definitions
+- Domain-owned business values for predictable rule outcomes
 - `DomainException` and `DomainValidationException`
 - `IIdGenerator` and the ambient `IdGenerator` facade
 - `IRepository<TEntity>`, `IAsyncQueryable<T>`, and provider-agnostic batch update descriptors for repository abstractions
@@ -103,32 +103,16 @@ services.AddNOFDomain();
 services.AddSingleton<IIdGenerator, MyIdGenerator>();
 ```
 
-### `Failure` and `[Failure]`
+### Expected failures and invariant exceptions
 
-Use `[Failure]` on a static partial class to declare strongly-typed domain failures. The source generator emits static members returning `Failure` instances.
+Declare expected application failures in Contract using FailureCase. Domain methods
+return their own business values; Application maps them to the generated operation
+cases. Domain does not reference Contract. See the [expected-failure guide](../../docs/en/design/expected-failures.md).
 
-```csharp
-using NOF.Domain;
-
-[Failure("NotFound", "Order not found", "404001")]
-[Failure("AlreadyPaid", "Order has already been paid", "409001")]
-public static partial class OrderFailures;
-```
-
-`Failure` can also be converted into exceptions when needed:
-
-```csharp
-OrderFailures.NotFound.ThrowAsDomainException();
-```
-
-### Exceptions
-
-- `DomainException` represents a domain rule violation with an `ErrorCode`
-- `DomainValidationException` is a `DomainException` specialization for validation failures
-
-```csharp
-throw new DomainValidationException("Customer name cannot be empty.");
-```
+The old Domain FailureAttribute, static-holder generator and failure.Throw extension
+are removed, as are DomainException constructors accepting Failure. DomainException
+and DomainValidationException remain for broken invariants/programmer misuse; ordinary
+business rejection should be returned as a value.
 
 ## Installation
 
@@ -140,6 +124,5 @@ dotnet add package NOF.Domain
 
 Apache-2.0
 
-Domain and RPC failures share `NOF.Abstraction.Failure(code, message)`. The failure
-generator emits that value directly. `failure.Throw()` remains a Domain extension
-that raises DomainException; Abstraction has no dependency on Domain.
+Declared expected application outcomes belong to Contract. Shared Abstraction.Failure
+remains available to policy rejection; it is not converted into DomainException.

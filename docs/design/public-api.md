@@ -13,3 +13,5 @@ are deleted without a compatibility layer. HTTP routes are explicit native endpo
 
 See the [service API and migration guide](../en/design/application-requests.md) and
 [complete configuration REST implementation](../en/design/configuration-rest.md).
+
+FailureCase declarations in Contract produce operation-specific closed outcomes. Error codes are opaque strings; names are explicit for multiple branches. The old Domain static Failure generator and exception conversions are removed. See [expected failures](../en/design/expected-failures.md).

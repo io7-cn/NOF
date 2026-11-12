@@ -26,7 +26,6 @@ public sealed class GeneralCodeFixProviderTests
 
     [Theory]
     [InlineData("NOF010", "public readonly struct Value", "Value", "partial struct Value")]
-    [InlineData("NOF104", "public class Failures", "Failures", "partial class Failures")]
     [InlineData("NOF300", "public class Server", "Server", "partial class Server")]
     [InlineData("NOF021", "public class Mappings", "Mappings", "static partial class Mappings")]
     public async Task ModifierFixes_AddRequiredModifiers(

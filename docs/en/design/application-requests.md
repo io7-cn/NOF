@@ -128,3 +128,5 @@ former failure overload with Reject for policies. Preserve Result Failure cases 
 business data. Rebuild generated output; remove stale client files from custom build
 tooling. Existing tags/releases remain immutable; rollback restores a coherent earlier
 package/caller set.
+
+[Declared expected failures](expected-failures.md) generate a closed result per operation; the declared method return describes success, while the Descriptor describes the actual execution response.

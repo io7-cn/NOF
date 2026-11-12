@@ -16,7 +16,7 @@ namespace NOF.CodeFixes;
 public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        ["NOF010", "NOF011", "NOF021", "NOF104", "NOF200", "NOF209", "NOF300", "NOF304"];
+        ["NOF010", "NOF011", "NOF021", "NOF200", "NOF209", "NOF300", "NOF304"];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -33,7 +33,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
         switch (diagnostic.Id)
         {
             case "NOF010":
-            case "NOF104":
             case "NOF300":
                 RegisterModifiersFix(context, diagnostic, node, [SyntaxKind.PartialKeyword], "Add partial modifier");
                 break;

@@ -36,7 +36,7 @@ Use this file when contributing to the NOF framework itself.
 - Transactional outbox: asynchronous `DeferSendAsync(...)` / `DeferPublishAsync(...)`, plus ordered variants, followed by `IDbContext.SaveChangesAsync()`.
 - Persistence: application-facing `IDbContext`, `IDbContextFactory`, and `IRepository<T>`; EF Core and NHibernate adapters live in provider packages.
 - Initialization: `IApplicationInitializationStep` instances are registered in `IServiceCollection` and ordered by `Compare(...)` returning `TopologyComparison`.
-- Source generation: `[AutoInject]`, `[Failure]`, `[Mappable<TSource, TDestination>]`, `[NewableValueObject]`, `IValueObject<T>`, handler registration, and server operation/descriptor generation (no client generation).
+- Source generation: `[AutoInject]`, `[FailureCase]`, `[Mappable<TSource, TDestination>]`, `[NewableValueObject]`, `IValueObject<T>`, handler registration, and server operation/descriptor generation (no client generation).
 - Application parts: `AddApplicationPart(assembly)` runs generated `AssemblyInitializeAttribute` initializers against the current `IServiceCollection`.
 - Registries: `EventHandlerRegistry`, `MappingRegistry`, `CommandHandlerRegistry`, `NotificationHandlerRegistry`, and `ApplicationServiceRegistry` are singleton instances stored in DI and freeze on first read. Do not reintroduce a process-wide type registry.
 - Ambient helpers: `Mapper`, `IdGenerator`, and `EventPublisher` are scoped through daemon-service resolution; `Context.Current` follows the current async execution flow. Explicit APIs remain the primary runtime contracts.
@@ -75,3 +75,5 @@ Before considering work done, verify all applicable items:
 4. Add new projects to `NOF.slnx`; update CI/CD only when its discovery or build inputs require it.
 5. Add dependency versions only to root `Directory.Packages.props`, or to `sample/Directory.Packages.props` for sample-only packages.
 6. Run `dotnet format`, review any changes, then run the relevant builds and tests.
+
+Declared expected failures use Contract FailureCase / FailureCase<TError>. Service methods declare the successful type; generated IService.OperationResult is used by operation overrides, Descriptor and InvokeAsync. Codes are opaque nonblank strings (including numeric codes); Name is independent and required for multiple failures, while a single unnamed case is Failed. Consume results with exhaustive switch expressions or Match. Do not use the removed Domain FailureAttribute, static failure holders, failure.Throw or Failure-accepting exception constructors. Domain returns its own business values without depending on Contract. See docs/en/design/expected-failures.md.

@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
+using NOF.SourceGeneration;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -81,7 +82,9 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
 
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var requestTypeName = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var originalReturnTypeName = method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var originalReturnTypeName = ExpectedFailureModel.Declarations(method).Length > 0
+                ? ExpectedFailureModel.ResultTypeName(method)
+                : method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.ServiceOperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})),");
         }
         sb.AppendLine("        };");
@@ -100,20 +103,17 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var responseType = method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
-                SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
+            var responseType = ExpectedFailureModel.ResponseTypeName(method);
             var requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             sb.AppendLine($"    public abstract class {method.Name} : global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>");
             sb.AppendLine("    {");
-            if (method.ReturnType.NullableAnnotation == NullableAnnotation.Annotated
-                || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+            if (ExpectedFailureModel.AllowsNull(method))
             {
                 sb.AppendLine("        public override bool AllowsNullResponse => true;");
             }
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var allowNull = method.ReturnType.NullableAnnotation == NullableAnnotation.Annotated
-                || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+            var allowNull = ExpectedFailureModel.AllowsNull(method);
             sb.AppendLine("        /// <summary>Identifies this operation for host adapters without transport metadata.</summary>");
             sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");

@@ -40,7 +40,7 @@ public class MappableGeneratorTests
     {
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
 
-        var driver = CSharpGeneratorDriver.Create(new MappableGenerator());
+        var driver = CSharpGeneratorDriver.Create([new MappableGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 
         var result = driver.GetRunResult();

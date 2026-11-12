@@ -10,13 +10,22 @@ modules own routes, binding, status codes and response schemas.
 ## Contract and handlers
 
 ```csharp
-public interface INOFSampleService : IApplicationService
+public partial interface INOFSampleService : IApplicationService
 {
-    Result<CreatedConfigNode> CreateConfigNode(CreateConfigNodeRequest request);
-    Result<GetConfigNodeByIdResponse> GetConfigNodeById(GetConfigNodeByIdRequest request);
+    [FailureCase("config_node.name_conflict", Name = "NameConflict")]
+    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
+    [FailureCase("config_node.invalid_input", Name = "InvalidInput")]
+    CreatedConfigNode CreateConfigNode(CreateConfigNodeRequest request);
+    [FailureCase("config_node.not_found", Name = "NotFound")]
+    GetConfigNodeByIdResponse GetConfigNodeById(GetConfigNodeByIdRequest request);
     GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
-    Result UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
-    Result DeleteConfigNode(DeleteConfigNodeRequest request);
+    [FailureCase("config_node.not_found", Name = "NotFound")]
+    [FailureCase("config_node.parent_cycle", Name = "ParentCycle")]
+    [FailureCase("config_node.parent_not_found", Name = "ParentNotFound")]
+    Empty UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
+    [FailureCase("config_node.not_found", Name = "NotFound")]
+    [FailureCase<NodeHasChildrenError>("config_node.has_children", Name = "HasChildren")]
+    Empty DeleteConfigNode(DeleteConfigNodeRequest request);
     // File, children, configuration and stream operations remain ordinary business declarations.
 }
 public sealed record CreatedConfigNode(long Id);

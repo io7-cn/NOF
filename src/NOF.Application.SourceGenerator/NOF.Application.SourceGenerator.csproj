@@ -26,4 +26,7 @@
 		<Compile Include="..\SourceGenerator.Shared\ExtensionMemberSymbol.cs" Link="Shared\ExtensionMemberSymbol.cs" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\SourceGenerator.Shared\ExpectedFailureModel.cs" Link="Shared\ExpectedFailureModel.cs" />
+  </ItemGroup>
 </Project>

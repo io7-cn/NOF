@@ -13,7 +13,7 @@
     <!-- NuGet Package Settings -->
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Contract</PackageId>
-    <Description>Contract layer for the NOF Framework — transport-independent application service contracts, messages and business outcomes.</Description>
+    <Description>Contract layer for the NOF Framework — transport-independent application service contracts, messages and declared expected business outcomes.</Description>
   </PropertyGroup>	
 
 	<ItemGroup>

@@ -41,17 +41,23 @@ public readonly partial struct EmailAddress : IValueObject<string>
 
 Construct values through `EmailAddress.Of(...)` and extract the primitive with an explicit cast. `default(EmailAddress)` and `new EmailAddress()` are invalid (`NOF018`).
 
-## 2. Add Failure Definitions
+## 2. Declare Expected Application Failures in Contract
 
 ```csharp
-using NOF.Domain;
+using NOF.Contract;
 
-[Failure("NotFound", "Order not found", "404001")]
-[Failure("InvalidStatus", "Order status is invalid", "400002")]
-public static partial class OrderFailures;
+public partial interface IOrderService : IApplicationService
+{
+    [FailureCase("404001", Name = "NotFound")]
+    [FailureCase("400002", Name = "InvalidStatus")]
+    Empty Confirm(ConfirmOrderRequest request);
+}
 ```
 
-The generator emits static `Failure` members such as `OrderFailures.InvalidStatus`.
+The generator creates IOrderService.ConfirmResult and distinct case types. Domain
+methods return their own business values; Application maps those values to the declared
+cases. Error codes do not determine C# names. No static failure-holder class or
+DomainException conversion is needed.
 
 ## 3. Add a Domain Class and Events
 
@@ -80,15 +86,16 @@ public sealed class Order
         return order;
     }
 
-    public void Confirm()
+    public bool TryConfirm()
     {
         if (Status == "Confirmed")
         {
-            throw new DomainException(OrderFailures.InvalidStatus);
+            return false;
         }
 
         Status = "Confirmed";
         new OrderConfirmedEvent(Id).PublishAsEvent();
+        return true;
     }
 }
 

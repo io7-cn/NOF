@@ -4,6 +4,7 @@ using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
 using NOF.Sample.Application.Repositories;
 using System.Text.Json.Nodes;
+using Outcome = NOF.Sample.INOFSampleService.GetConfigurationResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -18,8 +19,12 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
         _cache = cache;
     }
 
-    public override async Task<Result<GetConfigurationResponse>> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Outcome> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
     {
+        if (!ConfigNodeName.IsValid(request.AppName))
+        {
+            return new Outcome.InvalidInput("Application name must contain 1–100 nonblank characters.");
+        }
         var appNameStr = request.AppName;
         var appCacheKey = new ConfigResultCacheKey(appNameStr);
 
@@ -29,7 +34,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
         if (appNodeDto is null)
         {
-            return Result.Fail("404", "Config node not found.");
+            return new Outcome.NotFound("Config node not found.");
         }
 
         // 2. Expand Path to Root

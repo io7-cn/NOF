@@ -41,7 +41,7 @@ public class ValueObjectGeneratorTests
             source,
             true,
             _extraRefs);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
         using var stream = new MemoryStream();
@@ -83,7 +83,7 @@ public class ValueObjectGeneratorTests
     {
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
 
-        var driver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        var driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 
         var result = driver.GetRunResult();

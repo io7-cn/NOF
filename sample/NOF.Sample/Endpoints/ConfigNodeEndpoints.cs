@@ -36,18 +36,74 @@ public sealed class ConfigNodeEndpoints : IHttpEndpointModule
             .ProducesProblem(StatusCodes.Status400BadRequest);
     }
 
-    public static async Task<Results<CreatedAtRoute<CreatedConfigNode>, ProblemHttpResult>> CreateAsync(
-        [FromBody] CreateConfigNodeBody body, HttpContext http, CancellationToken ct)
-    {
-        var result = await http.InvokeAsync(NOFSampleService.CreateConfigNode.Descriptor,
-            new CreateConfigNodeRequest { Name = body.Name, ParentId = body.ParentId }, ct);
-        return result.Value switch
-        {
-            CreatedConfigNode node => TypedResults.CreatedAtRoute(node, GetNodeRoute, new { id = node.Id }),
-            Failure failure => ToProblem(failure),
-            _ => throw new InvalidOperationException("Create did not return a business outcome.")
-        };
-    }
+    public static async Task<Results<CreatedAtRoute<CreatedConfigNode>, ProblemHttpResult>> CreateAsync([FromBody] CreateConfigNodeBody body, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.CreateConfigNode.Descriptor,
+            new CreateConfigNodeRequest { Name = body.Name, ParentId = body.ParentId }, ct)).Match<Results<CreatedAtRoute<CreatedConfigNode>, ProblemHttpResult>>(
+            node => TypedResults.CreatedAtRoute(node, GetNodeRoute, new { id = node.Id }),
+            error => ToProblem(INOFSampleService.CreateConfigNodeResult.NameConflict.Code, error.Error.Message, 409),
+            error => ToProblem(INOFSampleService.CreateConfigNodeResult.ParentNotFound.Code, error.Error.Message, 422),
+            error => ToProblem(INOFSampleService.CreateConfigNodeResult.InvalidInput.Code, error.Error.Message, 400));
+
+    public static async Task<Results<Ok<ConfigNodeDto>, ProblemHttpResult>> GetAsync(long id, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.GetConfigNodeById.Descriptor,
+            new GetConfigNodeByIdRequest { Id = id }, ct)).Match<Results<Ok<ConfigNodeDto>, ProblemHttpResult>>(
+            found => TypedResults.Ok(found.Node),
+            error => ToProblem(INOFSampleService.GetConfigNodeByIdResult.NotFound.Code, error.Error.Message, 404));
+
+    public static async Task<Results<Ok<GetConfigNodeChildrenResponse>, ProblemHttpResult>> GetChildrenAsync(long id, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.GetConfigNodeChildren.Descriptor,
+            new GetConfigNodeChildrenRequest { Id = id }, ct)).Match<Results<Ok<GetConfigNodeChildrenResponse>, ProblemHttpResult>>(
+            children => TypedResults.Ok(children),
+            error => ToProblem(INOFSampleService.GetConfigNodeChildrenResult.NotFound.Code, error.Error.Message, 404));
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
+            new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(INOFSampleService.UpdateConfigNodeParentResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.UpdateConfigNodeParentResult.ParentCycle.Code, error.Error.Message, 409),
+            error => ToProblem(INOFSampleService.UpdateConfigNodeParentResult.ParentNotFound.Code, error.Error.Message, 422));
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(long id, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.DeleteConfigNode.Descriptor,
+            new DeleteConfigNodeRequest { Id = id }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(INOFSampleService.DeleteConfigNodeResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.DeleteConfigNodeResult.HasChildren.Code, error.Error.Message, 409));
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> PutFileAsync(long id, string fileName, [FromBody] ConfigFileBody body, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.AddOrUpdateConfigFile.Descriptor,
+            new AddOrUpdateConfigFileRequest { NodeId = id, FileName = fileName, Content = body.Content }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(INOFSampleService.AddOrUpdateConfigFileResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.AddOrUpdateConfigFileResult.InvalidInput.Code, error.Error.Message, 400));
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteFileAsync(long id, string fileName, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.RemoveConfigFile.Descriptor,
+            new RemoveConfigFileRequest { NodeId = id, FileName = fileName }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(INOFSampleService.RemoveConfigFileResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.RemoveConfigFileResult.InvalidInput.Code, error.Error.Message, 400));
+
+    public static async Task<Results<NoContent, ProblemHttpResult>> SetActiveFileAsync(long id, [FromBody] ActiveConfigFileBody body, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.SetActiveFile.Descriptor,
+            new SetActiveFileRequest { NodeId = id, FileName = body.FileName }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
+            _ => TypedResults.NoContent(),
+            error => ToProblem(INOFSampleService.SetActiveFileResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.SetActiveFileResult.InvalidInput.Code, error.Error.Message, 400));
+
+    public static async Task<Results<Ok<GetConfigurationResponse>, ProblemHttpResult>> GetConfigurationAsync(string appName, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.GetConfiguration.Descriptor,
+            new GetConfigurationRequest { AppName = appName }, ct)).Match<Results<Ok<GetConfigurationResponse>, ProblemHttpResult>>(
+            configuration => TypedResults.Ok(configuration),
+            error => ToProblem(INOFSampleService.GetConfigurationResult.NotFound.Code, error.Error.Message, 404),
+            error => ToProblem(INOFSampleService.GetConfigurationResult.InvalidInput.Code, error.Error.Message, 400));
+
+    public static async Task<Results<ServerSentEventsResult<SampleStreamEvent>, ProblemHttpResult>> WatchAsync(string? topic, int? count, int? intervalMilliseconds, bool? forceFailure, HttpContext http, CancellationToken ct)
+        => (await http.InvokeAsync(NOFSampleService.WatchSampleStream.Descriptor,
+            new WatchSampleStreamRequest { Topic = topic ?? "NOF Streaming Demo", Count = count ?? 5, IntervalMilliseconds = intervalMilliseconds ?? 1000, ForceFailure = forceFailure ?? false }, ct)).Match<Results<ServerSentEventsResult<SampleStreamEvent>, ProblemHttpResult>>(
+            events => TypedResults.ServerSentEvents(events),
+            error => ToProblem(INOFSampleService.WatchSampleStreamResult.StreamUnavailable.Code, error.Error.Message, 400));
 
     public static async Task<Ok<List<ConfigNodeDto>>> GetRootsAsync(HttpContext http, CancellationToken ct)
     {
@@ -55,104 +111,9 @@ public sealed class ConfigNodeEndpoints : IHttpEndpointModule
         return TypedResults.Ok(response.Nodes);
     }
 
-    public static async Task<Results<Ok<ConfigNodeDto>, ProblemHttpResult>> GetAsync(long id, HttpContext http, CancellationToken ct)
-    {
-        var result = await http.InvokeAsync(NOFSampleService.GetConfigNodeById.Descriptor, new GetConfigNodeByIdRequest { Id = id }, ct);
-        return result.Value switch
-        {
-            GetConfigNodeByIdResponse found => TypedResults.Ok(found.Node),
-            Failure failure => ToProblem(failure),
-            _ => throw new InvalidOperationException("Get did not return a business outcome.")
-        };
-    }
-
-    public static async Task<Results<Ok<GetConfigNodeChildrenResponse>, ProblemHttpResult>> GetChildrenAsync(
-        long id, HttpContext http, CancellationToken ct)
-    {
-        var result = await http.InvokeAsync(NOFSampleService.GetConfigNodeChildren.Descriptor,
-            new GetConfigNodeChildrenRequest { Id = id }, ct);
-        return result.Value switch
-        {
-            GetConfigNodeChildrenResponse children => TypedResults.Ok(children),
-            Failure failure => ToProblem(failure),
-            _ => throw new InvalidOperationException("Children query did not return a business outcome.")
-        };
-    }
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(
-        long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-        => ToCommandResult(await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-            new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct));
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(long id, HttpContext http, CancellationToken ct)
-        => ToCommandResult(await http.InvokeAsync(NOFSampleService.DeleteConfigNode.Descriptor, new DeleteConfigNodeRequest { Id = id }, ct));
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> PutFileAsync(
-        long id, string fileName, [FromBody] ConfigFileBody body, HttpContext http, CancellationToken ct)
-        => ToCommandResult(await http.InvokeAsync(NOFSampleService.AddOrUpdateConfigFile.Descriptor,
-            new AddOrUpdateConfigFileRequest { NodeId = id, FileName = fileName, Content = body.Content }, ct));
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> DeleteFileAsync(
-        long id, string fileName, HttpContext http, CancellationToken ct)
-        => ToCommandResult(await http.InvokeAsync(NOFSampleService.RemoveConfigFile.Descriptor,
-            new RemoveConfigFileRequest { NodeId = id, FileName = fileName }, ct));
-
-    public static async Task<Results<NoContent, ProblemHttpResult>> SetActiveFileAsync(
-        long id, [FromBody] ActiveConfigFileBody body, HttpContext http, CancellationToken ct)
-        => ToCommandResult(await http.InvokeAsync(NOFSampleService.SetActiveFile.Descriptor,
-            new SetActiveFileRequest { NodeId = id, FileName = body.FileName }, ct));
-
-    public static async Task<Results<Ok<GetConfigurationResponse>, ProblemHttpResult>> GetConfigurationAsync(
-        string appName, HttpContext http, CancellationToken ct)
-    {
-        var result = await http.InvokeAsync(NOFSampleService.GetConfiguration.Descriptor,
-            new GetConfigurationRequest { AppName = appName }, ct);
-        return result.Value switch
-        {
-            GetConfigurationResponse configuration => TypedResults.Ok(configuration),
-            Failure failure => ToProblem(failure),
-            _ => throw new InvalidOperationException("Configuration query did not return a business outcome.")
-        };
-    }
-
-    public static async Task<IResult> WatchAsync(HttpContext http, string? topic, int? count, int? intervalMilliseconds, bool? forceFailure, CancellationToken ct)
-    {
-        var result = await http.InvokeAsync(NOFSampleService.WatchSampleStream.Descriptor,
-            new WatchSampleStreamRequest
-            {
-                Topic = topic ?? "NOF Streaming Demo",
-                Count = count ?? 5,
-                IntervalMilliseconds = intervalMilliseconds ?? 1000,
-                ForceFailure = forceFailure ?? false
-            }, ct);
-        return result.Value switch
-        {
-            IAsyncEnumerable<SampleStreamEvent> events => TypedResults.ServerSentEvents(events),
-            Failure failure => ToProblem(failure),
-            _ => throw new InvalidOperationException("Stream did not return a business outcome.")
-        };
-    }
-
-    public static Results<NoContent, ProblemHttpResult> ToCommandResult(Result result) => result.Value switch
-    {
-        Empty => TypedResults.NoContent(),
-        Failure failure => ToProblem(failure),
-        _ => throw new InvalidOperationException("Command did not return a business outcome.")
-    };
-
-    public static ProblemHttpResult ToProblem(Failure failure)
-    {
-        var status = failure.Code switch
-        {
-            ConfigNodeErrorCodes.NotFound => StatusCodes.Status404NotFound,
-            ConfigNodeErrorCodes.ParentNotFound => StatusCodes.Status422UnprocessableEntity,
-            ConfigNodeErrorCodes.NameConflict or ConfigNodeErrorCodes.ParentCycle or ConfigNodeErrorCodes.HasChildren
-                => StatusCodes.Status409Conflict,
-            _ => int.TryParse(failure.Code, out var code) && code is >= 400 and <= 599 ? code : StatusCodes.Status500InternalServerError
-        };
-        return TypedResults.Problem(statusCode: status, detail: failure.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = failure.Code });
-    }
+    public static ProblemHttpResult ToProblem(string code, string message, int status)
+        => TypedResults.Problem(statusCode: status, detail: message,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
 }
 
 public sealed record CreateConfigNodeBody

@@ -11,7 +11,7 @@
     <!-- NuGet Package Settings -->
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Domain</PackageId>
-    <Description>Domain layer for the NOF Framework — entities, aggregate roots, repositories, domain events, and source-generated failure definitions.</Description>
+    <Description>Domain layer for the NOF Framework — entities, aggregate roots, repositories, domain events, and value objects.</Description>
   </PropertyGroup>
 	
   <ItemGroup>

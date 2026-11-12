@@ -6,24 +6,22 @@ namespace NOF.Domain.Tests;
 public class FailureModelTests
 {
     [Fact]
-    public void SharedFailure_ThrowsDomainExceptionWithoutAbstractionDependingOnDomain()
+    public void ExpectedFailures_HaveNoDomainExceptionConversion()
     {
-        var failure = new Failure("order.not_found", "Missing");
-        var exception = Assert.Throws<DomainException>(() => failure.Throw());
-        Assert.Equal("order.not_found", exception.ErrorCode);
-        Assert.Equal("Missing", exception.Message);
-        Assert.Equal("NOF.Abstraction", typeof(Failure).Assembly.GetName().Name);
-        Assert.Null(typeof(DomainException).Assembly.GetType("NOF.Domain.Failure"));
+        var assembly = typeof(DomainException).Assembly;
+        Assert.Null(assembly.GetType("NOF.Domain.FailureAttribute"));
+        Assert.Null(assembly.GetType("NOF.Domain.NOFDomainExtensions"));
+        Assert.DoesNotContain(typeof(DomainException).GetConstructors(), constructor =>
+            constructor.GetParameters().Any(parameter => parameter.ParameterType == typeof(Failure)));
     }
 
     [Fact]
-    public void DomainExceptions_PreserveSharedFailureAndInnerException()
+    public void InvariantExceptions_PreserveCodeMessageAndInnerException()
     {
-        var failure = new Failure("invalid", "Invalid order");
         var inner = new InvalidOperationException("cause");
-        var exception = new DomainValidationException(failure, inner);
-        Assert.Equal(failure.Code, exception.ErrorCode);
-        Assert.Equal(failure.Message, exception.Message);
+        var exception = new DomainValidationException("invalid", "Invalid order", inner);
+        Assert.Equal("invalid", exception.ErrorCode);
+        Assert.Equal("Invalid order", exception.Message);
         Assert.Same(inner, exception.InnerException);
     }
 }

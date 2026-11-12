@@ -71,3 +71,5 @@ When framework behavior changes, check all of the following and keep them consis
 - `.agents/`
 - `.github/`
 - sample usage in `sample/`
+
+- Expected application failures use Contract-owned FailureCase attributes. Error codes are opaque strings, independent of Name; multiple cases require explicit names and a single unnamed case is Failed. Generated IService.OperationResult closes the declared failures and success type. Use Match or exhaustive switches. Domain does not depend on Contract and no longer converts returned failures to DomainException.

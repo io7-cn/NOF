@@ -49,10 +49,10 @@ public sealed record ImportReceipt(int ImportedCount, string Message);
 也不需要失败转换适配器。领域生成的失败可以直接作为任意 `Result<T>` 的返回值。
 `Result.Fail(existingFailure)` 返回同一个共享实例。
 
-`[Failure(name, message, errorCode)]` 注解仍位于 Domain，其生成器现在构造
-`NOF.Abstraction.Failure(code, message)`。领域异常直接接受这个共享值。
-导入 `NOF.Domain` 后，可以用 `failure.Throw()` 抛出 `DomainException`；
-这是 Domain 扩展方法，因此 Abstraction 不会反向依赖 Domain。
+声明式 UseCase 使用 [FailureCase 和生成的封闭结果](expected-failures.md)。旧 Domain
+FailureAttribute、静态成员承载类生成器和 failure.Throw 转换已删除。共享 Failure 继续
+用于策略拒绝和开放 Result API，不会隐式加入生成的 checked 结果。领域不变式异常与
+可预期业务失败分开处理。
 
 ## JSON 和 Native AOT
 

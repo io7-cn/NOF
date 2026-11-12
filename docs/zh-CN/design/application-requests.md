@@ -110,3 +110,5 @@ Result 不再定义 CreateEmptyResponse。
 契约、实现、适配器和宿主需一同升级。策略将旧 SetResponse(Failure) 改为 Reject，业务
 Result 的 Failure 仍是业务数据。重新构建生成产物，删除自定义构建工具残留的客户端文件。
 既有标签和发行版保持不可变；回滚时恢复配套的旧包与调用方代码。
+
+[声明可预期失败](expected-failures.md)可为每个操作生成封闭结果；方法声明表示成功类型，Descriptor 表示实际执行返回类型。

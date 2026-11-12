@@ -234,3 +234,5 @@ The host selects an `IObjectStorageRider`; application handlers continue to depe
 ## License
 
 Apache-2.0
+
+[FailureCase declarations](../../docs/en/design/expected-failures.md) expand operation return types into Contract-owned closed outcomes; registration, descriptors and local invocation all use that generated response type.

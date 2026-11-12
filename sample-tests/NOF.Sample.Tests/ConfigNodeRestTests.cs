@@ -46,7 +46,7 @@ public sealed class ConfigNodeRestTests
         using var deleted = await http.DeleteAsync($"/api/config-nodes/{parent}");
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         using var missing = await http.GetAsync($"/api/config-nodes/{parent}");
-        await AssertProblemAsync(missing, HttpStatusCode.NotFound, ConfigNodeErrorCodes.NotFound);
+        await AssertProblemAsync(missing, HttpStatusCode.NotFound, INOFSampleService.GetConfigNodeByIdResult.NotFound.Code);
         using var deleteChild = await http.DeleteAsync($"/api/config-nodes/{child}");
         Assert.Equal(HttpStatusCode.NoContent, deleteChild.StatusCode);
     }
@@ -58,14 +58,14 @@ public sealed class ConfigNodeRestTests
         using var http = app.GetTestClient();
         var id = await CreateAsync(http, "existing");
         using var duplicate = await http.PostAsJsonAsync("/api/config-nodes", new { name = "existing" });
-        await AssertProblemAsync(duplicate, HttpStatusCode.Conflict, ConfigNodeErrorCodes.NameConflict);
+        await AssertProblemAsync(duplicate, HttpStatusCode.Conflict, INOFSampleService.CreateConfigNodeResult.NameConflict.Code);
         using var unknownParent = await http.PostAsJsonAsync("/api/config-nodes", new { name = "orphan", parentId = long.MaxValue });
-        await AssertProblemAsync(unknownParent, HttpStatusCode.UnprocessableEntity, ConfigNodeErrorCodes.ParentNotFound);
+        await AssertProblemAsync(unknownParent, HttpStatusCode.UnprocessableEntity, INOFSampleService.CreateConfigNodeResult.ParentNotFound.Code);
         using var self = await http.PatchAsJsonAsync($"/api/config-nodes/{id}/parent", new { parentId = id });
-        await AssertProblemAsync(self, HttpStatusCode.Conflict, ConfigNodeErrorCodes.ParentCycle);
+        await AssertProblemAsync(self, HttpStatusCode.Conflict, INOFSampleService.UpdateConfigNodeParentResult.ParentCycle.Code);
         var child = await CreateAsync(http, "child", id);
         using var cycle = await http.PatchAsJsonAsync($"/api/config-nodes/{id}/parent", new { parentId = child });
-        await AssertProblemAsync(cycle, HttpStatusCode.Conflict, ConfigNodeErrorCodes.ParentCycle);
+        await AssertProblemAsync(cycle, HttpStatusCode.Conflict, INOFSampleService.UpdateConfigNodeParentResult.ParentCycle.Code);
         using var missingParentField = await http.PatchAsJsonAsync($"/api/config-nodes/{child}/parent", new { nodeId = id });
         Assert.Equal(HttpStatusCode.BadRequest, missingParentField.StatusCode);
         using var blank = await http.PostAsJsonAsync("/api/config-nodes", new { name = " " });
@@ -90,7 +90,7 @@ public sealed class ConfigNodeRestTests
         Assert.IsType<Empty>((await api.RemoveConfigFileAsync(new()
         { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
         Assert.IsType<Empty>((await api.DeleteConfigNodeAsync(new() { Id = root.Id }, Context.Empty)).Value);
-        Assert.Equal(ConfigNodeErrorCodes.NotFound,
+        Assert.Equal(INOFSampleService.GetConfigNodeByIdResult.NotFound.Code,
             (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectFailure().Code);
     }
 

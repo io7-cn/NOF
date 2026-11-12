@@ -2,6 +2,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
+using Outcome = NOF.Sample.INOFSampleService.UpdateConfigNodeParentResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -18,7 +19,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Outcome> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
     {
         var nodeId = ConfigNodeId.Of(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
@@ -26,7 +27,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
 
         if (node is null)
         {
-            return Result.Fail(ConfigNodeErrorCodes.NotFound, "Node not found.");
+            return new Outcome.NotFound("Node not found.");
         }
 
         var newParentId = request.NewParentId.HasValue
@@ -38,19 +39,19 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
         {
             if (newParentId.Value == nodeId)
             {
-                return Result.Fail(ConfigNodeErrorCodes.ParentCycle, "Cannot move a node under itself.");
+                return new Outcome.ParentCycle("Cannot move a node under itself.");
             }
             var parentNode = await _dbContext.Set<ConfigNode>()
                 .FirstOrDefaultAsync(configNode => configNode.Id == newParentId.Value, cancellationToken);
             if (parentNode is null)
             {
-                return Result.Fail(ConfigNodeErrorCodes.ParentNotFound, "Target parent node not found.");
+                return new Outcome.ParentNotFound("Target parent node not found.");
             }
 
             // Prevent cyclic parent relationship.
             if (await IsDescendant(nodeId, newParentId.Value, cancellationToken))
             {
-                return Result.Fail(ConfigNodeErrorCodes.ParentCycle, "Cannot move a node under its descendant.");
+                return new Outcome.ParentCycle("Cannot move a node under its descendant.");
             }
         }
 
@@ -66,7 +67,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 
     private async Task<bool> IsDescendant(ConfigNodeId ancestorId, ConfigNodeId nodeId, CancellationToken cancellationToken)

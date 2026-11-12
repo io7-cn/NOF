@@ -1,11 +1,12 @@
 using NOF.Contract;
 using System.Runtime.CompilerServices;
+using Outcome = NOF.Sample.INOFSampleService.WatchSampleStreamResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
 public sealed class WatchSampleStream : NOFSampleService.WatchSampleStream
 {
-    public override Task<Result<global::System.Collections.Generic.IAsyncEnumerable<SampleStreamEvent>>> HandleAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<Outcome> HandleAsync(WatchSampleStreamRequest request, Context context, CancellationToken cancellationToken)
     {
         var count = Math.Clamp(request.Count, 1, 20);
         var intervalMilliseconds = Math.Clamp(request.IntervalMilliseconds, 100, 5000);
@@ -13,11 +14,11 @@ public sealed class WatchSampleStream : NOFSampleService.WatchSampleStream
 
         if (request.ForceFailure)
         {
-            return Task.FromResult<Result<global::System.Collections.Generic.IAsyncEnumerable<SampleStreamEvent>>>(
-                Result.Fail("sample_stream_failure", $"Sample streaming demo failed for topic '{topic}'."));
+            return Task.FromResult<Outcome>(
+                new Outcome.StreamUnavailable($"Sample streaming demo failed for topic '{topic}'."));
         }
 
-        return Task.FromResult(Result.Stream(Stream(topic, count, intervalMilliseconds, cancellationToken)));
+        return Task.FromResult<Outcome>(Stream(topic, count, intervalMilliseconds, cancellationToken));
     }
 
     private static async IAsyncEnumerable<SampleStreamEvent> Stream(

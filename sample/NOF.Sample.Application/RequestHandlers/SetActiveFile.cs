@@ -2,6 +2,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
+using Outcome = NOF.Sample.INOFSampleService.SetActiveFileResult;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
@@ -16,7 +17,7 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Outcome> HandleAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.Of(request.NodeId);
         var node = await _dbContext.Set<ConfigNode>()
@@ -24,9 +25,13 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return new Outcome.NotFound("Node not found.");
         }
 
+        if (request.FileName is { Length: > 0 } && !ConfigFileName.IsValid(request.FileName))
+        {
+            return new Outcome.InvalidInput("File name must contain 1–100 nonblank characters.");
+        }
         var fileName = string.IsNullOrEmpty(request.FileName) ? (ConfigFileName?)null : ConfigFileName.Of(request.FileName);
         node.SetActiveFileName(fileName);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -41,6 +46,6 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 }

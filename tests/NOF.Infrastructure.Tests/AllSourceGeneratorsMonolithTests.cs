@@ -36,9 +36,6 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             namespace Monolith;
 
-            [Failure("Unavailable", "The operation is unavailable.", "monolith.unavailable")]
-            public partial class AppFailures;
-
             [NewableValueObject]
             public readonly partial struct UserId : IValueObject<long>;
 
@@ -75,17 +72,18 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record PingRequest(string Value);
 
-            public interface IDemoService : IApplicationService
+            public partial interface IDemoService : IApplicationService
             {
-                Result Ping(PingRequest request);
+                [FailureCase("monolith.unavailable", Name = "Unavailable")]
+                Empty Ping(PingRequest request);
             }
 
             public partial class DemoServer : ApplicationService<IDemoService>;
 
             public sealed class PingHandler : DemoServer.Ping
             {
-                public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
-                    => Task.FromResult(Result.Success());
+                public override Task<IDemoService.PingResult> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                    => Task.FromResult<IDemoService.PingResult>(Empty.Instance);
             }
             """;
 
@@ -103,14 +101,14 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(IApplicationService),
             typeof(Result),
             typeof(IValueObject<>),
-            typeof(FailureAttribute),
+            typeof(FailureCaseAttribute),
             typeof(ApplicationServiceInvoker),
             typeof(System.Text.Json.NOFAbstractionExtensions));
         ISourceGenerator[] generators =
         [
             new AutoInjectGenerator().AsSourceGenerator(),
             new EventHandlerRegistrationGenerator().AsSourceGenerator(),
-            new FailureGenerator().AsSourceGenerator(),
+            new FailureCaseGenerator().AsSourceGenerator(),
             new ValueObjectGenerator().AsSourceGenerator(),
             new HandlerRegistrationGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
@@ -122,7 +120,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             generators = [.. generators.Reverse()];
         }
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         Assert.Empty(generatorDiagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
@@ -130,7 +128,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
         Assert.DoesNotContain("ServiceClient", generatedCode);
-        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::NOF.Contract.Result> InvokeAsync", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.IDemoService.PingResult> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
     }
 }

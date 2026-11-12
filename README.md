@@ -16,7 +16,7 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 
 - **Clean Architecture** - layered packages (`Domain`, `Contract`, `Application`, `Infrastructure`) enforce separation of concerns
 - **CQRS & Messaging** - first-class `IApplicationService`, typed command/notification dispatch, handler pipelines, and native HTTP streaming integration
-- **Source Generators** - compile-time code generation for application service operations, DI registration, mapping registration, and failure definitions
+- **Source Generators** - compile-time code generation for application service operations, DI registration, mapping registration, and declared expected-failure unions
 - **Transactional Outbox** - reliable message delivery with inbox/outbox pattern built into EF Core infrastructure
 - **State Machines** - declarative, event-driven state machine builder with persistent context
 - **Multi-Tenancy** - tenant-aware persistence and deployment-aware runtime defaults
@@ -190,3 +190,5 @@ This repository uses Central Package Management via `Directory.Packages.props`.
 ## License
 
 This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+Expected use-case failures can be declared with Contract-owned FailureCase attributes. Error codes remain opaque values; generated case names are independent. See the [guide](docs/en/design/expected-failures.md) ([简体中文](docs/zh-CN/design/expected-failures.md)).
