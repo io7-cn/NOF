@@ -17,7 +17,7 @@ public union ServiceExecution(ServiceCompleted, ServiceRejected)
     {
         if (Value is ServiceRejected rejected)
         {
-            return createFailure is not null ? createFailure(rejected.Failure) : throw new ServiceRejectedException(rejected.Failure);
+            return createFailure is not null ? createFailure(rejected.Failure) : throw new ServiceRejectedException(rejected.Failure, rejected.Reason);
         }
         if (Value is not ServiceCompleted completed)
         {

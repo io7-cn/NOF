@@ -1,107 +1,16 @@
-using Microsoft.Extensions.DependencyInjection;
-using NOF.Abstraction;
-using NOF.Application;
-using NOF.Infrastructure;
-
 namespace NOF.Infrastructure;
 
-public sealed class MemoryNotificationRider : INotificationRider
+/// <summary>Accepts one independent durable receipt per stable subscription.</summary>
+public sealed class MemoryNotificationRider(MessageBindingRegistry bindings, MessageInboxReceiver receiver) : INotificationRider
 {
-    private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IObjectSerializer _objectSerializer;
-
-    public MemoryNotificationRider(
-        NotificationHandlerRegistry notificationHandlerRegistry,
-        IServiceProvider serviceProvider,
-        IObjectSerializer objectSerializer)
+    /// <inheritdoc />
+    public async Task PublishAsync(ReadOnlyMemory<byte> payload, string messageRoute,
+        IEnumerable<KeyValuePair<string, string?>>? headers, CancellationToken cancellationToken = default)
     {
-        _notificationHandlerRegistry = notificationHandlerRegistry;
-        _serviceProvider = serviceProvider;
-        _objectSerializer = objectSerializer;
-    }
-
-    public async Task PublishAsync(ReadOnlyMemory<byte> payload,
-        string messageRoute,
-        IEnumerable<KeyValuePair<string, string?>>? headers,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(messageRoute);
-
-        var messageId = ResolveMessageId(headers);
-
-        // Deduplicate per handler, because each handler is a separate reliable processing unit.
-        var seenHandlerTypeNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var route in ResolveRoutes(messageRoute))
+        var messageId = MessageInboxReceiver.GetMessageId(headers);
+        foreach (var binding in bindings.Bindings.Where(binding => binding.IsSubscription && binding.Route == messageRoute))
         {
-            if (!seenHandlerTypeNames.Add(route))
-            {
-                continue;
-            }
-
-            await EnqueueAsync(
-                messageId,
-                InboxMessageType.Notification,
-                payload,
-                route,
-                headers,
-                cancellationToken);
+            await receiver.ReceiveAsync(messageId, InboxMessageType.Notification, payload, binding.ConsumerId, headers, cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    private IReadOnlyCollection<string> ResolveRoutes(string messageRoute)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(messageRoute);
-        return [.. _notificationHandlerRegistry.GetHandlers(messageRoute).Select(static handlerType => handlerType.DisplayName)];
-    }
-
-    private async Task<bool> EnqueueAsync(
-        Guid messageId,
-        InboxMessageType messageType,
-        ReadOnlyMemory<byte> payload,
-        string route,
-        IEnumerable<KeyValuePair<string, string?>>? headers,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
-
-        var dbContext = scope.ServiceProvider.GetService<IInboxStore>();
-        if (dbContext is null)
-        {
-            return true;
-        }
-
-        var order = InboxMessageOrdering.Parse(headers);
-        var message = NOFInboxMessage.Create(
-            messageId,
-            messageType,
-            route,
-            payload.ToArray(),
-            SerializeHeaders(headers),
-            order);
-
-        try
-        {
-            await dbContext.ReceiveAsync(message, order, cancellationToken);
-            return true;
-        }
-        catch (DbUpdateException)
-        {
-            return false;
-        }
-    }
-
-    private string SerializeHeaders(IEnumerable<KeyValuePair<string, string?>>? headers)
-    {
-        var dictionary = headers?.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value)
-            ?? new Dictionary<string, string?>(StringComparer.Ordinal);
-        return _objectSerializer.SerializeToText(dictionary, typeof(Dictionary<string, string?>));
-    }
-
-    private static Guid ResolveMessageId(IEnumerable<KeyValuePair<string, string?>>? headers)
-    {
-        var messageIdValue = headers?.FirstOrDefault(static kvp => kvp.Key == NOFAbstractionConstants.Transport.Headers.MessageId).Value;
-        return Guid.TryParse(messageIdValue, out var messageId) ? messageId : Guid.NewGuid();
     }
 }

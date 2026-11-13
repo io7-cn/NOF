@@ -32,7 +32,7 @@ public class TenantInvocationFilterTests
     {
         var middleware = new TenantInvocationFilter();
         var message = new object();
-        var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
+        var inboundContext = (InvocationContext)CreateContext(message.GetType())
             .WithItem(NOFAbstractionConstants.Transport.Headers.TenantId, "tenanta");
         var tenantDuringNext = string.Empty;
 
@@ -53,7 +53,7 @@ public class TenantInvocationFilterTests
     {
         var middleware = new TenantInvocationFilter();
         var message = new object();
-        var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
+        var inboundContext = (InvocationContext)CreateContext(message.GetType())
             .WithItem("x-tenant-id", "tenanta");
         var tenantDuringNext = string.Empty;
 
@@ -69,13 +69,14 @@ public class TenantInvocationFilterTests
         }
     }
 
-    private static CommandInboundContext CreateContext(Type messageType)
+    private static InvocationContext CreateContext(Type messageType)
     {
-        return new CommandInboundContext
+        return new InvocationContext
         {
             HandlerMethodInfo = typeof(object).GetMethod(nameof(ToString))!,
             HandlerType = typeof(object),
-            InputType = messageType
+            Operation = new InvocationTestDescriptor(typeof(object), (typeof(object).GetMethod(nameof(ToString))!).Name, messageType, typeof(Empty)),
+            Origin = InvocationOrigin.Message
         };
     }
 }

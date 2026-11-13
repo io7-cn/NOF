@@ -63,12 +63,6 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record AppCommand(string Value);
 
-            public sealed class AppCommandHandler : CommandHandler<AppCommand>
-            {
-                public override Task HandleAsync(AppCommand command, Context context, CancellationToken cancellationToken)
-                    => Task.CompletedTask;
-            }
-
             public sealed record PingRequest(string Value);
 
             public partial interface IDemoService : IApplicationService
@@ -81,7 +75,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed class PingHandler : DemoServer.Ping
             {
-                public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                public override Task<Result> HandleAsync(PingRequest request, InvocationContext context, CancellationToken cancellationToken)
                     => Task.FromResult<Result>(request.Value switch
                     {
                         "constructor" => new Unavailable("missing"),
@@ -99,14 +93,13 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(AutoInjectAttribute),
             typeof(AssemblyInitializeAttribute),
             typeof(InMemoryEventHandler<>),
-            typeof(CommandHandler<>),
             typeof(MappableAttribute<,>),
             typeof(ApplicationService<>),
             typeof(IApplicationService),
             typeof(NOF.Testing.TestOutcome),
             typeof(IValueObject<>),
             typeof(FailureCaseAttribute),
-            typeof(ApplicationServiceInvoker),
+            typeof(OperationInvoker),
             typeof(System.Text.Json.NOFAbstractionExtensions));
         ISourceGenerator[] generators =
         [
@@ -114,7 +107,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             new EventHandlerRegistrationGenerator().AsSourceGenerator(),
             new FailureCaseGenerator().AsSourceGenerator(),
             new ValueObjectGenerator().AsSourceGenerator(),
-            new HandlerRegistrationGenerator().AsSourceGenerator(),
+            new OperationDescriptorGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
             new ApplicationServiceGenerator().AsSourceGenerator()

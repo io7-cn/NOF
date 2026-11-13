@@ -43,3 +43,8 @@
   href: ../en/design/persistence-boundaries.md
 - name: 持久化边界迁移
   href: ../zh-CN/design/persistence-boundaries.md
+
+- name: Unified operations and collections
+  href: ../en/design/unified-operations.md
+- name: 统一操作与聚合集合
+  href: ../zh-CN/design/unified-operations.md

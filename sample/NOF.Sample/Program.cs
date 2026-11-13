@@ -17,6 +17,13 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
+builder.AddApplicationService<MessageDemoService>();
+builder.Services.AddMessageBindings(bindings =>
+{
+    bindings.Queue<SendEmail>("sample.mail.v1").To(IMessageDemoServiceOperations.SendMail);
+    bindings.Subscription<OrderCreated>("sample.orders.created.v1", "sample-order-audit")
+        .To(IMessageDemoServiceOperations.RecordOrder);
+});
 builder.AddApplicationService<OAuthChainDemoService>();
 builder.AddApplicationService<DemoDownstreamService>();
 

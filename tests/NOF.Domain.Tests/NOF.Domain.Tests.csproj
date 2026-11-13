@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Domain\NOF.Domain.csproj" />
     <ProjectReference Include="..\..\src\NOF.Domain.SourceGenerator\NOF.Domain.SourceGenerator.csproj" />
+    <ProjectReference Include="..\..\src\NOF.Domain.SourceGenerator\NOF.Domain.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

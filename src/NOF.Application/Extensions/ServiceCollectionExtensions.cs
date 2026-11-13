@@ -41,8 +41,6 @@ public static partial class NOFApplicationExtensions
             services.AddNOFAbstraction();
             services.AddNOFDomain();
             services.GetOrAddSingleton<MappingRegistry>();
-            services.GetOrAddSingleton<CommandHandlerRegistry>();
-            services.GetOrAddSingleton<NotificationHandlerRegistry>();
             services.GetOrAddSingleton<ApplicationServiceRegistry>();
             services.TryAddSingleton<IMapper, ExpressionMapper>();
             services.TryAddEnumerable(new ServiceDescriptor(

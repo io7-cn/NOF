@@ -16,7 +16,7 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigNodeByIdRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var nodeId = ConfigNodeId.From(request.Id);
         var cacheKey = new ConfigNodeByIdCacheKey(nodeId);

@@ -56,3 +56,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Native host integration](design/native-hosting.md)
 
 - [Persistence boundaries](design/persistence-boundaries.md)
+
+- [Unified operations and collections](design/unified-operations.md)

@@ -138,3 +138,5 @@ file CRUD, conflicts/cycles, malformed body binding, cross-tenant reads with SQL
 the actual UI adapter, policy rejection before handler construction, OpenAPI and absence
 of old implicit RPC routes. Run the sample test project and the framework's Native AOT
 smoke when changing the HTTP bridge.
+
+[Current unified operation and message binding API](unified-operations.md).

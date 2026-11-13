@@ -60,9 +60,8 @@ public class ServiceOperationPipelineTests
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ThrowingOperation>();
         using var provider = services.BuildServiceProvider();
-        var pipeline = new ApplicationServiceExecutionAdapter(provider);
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipeline.ExecuteAsync(new Query(),
-            typeof(ThrowingOperation), typeof(Reply), typeof(IProbeService), nameof(IProbeService.Read), null, default));
+        var pipeline = CreateExecutor(provider, typeof(ThrowingOperation));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipeline.ExecuteAsync(new ServiceOperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local));
         Assert.Equal("caller", Context.Current.TenantId);
     }
 
@@ -72,16 +71,28 @@ public class ServiceOperationPipelineTests
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<NullableOperation>();
         using var provider = services.BuildServiceProvider();
-        var result = await new ApplicationServiceExecutionAdapter(provider).ExecuteAsync(new Query(), typeof(NullableOperation),
-            typeof(Reply), typeof(IProbeService), nameof(IProbeService.Find), null, default);
+        var result = await CreateExecutor(provider, typeof(NullableOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply?>(typeof(IProbeService), nameof(IProbeService.Find), true), new Query(), Context.Empty, InvocationOrigin.Local);
         Assert.IsType<ServiceCompleted>(result.Execution.Value);
         Assert.Null(result.Execution.Require<Reply?>(allowNull: true));
         Assert.Null(result.Rejection);
     }
 
-    private static async Task<RequestInboundContext> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
-        => await new ApplicationServiceExecutionAdapter(provider).ExecuteAsync(new Query(), typeof(ProbeOperation), typeof(Reply),
-            typeof(IProbeService), nameof(IProbeService.Read), null, cancellationToken);
+    private static Task<InvocationContext> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
+        => CreateExecutor(provider, typeof(ProbeOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local, cancellationToken);
+
+    private static OperationExecutor CreateExecutor(IServiceProvider provider, Type implementation)
+    {
+        var registry = new ApplicationServiceRegistry();
+        registry.Add(new(typeof(IProbeService), typeof(object))
+        {
+            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            {
+                [nameof(IProbeService.Read)] = new(implementation, typeof(Query), typeof(Reply)),
+                [nameof(IProbeService.Find)] = new(implementation, typeof(Query), typeof(Reply))
+            }
+        });
+        return new(provider, new ApplicationServiceInvocationResolver(provider, registry));
+    }
 
     public sealed record Query;
     public sealed record Reply(Guid HandlerId, string Tenant, string ConstructorTenant);
@@ -96,17 +107,17 @@ public class ServiceOperationPipelineTests
         private readonly Guid _id = Guid.NewGuid();
         private readonly string _constructorTenant = Context.Current.TenantId;
 
-        public override async Task<Reply> HandleAsync(Query request, Context context, CancellationToken cancellationToken)
+        public override async Task<Reply> HandleAsync(Query request, InvocationContext context, CancellationToken cancellationToken)
         {
             await Task.Yield();
-            Assert.Same(context, Context.Current);
+            Assert.Same(context.Context, Context.Current);
             return new Reply(_id, context.TenantId, _constructorTenant);
         }
     }
 
     public sealed class ThrowingOperation : ServiceOperation<Query, Reply>
     {
-        public override async Task<Reply> HandleAsync(Query request, Context context, CancellationToken cancellationToken)
+        public override async Task<Reply> HandleAsync(Query request, InvocationContext context, CancellationToken cancellationToken)
         {
             await Task.Yield();
             throw new InvalidOperationException("Expected");
@@ -116,7 +127,7 @@ public class ServiceOperationPipelineTests
     public sealed class NullableOperation : ServiceOperation<Query, Reply?>
     {
         public override bool AllowsNullResponse => true;
-        public override Task<Reply?> HandleAsync(Query request, Context context, CancellationToken cancellationToken)
+        public override Task<Reply?> HandleAsync(Query request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult<Reply?>(null);
     }
 
@@ -132,6 +143,6 @@ public class ServiceOperationPipelineTests
     public sealed class Normalize : IInvocationFilter
     {
         public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
-            => next((RequestInboundContext)context.WithTenantId("normalized"), request, cancellationToken);
+            => next((InvocationContext)context.WithTenantId("normalized"), request, cancellationToken);
     }
 }

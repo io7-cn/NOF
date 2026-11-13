@@ -15,15 +15,15 @@ public sealed class HostTenantInvocationFilter : IInvocationFilter
     public async ValueTask InvokeAsync(InvocationContext context, object request,
         InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (context is not RequestInboundContext service || !UseHostTenantAttribute.IsRequired(service.ServiceMethodInfo))
+        if (!UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo))
         {
             await next(context, request, cancellationToken);
             return;
         }
 
-        var hostContext = (RequestInboundContext)context.WithTenantId(NOFAbstractionConstants.Tenant.HostId);
+        var hostContext = context.WithTenantId(NOFAbstractionConstants.Tenant.HostId);
         Activity.Current?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.TenantId, hostContext.TenantId);
-        using var _ = Context.PushCurrent(hostContext);
+        using var _ = Context.PushCurrent(hostContext.Context);
         await next(hostContext, request, cancellationToken);
     }
 }

@@ -49,7 +49,7 @@ public sealed class InvocationPipelineTests
         await scope.ServiceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, new object(), async (current, _, _) =>
         {
             await Task.Yield();
-            Assert.Same(current, Context.Current);
+            Assert.Same(current.Context, Context.Current);
             current.SetResponse(current.TenantId);
         }, default);
         Assert.Equal("normalized", context.Execution.Require<string>());
@@ -70,7 +70,7 @@ public sealed class InvocationPipelineTests
             await provider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, new object(), async (current, _, _) =>
             {
                 await Task.Yield();
-                Assert.Same(current, Context.Current);
+                Assert.Same(current.Context, Context.Current);
                 throw expected;
             }, default));
         Assert.Same(expected, actual);
@@ -94,21 +94,12 @@ public sealed class InvocationPipelineTests
         Assert.False(terminalCalled);
     }
 
-    private static TestContext CreateContext() => new()
+    private static InvocationContext CreateContext() => new()
     {
         HandlerType = typeof(InvocationPipelineTests),
         HandlerMethodInfo = typeof(InvocationPipelineTests).GetMethod(nameof(FilterRegistration_AloneDoesNotSelectOrRunAnEngine))!,
-        InputType = typeof(object)
+        Operation = new InvocationTestDescriptor(typeof(object), nameof(ToString), typeof(object), typeof(Empty))
     };
-
-    public sealed class TestContext : InvocationContext
-    {
-        public override InvocationKind Kind => InvocationKind.Command;
-        public TestContext() { }
-        [SetsRequiredMembers]
-        private TestContext(IReadOnlyDictionary<object, object?> items, TestContext source) : base(items, source) { }
-        protected override Context Clone(IReadOnlyDictionary<object, object?> items) => new TestContext(items, this);
-    }
 
     public sealed class HostPipeline : IInvocationPipeline
     {

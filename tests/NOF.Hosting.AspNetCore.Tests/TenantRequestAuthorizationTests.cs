@@ -50,8 +50,8 @@ public sealed class TenantRequestAuthorizationTests
         builder.Services.AddSingleton<IJwksService>(new TestJwksService(rsa.ExportParameters(false)));
         builder.Services.Configure<TenantAuthorizationOptions>(options =>
         {
-            options.RequireAuthenticatedTenantForRequests = true;
-            options.RejectMismatchedTenantForRequests = true;
+            options.RequireAuthenticatedTenant = true;
+            options.RejectMismatchedTenant = true;
         });
         builder.Services.AddScoped<DefaultInboundAuthorizationHandler>();
         builder.Services.AddScoped<IInboundAuthorizationHandler, CatalogAuthorizationHandler>();
@@ -154,13 +154,13 @@ public sealed class TenantRequestAuthorizationTests
 
     public sealed class TenantHandler : ServiceOperation<Empty, NOF.Testing.TestOutcome<string>>
     {
-        public override Task<NOF.Testing.TestOutcome<string>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+        public override Task<NOF.Testing.TestOutcome<string>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(NOF.Testing.TestOutcome.Success<string>(context.TenantId));
     }
 
     public sealed class StreamHandler : ServiceOperation<Empty, NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>>
     {
-        public override Task<NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+        public override Task<NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Unauthorized streaming handlers must not run");
     }
 
@@ -177,7 +177,7 @@ public sealed class TenantRequestAuthorizationTests
             // Application-owned catalog/readiness check uses trusted identity, before service resolution.
             return context.User.TenantId == "tenanta"
                 ? result
-                : new InboundAuthorizationResult.Denied(NOF.Testing.TestOutcome.Fail("403", "Tenant is not available"), 403, []);
+                : new InboundAuthorizationResult.Denied(NOF.Testing.TestOutcome.Fail("403", "Tenant is not available"), RejectionReason.Authorization, []);
         }
     }
 

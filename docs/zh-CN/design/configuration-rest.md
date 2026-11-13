@@ -129,3 +129,5 @@ OAuth 演示使用 /api/oauth-demo，Downstream 检查使用
 测试覆盖真实 Handler 和持久化、Location 跟随、层级投影、文件 CRUD、冲突和循环、非法 Body、
 SQLite 跨租户读取、实际 UI 适配器、Handler 构建前的策略拒绝、OpenAPI，以及旧隐式 RPC 路由
 不再暴露。修改 HTTP 桥接时运行示例测试项目和框架 Native AOT 冒烟。
+
+[当前统一操作与消息绑定 API](unified-operations.md)。

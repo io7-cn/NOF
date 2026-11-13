@@ -80,7 +80,7 @@ public sealed class HttpEndpointModuleTests
     }
     public sealed class EchoHandler : ServiceOperation<EchoRequest, EchoResponse>
     {
-        public override Task<EchoResponse> HandleAsync(EchoRequest request, Context context, CancellationToken cancellationToken)
+        public override Task<EchoResponse> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(new EchoResponse(request.Value));
     }
     public sealed class EchoEndpoints : IHttpEndpointModule

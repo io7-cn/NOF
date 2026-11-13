@@ -4,13 +4,13 @@ Application layer package for the [NOF Framework](https://github.com/XmmShp/NOF)
 
 ## Overview
 
-Contains the application service abstractions used to implement NOF applications: RPC servers, request handlers, command handlers, notification handlers, mapping, caching, object storage, and persistence contracts.
+Contains the application service abstractions used to implement NOF applications: service operations and message submission, mapping, caching, object storage, and persistence contracts.
 
 This package does not define runtime outbound authentication directives.
 
 `AddNOFApplication()` registers the package-local application defaults, including expression-based mapping and the package-local Domain defaults.
 
-Commands and notifications are plain payload types. Handler discovery comes from the `CommandHandler<T>` and `NotificationHandler<T>` base classes rather than marker interfaces on the message types.
+All consumers implement generated ApplicationService operations. The host binds stable queues/subscriptions to Empty-returning operation descriptors. Plain contracts need no partial modifier; descriptors are generated in a separate Contract class.
 
 ## Application services
 
@@ -43,7 +43,7 @@ public sealed class GetOrder : OrderService.GetOrder
         _orders = orders;
     }
 
-    public override async Task<Result> HandleAsync(GetOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var order = await _orders.FindAsync(request.Id, cancellationToken);
         if (order is null)
@@ -56,7 +56,7 @@ public sealed class GetOrder : OrderService.GetOrder
 }
 ```
 
-Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IApplicationServiceInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
+Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IOperationInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
 
 Streaming operations may directly return IAsyncEnumerable<T> when they declare no initial failure:
 
@@ -65,7 +65,7 @@ public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class Watch : OrderService.Watch
 {
-    public override Task<IAsyncEnumerable<OrderEvent>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<IAsyncEnumerable<OrderEvent>> HandleAsync(WatchOrdersRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         return Task.FromResult(Stream());
 
@@ -81,59 +81,19 @@ public sealed class Watch : OrderService.Watch
 
 The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> Watch(WatchOrdersRequest request);`.
 
-### Command Handlers
+### Message consumers and transactional submission
+
+Use ordinary ApplicationService operations for consumers and IMessageDispatcher for sending/publishing. The host declares explicit bindings; no command/notification handler base or registry remains.
 
 ```csharp
-public record SendEmailCommand(string To, string Subject, string Body);
-
-public sealed class SendEmailHandler : CommandHandler<SendEmailCommand>
-{
-    public override Task HandleAsync(SendEmailCommand command, Context context, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
+services.AddMessageBindings(bindings =>
+    bindings.Queue<SendMail>("mail.send.v1").To(MailService.Send.Descriptor));
+await messages.DeferSendAsync(IMailServiceOperations.Send, mail, invocation.Context, cancellationToken);
+await messages.DeferPublishAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-### Notification Handlers
-
-```csharp
-public record OrderCreatedNotification(Guid OrderId);
-
-public sealed class OrderCreatedHandler : NotificationHandler<OrderCreatedNotification>
-{
-    public override Task HandleAsync(OrderCreatedNotification notification, Context context, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-### Transactional Message Sending
-
-Use `ICommandSender` and `INotificationPublisher` for both immediate and deferred dispatch:
-
-The [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs)
-contains the complete deferred-dispatch example.
-
-```csharp
-await _notificationPublisher.DeferPublishAsync(new OrderCreatedNotification(order.Id), context, cancellationToken);
-await _commandSender.DeferSendAsync(new SendEmailCommand(order.Email, "Created", "Order created."), context, cancellationToken);
-await _unitOfWork.SaveChangesAsync(cancellationToken);
-```
-
-Pass the handler's explicit `Context`. Deferred dispatch prepares message identity, tenant and trace metadata and stores
-these headers and trace parent in the outbox; arbitrary context items and the authenticated
-principal are not automatically serialized. Message delivery uses the explicit context's
-tenant item, falling back to `Context.Current.TenantId`. Pass the authorized handler context,
-and validate tenant access at public boundaries; passing `Context` alone does not establish tenant trust. Identity
-propagation requires an explicit outbound authentication policy. See the
-[tenant authorization](../NOF.Infrastructure/README.md#tenant-authorization) for the trust boundaries.
-
-With an explicit transaction, `SaveChangesAsync` writes inside that transaction and
-`CommitAsync` makes it durable. After rollback or an uncertain commit, dispose the scope and
-recover using a fresh context and an application idempotency key. See
-[persistence boundaries](../../docs/design/repository-uow.md).
+See the [complete migration and routing guide](../../docs/en/design/unified-operations.md) and [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs). InvokeAsync waits for execution; Send/Publish wait for acceptance; Defer methods stage an intent committed with the scoped unit of work. Ordered variants retain their contiguous stream contract. Only message ID, tenant and trace metadata travel automatically, not arbitrary items or principals.
 
 ### Persistence boundaries
 

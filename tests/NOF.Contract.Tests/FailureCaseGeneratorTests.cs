@@ -46,7 +46,7 @@ public sealed class FailureCaseGeneratorTests
             public sealed class Handler : IService.DeleteOperation
             {
                 public override System.Threading.Tasks.Task<Result> HandleAsync(
-                    Query request, Context context, System.Threading.CancellationToken ct)
+                    Query request, InvocationContext context, System.Threading.CancellationToken ct)
                     => System.Threading.Tasks.Task.FromResult<Result>(new NotFound("missing"));
             }
             """, out _);

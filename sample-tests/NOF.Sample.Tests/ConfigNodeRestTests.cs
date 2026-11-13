@@ -244,7 +244,7 @@ public sealed class PolicyProbe { public int Constructed { get; set; } }
 public sealed class PolicyProbeHandler : PolicyProbeService.Read
 {
     public PolicyProbeHandler(PolicyProbe probe) => probe.Constructed++;
-    public override Task<string> HandleAsync(Empty request, Context context, CancellationToken cancellationToken)
+    public override Task<string> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult("secret");
 }
 

@@ -1,90 +1,13 @@
 ---
-description: Add NOF RPC, command, notification, or in-memory event handlers with the current Context-aware signatures
+description: Add a NOF application operation or current-scope domain event handler
 ---
 
-# Add a Handler or RPC Server
+# Add an application operation
 
-NOF has four handler shapes. A concrete class may inherit only one command, notification, or in-memory event handler base (`NOF001`).
+Declare one synchronous method on an IApplicationService contract. Implement its generated Service.Operation base inside the partial ApplicationService<T> container, overriding Task<TOutput> HandleAsync(TInput, InvocationContext, CancellationToken). Use invocation.Context with semantic APIs. Register the assembly and service container once; individual operations are discovered automatically.
 
-## RPC Pattern
+The same operation can serve HTTP, local invocation and messaging. Host AddMessageBindings configures Queue<T>(route).To(Service.Operation.Descriptor) or Subscription<T>(topic, stableSubscriptionId).To(...). Async bindings accept only Empty outputs. Producers use Contract-generated IServiceOperations.Method descriptors and IMessageDispatcher.SendAsync(descriptor, input, context, ct) or PublishAsync(input, context, ct). Configure remote producers with RouteToQueue/Topic without local consumers. CommandHandler/NotificationHandler and their generators/registries are removed.
 
-```csharp
-public partial interface IOrderService : IApplicationService
-{
-    [FailureCase("NotFound", "404")]
-    GetOrderResponse GetOrder(GetOrderRequest request);
-}
+Plain service contracts need no partial; FailureCase contracts retain partial for canonical result/case types. See docs/en/design/unified-operations.md and docs/en/design/expected-failures.md.
 
-public partial class OrderService : ApplicationService<IOrderService>;
-
-public sealed class GetOrder : OrderService.GetOrder
-{
-    public override Task<Result> HandleAsync(
-        GetOrderRequest request,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "demo"));
-    }
-}
-```
-
-Register the server explicitly:
-
-```csharp
-builder.AddApplicationPart(typeof(OrderService).Assembly);
-builder.AddApplicationService<OrderService>();
-```
-
-## Command Pattern
-
-```csharp
-public sealed record RebuildCacheCommand(string TenantId);
-
-public sealed class RebuildCacheHandler : CommandHandler<RebuildCacheCommand>
-{
-    public override Task HandleAsync(
-        RebuildCacheCommand command,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-## Notification Pattern
-
-```csharp
-public sealed record OrderCreatedNotification(string OrderId);
-
-public sealed class OrderCreatedHandler : NotificationHandler<OrderCreatedNotification>
-{
-    public override Task HandleAsync(
-        OrderCreatedNotification notification,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-## In-Memory Event Pattern
-
-```csharp
-public sealed record ProjectionRebuilt(string TenantId);
-
-public sealed class ProjectionRebuiltHandler : InMemoryEventHandler<ProjectionRebuilt>
-{
-    public override Task HandleAsync(
-        ProjectionRebuilt @event,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-Command, notification, and event handlers are discovered through generated assembly initializers. Ensure the containing assembly is passed to `AddApplicationPart(...)`.
+In-memory domain events keep InMemoryEventHandler<T> with Task HandleAsync(T, Context, CancellationToken), executing in the publisher scope. Do not turn them into reliable asynchronous consumers unless crossing that boundary is intentional.

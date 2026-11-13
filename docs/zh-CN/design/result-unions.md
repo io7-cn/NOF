@@ -19,7 +19,7 @@ public partial class OrderService : ApplicationService<IOrderService>;
 public sealed class GetOrder : OrderService.Get
 {
     public override Task<Result> HandleAsync(
-        GetOrderRequest request, Context context, CancellationToken ct)
+        GetOrderRequest request, InvocationContext context, CancellationToken ct)
         => Task.FromResult<Result>(new NotFound("订单不存在"));
 }
 ```

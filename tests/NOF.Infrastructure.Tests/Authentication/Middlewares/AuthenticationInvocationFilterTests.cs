@@ -35,12 +35,12 @@ public sealed class AuthenticationInvocationFilterTests
         using var cache = CreateJwksService([key]);
         var middleware = CreateMiddleware(userContext, cache, expectedIssuer, expectedAudience);
         var token = CreateToken(key.Key, tokenIssuer, audience: tokenAudience);
-        var context = (RequestInboundContext)CreateInboundContext()
+        var context = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
         Context? forwarded = null;
         await middleware.InvokeAsync(context, new object(), (next, _, _) =>
         {
-            forwarded = next;
+            forwarded = next.Context;
             return ValueTask.CompletedTask;
         }, default);
 
@@ -71,7 +71,7 @@ public sealed class AuthenticationInvocationFilterTests
             _ = forwardedRequest;
             _ = cancellationToken;
             nextCalled = true;
-            forwardedContext = context;
+            forwardedContext = context.Context;
             return ValueTask.CompletedTask;
         }
     }
@@ -84,7 +84,7 @@ public sealed class AuthenticationInvocationFilterTests
         var middleware = CreateMiddleware(userContext, jwksService);
         var inboundContext = CreateInboundContext();
         var request = new object();
-        var executionContext = (RequestInboundContext)inboundContext
+        var executionContext = (InvocationContext)inboundContext
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, "Bearer invalid-token");
         var forwardedContext = Context.Empty;
 
@@ -101,7 +101,7 @@ public sealed class AuthenticationInvocationFilterTests
             _ = forwardedRequest;
             _ = cancellationToken;
             nextCalled = true;
-            forwardedContext = context;
+            forwardedContext = context.Context;
             return ValueTask.CompletedTask;
         }
     }
@@ -122,7 +122,7 @@ public sealed class AuthenticationInvocationFilterTests
         var middleware = CreateMiddleware(userContext, jwksService);
         var inboundContext = CreateInboundContext();
         var request = new object();
-        var executionContext = (RequestInboundContext)inboundContext
+        var executionContext = (InvocationContext)inboundContext
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, "Bearer not-a-jwt");
 
         var nextCalled = false;
@@ -156,7 +156,7 @@ public sealed class AuthenticationInvocationFilterTests
         var token = CreateToken(key.Key, "https://auth.local");
         var jwksService = CreateJwksService([key], "https://auth.local");
         var middleware = CreateMiddleware(userContext, jwksService);
-        var inboundContext = (RequestInboundContext)CreateInboundContext()
+        var inboundContext = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
 
         var nextCalled = false;
@@ -188,7 +188,7 @@ public sealed class AuthenticationInvocationFilterTests
             [new Claim(JwtRegisteredClaimNames.Sub, "user-1"), new Claim("scope", "orders.read orders.write")]);
         var jwksService = CreateJwksService([key], "https://auth.local");
         var middleware = CreateMiddleware(userContext, jwksService);
-        var inboundContext = (RequestInboundContext)CreateInboundContext()
+        var inboundContext = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
 
         await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.CompletedTask, default);
@@ -216,7 +216,7 @@ public sealed class AuthenticationInvocationFilterTests
             [new Claim(JwtRegisteredClaimNames.Sub, "user-1"), new Claim("name", "Alice")]);
         var jwksService = CreateJwksService([key], "https://auth.local");
         var middleware = CreateMiddleware(userContext, jwksService);
-        var inboundContext = (RequestInboundContext)CreateInboundContext()
+        var inboundContext = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
 
         await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.CompletedTask, default);
@@ -281,17 +281,15 @@ public sealed class AuthenticationInvocationFilterTests
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private static RequestInboundContext CreateInboundContext()
+    private static InvocationContext CreateInboundContext()
     {
         var serviceMethod = typeof(object).GetMethod(nameof(ToString))!;
-        return new RequestInboundContext
+        return new InvocationContext
         {
-            ServiceType = typeof(object),
-            ServiceMethodInfo = serviceMethod,
             HandlerType = typeof(object),
             HandlerMethodInfo = serviceMethod,
-            InputType = typeof(object),
-            ResponseType = typeof(NOF.Testing.TestOutcome)
+            Operation = new InvocationTestDescriptor(typeof(object), (serviceMethod).Name, typeof(object), typeof(NOF.Testing.TestOutcome)),
+            Origin = InvocationOrigin.Http
         };
     }
 

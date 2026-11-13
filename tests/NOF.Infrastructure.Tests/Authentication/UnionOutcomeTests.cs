@@ -12,7 +12,7 @@ public class UnionOutcomeTests
     {
         var failure = NOF.Testing.TestOutcome.Fail("403", "Permission required");
         InboundAuthorizationResult allowed = InboundAuthorizationResult.Success;
-        InboundAuthorizationResult denied = new InboundAuthorizationResult.Denied(failure, 403, ["orders.read"]);
+        InboundAuthorizationResult denied = new InboundAuthorizationResult.Denied(failure, RejectionReason.Authorization, ["orders.read"]);
 
         Assert.True(IsAllowed(allowed));
         Assert.False(IsAllowed(denied));

@@ -17,8 +17,8 @@ public partial class OrderService : ApplicationService<IOrderService>;
 public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 {
     public override Task<OrderDto?> HandleAsync(
-        FindOrderRequest request, Context context, CancellationToken ct)
-        => orders.FindAsync(request.Id, context, ct);
+        FindOrderRequest request, InvocationContext context, CancellationToken ct)
+        => orders.FindAsync(request.Id, context.Context, ct);
 }
 ```
 
@@ -133,3 +133,5 @@ package/caller set.
 [Declared expected failures](expected-failures.md) generate a closed result per operation; the declared method return describes success, while the Descriptor describes the actual execution response.
 
 [Unified invocation extensions](invocation-extensions.md) replace the three inbound middleware families; hosts choose the engine. Message delivery prepares fixed metadata without an outbound extension chain.
+
+[Current unified operation and message binding API](unified-operations.md).

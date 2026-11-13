@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics;
 
@@ -15,7 +16,7 @@ public sealed class TracingInvocationFilter(IOptions<DeploymentOptions> deployme
     {
         using var activity = NOFInfrastructureConstants.InboundPipeline.Source.StartActivity(
             $"{context.HandlerType.FullName}.Handle: {context.OperationName}",
-            context.Kind == InvocationKind.ApplicationService ? ActivityKind.Internal : ActivityKind.Consumer);
+            context.Origin == InvocationOrigin.Message ? ActivityKind.Consumer : ActivityKind.Internal);
         activity?.SetServiceDeploymentTags(deployment.Value);
         activity?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.HandlerType, context.HandlerType.FullName);
         activity?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.MessageType, context.OperationName);

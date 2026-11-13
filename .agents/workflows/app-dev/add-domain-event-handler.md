@@ -42,7 +42,7 @@ Domain methods may instead call `payload.PublishAsEvent()`. At a NOF handler/eve
 ```csharp
 public sealed class CreateOrderHandler(
     IDbContext dbContext,
-    INotificationPublisher publisher)
+    IMessageDispatcher publisher)
     : CommandHandler<CreateOrderCommand>
 {
     public override async Task HandleAsync(
@@ -63,6 +63,6 @@ public sealed class CreateOrderHandler(
 }
 ```
 
-`DeferPublishAsync(...)` and `DeferSendAsync(...)` add an outbox entity to the current `IDbContext`; saving that same context commits it with application data. Immediate `PublishAsync(...)` / `SendAsync(...)` bypass the outbox.
+`DeferPublishAsync(...)` and `DeferSendAsync(...)` add an outbox entity to the current outbox scope; saving that same context commits it with application data. Immediate `PublishAsync(...)` / `SendAsync(...)` bypass the outbox.
 
 For ordered streams, use `DeferPublishOrderedAsync(...)` or `DeferSendOrderedAsync(...)` with a stable order key. Set `completesOrderKey` only on the final message, and ensure every participating consumer sees an unbroken stream.

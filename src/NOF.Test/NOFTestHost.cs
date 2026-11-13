@@ -67,10 +67,10 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
         return await scope.CallAsync(invocation, context, cancellationToken);
     }
 
-    public async Task SendAsync<TCommand>(TCommand command, Context? context = null, CancellationToken cancellationToken = default)
+    public async Task SendAsync<TCommand>(ServiceOperationDescriptor<TCommand, Empty> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
     {
         using var scope = CreateScope();
-        await scope.SendAsync(command, context, cancellationToken);
+        await scope.SendAsync(operation, command, context, cancellationToken);
     }
 
     public async Task PublishAsync<TNotification>(TNotification notification, Context? context = null, CancellationToken cancellationToken = default)

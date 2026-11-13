@@ -15,8 +15,6 @@ public interface IInboundAuthorizationHandler
 
 public sealed class InboundAuthorizationContext
 {
-    public required InvocationKind Kind { get; init; }
-
     public required ClaimsPrincipal User { get; init; }
 
     public required Context ExecutionContext { get; init; }
@@ -40,10 +38,10 @@ public union InboundAuthorizationResult(InboundAuthorizationResult.Allowed, Inbo
     /// <summary>Grants permission to execute the operation.</summary>
     public sealed record Allowed;
 
-    /// <summary>Rejects the operation with a business failure and an HTTP challenge.</summary>
+    /// <summary>Rejects the operation with a failure and the semantic authorization denial.</summary>
     public sealed record Denied(
         Failure Result,
-        int StatusCode,
+        RejectionReason Reason,
         IReadOnlyList<string> ChallengePermissions);
 
     /// <summary>Gets the shared authorization grant.</summary>

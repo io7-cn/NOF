@@ -4,7 +4,7 @@
 
 NOF.Application defines one extension point for service operations, commands and notifications:
 `IInvocationFilter.InvokeAsync(InvocationContext, object, InvocationDelegate, CancellationToken)`.
-The context supplies invocation kind, input/handler metadata and an execution outcome. It has no HTTP dependency.
+Contract owns InvocationContext, which composes semantic Context and supplies an operation descriptor, invocation origin, input/handler metadata and an execution outcome. It has no HTTP dependency.
 Expected business outcomes remain operation-specific unions; policy rejection is separate.
 
 Registering an extension does not select an execution engine or cause it to run. The host owns
@@ -66,9 +66,10 @@ Remove all five request/command/notification inbound and command/notification ou
 interfaces, their delegates, outbound context types and `Add*Middleware` registrations. Implement
 `IInvocationFilter` once, register with `AddInvocationFilter`, and select a host engine. Replace
 `Compare` topology constraints with host-owned ordering in the default engine. The outbound dispatcher
-injection analyzer is removed with its extension surface. Request and message contexts now inherit
-common `HandlerMethodInfo` and `InputType` metadata from `InvocationContext`.
+injection analyzer is removed with its extension surface. All entry points use one sealed InvocationContext; the three inbound context subclasses and InvocationKind are removed. Context.Current carries invocation.Context.
 
 Standalone test/service providers must choose `UseInMemoryInvocationPipeline()` explicitly;
 NOF host builders already do so. Custom hosts can replace `IInvocationPipeline` without changing
 application filters. Upgrade application, infrastructure and hosting packages together.
+
+[Current unified operation and message binding API](unified-operations.md).

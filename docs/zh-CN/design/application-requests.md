@@ -16,8 +16,8 @@ public partial class OrderService : ApplicationService<IOrderService>;
 public sealed class FindOrder(IOrderQueries orders) : OrderService.Find
 {
     public override Task<OrderDto?> HandleAsync(
-        FindOrderRequest request, Context context, CancellationToken ct)
-        => orders.FindAsync(request.Id, context, ct);
+        FindOrderRequest request, InvocationContext context, CancellationToken ct)
+        => orders.FindAsync(request.Id, context.Context, ct);
 }
 ```
 
@@ -115,3 +115,5 @@ Result 的 Failure 仍是业务数据。重新构建生成产物，删除自定�
 [声明可预期失败](expected-failures.md)可为每个操作生成封闭结果；方法声明表示成功类型，Descriptor 表示实际执行返回类型。
 
 [统一调用扩展](invocation-extensions.md)替代三套入站中间件，由宿主选择执行器；消息投递固定准备元数据，不再保留出站扩展链。
+
+[当前统一操作与消息绑定 API](unified-operations.md)。

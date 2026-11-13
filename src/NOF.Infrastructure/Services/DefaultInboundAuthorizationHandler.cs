@@ -65,7 +65,7 @@ public sealed class DefaultInboundAuthorizationHandler(
                 operationName);
             return new InboundAuthorizationResult.Denied(
                 new global::NOF.Abstraction.Failure("401", "Please login first"),
-                StatusCode: 401,
+                Reason: RejectionReason.Authentication,
                 ChallengePermissions: GetPermissions(requirement.Value));
         }
 
@@ -90,7 +90,7 @@ public sealed class DefaultInboundAuthorizationHandler(
                 permission);
             return new InboundAuthorizationResult.Denied(
                 new global::NOF.Abstraction.Failure("403", "Insufficient permissions"),
-                StatusCode: 403,
+                Reason: RejectionReason.Authorization,
                 ChallengePermissions: requiredPermissions);
         }
 
@@ -98,26 +98,11 @@ public sealed class DefaultInboundAuthorizationHandler(
     }
 
     private static string ResolveOperationName(InboundAuthorizationContext context, bool input)
-        => context.Kind switch
-        {
-            InvocationKind.ApplicationService when input => context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name,
-            InvocationKind.ApplicationService => context.HandlerMethodInfo.Name,
-            InvocationKind.Command => context.InputType?.DisplayName ?? context.HandlerMethodInfo.Name,
-            InvocationKind.Notification => context.InputType?.DisplayName ?? context.HandlerMethodInfo.Name,
-            _ => context.HandlerMethodInfo.Name
-        };
+        => input ? context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name : context.HandlerMethodInfo.Name;
 
     private static PermissionRequirement? ResolveInputRequirement(InboundAuthorizationContext context)
-        => context.Kind switch
-        {
-            InvocationKind.ApplicationService when context.ServiceType is not null && context.ServiceMethodInfo is not null
-                => ResolveRequestRequirement(context.ServiceType, context.ServiceMethodInfo),
-            InvocationKind.Command when context.InputType is not null
-                => GetRequirement(context.InputType),
-            InvocationKind.Notification when context.InputType is not null
-                => GetRequirement(context.InputType),
-            _ => null
-        };
+        => context.ServiceType is not null && context.ServiceMethodInfo is not null
+            ? ResolveRequestRequirement(context.ServiceType, context.ServiceMethodInfo) : null;
 
     private static PermissionRequirement? ResolveExecutionRequirement(InboundAuthorizationContext context)
         => GetRequirement(context.HandlerMethodInfo) ?? GetRequirement(context.HandlerType);

@@ -18,7 +18,7 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(SetActiveFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.NodeId);
         var node = await _nodes.GetAsync(id, cancellationToken);

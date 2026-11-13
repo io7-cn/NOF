@@ -18,7 +18,7 @@ public sealed class InMemoryInvocationPipeline(IServiceProvider services, IEnume
         InvocationDelegate pipeline = async (current, value, token) =>
         {
             token.ThrowIfCancellationRequested();
-            using var ambient = Context.PushCurrent(current);
+            using var ambient = Context.PushCurrent(current.Context);
             await terminal(current, value, token).ConfigureAwait(false);
         };
         for (var i = _filters.Length - 1; i >= 0; i--)
@@ -28,7 +28,7 @@ public sealed class InMemoryInvocationPipeline(IServiceProvider services, IEnume
             pipeline = async (current, value, token) =>
             {
                 token.ThrowIfCancellationRequested();
-                using var ambient = Context.PushCurrent(current);
+                using var ambient = Context.PushCurrent(current.Context);
                 await registration.Resolve(services).InvokeAsync(current, value, next, token).ConfigureAwait(false);
             };
         }

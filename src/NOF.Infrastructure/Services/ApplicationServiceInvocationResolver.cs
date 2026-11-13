@@ -25,6 +25,12 @@ public sealed class ApplicationServiceInvocationResolver(
         ArgumentNullException.ThrowIfNull(serviceType);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
 
+        var registration = applicationServiceRegistry.GetRegistration(serviceType);
+        if (registration.HandlerMappings is { } mappings && mappings.TryGetValue(operationName, out var captured))
+        {
+            return new(registration.ImplementationType, captured);
+        }
+
         if (!applicationServiceRegistry.TryGetImplementationType(serviceType, out var serverType))
         {
             throw new InvalidOperationException($"application service server is not registered for '{serviceType.FullName}'.");

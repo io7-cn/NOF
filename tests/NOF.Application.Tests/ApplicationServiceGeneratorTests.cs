@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Application;
 using NOF.Application.SourceGenerator;
@@ -28,10 +29,10 @@ public class ApplicationServiceGeneratorTests
             }
             public partial class Orders : ApplicationService<IOrders>;
             """;
-        var result = new ApplicationServiceGenerator().GetResultPostGen(source,
+        var result = Generate(source,
             typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>), typeof(IApplicationService), typeof(ServiceOperation<,>));
         Assert.Empty(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-        var code = result.GeneratedTrees.Single().GetRoot().ToFullString();
+        var code = result.GeneratedTrees.Single(tree => tree.FilePath.EndsWith(".ApplicationService.g.cs", StringComparison.Ordinal)).GetRoot().ToFullString();
         Assert.Contains("class Read : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto>", code);
         Assert.Contains("class Preview : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto>", code);
         Assert.Contains("class Find : global::NOF.Contract.ServiceOperation<global::App.Query, global::App.Dto?>", code);
@@ -79,14 +80,14 @@ public class ApplicationServiceGeneratorTests
             }
             """;
 
-        var result = new ApplicationServiceGenerator().GetResultPostGen(source,
+        var result = Generate(source,
             typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>),
             typeof(ServiceOperation<,>),
             typeof(AutoInjectAttribute),
             typeof(Empty),
             typeof(IApplicationService),
             typeof(NOF.Testing.TestOutcome));
-        var generatedCode = result.GeneratedTrees.Single().GetRoot().ToFullString();
+        var generatedCode = result.GeneratedTrees.Single(tree => tree.FilePath.EndsWith(".ApplicationService.g.cs", StringComparison.Ordinal)).GetRoot().ToFullString();
 
         Assert.Contains("partial class MyService : global::NOF.Application.IApplicationServiceImplementation", generatedCode);
         Assert.Contains("protected override global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> GetHandlerMappings()", generatedCode);
@@ -99,4 +100,16 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("nameof(global::App.IMyService.Archive)] = new global::NOF.Application.ServiceOperationMapping(typeof(Archive), typeof(global::App.ArchiveRequest), typeof(global::NOF.Testing.TestOutcome))", generatedCode);
         Assert.DoesNotContain("CreateFailure", generatedCode);
     }
+    private static GeneratorDriverRunResult Generate(string source, params Type[] references)
+    {
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.CreateCompilation("ApplicationOperations", source, true, references);
+        GeneratorDriver driver = Microsoft.CodeAnalysis.CSharp.CSharpGeneratorDriver.Create(
+            [new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()],
+            parseOptions: (Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)compilation.SyntaxTrees.First().Options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Assert.Empty(diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error));
+        Assert.Empty(output.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error));
+        return driver.GetRunResult();
+    }
+
 }

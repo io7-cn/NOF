@@ -182,7 +182,7 @@ public partial class OrderServer : ApplicationService<IOrderService>;
 public sealed class UpdateOrderHandler : OrderServer.Update
 {
     public override Task<PlainDecision> HandleAsync(
-        UpdateOrderRequest request, Context context, CancellationToken cancellationToken)
+        UpdateOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<PlainDecision>(request.Status == "fail"
             ? new Failure("order.rejected", "Order rejected")
             : new OrderDto(request.Id, request.Status, request.Label));
@@ -190,25 +190,25 @@ public sealed class UpdateOrderHandler : OrderServer.Update
 
 public sealed class ReadOrderHandler : OrderServer.Read
 {
-    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<PlainDecision>(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
 }
 
 public sealed class ReadOrderValue : OrderServer.ReadValue
 {
-    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
 }
 
 public sealed class PreviewOrder : OrderServer.Preview
 {
-    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, "preview", "preview"));
 }
 
 public sealed class FindOrder : OrderServer.Find
 {
-    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<OrderDto?>(null);
 }
 
@@ -216,11 +216,10 @@ public sealed class ValidateReadOrder : IInvocationFilter
 {
     public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (context is RequestInboundContext service && service.ServiceType == typeof(IOrderService)
-            && service.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
+        if (context.ServiceType == typeof(IOrderService)
+            && context.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
             && request is ReadOrderRequest { Page: < 0 })
         {
-            service.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "400";
             context.Reject(new Failure("order.page", "Page must be nonnegative"));
             return ValueTask.CompletedTask;
         }
@@ -240,38 +239,38 @@ public partial class PlainOrderService : ApplicationService<IPlainOrderService>;
 
 public sealed class ReadPlainOrder : PlainOrderService.Read
 {
-    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult(new OrderDto(request.Id, "read", "local"));
 }
 
 public sealed class FindPlainOrder : PlainOrderService.Find
 {
-    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<OrderDto?>(null);
 }
 
 public sealed class DecidePlainOrder : PlainOrderService.Decide
 {
-    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
 }
 
 public sealed class DecideOrder : OrderServer.Decide
 {
-    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
 }
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
 {
     public override Task<PlainDecision> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => throw new InvalidOperationException("An anonymous request must not reach the protected handler");
 }
 
 public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 {
-    public override Task<OrderReceipt> HandleAsync(ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<OrderReceipt> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<OrderReceipt>(new OrderReadReceipt(new OrderDto(request.Id, "cached", "read"), "Read from cache"));
 }
 
@@ -349,7 +348,7 @@ public partial class ExpectedOrderService : ApplicationService<IExpectedOrderSer
 public sealed class EvaluateOrder : ExpectedOrderService.Evaluate
 {
     public override Task<Result> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+        ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult<Result>(request.Page switch
         {
             < 0 => new Missing("Order not found"),

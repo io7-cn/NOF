@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Application;
+using NOF.Contract;
 using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore;
@@ -15,11 +16,8 @@ public static class ApplicationServiceHttpExtensions
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(operation);
-        var resolution = http.RequestServices.GetRequiredService<ApplicationServiceInvocationResolver>()
-            .Resolve(operation.ServiceType, operation.OperationName);
         var execution = await http.RequestServices.GetRequiredService<HttpRequestInboundAdapter>()
-            .InvokeAsync(http, operation.ServiceType, operation.OperationName, request!, resolution.HandlerMapping, cancellationToken)
-            .ConfigureAwait(false);
+            .InvokeAsync(operation, request!, http, cancellationToken).ConfigureAwait(false);
         return execution.Execution.Require<TResponse>(allowNull: operation.AllowsNullResponse);
     }
 }

@@ -1,3 +1,5 @@
+using NOF.Contract;
+
 namespace NOF.Application;
 
 /// <summary>Continues an application or message invocation with its current context.</summary>

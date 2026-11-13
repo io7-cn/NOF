@@ -14,8 +14,6 @@ namespace NOF.Infrastructure;
 public sealed class InboxMessageBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly CommandHandlerRegistry _commandHandlerRegistry;
-    private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
     private readonly IOptions<DeploymentOptions> _deployment;
     private readonly TransactionalMessageProcessorOptions _options;
     private readonly ILogger<InboxMessageBackgroundService> _logger;
@@ -24,8 +22,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
     public InboxMessageBackgroundService(
         IServiceProvider serviceProvider,
-        CommandHandlerRegistry commandHandlerRegistry,
-        NotificationHandlerRegistry notificationHandlerRegistry,
         IOptions<DeploymentOptions> deployment,
         IOptions<TransactionalMessageOptions> options,
         ILogger<InboxMessageBackgroundService> logger,
@@ -33,8 +29,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         ITenantProvider tenantProvider)
     {
         _serviceProvider = serviceProvider;
-        _commandHandlerRegistry = commandHandlerRegistry;
-        _notificationHandlerRegistry = notificationHandlerRegistry;
         _deployment = deployment;
         _options = options.Value.Inbox;
         _logger = logger;
@@ -206,35 +200,11 @@ public sealed class InboxMessageBackgroundService : BackgroundService
                     NOFAbstractionConstants.Transport.Headers.TenantId,
                     TenantId.Normalize(Context.Current.TenantId)))
                 .ToArray();
-            var handlerTypeName = ResolveHandlerTypeName(pendingMessage);
 
             using var activity = StartBoundaryActivity(message, traceParent);
 
-            switch (pendingMessage.MessageType)
-            {
-                case InboxMessageType.Command:
-                    {
-                        var commandPipelineExecutor = services.GetRequiredService<CommandDeliveryExecutor>();
-                        await commandPipelineExecutor.ExecuteAsync(
-                            message.Payload,
-                            handlerTypeName,
-                            processingHeaders,
-                            cancellationToken);
-                        break;
-                    }
-                case InboxMessageType.Notification:
-                    {
-                        var notificationPipelineExecutor = services.GetRequiredService<NotificationDeliveryExecutor>();
-                        await notificationPipelineExecutor.ExecuteAsync(
-                            message.Payload,
-                            handlerTypeName,
-                            processingHeaders,
-                            cancellationToken);
-                        break;
-                    }
-                default:
-                    throw new InvalidOperationException($"Unsupported inbox message type '{pendingMessage.MessageType}'.");
-            }
+            await services.GetRequiredService<MessageOperationExecutor>().ExecuteAsync(
+                pendingMessage.Payload, pendingMessage.Route, processingHeaders, cancellationToken);
 
             pendingMessage.Status = InboxMessageStatus.Processed;
             pendingMessage.ProcessedAtUtc = DateTime.UtcNow;
@@ -260,7 +230,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         {
             await transaction.RollbackAsync(cancellationToken);
 
-            if (message.RetryCount >= _options.MaxRetryCount)
+            if (ex is ServiceRejectedException || message.RetryCount >= _options.MaxRetryCount)
             {
                 await MarkFailedAsync(message, ex.Message, cancellationToken, ex);
             }
@@ -299,63 +269,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             ActivityKind.Consumer,
             traceParent);
 
-    private string ResolveHandlerTypeName(NOFInboxMessage message)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        ArgumentException.ThrowIfNullOrWhiteSpace(message.Route);
-
-        return message.MessageType switch
-        {
-            InboxMessageType.Command => ResolveCommandHandlerTypeName(message.Route),
-            InboxMessageType.Notification => ResolveNotificationHandlerTypeName(message.Route),
-            _ => throw new InvalidOperationException($"Unsupported inbox message type '{message.MessageType}'.")
-        };
-    }
-
-    private string ResolveCommandHandlerTypeName(string route)
-    {
-        if (_commandHandlerRegistry.TryGetHandlerType(route, out var handlerType))
-        {
-            return handlerType.DisplayName;
-        }
-
-        var resolvedHandlerType = _commandHandlerRegistry.GetHandlers(route).FirstOrDefault()
-            ?? throw new InvalidOperationException($"No command handler route is registered for '{route}'.");
-
-        return resolvedHandlerType.DisplayName;
-    }
-
-    private string ResolveNotificationHandlerTypeName(string route)
-    {
-        if (_notificationHandlerRegistry.TryGetHandlerType(route, out var handlerType))
-        {
-            return handlerType.DisplayName;
-        }
-
-        foreach (var notificationGroup in _notificationHandlerRegistry.Freeze().GroupBy(static registration => registration.HandlerType))
-        {
-            var handlerRoute = BuildNotificationRoute(_deployment.Value.ServiceName, notificationGroup.Key.DisplayName);
-
-            if (string.Equals(handlerRoute, route, StringComparison.Ordinal))
-            {
-                return notificationGroup.Key.DisplayName;
-            }
-        }
-
-        throw new InvalidOperationException($"No notification handler route is registered for '{route}'.");
-    }
-
-    private static string BuildNotificationRoute(string? serviceName, string handlerDisplayName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(handlerDisplayName);
-
-        if (string.IsNullOrWhiteSpace(serviceName))
-        {
-            return handlerDisplayName;
-        }
-
-        return $"{serviceName}.{handlerDisplayName}";
-    }
     private async Task MarkRetryAsync(NOFInboxMessage message, string error, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();

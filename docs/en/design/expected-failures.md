@@ -62,7 +62,7 @@ public partial class NodeService : ApplicationService<INodeService>;
 public sealed class DeleteNode : NodeService.Delete
 {
     public override Task<Result> HandleAsync(
-        DeleteNodeRequest request, Context context, CancellationToken ct)
+        DeleteNodeRequest request, InvocationContext context, CancellationToken ct)
         => Task.FromResult<Result>(request.Id <= 0
             ? new NotFound("Node not found")
             : new HasChildren(new DeleteConflict(request.Id)));

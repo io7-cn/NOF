@@ -13,7 +13,7 @@ public abstract class ServiceOperation
     public virtual bool AllowsNullResponse => false;
 
     /// <summary>Invokes the operation without imposing a wire response interface.</summary>
-    public abstract Task<object?> HandleAsync(object request, Context context, CancellationToken cancellationToken);
+    public abstract Task<object?> HandleAsync(object request, InvocationContext context, CancellationToken cancellationToken);
 }
 
 /// <summary>Implements one generated application service operation with its declared business response.</summary>
@@ -28,7 +28,7 @@ public abstract class ServiceOperation<TRequest, TResponse> : ServiceOperation
     public override Type ResponseType => typeof(TResponse);
 
     /// <inheritdoc />
-    public sealed override async Task<object?> HandleAsync(object request, Context context, CancellationToken cancellationToken)
+    public sealed override async Task<object?> HandleAsync(object request, InvocationContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var response = await HandleAsync((TRequest)request, context, cancellationToken).ConfigureAwait(false);
@@ -40,5 +40,5 @@ public abstract class ServiceOperation<TRequest, TResponse> : ServiceOperation
     }
 
     /// <summary>Executes the operation with its original application input and response types.</summary>
-    public abstract Task<TResponse> HandleAsync(TRequest request, Context context, CancellationToken cancellationToken);
+    public abstract Task<TResponse> HandleAsync(TRequest request, InvocationContext context, CancellationToken cancellationToken);
 }

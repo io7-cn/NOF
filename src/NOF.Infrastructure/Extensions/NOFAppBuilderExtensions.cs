@@ -56,7 +56,7 @@ public static partial class NOFInfrastructureExtensions
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value.InstanceId)));
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
             builder.Services.TryAddScoped<ApplicationServiceInvocationResolver>();
-            builder.Services.TryAddScoped<IApplicationServiceInvoker, ApplicationServiceInvocation>();
+            builder.Services.TryAddScoped<IOperationInvoker, OperationInvoker>();
 
             builder.Services.TryAddSingleton<MemoryCacheServiceRiderState>();
             builder.Services.TryAddSingleton<CacheServiceLocalLockState>();
@@ -107,14 +107,14 @@ public static partial class NOFInfrastructureExtensions
             #endregion
 
             #region Pipelines
-            builder.Services.TryAddScoped<CommandDeliveryExecutor>();
-            builder.Services.TryAddScoped<NotificationDeliveryExecutor>();
-            builder.Services.TryAddScoped<ApplicationServiceExecutionAdapter>();
+            builder.Services.TryAddScoped<IOperationExecutor, OperationExecutor>();
+            builder.Services.TryAddScoped<MessageOperationExecutor>();
+            builder.Services.TryAddSingleton<MessageInboxReceiver>();
+            builder.Services.GetOrAddSingleton<MessageBindingRegistry>();
             #endregion
 
             #region Application Services
-            builder.Services.TryAddScoped<ICommandSender, CommandSender>();
-            builder.Services.TryAddScoped<INotificationPublisher, NotificationPublisher>();
+            builder.Services.TryAddScoped<IMessageDispatcher, MessageDispatcher>();
             builder.Services.TryAddScoped<OutboxOrderSequenceAllocator>();
             #endregion
 

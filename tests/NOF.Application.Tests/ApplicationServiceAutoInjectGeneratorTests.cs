@@ -25,7 +25,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             {
                 public record PingRequest(string Value);
 
-                public partial interface IMyService : IApplicationService
+                public interface IMyService : IApplicationService
                 {
                     NOF.Testing.TestOutcome Ping(PingRequest request);
                 }
@@ -34,7 +34,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
                 public sealed class PingHandler : MyService.Ping
                 {
-                    public override Task<NOF.Testing.TestOutcome> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
+                    public override Task<NOF.Testing.TestOutcome> HandleAsync(PingRequest request, InvocationContext context, CancellationToken cancellationToken)
                         => Task.FromResult(NOF.Testing.TestOutcome.Success());
                 }
             }
@@ -53,7 +53,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(InitializedTypes));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
-            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
         ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
@@ -78,7 +78,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
             namespace App
             {
-                public partial interface IMyService : IApplicationService
+                public interface IMyService : IApplicationService
                 {
                     NOF.Testing.TestOutcome Run(RunRequest request);
                 }
@@ -111,7 +111,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(InitializedTypes));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
-            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
         ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 

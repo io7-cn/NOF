@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Contract;
 using Xunit;
 
 namespace NOF.Infrastructure.RabbitMQ.Tests.Services;
@@ -9,122 +10,36 @@ namespace NOF.Infrastructure.RabbitMQ.Tests.Services;
 public class RabbitMQConsumerHostedServiceTests
 {
     [Fact]
-    public void BuildCommandQueueName_ShouldUseCommandRoute()
+    public void ConsumerRegistrations_UseExplicitStableRoutesAndIndependentSubscriptions()
     {
-        var queueName = RabbitMQConsumerHostedService.BuildCommandQueueName(
-            "App.Commands.CreateOrderCommand");
-
-        Assert.Equal("App.Commands.CreateOrderCommand", queueName);
-    }
-
-    [Fact]
-    public void BuildCommandConsumerRegistrations_ShouldUseOneRouteQueueForDuplicateRegistrations()
-    {
-        var registrations = new[]
-        {
-            new CommandHandlerRegistration(typeof(TestCommandHandler), typeof(TestCommand)),
-            new CommandHandlerRegistration(typeof(TestCommandHandler), typeof(TestCommand))
-        };
-
-        var consumer = Assert.Single(
-            RabbitMQConsumerHostedService.BuildCommandConsumerRegistrations(registrations));
-
-        Assert.Equal(typeof(TestCommand).DisplayName, consumer.MessageRoute);
-        Assert.Equal(typeof(TestCommand).DisplayName, consumer.QueueName);
-        Assert.Equal(typeof(TestCommandHandler).DisplayName, consumer.HandlerTypeName);
-    }
-
-    [Fact]
-    public void BuildCommandConsumerRegistrations_ShouldRejectMultipleHandlersForOneCommand()
-    {
-        var registrations = new[]
-        {
-            new CommandHandlerRegistration(typeof(TestCommandHandler), typeof(TestCommand)),
-            new CommandHandlerRegistration(typeof(SecondTestCommandHandler), typeof(TestCommand))
-        };
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => RabbitMQConsumerHostedService.BuildCommandConsumerRegistrations(registrations));
-
-        Assert.Contains(typeof(TestCommand).DisplayName, exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuildNotificationQueueName_ShouldPrefixServiceName()
-    {
-        var queueName = RabbitMQConsumerHostedService.BuildNotificationQueueName(
-            "Orders.Api",
-            "JwtRotationNotificationHandler");
-
-        Assert.Equal("Orders.Api.JwtRotationNotificationHandler", queueName);
-    }
-
-    [Fact]
-    public void BuildNotificationQueueName_ShouldFallbackToOriginalName_WhenServiceNameIsEmpty()
-    {
-        var queueName = RabbitMQConsumerHostedService.BuildNotificationQueueName(
-            string.Empty,
-            "JwtRotationNotificationHandler");
-
-        Assert.Equal("JwtRotationNotificationHandler", queueName);
-    }
-
-    [Fact]
-    public void BuildNotificationConsumerRegistrations_ShouldCreateOneQueuePerHandler_WhenHandlersShareNotificationType()
-    {
-        var registrations = new[]
-        {
-            new NotificationHandlerRegistration(typeof(FirstTestNotificationHandler), typeof(TestNotification)),
-            new NotificationHandlerRegistration(typeof(SecondTestNotificationHandler), typeof(TestNotification))
-        };
-
-        var consumers = RabbitMQConsumerHostedService.BuildNotificationConsumerRegistrations(
-            registrations,
-            "Orders.Api");
-
-        Assert.Equal(2, consumers.Count);
-
-        var first = Assert.Single(
-            consumers,
-            consumer => consumer.HandlerTypeName == typeof(FirstTestNotificationHandler).DisplayName);
-        var second = Assert.Single(
-            consumers,
-            consumer => consumer.HandlerTypeName == typeof(SecondTestNotificationHandler).DisplayName);
-
-        Assert.Equal(
-            RabbitMQConsumerHostedService.BuildNotificationQueueName("Orders.Api", typeof(FirstTestNotificationHandler).DisplayName),
-            first.QueueName);
-        Assert.Equal(
-            RabbitMQConsumerHostedService.BuildNotificationQueueName("Orders.Api", typeof(SecondTestNotificationHandler).DisplayName),
-            second.QueueName);
-        Assert.Equal([typeof(TestNotification)], first.NotificationTypes);
-        Assert.Equal([typeof(TestNotification)], second.NotificationTypes);
+        var registry = new MessageBindingRegistry();
+        var bindings = new MessageBindingsBuilder(registry);
+        var descriptor = new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply));
+        bindings.Queue<TestCommand>("work.v1").To(descriptor);
+        bindings.Subscription<TestCommand>("facts.v1", "projection").To(descriptor);
+        bindings.Subscription<TestCommand>("facts.v1", "audit").To(descriptor);
+        var queue = Assert.Single(RabbitMQConsumerHostedService.BuildCommandConsumerRegistrations(registry.Bindings));
+        Assert.Equal("work.v1", queue.QueueName);
+        Assert.Equal("queue:work.v1", queue.ConsumerId);
+        var subscriptions = RabbitMQConsumerHostedService.BuildNotificationConsumerRegistrations(registry.Bindings);
+        Assert.Equal(["subscription:projection", "subscription:audit"], subscriptions.Select(binding => binding.QueueName));
+        Assert.All(subscriptions, binding => Assert.Equal(["facts.v1"], binding.NotificationTypes));
     }
 
     [Fact]
     public async Task StartAsync_ShouldThrow_WhenConsumerInitializationFails()
     {
-        var connectionManager = new RabbitMQConnectionManager(Options.Create(new RabbitMQOptions
-        {
-            HostName = "localhost"
-        }));
-        connectionManager.Dispose();
-
-        var commandHandlerRegistry = new CommandHandlerRegistry();
-        commandHandlerRegistry.Add(new CommandHandlerRegistration(typeof(TestCommandHandler), typeof(TestCommand)));
-
-        var service = new RabbitMQConsumerHostedService(
-            connectionManager,
-            Options.Create(new RabbitMQOptions()),
-            commandHandlerRegistry,
-            new NotificationHandlerRegistry(),
-            Options.Create(new NOF.Hosting.DeploymentOptions()),
-            null!,
-            new JsonObjectSerializer(),
-            NullLogger<RabbitMQConsumerHostedService>.Instance);
-
+        var manager = new RabbitMQConnectionManager(Options.Create(new RabbitMQOptions { HostName = "localhost" }));
+        manager.Dispose();
+        var registry = new MessageBindingRegistry();
+        new MessageBindingsBuilder(registry).Queue<TestCommand>("work.v1")
+            .To(new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply)));
+        using var service = new RabbitMQConsumerHostedService(manager, Options.Create(new RabbitMQOptions()), registry,
+            new MessageInboxReceiver(null!, new JsonObjectSerializer()), NullLogger<RabbitMQConsumerHostedService>.Instance);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.StartAsync(CancellationToken.None));
     }
+
+    private interface ITestService : IApplicationService { Empty Apply(TestCommand request); }
 
     [Fact]
     public void ShouldRequeue_ShouldUseOptionsForUnexpectedFailures()

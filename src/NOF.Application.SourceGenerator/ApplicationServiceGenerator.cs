@@ -111,22 +111,24 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 : $"global::NOF.Contract.ServiceOperation<{requestTypeName}, {responseType}>";
             sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
             sb.AppendLine("    {");
-            if (ExpectedFailureModel.AllowsNull(method))
+            var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var allowNull = ExpectedFailureModel.AllowsNull(method);
+            if (allowNull)
             {
                 sb.AppendLine("        public override bool AllowsNullResponse => true;");
             }
-            var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var allowNull = ExpectedFailureModel.AllowsNull(method);
-            sb.AppendLine("        /// <summary>Identifies this operation for host adapters without transport metadata.</summary>");
-            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
+            var descriptorContainer = serviceInterface.ContainingNamespace.IsGlobalNamespace ? "global::" : "global::" + serviceInterface.ContainingNamespace.ToDisplayString() + ".";
+            descriptorContainer += serviceInterface.Name + "Operations";
+            sb.AppendLine("        /// <summary>Gets the canonical Contract descriptor.</summary>");
+            sb.AppendLine($"        public static global::NOF.Contract.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor => {descriptorContainer}.{method.Name};");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<{responseType}> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Contract.Context context,");
             sb.AppendLine("            global::System.Threading.CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);");
-            sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IApplicationServiceInvoker>(services);");
-            sb.AppendLine($"            var execution = await invoker.InvokeAsync<{serviceTypeName}>(nameof({serviceTypeName}.{method.Name}), request, context, cancellationToken).ConfigureAwait(false);");
+            sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IOperationInvoker>(services);");
+            sb.AppendLine($"            var execution = await invoker.InvokeAsync(Descriptor, request, context, cancellationToken).ConfigureAwait(false);");
             sb.AppendLine($"            return execution.Require<{responseType}>(allowNull: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        }");
             sb.AppendLine("    }");

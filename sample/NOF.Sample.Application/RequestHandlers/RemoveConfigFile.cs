@@ -18,7 +18,7 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.NodeId);
         var node = await _nodes.GetAsync(id, cancellationToken);

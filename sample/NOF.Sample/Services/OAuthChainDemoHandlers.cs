@@ -16,7 +16,7 @@ public sealed class CreateClientHandler(OAuthChainDemoBackend backend) : OAuthCh
 {
     public override async Task<Result> HandleAsync(
         CreateDemoOAuthClientRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
@@ -36,7 +36,7 @@ public sealed class GetClientTokenHandler(OAuthChainDemoBackend backend) : OAuth
 {
     public override async Task<Result> HandleAsync(
         GetDemoClientTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
@@ -56,7 +56,7 @@ public sealed class GetUserTokenHandler(OAuthChainDemoBackend backend) : OAuthCh
 {
     public override async Task<Result> HandleAsync(
         GetDemoUserTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = request;
@@ -77,7 +77,7 @@ public sealed class ExchangeTokenHandler(OAuthChainDemoBackend backend) : OAuthC
 {
     public override async Task<Result> HandleAsync(
         ExchangeDemoTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
@@ -97,7 +97,7 @@ public sealed class CallDownstreamHandler(IDemoDownstreamApi downstreamClient) :
 {
     public override async Task<Result> HandleAsync(
         CallDemoDownstreamRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
@@ -113,7 +113,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 {
     public override Task<Result> HandleAsync(
         Empty request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = request;

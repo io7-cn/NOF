@@ -39,6 +39,11 @@ public class SqliteInMemoryPersistenceTests
             : builder.UseDbContext<NOFDbContext>();
         ConfigureSqliteInMemory(selector, $"nof-shared-scope-{Guid.NewGuid():N}");
 
+        builder.Services.AddMessageBindings(bindings =>
+        {
+            bindings.Topic<ScopedTransactionMessage>("scope.events.v1");
+            bindings.Queue<ScopedTransactionMessage>("scope.work.v1").To(new(typeof(IScopeMessages), nameof(IScopeMessages.Apply)));
+        });
         using var services = BuildServiceProvider(builder);
         using var scope = services.CreateScope();
         SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
@@ -50,8 +55,8 @@ public class SqliteInMemoryPersistenceTests
         }
 
         var application = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var sender = scope.ServiceProvider.GetRequiredService<ICommandSender>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+        var sender = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
         await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
         {
             var state = new NOFOutboxOrderState { OrderKey = "shared", Sequence = 1 };
@@ -61,7 +66,7 @@ public class SqliteInMemoryPersistenceTests
             await publisher.DeferPublishAsync(new ScopedTransactionMessage("first"), Context.Current);
             await application.SaveChangesAsync();
             concrete.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState { OrderKey = "native", Sequence = 2 });
-            await sender.DeferSendAsync(new ScopedTransactionMessage("second"), Context.Current);
+            await sender.DeferSendAsync(new ServiceOperationDescriptor<ScopedTransactionMessage, Empty>(typeof(IScopeMessages), nameof(IScopeMessages.Apply)), new ScopedTransactionMessage("second"), Context.Current);
             await application.SaveChangesAsync();
             await application.SaveChangesAsync();
             Assert.Equal(2, await EFQuery.CountAsync(concrete.Set<NOFOutboxMessage>()));
@@ -80,6 +85,8 @@ public class SqliteInMemoryPersistenceTests
         Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxOrderState>()));
         Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxMessage>()));
     }
+
+    public interface IScopeMessages : IApplicationService { Empty Apply(ScopedTransactionMessage message); }
 
     public sealed record ScopedTransactionMessage(string Value);
 

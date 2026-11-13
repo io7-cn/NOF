@@ -118,14 +118,14 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
         return invocation(_scope.ServiceProvider, context ?? Context, cancellationToken);
     }
 
-    public Task SendAsync<TCommand>(TCommand command, Context? context = null, CancellationToken cancellationToken = default)
+    public Task SendAsync<TCommand>(ServiceOperationDescriptor<TCommand, Empty> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
     {
-        return GetRequiredService<ICommandSender>().SendAsync(command, context ?? Context, cancellationToken);
+        return GetRequiredService<IMessageDispatcher>().SendAsync(operation, command, context ?? Context, cancellationToken);
     }
 
     public Task PublishAsync<TNotification>(TNotification notification, Context? context = null, CancellationToken cancellationToken = default)
     {
-        return GetRequiredService<INotificationPublisher>().PublishAsync(notification, context ?? Context, cancellationToken);
+        return GetRequiredService<IMessageDispatcher>().PublishAsync(notification, context ?? Context, cancellationToken);
     }
 
     public void Dispose()

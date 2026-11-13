@@ -21,7 +21,7 @@ public class DeleteConfigNode : NOFSampleService.DeleteConfigNode
         _queries = queries;
     }
 
-    public override async Task<Result> HandleAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(DeleteConfigNodeRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.Id);
         var node = await _nodes.GetAsync(id, cancellationToken);

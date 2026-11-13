@@ -19,6 +19,11 @@ public sealed class ApplicationServiceRegistry : Registry<ApplicationServiceRegi
         return _registrationsByService.TryGetValue(contractType, out implementationType);
     }
 
+    /// <summary>Gets frozen metadata captured at service registration.</summary>
+    public ApplicationServiceRegistration GetRegistration(Type contractType)
+        => Freeze().SingleOrDefault(registration => registration.ServiceType == contractType)
+            ?? throw new InvalidOperationException($"Application service '{contractType}' is not registered.");
+
     private void BuildIndexes()
     {
         _registrationsByService.Clear();

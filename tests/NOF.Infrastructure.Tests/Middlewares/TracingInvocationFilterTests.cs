@@ -10,15 +10,13 @@ public sealed class TracingInvocationFilterTests
     [Fact]
     public async Task InvokeAsync_ServiceCancellation_ShouldPropagateWithoutBecomingARejection()
     {
-        var context = new RequestInboundContext
+        var context = new InvocationContext
         {
-            ServiceType = typeof(ServiceOperationPipelineTests.IProbeService),
-            ServiceMethodInfo = typeof(ServiceOperationPipelineTests.IProbeService).GetMethod("Read")!,
             HandlerType = typeof(ServiceOperationPipelineTests.ProbeOperation),
             HandlerMethodInfo = typeof(ServiceOperationPipelineTests.ProbeOperation).GetMethod("HandleAsync",
-                [typeof(ServiceOperationPipelineTests.Query), typeof(Context), typeof(CancellationToken)])!,
-            InputType = typeof(ServiceOperationPipelineTests.Query),
-            ResponseType = typeof(ServiceOperationPipelineTests.Reply)
+                [typeof(ServiceOperationPipelineTests.Query), typeof(InvocationContext), typeof(CancellationToken)])!,
+            Operation = new InvocationTestDescriptor(typeof(ServiceOperationPipelineTests.IProbeService), (typeof(ServiceOperationPipelineTests.IProbeService).GetMethod("Read")!).Name, typeof(ServiceOperationPipelineTests.Query), typeof(ServiceOperationPipelineTests.Reply)),
+            Origin = InvocationOrigin.Http
         };
         using var source = new CancellationTokenSource();
         source.Cancel();
@@ -64,20 +62,22 @@ public sealed class TracingInvocationFilterTests
             Microsoft.Extensions.Options.Options.Create(new NOF.Hosting.DeploymentOptions()),
             NullLogger<TracingInvocationFilter>.Instance);
 
-    private static CommandInboundContext CreateCommandContext()
+    private static InvocationContext CreateCommandContext()
         => new()
         {
             HandlerMethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleCommand))!,
             HandlerType = typeof(TestHandler),
-            InputType = typeof(TestCommand)
+            Operation = new InvocationTestDescriptor(typeof(TestHandler), nameof(TestHandler.HandleCommand), typeof(TestCommand), typeof(Empty)),
+            Origin = InvocationOrigin.Message
         };
 
-    private static NotificationInboundContext CreateNotificationContext()
+    private static InvocationContext CreateNotificationContext()
         => new()
         {
             HandlerMethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleNotification))!,
             HandlerType = typeof(TestHandler),
-            InputType = typeof(TestNotification)
+            Operation = new InvocationTestDescriptor(typeof(TestHandler), nameof(TestHandler.HandleNotification), typeof(TestNotification), typeof(Empty)),
+            Origin = InvocationOrigin.Message
         };
 
     private sealed class TestCommand;

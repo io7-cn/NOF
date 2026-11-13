@@ -20,7 +20,7 @@ public class CreateConfigNode : NOFSampleService.CreateConfigNode
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         if (!ConfigNodeName.TryFrom(request.Name, out var name, out var nameErrorMessage))
         {

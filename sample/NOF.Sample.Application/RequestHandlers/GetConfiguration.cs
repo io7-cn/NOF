@@ -17,7 +17,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigurationRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         if (!ConfigNodeName.TryFrom(request.AppName, out var appName, out var appNameErrorMessage))
         {

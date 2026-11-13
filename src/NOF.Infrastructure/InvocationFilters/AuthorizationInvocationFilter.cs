@@ -13,49 +13,36 @@ namespace NOF.Infrastructure;
 public sealed class AuthorizationInvocationFilter(
     IUserContext userContext,
     IInboundAuthorizationHandler authorizationHandler,
-    IOptions<AuthenticationResourceServerOptions> options,
     IOptions<TenantAuthorizationOptions> tenantOptions) :
     IInvocationFilter
 {
-    private const string WwwAuthenticateHeader = "WWW-Authenticate";
-    private readonly AuthenticationResourceServerOptions _options = options.Value;
     private readonly TenantAuthorizationOptions _tenantOptions = tenantOptions.Value;
 
     /// <summary>Creates an authorization filter with the default tenant trust policy.</summary>
     public AuthorizationInvocationFilter(IUserContext userContext,
-        IInboundAuthorizationHandler authorizationHandler,
-        IOptions<AuthenticationResourceServerOptions> options)
-        : this(userContext, authorizationHandler, options, Microsoft.Extensions.Options.Options.Create(new TenantAuthorizationOptions()))
+        IInboundAuthorizationHandler authorizationHandler)
+        : this(userContext, authorizationHandler, Microsoft.Extensions.Options.Options.Create(new TenantAuthorizationOptions()))
     {
     }
 
     /// <inheritdoc />
     public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        var service = context as RequestInboundContext;
         var result = await authorizationHandler.AuthorizeAsync(new InboundAuthorizationContext
         {
-            Kind = context.Kind,
             User = userContext.User,
-            ExecutionContext = context,
+            ExecutionContext = context.Context,
             Input = input,
             HandlerType = context.HandlerType,
             HandlerMethodInfo = context.HandlerMethodInfo,
-            ServiceType = service?.ServiceType,
-            ServiceMethodInfo = service?.ServiceMethodInfo,
-            InputType = service is null ? context.InputType : null
+            ServiceType = context.ServiceType,
+            ServiceMethodInfo = context.ServiceMethodInfo,
+            InputType = context.InputType
         }, cancellationToken).ConfigureAwait(false);
-        var denial = GetDenial(result) ?? (service is null ? null : ValidateRequestTenant(service));
+        var denial = GetDenial(result) ?? ValidateRequestTenant(context);
         if (denial is not null)
         {
-            if (service is not null)
-            {
-                ApplyFailure(service, denial);
-            }
-            else
-            {
-                context.Reject(denial.Result);
-            }
+            context.Reject(denial.Result, denial.ChallengePermissions, denial.Reason);
             return;
         }
         await next(WithTrustedTenant(context), input, cancellationToken);
@@ -69,76 +56,38 @@ public sealed class AuthorizationInvocationFilter(
             null => throw new InvalidOperationException("The authorization handler returned an uninitialized result.")
         };
 
-    private InboundAuthorizationResult.Denied? ValidateRequestTenant(RequestInboundContext context)
+    private InboundAuthorizationResult.Denied? ValidateRequestTenant(InvocationContext context)
     {
         var isHostOperation = UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo);
         var isAuthenticated = userContext.User.IsAuthenticated;
         var trustedTenant = isAuthenticated ? userContext.User.TenantId : null;
         var normalizedTenant = TenantId.Normalize(trustedTenant);
-        if (_tenantOptions.RequireAuthenticatedTenantForRequests)
+        if (_tenantOptions.RequireAuthenticatedTenant)
         {
             if (!isAuthenticated)
             {
-                return new(new global::NOF.Abstraction.Failure("401", "Please login first"), 401, []);
+                return new(new global::NOF.Abstraction.Failure("401", "Please login first"), RejectionReason.Authentication, []);
             }
 
             if (!isHostOperation && (string.IsNullOrWhiteSpace(trustedTenant)
                 || normalizedTenant == NOFAbstractionConstants.Tenant.HostId))
             {
-                return new(new global::NOF.Abstraction.Failure("403", "An authenticated tenant is required"), 403, []);
+                return new(new global::NOF.Abstraction.Failure("403", "An authenticated tenant is required"), RejectionReason.Authorization, []);
             }
         }
 
-        if (_tenantOptions.RejectMismatchedTenantForRequests && !isHostOperation
+        if (_tenantOptions.RejectMismatchedTenant && !isHostOperation
             && !string.IsNullOrWhiteSpace(trustedTenant)
             && context.TenantId != NOFAbstractionConstants.Tenant.HostId
             && !string.Equals(context.TenantId, normalizedTenant, StringComparison.Ordinal))
         {
-            return new(new global::NOF.Abstraction.Failure("403", "Request tenant does not match the authenticated tenant"), 403, []);
+            return new(new global::NOF.Abstraction.Failure("403", "Request tenant does not match the authenticated tenant"), RejectionReason.Authorization, []);
         }
 
         return null;
     }
 
-    private void ApplyFailure(RequestInboundContext context, InboundAuthorizationResult.Denied failure)
-    {
-        context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] =
-            failure.StatusCode.ToString(CultureInfo.InvariantCulture);
-        context.ResponseHeaders[WwwAuthenticateHeader] = CreateBearerChallenge(failure);
-        context.Reject(failure.Result);
-    }
-
-    private string CreateBearerChallenge(InboundAuthorizationResult.Denied failure)
-    {
-        var parameters = new List<string>
-        {
-            failure.StatusCode == 403
-                ? "error=\"insufficient_scope\""
-                : "error=\"invalid_token\""
-        };
-
-        if (!string.IsNullOrWhiteSpace(_options.AuthorizationServerIssuer))
-        {
-            parameters.Add($"authorization_server=\"{EscapeChallengeValue(_options.AuthorizationServerIssuer)}\"");
-        }
-
-        if (failure.StatusCode == 403)
-        {
-            var scope = string.Join(' ', failure.ChallengePermissions.Where(static permission => !string.IsNullOrWhiteSpace(permission)));
-            if (!string.IsNullOrWhiteSpace(scope))
-            {
-                parameters.Add($"scope=\"{EscapeChallengeValue(scope)}\"");
-            }
-        }
-
-        return $"Bearer {string.Join(", ", parameters)}";
-    }
-
-    private static string EscapeChallengeValue(string value)
-        => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-
-    private TContext WithTrustedTenant<TContext>(TContext context)
-        where TContext : Context
+    private InvocationContext WithTrustedTenant(InvocationContext context)
     {
         if (!userContext.User.IsAuthenticated)
         {
@@ -153,6 +102,6 @@ public sealed class AuthorizationInvocationFilter(
 
         var tenantId = TenantId.Normalize(trustedTenantId);
         Activity.Current?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.TenantId, tenantId);
-        return (TContext)context.WithTenantId(tenantId);
+        return context.WithTenantId(tenantId);
     }
 }

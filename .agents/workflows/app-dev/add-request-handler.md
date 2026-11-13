@@ -40,7 +40,7 @@ public sealed class GetOrder : OrderService.GetOrder
 {
     public override Task<Result> HandleAsync(
         GetOrderRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         return Task.FromResult<Result>(new GetOrderResponse(request.Id, "demo"));

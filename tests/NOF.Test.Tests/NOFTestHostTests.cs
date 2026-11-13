@@ -95,24 +95,24 @@ public class NOFTestHostTests
     public async Task SendAsync_Command_ShouldResolveCommandSenderFromScope()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddScoped<ICommandSender, FakeCommandSender>();
+        builder.Services.AddScoped<IMessageDispatcher, FakeMessageDispatcher>();
 
         await using var host = builder.BuildTestHost();
-        Func<Task> act = () => host.SendAsync(new TestCommand("do-it"));
+        Func<Task> act = () => host.SendAsync(new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestMessages), nameof(ITestMessages.Send)), new TestCommand("do-it"));
 
-        await Record.ExceptionAsync(act);
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 
     [Fact]
     public async Task PublishAsync_ShouldResolveNotificationPublisherFromScope()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddScoped<INotificationPublisher, FakeNotificationPublisher>();
+        builder.Services.AddScoped<IMessageDispatcher, FakeMessageDispatcher>();
 
         await using var host = builder.BuildTestHost();
         Func<Task> act = () => host.PublishAsync(new TestNotification("evt"));
 
-        await Record.ExceptionAsync(act);
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 
     [Fact]
@@ -216,58 +216,16 @@ public class NOFTestHostTests
         public required string Name { get; set; }
     }
 
-    private sealed class FakeCommandSender : ICommandSender
+    private interface ITestMessages : IApplicationService { Empty Send(TestCommand request); }
+
+    private sealed class FakeMessageDispatcher : IMessageDispatcher
     {
-        public Task DeferSendAsync(object command, Type commandType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task DeferSendOrderedAsync(
-            object command,
-            Type commandType,
-            string orderKey,
-            Context context,
-            bool completesOrderKey = false,
-            CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task SendAsync(object command, Type commandType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class FakeNotificationPublisher : INotificationPublisher
-    {
-        public Task DeferPublishAsync(object notification, Type notificationType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task DeferPublishOrderedAsync(
-            object notification,
-            Type notificationType,
-            string orderKey,
-            Context context,
-            bool completesOrderKey = false,
-            CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(object notification, Type notificationType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
+        public Task SendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferSendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferSendOrderedAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task PublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferPublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferPublishOrderedAsync<T>(T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class LazyProbe

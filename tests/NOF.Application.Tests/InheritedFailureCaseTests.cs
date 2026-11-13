@@ -33,7 +33,7 @@ public sealed class InheritedFailureCaseTests
             public partial class Service : ApplicationService<IService>;
             public sealed class Handler : Service.Run
             {
-                public override Task<Result> HandleAsync(Query request, Context context, CancellationToken ct)
+                public override Task<Result> HandleAsync(Query request, InvocationContext context, CancellationToken ct)
                     => Task.FromResult<Result>(request.Mode switch
                     {
                         0 => new NotFound("constructor"),
@@ -48,10 +48,12 @@ public sealed class InheritedFailureCaseTests
                 public static async Task<bool> Run()
                 {
                     var handler = new Handler();
-                    var constructed = await handler.HandleAsync(new Query(0), Context.Empty, default);
-                    var message = await handler.HandleAsync(new Query(1), Context.Empty, default);
-                    var typed = await handler.HandleAsync(new Query(2), Context.Empty, default);
-                    var conflict = await handler.HandleAsync(new Query(3), Context.Empty, default);
+                    var context = new InvocationContext { Operation = IServiceOperations.Run, HandlerType = typeof(Handler),
+                        HandlerMethodInfo = typeof(Handler).GetMethods().First(method => method.Name == "HandleAsync" && method.GetParameters()[0].ParameterType == typeof(Query)) };
+                    var constructed = await handler.HandleAsync(new Query(0), context, default);
+                    var message = await handler.HandleAsync(new Query(1), context, default);
+                    var typed = await handler.HandleAsync(new Query(2), context, default);
+                    var conflict = await handler.HandleAsync(new Query(3), context, default);
                     var details = new Details(99);
                     return constructed is IService.RunOperation.NotFound { Message: "constructor" }
                         && message is IService.RunOperation.NotFound { Message: "message constructor" }
@@ -71,7 +73,7 @@ public sealed class InheritedFailureCaseTests
             typeof(ApplicationService<>), typeof(ServiceOperation<,>), typeof(FailureCaseAttribute), typeof(Context),
             typeof(ServiceProviderServiceExtensions), typeof(System.Text.Json.Serialization.JsonUnionAttribute));
         ISourceGenerator[] generators = [new NOF.Contract.SourceGenerator.FailureCaseGenerator().AsSourceGenerator(),
-            new ApplicationServiceGenerator().AsSourceGenerator()];
+            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()];
         if (reverseOrder)
         {
             generators = [.. generators.Reverse()];

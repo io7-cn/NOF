@@ -4,109 +4,43 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Infrastructure;
-using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Hosting.AspNetCore;
 
-/// <summary>
-/// Adapts an inbound HTTP request into the application policy pipeline.
-/// </summary>
-public sealed class HttpRequestInboundAdapter(
-    ApplicationServiceInvocationResolver invocationResolver,
-    ApplicationServiceExecutionAdapter inboundPipeline,
-    IOptions<HttpRequestHeaderOptions> httpHeaderOptions)
+/// <summary>Owns HTTP metadata, challenges and the bridge to host operation execution.</summary>
+public sealed class HttpRequestInboundAdapter(IOperationExecutor executor,
+    IOptions<HttpRequestHeaderOptions> headerOptions, IOptions<AuthenticationResourceServerOptions> authenticationOptions)
 {
-    private readonly HttpRequestHeaderOptions _httpHeaderOptions = httpHeaderOptions.Value;
-
-    public async Task<RequestInboundContext> InvokeAsync<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRequest>(
-        HttpContext httpContext,
-        string operationName,
-        TRequest request,
-        CancellationToken cancellationToken)
-        where TService : class, IApplicationService
+    /// <summary>Runs one operation in the existing HTTP request scope.</summary>
+    public async Task<InvocationContext> InvokeAsync(ServiceOperationDescriptor operation, object input,
+        HttpContext http, CancellationToken cancellationToken)
     {
-        var resolution = invocationResolver.Resolve<TService>(operationName);
-        return await InvokeAsync(
-            httpContext,
-            typeof(TService),
-            operationName,
-            request!,
-            resolution.HandlerMapping,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<RequestInboundContext> InvokeAsync(
-        HttpContext httpContext,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
-        string operationName,
-        object request,
-        ServiceOperationMapping handlerMapping,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentNullException.ThrowIfNull(serviceType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(handlerMapping);
-
-        var headers = CreateInboundHeaders(httpContext);
-        var execution = await inboundPipeline.ExecuteAsync(
-            request,
-            handlerMapping.HandlerType,
-            handlerMapping.ReturnType,
-            serviceType,
-            operationName,
-            headers,
-            cancellationToken).ConfigureAwait(false);
-        ApplyResponseHeaders(httpContext, execution.ResponseHeaders);
-        return execution;
-    }
-
-    private Dictionary<string, string?> CreateInboundHeaders(HttpContext httpContext)
-    {
-        var headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var header in httpContext.Request.Headers)
+        var items = new Dictionary<object, object?>();
+        foreach (var header in http.Request.Headers)
         {
             if (!string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.TraceParent, StringComparison.OrdinalIgnoreCase)
-                && IsAllowed(header.Key))
+                && headerOptions.Value.AllowedHeaders.Any(pattern => header.Key.MatchWildcard(pattern, StringComparison.OrdinalIgnoreCase)))
             {
-                headers[header.Key] = header.Value.ToString();
+                items[header.Key] = header.Value.ToString();
             }
         }
-
-        if (!headers.ContainsKey(NOFAbstractionConstants.Transport.Headers.MessageId))
+        var result = await executor.ExecuteAsync(operation, input, Context.Empty.WithItems(items), InvocationOrigin.Http, cancellationToken).ConfigureAwait(false);
+        if (result.Execution.Value is ServiceRejected { Reason: RejectionReason.Authentication or RejectionReason.Authorization } rejection)
         {
-            headers[NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString();
+            var parameters = new List<string> { rejection.Reason == RejectionReason.Authorization ? "error=\"insufficient_scope\"" : "error=\"invalid_token\"" };
+            if (authenticationOptions.Value.AuthorizationServerIssuer is { Length: > 0 } issuer)
+            {
+                parameters.Add($"authorization_server=\"{Escape(issuer)}\"");
+            }
+            if (rejection.Reason == RejectionReason.Authorization && result.RequiredPermissions.Count > 0)
+            {
+                parameters.Add($"scope=\"{Escape(string.Join(' ', result.RequiredPermissions))}\"");
+            }
+            http.Response.Headers.WWWAuthenticate = $"Bearer {string.Join(", ", parameters)}";
         }
-
-        return headers;
+        return result;
     }
 
-    private bool IsAllowed(string headerName)
-        => _httpHeaderOptions.AllowedHeaders.Any(pattern => headerName.MatchWildcard(pattern, StringComparison.OrdinalIgnoreCase));
-
-    private static void ApplyResponseHeaders(HttpContext httpContext, IEnumerable<KeyValuePair<string, string?>> headers)
-    {
-        foreach (var (name, value) in headers)
-        {
-            if (string.IsNullOrWhiteSpace(name) || value is null)
-            {
-                continue;
-            }
-
-            if (string.Equals(name, NOFInfrastructureConstants.Transport.Headers.HttpStatusCode, StringComparison.OrdinalIgnoreCase))
-            {
-                if (int.TryParse(value, out var statusCode))
-                {
-                    httpContext.Items[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = statusCode;
-                }
-
-                continue;
-            }
-
-            httpContext.Response.Headers[name] = value;
-        }
-    }
+    private static string Escape(string value)
+        => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
 }

@@ -38,7 +38,7 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
     /// <inheritdoc />
     public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (context is RequestInboundContext { IsLocalInvocation: true })
+        if (context.Origin is InvocationOrigin.Local or InvocationOrigin.Message)
         {
             await next(context, input, cancellationToken);
             return;
@@ -47,8 +47,7 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
         await next(authenticated, input, cancellationToken);
     }
 
-    private async ValueTask<TContext> AuthenticateAsync<TContext>(TContext context, CancellationToken cancellationToken)
-        where TContext : Context
+    private async ValueTask<InvocationContext> AuthenticateAsync(InvocationContext context, CancellationToken cancellationToken)
     {
         var tokenSources = GetTokenSources();
         var executionContext = context;
@@ -61,7 +60,7 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
         {
             foreach (var source in tokenSources)
             {
-                if (!TryGetToken(executionContext, source, out var token))
+                if (!TryGetToken(executionContext.Context, source, out var token))
                 {
                     continue;
                 }
@@ -106,7 +105,7 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
                         : new JwtClaimsIdentity(
                             new ClaimsIdentity(identity),
                             token));
-                    executionContext = (TContext)executionContext.WithoutItem(source.HeaderName);
+                    executionContext = executionContext.WithoutItem(source.HeaderName);
                 }
                 catch (SecurityTokenExpiredException)
                 {

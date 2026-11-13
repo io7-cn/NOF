@@ -91,8 +91,8 @@ For HTTP hosts that require tenant-bound identities, enable both checks:
 ```csharp
 builder.Services.Configure<TenantAuthorizationOptions>(options =>
 {
-    options.RequireAuthenticatedTenantForRequests = true;
-    options.RejectMismatchedTenantForRequests = true;
+    options.RequireAuthenticatedTenant = true;
+    options.RejectMismatchedTenant = true;
 });
 ```
 
@@ -163,7 +163,7 @@ builder.AddApplicationService<OrderService>();
 var order = await OrderService.GetOrder.InvokeAsync(services, request, context, ct);
 ```
 
-`IApplicationServiceInvoker` is registered as scoped infrastructure. Static operation
+`IOperationInvoker` is registered as scoped infrastructure. Static operation
 entries delegate to it; no client interfaces or Local/HTTP Client implementations are
 generated. Invocation opens and asynchronously disposes a fresh scope for daemon
 services, inbound policies and the handler. Context items flow directly and the
@@ -261,3 +261,5 @@ Apache-2.0
 NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. See [execution and migration](../../docs/en/design/invocation-extensions.md).
 
 Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and provider query helpers are infrastructure collaboration only. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).
+
+See [unified operations](../../docs/en/design/unified-operations.md) for IOperationExecutor, host message bindings, durable consumer IDs and stored-route migration.

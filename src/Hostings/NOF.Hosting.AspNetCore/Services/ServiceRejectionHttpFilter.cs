@@ -16,9 +16,12 @@ public sealed class ServiceRejectionHttpFilter : IEndpointFilter
         }
         catch (ServiceRejectedException rejected)
         {
-            var status = context.HttpContext.Items[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] is int supplied
-                ? supplied
-                : int.TryParse(rejected.Failure.Code, out var parsed) && parsed is >= 400 and <= 599 ? parsed : 500;
+            var status = rejected.Reason switch
+            {
+                RejectionReason.Authentication => StatusCodes.Status401Unauthorized,
+                RejectionReason.Authorization => StatusCodes.Status403Forbidden,
+                _ => StatusCodes.Status400BadRequest
+            };
             return TypedResults.Problem(statusCode: status, title: "Application request rejected",
                 detail: rejected.Failure.Message,
                 extensions: new Dictionary<string, object?> { ["code"] = rejected.Failure.Code });

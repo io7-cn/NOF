@@ -18,12 +18,6 @@ public class ServiceCollectionExtensionsTests
             descriptor.ServiceType == typeof(MappingRegistry) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(CommandHandlerRegistry) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(NotificationHandlerRegistry) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ApplicationServiceRegistry) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
         Assert.Contains(services, descriptor =>
@@ -98,8 +92,6 @@ public class ServiceCollectionExtensionsTests
         services.AddNOFApplication();
 
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(MappingRegistry));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(CommandHandlerRegistry));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(NotificationHandlerRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ApplicationServiceRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IMapper));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));

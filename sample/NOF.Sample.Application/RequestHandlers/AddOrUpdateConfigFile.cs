@@ -18,7 +18,7 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.NodeId);
         var node = await _nodes.GetAsync(id, cancellationToken);

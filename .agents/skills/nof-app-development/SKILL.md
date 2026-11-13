@@ -1,6 +1,6 @@
 ---
 name: nof-app-development
-description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, CommandHandler<T>, NotificationHandler<T>, IUnitOfWork, aggregate repositories, Result, or CacheKey<T>.
+description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, IMessageDispatcher, InvocationContext, IUnitOfWork, aggregate repositories, Result, or CacheKey<T>.
 ---
 
 # NOF Application Development
@@ -33,23 +33,22 @@ All five inbound/outbound middleware families, delegates, outbound contexts and 
 | Concern | Declaration | Handler / registration |
 |---|---|---|
 | RPC | `IApplicationService` | generated nested base under `ApplicationService<TService>`; register with `AddApplicationService<TServer>()` |
-| Command | plain payload | `CommandHandler<T>` |
-| Notification | plain payload | `NotificationHandler<T>` |
+| Queued work / subscribed fact | plain payload + IApplicationService method returning Empty | generated Service.Operation + host binding |
 | In-memory event | arbitrary payload | `InMemoryEventHandler<T>` |
 
-All generated RPC handlers, command handlers, notification handlers, and in-memory event handlers receive `Context` plus `CancellationToken`.
+Generated service operations receive InvocationContext plus CancellationToken; in-memory events and dispatch receive semantic Context. InvocationContext composes Context; it does not inherit it.
 
 ## Dispatch APIs
 
 | Interface | Method | Use |
 |---|---|---|
 | Generated server operation | `Service.Operation.InvokeAsync(services, request, context, ct)` | policy-controlled in-process invocation; remote callers own HTTP integration |
-| `ICommandSender` | `SendAsync(command, context, ct)` | immediate command dispatch |
-| `ICommandSender` | `DeferSendAsync(command, context, ct)` | stage a command in the current outbox |
-| `ICommandSender` | `DeferSendOrderedAsync(command, orderKey, context, ..., ct)` | stage ordered command delivery |
-| `INotificationPublisher` | `PublishAsync(notification, context, ct)` | immediate fan-out |
-| `INotificationPublisher` | `DeferPublishAsync(notification, context, ct)` | stage a notification in the current outbox |
-| `INotificationPublisher` | `DeferPublishOrderedAsync(notification, orderKey, context, ..., ct)` | stage ordered notification delivery |
+| `IMessageDispatcher` | `SendAsync(descriptor, command, context, ct)` | immediate command dispatch |
+| `IMessageDispatcher` | `DeferSendAsync(descriptor, command, context, ct)` | stage a command in the current outbox |
+| `IMessageDispatcher` | `DeferSendOrderedAsync(descriptor, command, orderKey, context, ..., ct)` | stage ordered command delivery |
+| `IMessageDispatcher` | `PublishAsync(notification, context, ct)` | immediate fan-out |
+| `IMessageDispatcher` | `DeferPublishAsync(notification, context, ct)` | stage a notification in the current outbox |
+| `IMessageDispatcher` | `DeferPublishOrderedAsync(notification, orderKey, context, ..., ct)` | stage ordered notification delivery |
 | `IEventPublisher` | `PublishAsync(payload, context, ct)` | current-scope in-memory event dispatch |
 
 Save the same scoped `IUnitOfWork` after a deferred dispatch to commit the application changes and outbox record together.
@@ -78,7 +77,7 @@ Save the same scoped `IUnitOfWork` after a deferred dispatch to commit the appli
 | invoke operations in process | plain contracts and Service.Operation.InvokeAsync |
 | persist application data | aggregate repositories / DTO query ports / IUnitOfWork; choose the provider in the host |
 | cache data | `CacheKey<T>` + `ICacheService`; optionally replace the memory rider with Redis |
-| send cross-boundary work | `ICommandSender` / `INotificationPublisher`, passing the current `Context` |
+| send cross-boundary work | `IMessageDispatcher` / `IMessageDispatcher`, passing the current `Context` |
 | add an OAuth/OIDC server | `AddOidcServer(...)` |
 | validate access tokens | `services.AddAuthenticationResourceServer(...)` |
 
@@ -96,3 +95,7 @@ Declared expected failures use Contract FailureCase(name), FailureCase(name, err
 Value objects implement static bool IsValid(T, out string? errorMessage) and optional Normalize. Generated From throws for invalid values; TryFrom returns false with default out for expected invalid input and never catches user-hook exceptions. Of and Validate are removed; legacy Validate or single-parameter IsValid is NOF019. Use TryFrom at application input boundaries to avoid validating twice. See docs/en/design/value-objects.md.
 
 IsValid always has out string? errorMessage. Detailed TryFrom returns a non-null failure message and null on success; From uses the same text with ArgumentException. DomainException/DomainValidationException are removed. Application handlers forward TryFrom messages into FailureCase rather than duplicate wording.
+
+Unified operations: service implementation bases stay in ApplicationService. Contract independently generates IServiceOperations.Method descriptors for producers; plain interfaces and IApplicationServiceImplementation need no partial modifier. FailureCase partial contracts remain unchanged. IOperationExecutor runs a selected operation in the current scope, IOperationInvoker isolates local calls, and all origins run the same policy boundary. Use invocation.Context for nested semantic APIs. RequestInboundContext, CommandInboundContext, NotificationInboundContext and InvocationKind are removed. HTTP response metadata stays in HTTP adapters. See docs/en/design/unified-operations.md.
+
+Domain collections: [ReadOnlyCollection] on private readonly List<T>/HashSet<T> fields in top-level non-generic partial classes generates a cached live IReadOnlyCollection view and CollectionBackingField metadata. OwnsMany field access is configured by EF Core after model configuration; explicit conflicts fail. Mut is removed. Use ReferenceEqualityComparer.Instance for entity HashSet navigation fields. NOF020 validates fields/names; NOF021 requests partial with a code fix.
