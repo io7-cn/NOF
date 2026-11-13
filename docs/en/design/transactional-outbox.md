@@ -81,3 +81,18 @@ Breaking upgrade procedure:
 5. Rollback restores the backup and matching previous packages together. Automatic Down is refused because generic intent schemas cannot be inferred as legacy routes. New schemas must not be opened by old binaries.
 
 The migration is supplied as code; applying it to a live PostgreSQL database is a deployment step. SQLite regressions exercise the shared transactional store, stream blocking and owner fencing. Other tests cover snapshot/rollback, retry identity/scopes, independent subscriptions, tenant isolation, cancellation recovery and reflection-disabled typed delivery. Broker acknowledgement behavior remains the concrete client's responsibility; local tests do not run a live broker or PostgreSQL deployment.
+
+## Capability assembly and worker hosts
+
+AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddMessageBindings registers the complete Inbox capability. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
+
+```csharp
+builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
+builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
+```
+
+A producer-only host still stages snapshots and commits its unit of work, but does not claim, deliver, retry or clean up messages. Inbox.RunWorkers=false similarly accepts durable receipts without processing or cleanup. Independent worker hosts enable the matching capability with the same schemas/bindings and appropriate persistence/transport configuration. Disabling workers never discards pending records or resets ordering/ownership state. No new schema migration is required by capability gating; existing generic-outbox migrations still apply when upgrading old schemas.
+
+Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. Default ordered stream allocation resolves provider persistence only when that feature is actually used. AddNOF retains convenient cache, serialization, object storage and ordinary native-host defaults; users do not register every low-level service manually.
+
+Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.

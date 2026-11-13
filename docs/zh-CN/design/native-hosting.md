@@ -25,7 +25,7 @@ Web Builder 的 AddNOF 注册默认服务端基础设施及 HTTP 适配器；Wor
 builder.AddApplicationPart 与 services.AddApplicationPart 在同一容器中共享去重记录。
 加入操作实现及生成注册所在程序集；普通 HTTP 映射扩展不需要 ApplicationPart 注册。
 
-UseNOF 安装 HTTP 作用域环境服务激活。显式调用普通 MapFeatureEndpoints 扩展、原生 MapHealthChecks 和 MapOidcServer，不再发现或注册 DI 端点模块。AddNOF 注册 ProblemDetails、JSON 和 OpenAPI，MapOpenApi 由宿主选择。认证、异常处理、防伪和协议仍由原生宿主负责。参见 [HTTP 适配](http-adaptation.md)。
+UseNOF 为每个原生 HTTP 请求成对绑定、恢复作用域便捷服务；普通 DI scope 无激活协议，参见 [Ambient 绑定](ambient-binding.md)。显式调用普通 MapFeatureEndpoints 扩展、原生 MapHealthChecks 和 MapOidcServer，不再发现或注册 DI 端点模块。AddNOF 注册 ProblemDetails、JSON 和 OpenAPI，MapOpenApi 由宿主选择。认证、异常处理、防伪和协议仍由原生宿主负责。参见 [HTTP 适配](http-adaptation.md)。
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);
@@ -76,3 +76,5 @@ DependencyGraph、NOF401 分析器/修复和 NOF.Hosting.SourceGenerator。
 MigrateOnInitialize 改为 MigrateOnStart，数据库断言从构建阶段迁至启动阶段。
 环境扩展属性及主节点 Predicate 改为 DeploymentOptions。显式注册端点程序集并映射模块。
 所有包和宿主协调升级；回滚时恢复配套旧包与配置。
+
+可靠消息由 AddOutbox/AddMessageBindings 按需装配，参见[能力与 Worker 配置](transactional-outbox.md#按能力装配与独立-worker-宿主)。

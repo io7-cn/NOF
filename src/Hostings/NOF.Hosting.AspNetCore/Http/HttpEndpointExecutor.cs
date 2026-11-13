@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,21 +32,19 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
     private readonly IReadOnlyList<HttpBoundMember> _members;
     private readonly IReadOnlyDictionary<object, Func<HttpContext, object?>> _items;
     private readonly Func<HttpContext, string?>? _tenant;
-    private readonly IReadOnlyList<HttpResponseRule> _rules;
+    private readonly IReadOnlyDictionary<Type, HttpResponseMapping> _responses;
     private readonly InvocationPlan _plan;
-    private readonly HttpResponseSelector? _selector;
     private readonly StringComparison _queryComparison;
     private readonly StringComparison _routeComparison;
-    private HttpEndpointExecutor(JsonSerializerOptions json, Func<HttpRequestReadContext, ValueTask<TRequest>>? constructor, IReadOnlyList<HttpBoundMember> members, IReadOnlyDictionary<object, Func<HttpContext, object?>> items, Func<HttpContext, string?>? tenant, IReadOnlyList<HttpResponseRule> rules, InvocationPlan plan, HttpResponseSelector? selector, HttpEndpointBinding binding, StringComparison queryComparison, StringComparison routeComparison)
+    private HttpEndpointExecutor(JsonSerializerOptions json, Func<HttpRequestReadContext, ValueTask<TRequest>>? constructor, IReadOnlyList<HttpBoundMember> members, IReadOnlyDictionary<object, Func<HttpContext, object?>> items, Func<HttpContext, string?>? tenant, IReadOnlyDictionary<Type, HttpResponseMapping> responses, InvocationPlan plan, HttpEndpointBinding binding, StringComparison queryComparison, StringComparison routeComparison)
     {
         _json = json;
         _constructor = constructor;
         _members = members;
         _items = items;
         _tenant = tenant;
-        _rules = rules;
+        _responses = responses;
         _plan = plan;
-        _selector = selector;
         Binding = binding;
         _queryComparison = queryComparison;
         _routeComparison = routeComparison;
@@ -179,54 +178,23 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             cases.Add(typeof(void));
         }
 
-        var rules = endpoint.Metadata.OfType<HttpResponseRule>().Where(rule => rule.FilterType is null || plan.Filters.Any(filter => filter.FilterType == rule.FilterType)).Select(rule =>
+        var mappings = endpoint.Metadata.OfType<HttpResponseMapping>().ToArray();
+        foreach (var mapping in mappings.Where(item => item.Endpoint))
         {
-            var copy = new HttpResponseRule
-            {
-                SourceType = rule.SourceType,
-                Variant = rule.Variant,
-                FilterType = rule.FilterType,
-                Endpoint = rule.Endpoint,
-                StatusCodes = rule.StatusCodes,
-                Writer = rule.Writer,
-                WriterDescription = rule.WriterDescription
-            };
-            foreach (var target in rule.Targets)
-            {
-                copy.Targets[target.Key] = target.Value;
-            }
-
-            return copy;
-        }).ToArray();
-        foreach (var rule in rules.Where(rule => rule.Endpoint && rule.FilterType is null))
-        {
-            if (rule.SourceType != typeof(IFailure) && rule.SourceType != typeof(object) && !cases.Contains(rule.SourceType))
-            {
-                throw new InvalidOperationException($"Endpoint response '{rule.SourceType}' cannot occur in '{operation.Id}'.");
-            }
+            if (!cases.Contains(mapping.SourceType))
+            { throw new InvalidOperationException($"Response '{mapping.SourceType}' cannot occur in '{operation.Id}'."); }
         }
-
-        var responses = new List<HttpResponseDescription>();
-        foreach (var source in cases)
+        var selected = cases.ToFrozenDictionary(type => type, type => mappings.LastOrDefault(item => item.SourceType == type)
+            ?? new HttpResponseMapping(type, null, null, null, false));
+        var responses = selected.Values.SelectMany(mapping => mapping.DescribeResponses(services)).ToList();
+        // Explicit native Produces metadata describes opaque/custom results without probing their delegates.
+        responses.AddRange(endpoint.Metadata.OfType<IProducesResponseTypeMetadata>().Where(item => item.StatusCode >= 200)
+            .SelectMany(item => item.ContentTypes.DefaultIfEmpty(null!).Select(content => new HttpResponseDescription(typeof(object), item.StatusCode,
+                item.Type == typeof(void) ? null : item.Type, content))));
+        foreach (var response in responses.Where(item => item.BodyType is not null && item.BodyType != typeof(object)))
         {
-            var variants = rules.Where(rule => rule.SourceType == source && rule.Variant is not null).Select(rule => rule.Variant).Distinct().Prepend(null);
-            foreach (var variant in variants)
-            {
-                var merged = HttpResponsePlan.Compile(source, variant, rules, plan);
-                if (merged.BodyType is not null && merged.BodyType != typeof(void) && merged.BodyType != typeof(object))
-                {
-                    _ = json.GetRequiredTypeInfo(merged.BodyType);
-                }
-
-                if (merged.StatusCodes.Any(code => code is 204 or 304) && merged.BodyType is not null)
-                {
-                    throw new InvalidOperationException("204/304 responses must explicitly have no body.");
-                }
-
-                responses.Add(new(source, variant, merged.StatusCodes, merged.BodyType, merged.ContentType, merged.Headers.ToFrozenDictionary(item => item.Key, item => item.Value.ValueType, StringComparer.OrdinalIgnoreCase), merged.ProblemFields.Where(item => item.Key.StartsWith("extension:", StringComparison.Ordinal)).ToFrozenDictionary(item => item.Key[10..], item => item.Value.ValueType)));
-            }
+            _ = json.GetRequiredTypeInfo(response.BodyType!);
         }
-
         if (constructor is not null && bodyDescription is not null)
         {
             inputs.Add(new("", HttpInputLocation.WholeBody, bodyDescription.BodyType, bodyDescription.Required, ContentType: bodyDescription.ContentType));
@@ -238,7 +206,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         }
 
         var binding = new HttpEndpointBinding(operation, Array.AsReadOnly(inputs.DistinctBy(item => (item.Name, item.Location)).ToArray()), Array.AsReadOnly(responses.ToArray()), Array.AsReadOnly(plan.FailureCases.Select(item => item.CaseType).ToArray()));
-        return new(json, constructor, members.AsReadOnly(), items, tenant, Array.AsReadOnly(rules), plan, endpoint.Metadata.OfType<HttpResponseSelector>().LastOrDefault(), binding, queryComparison, routeComparison);
+        return new(json, constructor, members.AsReadOnly(), items, tenant, selected, plan, binding, queryComparison, routeComparison);
     }
 
     /// <summary>Binds input, invokes the common executor, and writes the selected actual result.</summary>
@@ -269,22 +237,11 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             context = context.WithTenantId(_tenant(http));
         }
 
-        var output = new HttpOutputContext(http, context, Binding.Operation, http.RequestAborted);
         var result = InvocationResult.Value(await adapter.ExecuteAsync(Binding.Operation, input!, http, context, http.RequestAborted));
-        var reference = _selector?.Select(result, new HttpResponseMappings());
-        var source = result is null ? typeof(void) : Binding.Responses.Select(item => item.SourceType).Distinct().OrderBy(type => type == result.GetType() ? 0 : 1).FirstOrDefault(type => type.IsInstanceOfType(result)) ?? result.GetType();
-        if (reference is not null && reference.SourceType != source && !(reference.Variant is null && reference.SourceType == result?.GetType()))
-        {
-            throw new InvalidOperationException("The selected response reference does not match the actual source.");
-        }
-
-        if (reference?.Variant is { } name && !Binding.Responses.Any(item => item.SourceType == source && item.Variant == name))
-        {
-            throw new InvalidOperationException($"Unknown response variant '{name}'.");
-        }
-
-        var response = HttpResponsePlan.Compile(source, reference?.Variant, _rules, _plan);
-        await response.WriteAsync(result, output, _json);
+        var source = result is null ? typeof(void) : _responses.Keys.OrderBy(type => type == result.GetType() ? 0 : 1)
+            .FirstOrDefault(type => type.IsInstanceOfType(result)) ?? result.GetType();
+        var response = _responses.GetValueOrDefault(source) ?? new HttpResponseMapping(source, null, null, null, false);
+        await response.WriteAsync(result, http, _json);
     }
 
     private async ValueTask<TRequest> ReadAsync(HttpRequestReadContext read)

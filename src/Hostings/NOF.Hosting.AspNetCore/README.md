@@ -5,11 +5,11 @@ Native ASP.NET Core operation binding, explicit feature mapping and runtime Open
 ```csharp
 var orders = app.MapGroup("/orders");
 orders.MapGet<OrderService.Find>("/{id}")
-    .Response<OrderService.Find.NotFound>(output => output.StatusCode(404));
+    .Response<OrderService.Find.NotFound>(404);
 ```
 
 Operation bases implement static IServiceOperationDefinition. Typed Request/Response
-rules merge per target on native groups/endpoints; no endpoint-module registration or
+rules replace complete exact-type mappings on native groups/endpoints; no endpoint-module registration or
 client generation is required. AddNOF registers JSON, ProblemDetails and OpenAPI services.
 Call UseNOF, ordinary feature extensions, native health checks, MapOidcServer (when used)
 and MapOpenApi explicitly. Native middleware and protocols remain host responsibilities.

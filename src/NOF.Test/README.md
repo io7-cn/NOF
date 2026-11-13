@@ -9,7 +9,7 @@ builder.AddApplicationService<OrderService>();
 await using var host = builder.BuildTestHost();
 // await host.Host.StartAsync(); // when the test needs migration, bootstrap or workers
 
-var result = await host.CallAsync<IOrderService.GetOperation.Result>(
+var result = await host.CallAsync<object?>(
     (services, context, ct) => OrderService.Get.InvokeAsync(
         services, new GetOrderRequest(orderId), context, ct),
     configure: scope => scope.SetTenant("tenant-a").SetUser("user-1", "Alice"));
@@ -20,11 +20,11 @@ returns the operation's task. Client generation, `AddLocalApplicationServiceClie
 and `GetRpcClient` have been removed. Add every assembly with generated initializers
 explicitly, including test assemblies declaring mappings.
 
-`NOFTestHost` exposes CreateScope, ExecuteAsync, CallAsync, SendAsync and PublishAsync.
+`NOFTestHost` exposes CreateScope, ExecuteAsync and CallAsync; NOFTestScope.EnqueueAsync stages explicitly configured Outbox intents.
 Inside ExecuteAsync, configure the scope with SetTenant, SetUser, SetAnonymousUser,
 SetTracing, SetContext, SetContextItem, SetContextItems or RemoveContextItem; resolve
 dependencies with GetRequiredService. Scope CallAsync uses the configured Context.
-Daemon services and Context.Current are bound for scoped ambient conveniences.
+Test scopes bind and restore Context.Current and ambient conveniences through BindNOF.
 Server invocation still creates its own policy-controlled inbound scope; use explicit
 context and dependency APIs when tests need to observe those boundaries.
 

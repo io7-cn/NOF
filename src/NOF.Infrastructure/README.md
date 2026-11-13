@@ -6,12 +6,12 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 `NOF.Infrastructure` provides the default runtime wiring for NOF applications, including:
 
-- builder defaults and step orchestration
+- native builder defaults and capability-based registration
 - in-memory cache and messaging riders
 - OpenTelemetry registration and unified invocation filters
 - JWT resource server validation and explicit transport authentication policies
 - `[UseHostTenant]` application execution after authorization, registered by default through `HostTenantInvocationFilter`
-- ambient `IMapper` and `IIdGenerator` activation through scoped `IDaemonService` implementations
+- ambient conveniences bound/restored at managed entries or explicit BindNOF scopes
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
 
@@ -264,3 +264,5 @@ Business handlers depend on aggregate repositories, DTO query ports and IUnitOfW
 See [unified operations](../../docs/en/design/unified-operations.md) for IOperationExecutor, host message bindings, durable consumer IDs and stored-route migration.
 
 Immediate messages use concrete MemoryMessageClient/RabbitMQMessageClient with explicit destinations. Generic IOutbox intents are interpreted by host-registered IOutboxHandler<T> adapters; AddRabbitMQ does not replace the memory client. Inbound Queue/Subscription bindings remain separate. See [transactional outbox](../../docs/en/design/transactional-outbox.md).
+
+Durable workers and model contributors are installed only by AddOutbox/AddMessageBindings. Set TransactionalMessageOptions.Outbox/Inbox.RunWorkers=false for staging/receiving-only hosts. See [outbox capability assembly](../../docs/en/design/transactional-outbox.md).

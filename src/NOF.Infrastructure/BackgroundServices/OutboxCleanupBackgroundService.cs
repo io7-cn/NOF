@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Hosting;
 using NOF.Infrastructure;
@@ -34,6 +35,9 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.RunWorkers)
+        { return; }
+
         _logger.LogInformation(
             "Outbox cleanup service started. Cleanup interval: {Interval}, Retention period: {Retention}",
             _options.CleanupInterval, _options.RetentionPeriod);
@@ -80,7 +84,7 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     private async Task CleanupOutboxAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var store = scope.ServiceProvider.GetService<IOutboxStore>();
         if (store is null)
         {

@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Infrastructure;
 
@@ -63,7 +64,7 @@ public sealed class RevokedRefreshTokenCleanupBackgroundService : BackgroundServ
     private async Task CleanupAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceScopeFactory.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var now = DateTime.UtcNow;
         var expiredTokens = dbContext.Set<RevokedRefreshToken>()

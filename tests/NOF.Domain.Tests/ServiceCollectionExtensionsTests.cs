@@ -16,10 +16,7 @@ public class ServiceCollectionExtensionsTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IIdGenerator)
             && descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService)
-            && descriptor.Lifetime == ServiceLifetime.Scoped);
+
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IEventPublisher)
             && descriptor.ImplementationType == typeof(InMemoryEventPublisher));
@@ -61,9 +58,7 @@ public class ServiceCollectionExtensionsTests
         services.AddNOFDomain();
 
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService));
+
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IEventPublisher));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IUserContext));
     }

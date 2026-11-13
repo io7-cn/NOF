@@ -64,7 +64,7 @@ public static class WebApplicationExtensions
         {
             return app;
         }
-        app.UseMiddleware<DaemonServiceResolutionMiddleware>();
+        app.UseMiddleware<NOFAmbientBindingMiddleware>();
         return app;
     }
 

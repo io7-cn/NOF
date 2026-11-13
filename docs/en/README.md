@@ -64,3 +64,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Generic transactional outbox](design/transactional-outbox.md)
 
 - [HTTP adaptation](design/http-adaptation.md)
+
+- [Ambient binding](design/ambient-binding.md)

@@ -63,7 +63,7 @@ Include<TFailure>() 不能选择本目录以外的类型。描述只提供操作
 
 有效 InvocationPlan 同时包含实际 Filter、选中的 FailureCases 与操作 BusinessCases。返回不属于有效目录的失败、未知业务值和未初始化 union 都是契约错误。适配器可通过 InvocationResult.Value(value) 解开装箱 union 再用原生 switch；执行路径保留原始业务返回值。
 
-原生 HTTP 功能扩展使用泛型操作映射、声明式 Request/Response 和不可变绑定驱动的运行时 OpenAPI。Filter 视图消费有效失败目录，按具体类型映射并保留原生 challenge。参见 [HTTP 适配](http-adaptation.md)。消息消费使用相同结果路径，预期 Filter 失败回滚业务事务并将 inbox 标为失败，不执行技术异常重试。消息直接发送与 outbox 均不恢复出站中间件。
+原生 HTTP 功能扩展使用泛型操作映射、声明式 Request/Response 和不可变绑定驱动的运行时 OpenAPI。按确切类型的整条响应映射消费有效失败目录并保留原生 challenge。参见 [HTTP 适配](http-adaptation.md)。消息消费使用相同结果路径，预期 Filter 失败回滚业务事务并将 inbox 标为失败，不执行技术异常重试。消息直接发送与 outbox 均不恢复出站中间件。
 
 ## 破坏性迁移
 

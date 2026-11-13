@@ -63,7 +63,7 @@ public static void Describe(InvocationDescriptionContext description)
 
 The effective `InvocationPlan` contains the selected filters, their selected FailureCases and operation BusinessCases. Runtime rejects failures omitted from that effective catalog and unknown result values, including uninitialized native unions. `InvocationResult.Value(value)` unwraps a boxed business union for an adapter's native switch; the execution path preserves the original business value.
 
-Native HTTP feature extensions use generic operation maps, declarative Request/Response rules and runtime OpenAPI from immutable bindings. Filter views consume effective failure catalogs; mappings use concrete types and preserve native challenge behavior. See [HTTP adaptation](http-adaptation.md). Message consumption uses the same result path: expected filter failures roll back business work and mark the inbox record failed without a technical retry. Immediate/outbox message sending has no outbound middleware chain.
+Native HTTP feature extensions use generic operation maps, declarative Request/Response rules and runtime OpenAPI from immutable bindings. Exact-type whole-response mappings consume effective failure catalogs and preserve native challenge behavior. See [HTTP adaptation](http-adaptation.md). Message consumption uses the same result path: expected filter failures roll back business work and mark the inbox record failed without a technical retry. Immediate/outbox message sending has no outbound middleware chain.
 
 ## Breaking migration
 

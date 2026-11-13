@@ -25,7 +25,6 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
     public NOFTestScope CreateScope()
     {
         var scope = Services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
         return new NOFTestScope(scope);
     }
 

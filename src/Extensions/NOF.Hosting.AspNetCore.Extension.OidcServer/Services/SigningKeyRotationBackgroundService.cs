@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -59,7 +60,7 @@ public sealed class SigningKeyRotationBackgroundService : BackgroundService
                 await Task.Delay(nextRotation, stoppingToken);
 
                 using var scope = _serviceScopeFactory.CreateScope();
-                scope.ServiceProvider.ResolveDaemonServices();
+                using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
                 if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
@@ -118,7 +119,7 @@ public sealed class SigningKeyRotationBackgroundService : BackgroundService
     private async Task<TimeSpan> ComputeNextRotationDelayAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceScopeFactory.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var signingKeyService = scope.ServiceProvider.GetRequiredService<ISigningKeyService>();
         var keyAge = DateTime.UtcNow - (await signingKeyService.GetCurrentSigningKeyAsync(cancellationToken).ConfigureAwait(false)).ActivatedAtUtc;
         var remaining = _options.KeyRotationInterval - keyAge;

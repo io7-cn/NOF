@@ -43,9 +43,6 @@ public static partial class NOFInfrastructureExtensions
             services.AddOptions<TransactionalMessageOptions>();
             services.AddLogging();
             services.TryAddScoped<PersistenceUnitOfWork>();
-            services.TryAddScoped<IInboxStore, PersistenceInboxStore>();
-            services.TryAddScoped<IOutboxStore, PersistenceOutboxStore>();
-            services.TryAddScoped<OutboxOrderSequenceAllocator>();
             services.TryAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
             services.TryAddScoped<ITransactionManager>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
             return services;

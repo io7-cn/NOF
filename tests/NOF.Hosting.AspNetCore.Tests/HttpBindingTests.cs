@@ -23,38 +23,134 @@ public sealed class HttpBindingTests
     private static readonly ServiceOperationDescriptor<SearchInput, UpdateReply> Search = new(typeof(IService), nameof(IService.Search));
     private static readonly ServiceOperationDescriptor<UpdateInput, UpdateReply> Denied = new(typeof(IService), nameof(IService.Denied));
     [Fact]
-    public async Task ConventionBinding_ProtectsRouteIdentity_ProjectsBodyAndMatchesOpenApi()
+    public async Task ConventionBinding_ProtectsRouteIdentity_AndNativeProjectionMatchesOpenApi()
     {
         await using var app = CreateApp();
-        app.MapPut("/items/{id:long}", Update).Response<UpdateReply>(output => output.Body(value => value.Name).Header("X-Id", value => value.Id));
+        app.MapPut("/items/{id:long}", Update).Response((UpdateReply value) => TypedResults.Ok(value.Name));
         app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();
         using var response = await client.PutAsJsonAsync("/items/42", new { id = 999, name = "stored" });
         Assert.Equal("stored", await response.Content.ReadFromJsonAsync<string>());
-        Assert.Equal("42", response.Headers.GetValues("X-Id").Single());
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var operation = document.RootElement.GetProperty("paths").GetProperty("/items/{id}").GetProperty("put");
         var body = operation.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.True(body.GetProperty("properties").TryGetProperty("name", out _));
         Assert.False(body.GetProperty("properties").TryGetProperty("id", out _));
         Assert.Equal("string", operation.GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema").GetProperty("type").GetString());
-        Assert.True(operation.GetProperty("responses").GetProperty("200").GetProperty("headers").TryGetProperty("X-Id", out _));
     }
 
     [Fact]
     public async Task QueryMembers_MergeRepeatedConfigurationAndUseExplicitDefaults()
     {
         await using var app = CreateApp();
-        var group = app.MapGroup("/api");
-        var endpoint = group.MapGet("/search", Search).Request(input => input.Member(value => value.Page).FromQuery("old", defaultValue: 2));
-        endpoint.Request(input => input.Member(value => value.Page).FromQuery("limit", defaultValue: 5));
+        var endpoint = app.MapGet("/search", Search).Request(input => input.Member(value => value.Page).FromQuery("old", 2));
+        endpoint.Request(input => input.Member(value => value.Page).FromQuery("limit", 5));
         await app.StartAsync();
         using var client = app.GetTestClient();
-        var result = await client.GetFromJsonAsync<UpdateReply>("/api/search?name=typed&tags=a&tags=b");
+        var result = await client.GetFromJsonAsync<UpdateReply>("/search?name=typed&tags=a&tags=b");
         Assert.Equal("typed:5:a,b", result!.Name);
-        var overrideValue = await client.GetFromJsonAsync<UpdateReply>("/api/search?name=typed&limit=7");
-        Assert.Equal("typed:7:", overrideValue!.Name);
+    }
+
+    [Fact]
+    public async Task Response_ClosestGroupWins_AndEndpointReplacesTheEntireMapping()
+    {
+        await using var app = CreateApp();
+        var root = app.MapGroup("/api");
+        var inner = root.MapGroup("/items");
+        inner.Response((UpdateReply value) => TypedResults.Created("/group-location", value.Name));
+        // A late root declaration cannot override a more specific native group.
+        root.Response<UpdateReply>(202);
+        inner.MapPut("/{id:long}", Update);
+        inner.MapPut("/plain/{id:long}", Update).Response<UpdateReply>(202);
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var inherited = await client.PutAsJsonAsync("/api/items/1", new { name = "a" });
+        Assert.Equal(HttpStatusCode.Created, inherited.StatusCode);
+        Assert.Equal("a", await inherited.Content.ReadFromJsonAsync<string>());
+        Assert.NotNull(inherited.Headers.Location);
+        using var replaced = await client.PutAsJsonAsync("/api/items/plain/2", new { name = "b" });
+        Assert.Equal(HttpStatusCode.Accepted, replaced.StatusCode);
+        Assert.Null(replaced.Headers.Location);
+        Assert.Equal(2, (await replaced.Content.ReadFromJsonAsync<UpdateReply>())!.Id);
+    }
+
+    [Fact]
+    public async Task RepeatedResponses_LastMappingWinsWithoutExecutingProvidersForDocumentation()
+    {
+        await using var app = CreateApp();
+        var calls = 0;
+        app.MapPut("/items/{id:long}", Update).Response<UpdateReply>(201).Response((UpdateReply value) =>
+        {
+            calls++;
+            return TypedResults.Ok(value.Name);
+        });
+        app.MapOpenApi();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/items/{id}").GetProperty("put").GetProperty("responses");
+        Assert.True(responses.TryGetProperty("200", out _));
+        Assert.False(responses.TryGetProperty("201", out _));
+        Assert.Equal(0, calls);
+        using var response = await client.PutAsJsonAsync("/items/1", new { name = "a" });
+        Assert.Equal("a", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task FilterFailures_UseConcreteTypes_AndExcludedCasesDoNotAppearInOpenApi()
+    {
+        foreach (var exclude in new[]
+        {
+            false,
+            true
+        }
+
+        )
+        {
+            await using var app = CreateApp(deny: true, exclude: exclude);
+            app.MapGroup("/api").Response<RateFailure>(429).MapPut("/{id:long}", Denied);
+            app.MapOpenApi();
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+            using var response = await client.PutAsJsonAsync("/api/1", new { name = "a" });
+            Assert.Equal(exclude ? 200 : 429, (int)response.StatusCode);
+            if (!exclude)
+            {
+                using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                Assert.Equal("000429", problem.RootElement.GetProperty("title").GetString());
+                Assert.False(problem.RootElement.TryGetProperty("code", out _));
+                Assert.Equal("about:blank", problem.RootElement.GetProperty("type").GetString());
+            }
+
+            using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+            var responses = document.RootElement.GetProperty("paths").GetProperty("/api/{id}").GetProperty("put").GetProperty("responses");
+            Assert.Equal(!exclude, responses.TryGetProperty("429", out _));
+        }
+    }
+
+    [Fact]
+    public async Task Context_IsExplicit_AndNativeResponseDoesNotReadBusinessContextBack()
+    {
+        await using var app = CreateApp(normalize: true);
+        app.MapPut("/items/{id:long}", Update).Context(context => context.TenantFromHeader("X-Tenant").Item("correlation").FromHeader("X-Correlation")).Response((UpdateReply value, HttpContext http) =>
+        {
+            http.Response.Headers["X-Boundary-Tenant"] = http.Request.Headers["X-Tenant"];
+            return TypedResults.Ok(value);
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Add("X-Tenant", "boundary");
+        client.DefaultRequestHeaders.Add("X-Correlation", "request-id");
+        client.DefaultRequestHeaders.Add("X-Unlisted", "must-not-flow");
+        using var response = await client.PutAsJsonAsync("/items/1", new { name = "a" });
+        var result = await response.Content.ReadFromJsonAsync<UpdateReply>();
+        Assert.Equal("business", result!.Tenant);
+        Assert.Equal("request-id", result.Correlation);
+        Assert.False(result.Unlisted);
+        Assert.Equal("boundary", response.Headers.GetValues("X-Boundary-Tenant").Single());
+        Assert.Equal("host", Context.Current.TenantId);
     }
 
     [Theory]
@@ -93,98 +189,6 @@ public sealed class HttpBindingTests
     }
 
     [Fact]
-    public async Task BusinessGroup_PartialRuleOutranksDeeperFilterDefaults_WithoutReplacingOtherTargets()
-    {
-        await using var app = CreateApp(deny: true);
-        var root = app.MapGroup("/api").ConfigureProblem(problem => problem.Extension("trace", (_, context) => context.Http.TraceIdentifier));
-        var service = root.MapGroup("/service").Response<RateFailure>(output => output.Header("X-Source", "service"));
-        var detail = service.MapGroup("/detail");
-        detail.Filter<RateFilter>().Response<RateFailure>(output => output.StatusCode(429).Header("X-Source", "filter").Header("Retry-After", 5));
-        detail.MapPut("/{id:long}", Denied);
-        app.MapOpenApi();
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        using var response = await client.PutAsJsonAsync("/api/service/detail/1", new { name = "a" });
-        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
-        Assert.Equal("service", response.Headers.GetValues("X-Source").Single());
-        Assert.Equal("5", response.Headers.GetValues("Retry-After").Single());
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("000429", body.RootElement.GetProperty("title").GetString());
-        Assert.Equal("about:blank", body.RootElement.GetProperty("type").GetString());
-        Assert.False(body.RootElement.TryGetProperty("code", out _));
-        Assert.True(body.RootElement.TryGetProperty("trace", out _));
-        Assert.Equal(0, app.Services.GetRequiredService<Probe>().Constructed);
-    }
-
-    [Fact]
-    public async Task ExcludedFilters_ContributeNeitherFailureDocsNorRuntime_AndGroupRulesAreOnlyCandidates()
-    {
-        await using var app = CreateApp(deny: true, exclude: true);
-        var root = app.MapGroup("/api");
-        root.Filter<RateFilter>().Response<RateFailure>(output => output.StatusCode(429));
-        root.Response<RateFailure>(output => output.Header("X-Unused", "unused"));
-        root.MapPut("/{id:long}", Denied);
-        app.MapOpenApi();
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        using var response = await client.PutAsJsonAsync("/api/1", new { name = "a" });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(response.Headers.Contains("X-Unused"));
-        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
-        var responses = document.RootElement.GetProperty("paths").GetProperty("/api/{id}").GetProperty("put").GetProperty("responses");
-        Assert.False(responses.TryGetProperty("429", out _));
-        Assert.False(responses.TryGetProperty("422", out _));
-    }
-
-    [Fact]
-    public async Task Context_IsExplicitAndDoesNotReturnBusinessViewsOrBulkHeaders()
-    {
-        await using var app = CreateApp(normalize: true);
-        app.MapPut("/items/{id:long}", Update).Context(context => context.TenantFromHeader("X-Tenant").Item("correlation").FromHeader("X-Correlation")).Response<UpdateReply>(output => output.Header("X-Boundary-Tenant", (_, context) => context.Context.TenantId));
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Tenant", "boundary");
-        client.DefaultRequestHeaders.Add("X-Correlation", "request-id");
-        client.DefaultRequestHeaders.Add("X-Unlisted", "must-not-flow");
-        using var response = await client.PutAsJsonAsync("/items/1", new { name = "a" });
-        var result = await response.Content.ReadFromJsonAsync<UpdateReply>();
-        Assert.Equal("business", result!.Tenant);
-        Assert.Equal("request-id", result.Correlation);
-        Assert.False(result.Unlisted);
-        Assert.Equal("boundary", response.Headers.GetValues("X-Boundary-Tenant").Single());
-        Assert.Equal("host", Context.Current.TenantId);
-    }
-
-    [Fact]
-    public async Task NamedVariants_ResolveFinalDefinitions_AndHeadersMergeCaseInsensitively()
-    {
-        await using var app = CreateApp();
-        var endpoint = app.MapPut("/items/{id:long}", Update).Response<UpdateReply>("pending", output => output.StatusCode(202).Header("X-Test", "old")).Response<UpdateReply>("ready", output => output.StatusCode(201)).SelectResponse((value, mappings) => value is UpdateReply { Id: 1 } ? mappings.Get<UpdateReply>("ready") : mappings.Get<UpdateReply>("pending"));
-        endpoint.Response<UpdateReply>("pending", output => output.Header("x-test", "new"));
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        using var response = await client.PutAsJsonAsync("/items/2", new { name = "a" });
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal("new", response.Headers.GetValues("X-Test").Single());
-    }
-
-    [Fact]
-    public async Task ProblemFactory_ReplacesEarlierPatches_AndLaterFieldsCanOverrideIt()
-    {
-        await using var app = CreateApp(deny: true);
-        var root = app.MapGroup("/api").ConfigureProblem(problem => problem.Title("root"));
-        root.MapPut("/{id:long}", Denied).Response<RateFailure>(output => output.Problem(value => new ProblemDetails { Title = "factory", Detail = value.Detail })).Response<RateFailure>(output => output.ConfigureProblem(problem => problem.Detail("later")));
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        using var response = await client.PutAsJsonAsync("/api/1", new { name = "a" });
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("factory", body.RootElement.GetProperty("title").GetString());
-        Assert.Equal("later", body.RootElement.GetProperty("detail").GetString());
-        Assert.Equal("about:blank", body.RootElement.GetProperty("type").GetString());
-        Assert.Equal((int)response.StatusCode, body.RootElement.GetProperty("status").GetInt32());
-    }
-
-    [Fact]
     public async Task WholeBody_CollectionsAreReadOnce_AndMultipleBodiesAreRejected()
     {
         await using var app = CreateApp();
@@ -195,21 +199,6 @@ public sealed class HttpBindingTests
         using var client = app.GetTestClient();
         using var response = await client.PutAsJsonAsync("/collection", new[] { "a", "b" });
         Assert.Equal("a,b", (await response.Content.ReadFromJsonAsync<UpdateReply>())!.Name);
-    }
-
-    [Fact]
-    public async Task SameDeclaration_CompleteProblemMasksEarlierFields_AndExtensionNamesRetainCase()
-    {
-        await using var app = CreateApp(deny: true);
-        app.MapPut("/items/{id:long}", Denied).Response<RateFailure>(output => output.ConfigureProblem(problem => problem.Title("masked").Extension("old", true)).Problem(value => new ProblemDetails { Title = "factory", Detail = value.Detail }).ConfigureProblem(problem => problem.Extension("Trace", "upper").Extension("trace", "lower")));
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        using var response = await client.PutAsJsonAsync("/items/1", new { name = "a" });
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("factory", body.RootElement.GetProperty("title").GetString());
-        Assert.False(body.RootElement.TryGetProperty("old", out _));
-        Assert.Equal("upper", body.RootElement.GetProperty("Trace").GetString());
-        Assert.Equal("lower", body.RootElement.GetProperty("trace").GetString());
     }
 
     [Fact]
@@ -226,25 +215,6 @@ public sealed class HttpBindingTests
         Assert.DoesNotContain(parameters, parameter => parameter.GetProperty("name").GetString() == "X-Old");
         var limit = parameters.Single(parameter => parameter.GetProperty("name").GetString() == "limit");
         Assert.Equal(5, limit.GetProperty("schema").GetProperty("default").GetInt32());
-    }
-
-    [Fact]
-    public async Task DynamicStatus_RejectsUndeclaredValues_WithoutRunningProviderAtStartup()
-    {
-        await using var app = CreateApp();
-        var calls = 0;
-        app.MapPut("/items/{id:long}", Update).Response<UpdateReply>(output => output.StatusCode(_ =>
-        {
-            calls++;
-            return 201;
-        }, 200));
-        app.MapOpenApi();
-        await app.StartAsync();
-        using var client = app.GetTestClient();
-        _ = await client.GetStringAsync("/openapi/v1.json");
-        Assert.Equal(0, calls);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => client.PutAsJsonAsync("/items/1", new { name = "a" }));
-        Assert.Equal(1, calls);
     }
 
     [Fact]
@@ -266,6 +236,28 @@ public sealed class HttpBindingTests
         var media = document.RootElement.GetProperty("paths").GetProperty("/text").GetProperty("put").GetProperty("requestBody").GetProperty("content");
         Assert.True(media.TryGetProperty("text/plain", out _));
         await Assert.ThrowsAsync<ArgumentException>(() => client.PutAsJsonAsync("/broken", new { name = "a" }));
+    }
+
+    [Fact]
+    public async Task CompleteProblemResult_UsesExplicitNativeProducesMetadataWithoutRunningFactory()
+    {
+        await using var app = CreateApp(deny: true);
+        var calls = 0;
+        app.MapPut("/items/{id:long}", Denied).Response((RateFailure failure) =>
+        {
+            calls++;
+            return TypedResults.Problem(statusCode: 429, type: "about:blank", title: failure.Title, detail: failure.Detail);
+        }).NativeBuilder.ProducesProblem(429);
+        app.MapOpenApi();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/items/{id}").GetProperty("put").GetProperty("responses");
+        Assert.True(responses.TryGetProperty("429", out _));
+        Assert.Equal(0, calls);
+        using var response = await client.PutAsJsonAsync("/items/1", new { name = "a" });
+        Assert.Equal(429, (int)response.StatusCode);
+        Assert.Equal(1, calls);
     }
 
     private static WebApplication CreateApp(bool deny = false, bool exclude = false, bool normalize = false)

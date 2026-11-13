@@ -19,7 +19,7 @@ public sealed class OidcServerBootstrapService(IServiceProvider services) : IHos
     {
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId(NOFAbstractionConstants.Tenant.HostId));
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
 
         var bootstrapOptions = scope.ServiceProvider.GetRequiredService<IOptions<OidcServerBootstrapOptions>>().Value;
         if (bootstrapOptions.PublicClients.Count == 0 && bootstrapOptions.ConfidentialClients.Count == 0)

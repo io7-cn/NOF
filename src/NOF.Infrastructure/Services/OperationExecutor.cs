@@ -18,6 +18,7 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
+        using var binding = services.BindNOF(context);
         var mapping = resolver.Resolve(operation.ServiceType, operation.OperationName).HandlerMapping;
         if (mapping.RequestType != operation.RequestType || mapping.ReturnType != operation.ResponseType
             || !operation.RequestType.IsInstanceOfType(input))

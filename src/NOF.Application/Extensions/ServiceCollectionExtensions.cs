@@ -43,10 +43,6 @@ public static partial class NOFApplicationExtensions
             services.GetOrAddSingleton<MappingRegistry>();
             services.GetOrAddSingleton<ApplicationServiceRegistry>();
             services.TryAddSingleton<IMapper, ExpressionMapper>();
-            services.TryAddEnumerable(new ServiceDescriptor(
-                typeof(IDaemonService),
-                typeof(MapperAmbientDaemonService),
-                ServiceLifetime.Scoped));
             return services;
         }
 

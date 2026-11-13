@@ -65,12 +65,12 @@ public sealed class HttpRequestInboundAdapter(IOperationExecutor executor, IOpti
     }
 
     /// <summary>Supports explicitly bound native handlers using the same policy boundary.</summary>
-    public async Task<object?> InvokeAsync(ServiceOperationDescriptor operation, object input, HttpContext http, CancellationToken ct)
+    public async Task<object?> InvokeAsync(ServiceOperationDescriptor operation, object input, HttpContext http, Context context, CancellationToken ct)
     {
         var plan = http.RequestServices.GetRequiredService<IInvocationPlanProvider>().Describe(operation, InvocationOrigin.Http);
         await AuthenticateAsync(http, plan, ct);
-        var result = await ExecuteAsync(operation, input, http, Context.Empty, ct);
-        return result is IFailure failure ? TypedResults.Problem(statusCode: result is AuthorizationInvocationFilter.AuthenticationRequired ? 401 : result is AuthorizationInvocationFilter.PermissionDenied ? 403 : result is AuthorizationInvocationFilter.PolicyDenied ? 400 : 422, type: "about:blank", title: failure.Title, detail: failure.Detail) : result;
+        var result = await ExecuteAsync(operation, input, http, context, ct);
+        return result is IFailure failure && result is (AuthorizationInvocationFilter.AuthenticationRequired or AuthorizationInvocationFilter.PermissionDenied or AuthorizationInvocationFilter.PolicyDenied) ? TypedResults.Problem(statusCode: result is AuthorizationInvocationFilter.AuthenticationRequired ? 401 : result is AuthorizationInvocationFilter.PermissionDenied ? 403 : result is AuthorizationInvocationFilter.PolicyDenied ? 400 : 422, type: "about:blank", title: failure.Title, detail: failure.Detail) : result;
     }
 
     private static string Escape(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);

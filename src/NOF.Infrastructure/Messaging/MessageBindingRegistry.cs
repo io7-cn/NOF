@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
@@ -76,6 +78,21 @@ public static class MessageBindingExtensions
     public static IServiceCollection AddMessageBindings(this IServiceCollection services, Action<MessageBindingsBuilder> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
+        services.AddLogging();
+        services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
+        services.TryAddSingleton<IObjectSerializer, JsonObjectSerializer>();
+        services.AddOptions<TransactionalMessageOptions>()
+            .Validate(options => !options.Inbox.RunWorkers ||
+                options.Inbox.PollingInterval > TimeSpan.Zero && options.Inbox.BatchSize > 0
+                && options.Inbox.MaxRetryCount > 0 && options.Inbox.RetryDelay >= TimeSpan.Zero
+                && options.Inbox.ClaimTimeout > TimeSpan.Zero && options.Inbox.CleanupInterval > TimeSpan.Zero
+                && options.Inbox.RetentionPeriod > TimeSpan.Zero, "Inbox transactional message options are invalid.")
+            .ValidateOnStart();
+        services.TryAddScoped<IInboxStore, PersistenceInboxStore>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxMessageBackgroundService>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxCleanupBackgroundService>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFInboxMessageModelCreatingContributor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFInboxOrderStateModelCreatingContributor>());
         configure(new(services.GetOrAddSingleton<MessageBindingRegistry>()));
         return services;
     }

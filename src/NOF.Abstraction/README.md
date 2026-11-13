@@ -29,9 +29,9 @@ For convenience, NOF also exposes an ambient publisher facade:
 - `payload.PublishAsEvent(context)` explicitly overrides the context used by the ambient publisher
 - `payload.PublishAsEvent(publisher)` is the explicit alternative when ambient scope is not desired
 - `payload.PublishAsEvent(publisher, context)` keeps both the publisher and context explicit
-- `AddNOFAbstraction()` registers the scoped ambient activation service
+- `AddNOFAbstraction()` registers the scoped publisher and explicit event registry
 
-The ambient publisher and context have separate lifetimes. The daemon service binds the publisher once for the dependency injection scope, while NOF binds `Context.Current` at RPC, command, notification, and nested event-dispatch boundaries. Calls outside a bound execution context use `Context.Empty`. Ambient access is a convenience for infrastructure APIs that do not receive a context parameter; handlers should continue using their explicit `Context`, and `IEventPublisher` remains the primary event-publishing contract.
+Managed HTTP/operation/message/test entries bind and restore ambient services and Context. Ordinary DI scopes have no activation protocol. Standalone Application code uses using var binding = services.BindNOF(context); package-only callers may use EventPublisher.PushCurrent(publisher). PublishAsEvent keeps its synchronous timing and exception behavior. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
 
 ```csharp
 public sealed class OrderCreatedHandler : LocalEventHandler<OrderCreated>
@@ -63,7 +63,7 @@ using Microsoft.Extensions.DependencyInjection;
 services.AddNOFAbstraction();
 ```
 
-`AddNOFAbstraction()` registers the scoped daemon service that activates the ambient event publisher. Standard NOF hosts activate daemon services automatically; custom hosts should do the equivalent when entering a scope.
+`AddNOFAbstraction()` registers explicit services; it does not activate an ambient scope merely because DI resolves a service.
 
 ## Auto Injection
 

@@ -35,7 +35,7 @@ public sealed class NativeHostingTests
         var otherDeployment = other.Services.GetRequiredService<IOptions<DeploymentOptions>>().Value;
         Assert.Equal(1u, otherDeployment.InstanceId);
         Assert.NotEqual("orders", otherDeployment.ServiceName);
-        Assert.Single(first.Services, descriptor => descriptor.ImplementationType == typeof(Infrastructure.InboxMessageBackgroundService));
+        Assert.DoesNotContain(first.Services, descriptor => descriptor.ImplementationType == typeof(Infrastructure.InboxMessageBackgroundService));
     }
 
     [Fact]

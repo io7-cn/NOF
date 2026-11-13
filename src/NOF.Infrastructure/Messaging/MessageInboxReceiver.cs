@@ -17,7 +17,7 @@ public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSeria
         metadata.TryGetValue(NOFAbstractionConstants.Transport.Headers.TenantId, out var tenantId);
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var store = scope.ServiceProvider.GetRequiredService<IInboxStore>();
         var order = InboxMessageOrdering.Parse(metadata);
         var message = NOFInboxMessage.Create(messageId, kind, consumerId, payload.ToArray(),
@@ -29,7 +29,7 @@ public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSeria
         catch (DbUpdateException)
         {
             await using var verification = services.CreateAsyncScope();
-            verification.ServiceProvider.ResolveDaemonServices();
+            using var verificationBinding = verification.ServiceProvider.BindNOF(Context.Current);
             if (!await verification.ServiceProvider.GetRequiredService<IInboxStore>()
                 .ExistsAsync(messageId, consumerId, cancellationToken).ConfigureAwait(false))
             {

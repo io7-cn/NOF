@@ -39,23 +39,23 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOF_ShouldRegisterCoreServicesAndOutboxOptions()
+    public void AddNOF_ShouldNotEnableTransactionalMessageCapabilities()
     {
         var builder = new TestServiceRegistrationContext();
         builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
 
-        Assert.Contains(builder.Services, service =>
+        Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(OutboxMessageBackgroundService));
-        Assert.Contains(builder.Services, service =>
+        Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(InboxMessageBackgroundService));
-        Assert.Contains(builder.Services, service =>
+        Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(InboxCleanupBackgroundService));
-        Assert.Contains(builder.Services, service =>
+        Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(OutboxCleanupBackgroundService));
         Assert.NotNull(provider.GetRequiredService<IOptions<TransactionalMessageOptions>>());
@@ -66,18 +66,14 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOF_ShouldRegisterSupportedAmbientDaemons()
+    public void AddNOF_ShouldAllowExplicitConvenienceBinding()
     {
         var builder = new TestServiceRegistrationContext();
-
         builder.AddNOF();
-
-        Assert.Contains(builder.Services, service =>
-            service.ServiceType == typeof(IDaemonService) &&
-            service.ImplementationType == typeof(MapperAmbientDaemonService));
-        Assert.Contains(builder.Services, service =>
-            service.ServiceType == typeof(IDaemonService) &&
-            service.ImplementationType == typeof(IdGeneratorAmbientDaemonService));
+        using var provider = BuildServiceProvider(builder);
+        using var scope = provider.CreateScope();
+        using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
+        Assert.Same(scope.ServiceProvider.GetRequiredService<IMapper>(), Mapper.Current);
     }
 
     [Fact]

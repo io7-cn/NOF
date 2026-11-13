@@ -42,7 +42,7 @@ SmokeEndpointModule.Map(app);
 app.MapOpenApi();
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.ResolveDaemonServices();
+    using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
     var messageId = await scope.ServiceProvider.GetRequiredService<IOutbox>()
         .EnqueueAsync(new SmokeIntent("typed"), Context.Empty);
     var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
@@ -61,7 +61,7 @@ using (var scope = app.Services.CreateScope())
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.ResolveDaemonServices();
+    using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
     var plan = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>()
         .Describe(OrderServer.Read.Descriptor, InvocationOrigin.Http);
     Expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
@@ -356,19 +356,18 @@ public static class SmokeEndpointModule
     public static void Map(IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/native");
-        group.Filter<ValidateReadOrder>().Response<ValidateReadOrder.InvalidPage>(output => output.StatusCode(400));
+        group.Response<ValidateReadOrder.InvalidPage>(400);
         group.MapGet<OrderServer.ReadValue>("/orders/{id:guid}");
         group.MapPut<OrderServer.Update>("/orders/{id:guid}")
-            .Response<Failure>(output => output.StatusCode(400));
+            .Response<Failure>(400);
         group.MapGet<OrderServer.ReadProtected>("/protected/{id:guid}");
         group.MapGet<PlainOrderService.Find>("/nullable/{id:guid}");
         group.MapGet<PlainOrderService.Decide>("/decisions/{id:guid}")
-            .Response<Failure>(output => output.StatusCode(404));
+            .Response<Failure>(404);
         group.MapGet<OrderServer.ReadWithMessage>("/messages/{id:guid}");
         group.MapGet<ExpectedOrderService.Evaluate>("/expected/{id:guid}")
-            .Response<ExpectedOrderService.Evaluate.Missing>(output => output.StatusCode(404))
-            .Response<ExpectedOrderService.Evaluate.Conflict>(output => output.StatusCode(409)
-                .ConfigureProblem(problem => problem.Detail(value => $"Conflict for {value.Error.Id}")));
+            .Response<ExpectedOrderService.Evaluate.Missing>(404)
+.Response<ExpectedOrderService.Evaluate.Conflict>(409);
     }
 }
 

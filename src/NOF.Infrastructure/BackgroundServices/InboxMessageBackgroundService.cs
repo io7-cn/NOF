@@ -38,6 +38,9 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.RunWorkers)
+        { return; }
+
         _logger.LogInformation(
             "Inbox message processor started. PollingInterval: {Interval}, BatchSize: {BatchSize}, MaxRetry: {MaxRetry}",
             _options.PollingInterval, _options.BatchSize, _options.MaxRetryCount);
@@ -78,7 +81,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         List<NOFInboxMessage> pendingMessages;
         using (var claimScope = _serviceProvider.CreateScope())
         {
-            claimScope.ServiceProvider.ResolveDaemonServices();
+            using var ambientBinding = claimScope.ServiceProvider.BindNOF(Context.Current);
             var store = claimScope.ServiceProvider.GetService<IInboxStore>();
             if (store is null)
             {
@@ -186,7 +189,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         }
 
         await using var scope = _serviceProvider.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var services = scope.ServiceProvider;
         var store = services.GetRequiredService<IInboxStore>();
         var unitOfWork = services.GetRequiredService<IUnitOfWork>();
@@ -295,25 +298,25 @@ public sealed class InboxMessageBackgroundService : BackgroundService
     private async Task MarkRetryAsync(NOFInboxMessage message, string error, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         await scope.ServiceProvider.GetRequiredService<IInboxStore>().MarkRetryAsync(message, error, cancellationToken);
     }
     private async Task MarkFailedAsync(NOFInboxMessage message, string error, CancellationToken cancellationToken, Exception? ex = null)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         await scope.ServiceProvider.GetRequiredService<IInboxStore>().MarkFailedAsync(message, error, cancellationToken, ex);
     }
     private async Task ReleaseUnprocessedOrderedMessagesAsync(IEnumerable<NOFInboxMessage> messages, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         await scope.ServiceProvider.GetRequiredService<IInboxStore>().ReleaseUnprocessedOrderedMessagesAsync(messages, cancellationToken);
     }
     private async Task ReleaseOrderStateClaimAsync(string route, string orderKey, string? claimedBy, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         await scope.ServiceProvider.GetRequiredService<IInboxStore>().ReleaseOrderStateClaimAsync(route, orderKey, claimedBy, cancellationToken);
     }
 }

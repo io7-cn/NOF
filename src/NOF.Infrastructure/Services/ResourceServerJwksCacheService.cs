@@ -194,7 +194,7 @@ public sealed class ResourceServerJwksCacheService : IDisposable
     private async Task<JwksDocument> GetJwksAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var jwksService = scope.ServiceProvider.GetRequiredService<IJwksService>();
         return await jwksService.GetJwksAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -202,7 +202,7 @@ public sealed class ResourceServerJwksCacheService : IDisposable
     private async Task<OAuthAuthorizationServerMetadataDocument?> GetMetadataAsync(CancellationToken cancellationToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var metadataService = scope.ServiceProvider.GetService<IAuthorizationServerMetadataService>();
         return metadataService is null
             ? null

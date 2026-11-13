@@ -74,10 +74,6 @@ public static partial class NOFInfrastructureExtensions
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>()));
             builder.Services.TryAddSingleton<IBackplane>(sp => new MemoryBackplane(
                 sp.GetRequiredService<MemoryBackplaneState>()));
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFInboxMessageModelCreatingContributor>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFInboxOrderStateModelCreatingContributor>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxMessageModelCreatingContributor>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxOrderStateModelCreatingContributor>());
 
             #endregion
 
@@ -93,17 +89,6 @@ public static partial class NOFInfrastructureExtensions
                 .Validate(
                     static options => options.ApplicationIdBits + options.InstanceIdBits + options.SequenceBits <= 22,
                     "The sum of ApplicationIdBits, InstanceIdBits, and SequenceBits must be less than or equal to 22.");
-            builder.Services.AddOptions<TransactionalMessageOptions>()
-                .Validate(static options => ValidateTransactionalMessageProcessor(options.Inbox), "Inbox transactional message options are invalid.")
-                .Validate(static options => ValidateTransactionalMessageProcessor(options.Outbox), "Outbox transactional message options are invalid.")
-                .ValidateOnStart();
-            #endregion
-
-            #region Background Services
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxMessageBackgroundService>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxCleanupBackgroundService>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
             #endregion
 
             #region Pipelines
@@ -113,9 +98,6 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.GetOrAddSingleton<MessageBindingRegistry>();
             #endregion
 
-            #region Application Services
-            builder.Services.AddOutbox(static _ => { });
-            #endregion
 
             // Host defaults select the in-memory engine; a host can replace IInvocationPipeline.
             builder.Services.UseInMemoryInvocationPipeline();
@@ -138,14 +120,7 @@ public static partial class NOFInfrastructureExtensions
             return builder;
         }
 
-        private static bool ValidateTransactionalMessageProcessor(TransactionalMessageProcessorOptions options)
-            => options.PollingInterval > TimeSpan.Zero
-               && options.BatchSize > 0
-               && options.MaxRetryCount > 0
-               && options.RetryDelay >= TimeSpan.Zero
-               && options.ClaimTimeout > TimeSpan.Zero
-               && options.CleanupInterval > TimeSpan.Zero
-               && options.RetentionPeriod > TimeSpan.Zero;
+
     }
 
     private static void AddOpenTelemetry(IHostApplicationBuilder builder)

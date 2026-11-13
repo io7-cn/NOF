@@ -14,10 +14,6 @@ public static partial class NOFDomainExtensions
 
             services.AddNOFAbstraction();
             services.TryAddSingleton<IIdGenerator, SnowflakeIdGenerator>();
-            services.TryAddEnumerable(new ServiceDescriptor(
-                typeof(IDaemonService),
-                typeof(IdGeneratorAmbientDaemonService),
-                ServiceLifetime.Scoped));
             return services;
         }
     }

@@ -9,6 +9,9 @@ public sealed class TransactionalMessageOptions
 
 public sealed class TransactionalMessageProcessorOptions
 {
+    /// <summary>Gets or sets whether this enabled capability runs its processing and cleanup workers in this host.</summary>
+    public bool RunWorkers { get; set; } = true;
+
     public TimeSpan PollingInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     public int BatchSize { get; set; } = 100;

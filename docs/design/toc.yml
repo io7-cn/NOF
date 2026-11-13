@@ -63,3 +63,8 @@
   href: ../en/design/http-adaptation.md
 - name: HTTP 适配
   href: ../zh-CN/design/http-adaptation.md
+
+- name: Ambient binding
+  href: ../en/design/ambient-binding.md
+- name: Ambient 绑定
+  href: ../zh-CN/design/ambient-binding.md

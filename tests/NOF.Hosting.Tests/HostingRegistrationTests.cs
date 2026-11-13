@@ -11,18 +11,16 @@ using Xunit;
 
 namespace NOF.Hosting.Tests;
 
-public class DaemonServiceScopeTests
+public class HostingRegistrationTests
 {
     [Fact]
-    public async Task AddNOFHosting_OnServices_ShouldRegisterAmbientEventPublisherDaemon()
+    public async Task AddNOFHosting_OnServices_ShouldRegisterScopedEventPublisher()
     {
         var services = new ServiceCollection();
 
         services.AddNOFHosting();
 
-        Assert.Contains(services, service =>
-            service.ServiceType == typeof(IDaemonService)
-            && service.ImplementationType == typeof(EventPublisherAmbientDaemonService));
+
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -39,9 +37,7 @@ public class DaemonServiceScopeTests
 
         _ = Assert.Single(services, service => service.ServiceType == typeof(IUserContext));
         _ = Assert.Single(services, service => service.ServiceType == typeof(IEventPublisher));
-        _ = Assert.Single(services, service =>
-            service.ServiceType == typeof(IDaemonService)
-            && service.ImplementationType == typeof(EventPublisherAmbientDaemonService));
+
     }
 
     [Fact]
@@ -57,9 +53,7 @@ public class DaemonServiceScopeTests
         Assert.Same(environment, Assert.Single(builder.Services, service => service.ServiceType == typeof(IHostEnvironment)));
         _ = Assert.Single(builder.Services, service => service.ServiceType == typeof(IUserContext));
         _ = Assert.Single(builder.Services, service => service.ServiceType == typeof(IEventPublisher));
-        _ = Assert.Single(builder.Services, service =>
-            service.ServiceType == typeof(IDaemonService)
-            && service.ImplementationType == typeof(EventPublisherAmbientDaemonService));
+
     }
 
     private sealed class TestAppBuilder : IHostApplicationBuilder

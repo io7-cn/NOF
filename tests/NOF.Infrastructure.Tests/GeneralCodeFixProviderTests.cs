@@ -241,34 +241,6 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task DaemonResolutionFix_InsertsImmediateResolution()
-    {
-        const string source = """
-            namespace Test;
-            public static class Worker
-            {
-                public static void Run(dynamic services)
-                {
-                    using var scope = services.CreateScope();
-                    Use(scope);
-                }
-
-                private static void Use(dynamic value) { }
-            }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF040",
-            "CreateScope",
-            new DaemonServiceResolutionCodeFixProvider());
-
-        var resolutionIndex = changed.IndexOf("scope.ServiceProvider.ResolveDaemonServices();", StringComparison.Ordinal);
-        var useIndex = changed.IndexOf("Use(scope);", StringComparison.Ordinal);
-        Assert.True(resolutionIndex >= 0 && resolutionIndex < useIndex);
-    }
-
-    [Fact]
     public async Task BatchFixProviders_SupportFixAllInSolution()
     {
         var cases = new[]
@@ -334,26 +306,6 @@ public sealed class GeneralCodeFixProviderTests
                 ImmutableDictionary<string, string?>.Empty
                     .Add("PrimitiveType", "global::System.String")
                     .Add("NullableKey", "false")),
-            new SolutionFixAllCase(
-                "daemon service resolution",
-                "NOF040",
-                """
-                    namespace Test;
-                    public static class Worker
-                    {
-                        public static void Run(dynamic services)
-                        {
-                            using var scope = services.CreateScope();
-                            Use(scope);
-                        }
-
-                        private static void Use(dynamic value) { }
-                    }
-                    """,
-                "CreateScope",
-                new DaemonServiceResolutionCodeFixProvider(),
-                "ResolveDaemonServices",
-                static text => text.Contains("scope.ServiceProvider.ResolveDaemonServices();", StringComparison.Ordinal)),
             new SolutionFixAllCase(
                 "value object length configuration",
                 "NOF306",

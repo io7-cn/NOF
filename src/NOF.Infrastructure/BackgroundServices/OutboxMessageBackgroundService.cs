@@ -17,6 +17,9 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.RunWorkers)
+        { return; }
+
         logger.LogInformation("Outbox intent processor started");
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -55,7 +58,7 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
     private async Task ProcessPendingMessagesAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var store = scope.ServiceProvider.GetService<IOutboxStore>();
         if (store is null)
         {
@@ -105,7 +108,7 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
         var tenant = Context.Current.TenantId;
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId(tenant));
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var serializer = scope.ServiceProvider.GetRequiredService<IObjectSerializer>();
         var headers = serializer.Deserialize<Dictionary<string, string?>>(record.Headers)
             ?? throw new OutboxPermanentFailureException("Missing outbox metadata.");

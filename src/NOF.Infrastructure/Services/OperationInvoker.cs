@@ -27,7 +27,6 @@ public sealed class OperationInvoker(IServiceProvider services) : IOperationInvo
             user.Logout();
             user.User.AddIdentities(identities);
         }
-        scope.ServiceProvider.ResolveDaemonServices();
         var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
             .ExecuteAsync(operation, input, context, InvocationOrigin.Local, cancellationToken).ConfigureAwait(false);
         return result;

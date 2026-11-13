@@ -9,41 +9,40 @@ namespace NOF.Application;
 /// </remarks>
 public static class Mapper
 {
-    private static readonly AsyncLocal<IMapper?> _currentMapper = new();
+    private static readonly AsyncLocal<Func<IMapper?>?> _currentMapper = new();
 
     /// <summary>
     /// Gets the ambient <see cref="IMapper"/> for the current async flow.
     /// </summary>
     public static IMapper Current
-        => _currentMapper.Value ?? throw new InvalidOperationException(
+        => _currentMapper.Value?.Invoke() ?? throw new InvalidOperationException(
             "No ambient IMapper is available for the current async flow. " +
-            "Resolve the scope's daemon services or use an explicit IMapper.");
+            "Enter services.BindNOF(context) or use an explicit IMapper.");
 
     /// <summary>
     /// Pushes an ambient mapper and restores the previous mapper when the returned scope is disposed.
     /// </summary>
-    public static IDisposable PushCurrent(IMapper mapper)
-    {
-        ArgumentNullException.ThrowIfNull(mapper);
+    /// <remarks>A null mapper explicitly shadows the previous binding until disposal.</remarks>
+    public static IDisposable PushCurrent(IMapper? mapper) => PushFactory(() => mapper);
 
+    private static IDisposable PushFactory(Func<IMapper?> resolve)
+    {
         var previous = _currentMapper.Value;
-        _currentMapper.Value = mapper;
+        _currentMapper.Value = resolve;
         return new AmbientMapperScope(previous);
     }
 
     /// <summary>
-    /// Resolves and pushes the current dependency injection scope's mapper.
+    /// Lazily resolves the bound dependency injection scope's mapper.
     /// </summary>
     public static IDisposable PushCurrent(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var mapper = services.GetService(typeof(IMapper)) as IMapper
-            ?? throw new InvalidOperationException($"No service of type '{typeof(IMapper).FullName}' is registered.");
-        return PushCurrent(mapper);
+        return PushFactory(() => services.GetService(typeof(IMapper)) as IMapper);
     }
 
-    private sealed class AmbientMapperScope(IMapper? previous) : IDisposable
+    private sealed class AmbientMapperScope(Func<IMapper?>? previous) : IDisposable
     {
         private bool _disposed;
 

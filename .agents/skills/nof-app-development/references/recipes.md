@@ -123,8 +123,8 @@ own HTTP integration, as demonstrated by the sample UI API ports/adapters.
 
 Use an ordinary MapOrderEndpoints extension returning RouteGroupBuilder. Map with
 `group.MapGet<OrderService.GetOrder>("/{id}")` and typed Request/Response rules.
-Configure `.Response<OrderService.GetOrder.NotFound>(output => output.StatusCode(404))`.
+Configure `.Response<OrderService.GetOrder.NotFound>(404)`; use a typed lambda returning complete TypedResults for projection/Location.
 Call the feature extension after Build. No AutoInject module, discovery or mandatory
-endpoint filter is needed. Context values are explicit; business context never flows back.
+endpoint filter is needed. Context values are explicit; business context never flows back. Response maps replace as a whole; no header/body/Problem field DSL, variants, selector or HTTP Filter view remains.
 Runtime OpenAPI uses the same final binding; source generation only retains request types.
 See docs/en/design/http-adaptation.md and configuration-rest.md.

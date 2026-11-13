@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Infrastructure;
@@ -14,10 +15,17 @@ public static class ApplicationServiceHttpExtensions
     public static async Task<object?> InvokeAsync<TRequest, TResponse>(this HttpContext http,
         ServiceOperationDescriptor<TRequest, TResponse> operation, TRequest request, CancellationToken cancellationToken = default)
     {
+        return await InvokeAsync(http, operation, request, Context.Empty, cancellationToken);
+    }
+
+    /// <summary>Runs native HTTP entry with explicitly selected semantic context.</summary>
+    public static async Task<object?> InvokeAsync<TRequest, TResponse>(this HttpContext http,
+        ServiceOperationDescriptor<TRequest, TResponse> operation, TRequest request, Context context, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(operation);
         var execution = await http.RequestServices.GetRequiredService<HttpRequestInboundAdapter>()
-            .InvokeAsync(operation, request!, http, cancellationToken).ConfigureAwait(false);
+            .InvokeAsync(operation, request!, http, context, cancellationToken).ConfigureAwait(false);
         return execution;
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using System.Net;
@@ -47,6 +48,27 @@ public sealed class HttpOperationAdapterTests
     }
 
     [Fact]
+    public async Task NativeInvocation_PreservesBusinessFailureForOrdinaryCSharpMapping()
+    {
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.WebHost.UseTestServer();
+        builder.AddApplicationService<EchoService>();
+        builder.Services.AddScoped<RejectHandler>();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapPost("/rejected", async Task<IResult> (EchoRequest request, HttpContext http, CancellationToken ct) =>
+        {
+            var result = await http.InvokeAsync(new ServiceOperationDescriptor<EchoRequest, Failure>(typeof(IEchoService), nameof(IEchoService.Reject)), request, Context.Empty, ct);
+            var failure = Assert.IsType<Failure>(result);
+            return TypedResults.Problem(statusCode: 409, type: "about:blank", title: failure.Title, detail: failure.Detail);
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var response = await client.PostAsJsonAsync("/rejected", new EchoRequest("explanation"));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public void RuntimeAssemblies_ShouldExposeNoLegacyProtocolSurface()
     {
         var removed = new[] { "HttpEndpointAttribute", "TransportOverAttribute", "TransportOverHttpAttribute",
@@ -67,16 +89,24 @@ public sealed class HttpOperationAdapterTests
     public interface IEchoService : IApplicationService
     {
         EchoResponse Echo(EchoRequest request);
+        Failure Reject(EchoRequest request);
     }
     public sealed class EchoService : ApplicationService<IEchoService>, IApplicationServiceImplementation
     {
         public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
             new Dictionary<string, ServiceOperationMapping>
             {
-                [nameof(IEchoService.Echo)] = new(typeof(EchoHandler), typeof(EchoRequest), typeof(EchoResponse))
+                [nameof(IEchoService.Echo)] = new(typeof(EchoHandler), typeof(EchoRequest), typeof(EchoResponse)),
+                [nameof(IEchoService.Reject)] = new(typeof(RejectHandler), typeof(EchoRequest), typeof(Failure))
             };
         protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
+    public sealed class RejectHandler : ServiceOperation<EchoRequest, Failure>
+    {
+        public override Task<Failure> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)
+            => Task.FromResult(new Failure("Rejected", request.Value));
+    }
+
     public sealed class EchoHandler : ServiceOperation<EchoRequest, EchoResponse>
     {
         public override Task<EchoResponse> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)

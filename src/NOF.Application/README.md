@@ -140,7 +140,7 @@ For package-local defaults:
 services.AddNOFApplication();
 ```
 
-This registers `MappingRegistry`, the default `ExpressionMapper` implementation of `IMapper`, and a scoped daemon that binds `Mapper.Current` to the current async flow.
+This registers MappingRegistry and the default ExpressionMapper. Managed entries or an explicit services.BindNOF(context) scope bind and restore Mapper.Current; ordinary DI scopes have no activation requirement. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
 
 `AddNOFApplication()` already includes `AddNOFDomain()`:
 

@@ -123,8 +123,8 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         Assert.Equal(2, probe.HandlerScopeMarkers.Count);
         Assert.All(probe.HandlerScopeMarkers, handlerMarker => Assert.NotSame(marker, handlerMarker));
         Assert.NotSame(probe.HandlerScopeMarkers[0], probe.HandlerScopeMarkers[1]);
-        Assert.Equal(2, probe.DaemonServiceActivations);
-        Assert.Equal(2, probe.DaemonServiceAsyncDisposals);
+        Assert.Equal(2, probe.ScopedServiceActivations);
+        Assert.Equal(2, probe.ScopedServiceAsyncDisposals);
     }
 
     private static ServiceProvider BuildServiceProvider(ResourceServerJwksCacheService? authenticationCache = null)
@@ -152,8 +152,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
             services.AddInvocationFilter<AuthenticationInvocationFilter>();
         }
         services.AddScoped<IEventPublisher, InMemoryEventPublisher>();
-        services.AddScoped<IDaemonService, EventPublisherAmbientDaemonService>();
-        services.AddScoped<IDaemonService, ScopeLifecycleDaemonService>();
+        services.AddScoped<ScopeLifecycleProbeService>();
 
         services.AddScoped<IOperationExecutor, OperationExecutor>();
         services.AddScoped<ApplicationServiceInvocationResolver>();
@@ -226,9 +225,9 @@ public sealed class LocalScopeProbe
 
     public List<LocalScopeMarker> HandlerScopeMarkers { get; } = [];
 
-    public int DaemonServiceActivations { get; set; }
+    public int ScopedServiceActivations { get; set; }
 
-    public int DaemonServiceAsyncDisposals { get; set; }
+    public int ScopedServiceAsyncDisposals { get; set; }
 
 }
 
@@ -253,30 +252,32 @@ public sealed class ProtectedFleetServer : ApplicationService<IProtectedFleetSer
     protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => _mappings;
 }
 
-public sealed class ScopeLifecycleDaemonService : IDaemonService, IAsyncDisposable
+public sealed class ScopeLifecycleProbeService : IAsyncDisposable
 {
     private readonly LocalScopeProbe _probe;
 
-    public ScopeLifecycleDaemonService(LocalScopeProbe probe)
+    public ScopeLifecycleProbeService(LocalScopeProbe probe)
     {
         _probe = probe;
-        _probe.DaemonServiceActivations++;
+        _probe.ScopedServiceActivations++;
     }
 
     public ValueTask DisposeAsync()
     {
-        _probe.DaemonServiceAsyncDisposals++;
+        _probe.ScopedServiceAsyncDisposals++;
         return ValueTask.CompletedTask;
     }
 }
 
 public sealed class ScopeCheckHandler(
+    ScopeLifecycleProbeService lifetime,
     IPersistenceSession dbContext,
     LocalScopeMarker marker,
     LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, NOF.Testing.TestOutcome>
 {
     public override Task<NOF.Testing.TestOutcome> HandleAsync(ScopeCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
+        _ = lifetime;
         probe.HandlerUsedCallerScopeDbContext = ReferenceEquals(request.ExpectedDbContext, dbContext);
         probe.HandlerUsedCallerScopeMarker = ReferenceEquals(request.ExpectedMarker, marker);
         probe.HandlerScopeMarkers.Add(marker);

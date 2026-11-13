@@ -28,14 +28,8 @@ public class ServiceCollectionExtensionsTests
             descriptor.ServiceType == typeof(IIdGenerator) &&
             descriptor.ImplementationType == typeof(SnowflakeIdGenerator) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService) &&
-            descriptor.ImplementationType == typeof(MapperAmbientDaemonService) &&
-            descriptor.Lifetime == ServiceLifetime.Scoped);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService) &&
-            descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService) &&
-            descriptor.Lifetime == ServiceLifetime.Scoped);
+
+
     }
 
     [Fact]
@@ -61,7 +55,7 @@ public class ServiceCollectionExtensionsTests
         using var provider = services.BuildServiceProvider();
         using (var scope = provider.CreateScope())
         {
-            scope.ServiceProvider.ResolveDaemonServices();
+            using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
 
             Assert.Same(scope.ServiceProvider.GetRequiredService<IMapper>(), Mapper.Current);
             Assert.Equal("mapped:5", new[] { 5 }.AsQueryable().ProjectTo<string>().Single());
@@ -95,12 +89,8 @@ public class ServiceCollectionExtensionsTests
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ApplicationServiceRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IMapper));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(MapperAmbientDaemonService));
+
+
     }
 
     [Fact]

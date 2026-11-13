@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using NOF.Domain;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
@@ -221,10 +222,18 @@ public class SnowflakeIdGeneratorTests
     }
 
     [Fact]
-    public void IdGenerator_PushCurrent_Null_Throws()
+    public void IdGenerator_PushCurrent_Null_ShadowsAndRestoresOuterBinding()
     {
-        var act = () => IdGenerator.PushCurrent((IIdGenerator)null!);
-        Assert.Throws<ArgumentNullException>(act);
+        var services = new ServiceCollection();
+        services.AddNOFDomain();
+        using var provider = services.BuildServiceProvider();
+        using var outer = IdGenerator.PushCurrent(provider.GetRequiredService<IIdGenerator>());
+        var generator = IdGenerator.Current;
+        using (IdGenerator.PushCurrent((IIdGenerator?)null))
+        {
+            Assert.Throws<InvalidOperationException>(() => IdGenerator.Current);
+        }
+        Assert.Same(generator, IdGenerator.Current);
     }
 
     private static List<ValidationResult> ValidateOptions(SnowflakeIdGeneratorOptions options)

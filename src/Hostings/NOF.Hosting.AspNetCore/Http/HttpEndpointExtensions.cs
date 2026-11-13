@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using NOF.Abstraction;
@@ -14,13 +15,13 @@ namespace NOF.Hosting.AspNetCore;
 public sealed class HttpOperationBuilder<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest> : IEndpointConventionBuilder
 {
     /// <summary>Creates a typed native endpoint view.</summary>
-    public HttpOperationBuilder(IEndpointConventionBuilder nativeBuilder)
+    public HttpOperationBuilder(RouteHandlerBuilder nativeBuilder)
     {
         NativeBuilder = nativeBuilder;
     }
 
     /// <summary>Gets the native convention builder for native-specific extensions.</summary>
-    public IEndpointConventionBuilder NativeBuilder { get; }
+    public RouteHandlerBuilder NativeBuilder { get; }
 
     /// <inheritdoc/>
     public void Add(Action<EndpointBuilder> convention) => NativeBuilder.Add(convention);
@@ -35,61 +36,19 @@ public sealed class HttpOperationBuilder<[DynamicallyAccessedMembers(Dynamically
         return this;
     }
 
-    /// <summary>Configures one typed source mapping.</summary>
-    public HttpOperationBuilder<TRequest> Response<T>(Action<HttpResponseBuilder<T>> configure)
+    /// <summary>Replaces this result type's mapping with a fixed status and default representation.</summary>
+    public HttpOperationBuilder<TRequest> Response<T>(int statusCode)
     {
-        HttpEndpointExtensions.AddResponse(this, typeof(T), null, null, configure);
+        Add(endpoint => endpoint.Metadata.Add(HttpResponseMapping.Status<T>(statusCode, true)));
         return this;
     }
-
-    /// <summary>Configures a named source variant.</summary>
-    public HttpOperationBuilder<TRequest> Response<T>(string name, Action<HttpResponseBuilder<T>> configure)
+    /// <summary>Replaces this result type's mapping with one complete native result.</summary>
+    public HttpOperationBuilder<TRequest> Response<T, TResult>(Func<T, TResult> present) where TResult : IResult, IEndpointMetadataProvider
+        => Response<T, TResult>((value, _) => present(value));
+    /// <summary>Replaces this result type's mapping using the native HTTP boundary.</summary>
+    public HttpOperationBuilder<TRequest> Response<T, TResult>(Func<T, HttpContext, TResult> present) where TResult : IResult, IEndpointMetadataProvider
     {
-        HttpEndpointExtensions.AddResponse(this, typeof(T), name, null, configure);
-        return this;
-    }
-
-    /// <summary>Configures HTTP defaults for an invocation filter without enabling it.</summary>
-    public HttpFilterView<HttpOperationBuilder<TRequest>> Filter<TFilter>()
-        where TFilter : IInvocationFilter => new(this, typeof(TFilter), TFilter.FailureCases);
-    /// <summary>Configures an explicit nullable response.</summary>
-    public HttpOperationBuilder<TRequest> ResponseNull(Action<HttpResponseBuilder<object?>> configure)
-    {
-        HttpEndpointExtensions.AddResponse(this, typeof(void), null, null, configure);
-        return this;
-    }
-
-    /// <summary>Selects a final named mapping; the selector does not define its schema.</summary>
-    public HttpOperationBuilder<TRequest> SelectResponse(Func<object?, HttpResponseMappings, HttpResponseReference> selector)
-    {
-        Add(endpoint => endpoint.Metadata.Add(new HttpResponseSelector(selector)));
-        return this;
-    }
-}
-
-/// <summary>An optional selector replacing only the selector slot.</summary>
-public sealed record HttpResponseSelector(Func<object?, HttpResponseMappings, HttpResponseReference> Select);
-
-/// <summary>A filter-owned view for HTTP defaults. This never enables an invocation filter.</summary>
-public sealed class HttpFilterView<TBuilder>(TBuilder builder, Type filterType, IReadOnlyList<InvocationFailureCase> cases)
-    where TBuilder : IEndpointConventionBuilder
-{
-    /// <summary>Configures one declared filter failure.</summary>
-    public HttpFilterView<TBuilder> Response<T>(Action<HttpResponseBuilder<T>> configure)
-    {
-        if (!cases.Any(item => item.CaseType == typeof(T)))
-        {
-            throw new ArgumentException("The failure is outside this filter's directory.");
-        }
-
-        HttpEndpointExtensions.AddResponse(builder, typeof(T), null, filterType, configure);
-        return this;
-    }
-
-    /// <summary>Configures common Problem fields for this filter's failures.</summary>
-    public HttpFilterView<TBuilder> ConfigureProblem(Action<HttpProblemBuilder<IFailure>> configure)
-    {
-        HttpEndpointExtensions.AddResponse<IFailure>(builder, typeof(IFailure), null, filterType, output => output.ConfigureProblem(configure));
+        Add(endpoint => endpoint.Metadata.Add(HttpResponseMapping.Native(present, true)));
         return this;
     }
 }
@@ -143,13 +102,10 @@ public static class HttpEndpointExtensions
             endpoint.Metadata.Add(binding.Binding);
             foreach (var response in binding.Binding.Responses)
             {
-                foreach (var status in response.StatusCodes)
-                {
-                    endpoint.Metadata.Add(new ProducesResponseTypeMetadata(status, response.BodyType, response.ContentType is null ? [] : [response.ContentType]));
-                }
+                endpoint.Metadata.Add(new ProducesResponseTypeMetadata(response.StatusCode, response.BodyType, response.ContentType is null ? [] : [response.ContentType]));
             }
         });
-        return new(native);
+        return new(new RouteHandlerBuilder([native]));
     }
 
     /// <summary>Native API explorer marker; execution uses the separately compiled binding.</summary>
@@ -157,18 +113,20 @@ public static class HttpEndpointExtensions
     {
     }
 
-    /// <summary>Configures an independently inherited response mapping.</summary>
-    public static RouteGroupBuilder Response<T>(this RouteGroupBuilder builder, Action<HttpResponseBuilder<T>> configure)
+    /// <summary>Provides a complete fixed-status mapping for descendant endpoints.</summary>
+    public static RouteGroupBuilder Response<T>(this RouteGroupBuilder builder, int statusCode)
     {
-        AddResponse(builder, typeof(T), null, null, configure);
+        ((IEndpointConventionBuilder)builder).Add(endpoint => endpoint.Metadata.Add(HttpResponseMapping.Status<T>(statusCode, false)));
         return builder;
     }
-
-    /// <summary>Configures common failure fields.</summary>
-    public static TBuilder ConfigureProblem<TBuilder>(this TBuilder builder, Action<HttpProblemBuilder<IFailure>> configure)
-        where TBuilder : IEndpointConventionBuilder
+    /// <summary>Provides a complete typed native result for descendant endpoints.</summary>
+    public static RouteGroupBuilder Response<T, TResult>(this RouteGroupBuilder builder, Func<T, TResult> present)
+        where TResult : IResult, IEndpointMetadataProvider => builder.Response<T, TResult>((value, _) => present(value));
+    /// <summary>Provides a boundary-aware native result for descendant endpoints.</summary>
+    public static RouteGroupBuilder Response<T, TResult>(this RouteGroupBuilder builder, Func<T, HttpContext, TResult> present)
+        where TResult : IResult, IEndpointMetadataProvider
     {
-        AddResponse<IFailure>(builder, typeof(IFailure), null, null, output => output.ConfigureProblem(configure));
+        ((IEndpointConventionBuilder)builder).Add(endpoint => endpoint.Metadata.Add(HttpResponseMapping.Native(present, false)));
         return builder;
     }
 
@@ -192,32 +150,11 @@ public static class HttpEndpointExtensions
         return builder;
     }
 
-    /// <summary>Adds one final response rule.</summary>
-    public static void AddResponse<T>(IEndpointConventionBuilder builder, Type source, string? variant, Type? filter, Action<HttpResponseBuilder<T>> configure)
-    {
-        var rule = new HttpResponseRule
-        {
-            SourceType = source,
-            Variant = variant,
-            FilterType = filter,
-            Endpoint = builder is not RouteGroupBuilder
-        };
-        configure(new(rule));
-        builder.Add(endpoint => endpoint.Metadata.Add(rule));
-    }
-
-    /// <summary>Creates a filter-default consumer view on a native group.</summary>
-    public static HttpFilterView<RouteGroupBuilder> Filter<TFilter>(this RouteGroupBuilder builder)
-        where TFilter : IInvocationFilter => new(builder, typeof(TFilter), TFilter.FailureCases);
-    /// <summary>Creates a filter-default consumer view on a typed operation endpoint.</summary>
-    public static HttpFilterView<HttpOperationBuilder<TRequest>> Filter<TFilter, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)]
-    TRequest>(this HttpOperationBuilder<TRequest> builder)
-        where TFilter : IInvocationFilter => new(builder, typeof(TFilter), TFilter.FailureCases);
 }
 
 /// <summary>Bridges static operation type arguments into the typed HTTP request binder.</summary>
-public sealed class HttpOperationMappingVisitor(IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods) : IServiceOperationDescriptorVisitor<IEndpointConventionBuilder>
+public sealed class HttpOperationMappingVisitor(IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods) : IServiceOperationDescriptorVisitor<RouteHandlerBuilder>
 {
     /// <inheritdoc/>
-    public IEndpointConventionBuilder Visit<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(ServiceOperationDescriptor<TRequest, TResponse> descriptor) => endpoints.MapOperation(pattern, methods, descriptor).NativeBuilder;
+    public RouteHandlerBuilder Visit<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(ServiceOperationDescriptor<TRequest, TResponse> descriptor) => endpoints.MapOperation(pattern, methods, descriptor).NativeBuilder;
 }

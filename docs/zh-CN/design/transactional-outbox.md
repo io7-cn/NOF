@@ -81,3 +81,18 @@ AddNOF 注册 MemoryMessageClient；AddRabbitMQ 额外注册 RabbitMQMessageClie
 5. 回滚时一起恢复备份和旧包。因为无法推断意图对应的旧路由，自动 Down 被拒绝。旧程序不能打开新结构。
 
 这里只提供迁移代码，真实 PostgreSQL 数据库应用属于部署步骤。SQLite 回归验证共享事务存储、顺序阻塞和领取者隔离；其他测试覆盖快照/回滚、重试 ID/作用域、独立订阅、租户隔离、取消恢复与禁用反射后的强类型投递。本地验证不启动真实 Broker 或 PostgreSQL，消息确认条件由具体客户端保证。
+
+## 按能力装配与独立 Worker 宿主
+
+仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddMessageBindings 完整装配 Inbox 能力。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
+
+```csharp
+builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
+builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
+```
+
+仅生产者宿主仍可暂存快照、提交工作单元，但不认领、发送、重试或清理消息。Inbox.RunWorkers=false 同样接收持久化回执，但不处理/清理。独立 Worker 宿主使用相同 Schema/绑定启用对应能力，并配置正确持久化与传输。关闭 Worker 不丢弃待处理记录，也不重置顺序或所有权。本次能力开关无需新增数据库迁移；从旧版本升级仍须遵循既有 generic-outbox 迁移要求。
+
+自定义 IOutboxStore 在没有 ORM/传输、开启 DI 依赖验证时仍可使用；默认有序流分配器仅在实际使用该能力时解析 Provider 持久化。AddNOF 继续提供便捷缓存、序列化、对象存储和原生宿主默认值，不要求用户逐项注册底层服务。
+
+能力配置不会修改既有模型快照或执行删表。共享数据库的迁移宿主应保留该库完整的能力模型，不要为了关闭某个进程的 Worker 生成破坏性删表迁移；RunWorkers=false 保留模型及持久化进度。

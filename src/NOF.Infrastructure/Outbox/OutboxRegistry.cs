@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
 using NOF.Application;
 using System.Diagnostics.CodeAnalysis;
@@ -76,6 +77,23 @@ public static class OutboxServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configure);
         var registry = services.GetOrAddSingleton<OutboxRegistry>();
         services.TryAddScoped<IOutbox, TransactionalOutbox>();
+        services.AddLogging();
+        services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
+        services.TryAddSingleton<IObjectSerializer, JsonObjectSerializer>();
+        services.AddOptions<TransactionalMessageOptions>()
+            .Validate(options => !options.Outbox.RunWorkers ||
+                options.Outbox.PollingInterval > TimeSpan.Zero && options.Outbox.BatchSize > 0
+                && options.Outbox.MaxRetryCount > 0 && options.Outbox.RetryDelay >= TimeSpan.Zero
+                && options.Outbox.ClaimTimeout > TimeSpan.Zero && options.Outbox.CleanupInterval > TimeSpan.Zero
+                && options.Outbox.RetentionPeriod > TimeSpan.Zero, "Outbox transactional message options are invalid.")
+            .ValidateOnStart();
+        services.TryAddScoped<IOutboxStore, PersistenceOutboxStore>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxMessageModelCreatingContributor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxOrderStateModelCreatingContributor>());
+        services.TryAddScoped<OutboxOrderSequenceAllocator>(provider => new(provider.GetRequiredService<IPersistenceSession>(),
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<NOF.Hosting.DeploymentOptions>>()));
         configure(new(services, registry));
         return services;
     }

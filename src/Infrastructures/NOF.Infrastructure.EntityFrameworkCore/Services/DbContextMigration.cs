@@ -16,7 +16,7 @@ public sealed class DbContextMigration(Type dbContextType)
     {
         using var tenantContext = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
         await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var dbContext = (DbContext)scope.ServiceProvider.GetRequiredService(DbContextType);
         await dbContext.Database.MigrateAsync(cancellationToken);
     }

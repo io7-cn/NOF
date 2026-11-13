@@ -88,7 +88,7 @@ using NOF.Domain;
 public readonly partial struct OrderId : IValueObject<long>;
 ```
 
-Before using `New()`, register NOF.Domain and ensure the current scope activates daemon services:
+Before using `New()`, register NOF.Domain and bind ambient conveniences at the execution boundary:
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -97,7 +97,7 @@ services.AddNOFDomain();
 ```
 
 `New()` is a convenience API over the ambient `IdGenerator`. Use `New(IIdGenerator)` when you want an explicit dependency instead of relying on ambient scope.
-Standard NOF hosts activate daemon services automatically; custom hosts should do the equivalent when entering a scope.
+NOF-managed entries bind and restore conveniences automatically. Standalone Application code uses services.BindNOF(context); package-only callers can use IdGenerator.PushCurrent(generator). Ordinary DI scopes need no activation. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
 
 `AddNOFDomain()` registers the default `SnowflakeIdGenerator`.
 If you want a different generator, register your own `IIdGenerator` in the container and let your host/container policy decide how it overrides the default:

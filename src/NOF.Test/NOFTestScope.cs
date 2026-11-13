@@ -13,11 +13,13 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
     private readonly AsyncServiceScope _scope;
     private Context _context = Context.Empty;
     private IDisposable? _contextScope;
+    private readonly IDisposable _ambientBinding;
     private Activity? _tracingActivity;
 
     public NOFTestScope(AsyncServiceScope scope)
     {
         _scope = scope;
+        _ambientBinding = scope.ServiceProvider.BindNOF(_context);
     }
 
     public IServiceProvider Services => _scope.ServiceProvider;
@@ -126,6 +128,7 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
     public void Dispose()
     {
         _contextScope?.Dispose();
+        _ambientBinding.Dispose();
         _tracingActivity?.Dispose();
         _scope.Dispose();
     }
@@ -133,6 +136,7 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
     public ValueTask DisposeAsync()
     {
         _contextScope?.Dispose();
+        _ambientBinding.Dispose();
         _tracingActivity?.Dispose();
         return _scope.DisposeAsync();
     }
