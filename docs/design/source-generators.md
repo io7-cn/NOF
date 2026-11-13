@@ -30,3 +30,5 @@ NOF runtime packages ship a shared `NOF.CodeFixes` analyzer assembly beside thei
 All provided code fixes support Fix All at document, project, and solution scope. HTTP transport diagnostics and their code fixes are deleted along with the legacy adapters.
 
 Diagnostics that require a domain or API design choice deliberately remain analyzer-only. Examples include renaming overloaded operations, inventing unique failure names/codes, or rewriting `Find` calls without a known key predicate.
+
+The outbound middleware dispatcher-injection analyzer is removed along with the outbound middleware extension surface. Invocation filters are ordinary Application contracts, registered without source generation.

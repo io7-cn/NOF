@@ -40,7 +40,7 @@ public static class ApplicationServiceInvoker
         var operationName = serviceMethodInfo.Name;
         var resolution = inboundScope.ServiceProvider.GetRequiredService<ApplicationServiceInvocationResolver>()
             .Resolve<TService>(operationName);
-        var inboundPipeline = inboundScope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>();
+        var inboundPipeline = inboundScope.ServiceProvider.GetRequiredService<ApplicationServiceExecutionAdapter>();
         var execution = await inboundPipeline.ExecuteAsync(
             request, resolution.HandlerMapping.HandlerType, resolution.HandlerMapping.ReturnType,
             typeof(TService), operationName, null, cancellationToken, context).ConfigureAwait(false);

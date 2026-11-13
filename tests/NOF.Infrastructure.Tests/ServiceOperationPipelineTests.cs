@@ -12,9 +12,9 @@ public class ServiceOperationPipelineTests
     [Fact]
     public async Task RejectedOperations_DoNotConstructHandlers()
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ProbeOperation>(_ => throw new InvalidOperationException("Handler constructed"));
-        services.AddScoped<IRequestInboundMiddleware, Deny>();
+        services.AddScoped<IInvocationFilter, Deny>();
         using var provider = services.BuildServiceProvider();
         var result = await Execute(provider);
         Assert.Equal("403", Assert.IsType<ServiceRejected>(result.Execution.Value).Failure.Code);
@@ -25,9 +25,9 @@ public class ServiceOperationPipelineTests
     public async Task NormalizedContext_IsBoundBeforeDependencyResolution_AndRestoredAfterAwait()
     {
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ProbeOperation>();
-        services.AddScoped<IRequestInboundMiddleware, Normalize>();
+        services.AddScoped<IInvocationFilter, Normalize>();
         using var provider = services.BuildServiceProvider();
         using var firstScope = provider.CreateScope();
         using var otherScope = provider.CreateScope();
@@ -45,7 +45,7 @@ public class ServiceOperationPipelineTests
     [Fact]
     public async Task Cancellation_DoesNotConstructHandlers()
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ProbeOperation>(_ => throw new InvalidOperationException("Handler constructed"));
         using var provider = services.BuildServiceProvider();
         using var source = new CancellationTokenSource();
@@ -57,10 +57,10 @@ public class ServiceOperationPipelineTests
     public async Task Exceptions_PropagateAndRestoreAmbientContext()
     {
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ThrowingOperation>();
         using var provider = services.BuildServiceProvider();
-        var pipeline = new RequestInboundPipelineExecutor(provider);
+        var pipeline = new ApplicationServiceExecutionAdapter(provider);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipeline.ExecuteAsync(new Query(),
             typeof(ThrowingOperation), typeof(Reply), typeof(IProbeService), nameof(IProbeService.Read), null, default));
         Assert.Equal("caller", Context.Current.TenantId);
@@ -69,10 +69,10 @@ public class ServiceOperationPipelineTests
     [Fact]
     public async Task NullableCompletion_IsSeparateFromUninitializedExecution()
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<NullableOperation>();
         using var provider = services.BuildServiceProvider();
-        var result = await new RequestInboundPipelineExecutor(provider).ExecuteAsync(new Query(), typeof(NullableOperation),
+        var result = await new ApplicationServiceExecutionAdapter(provider).ExecuteAsync(new Query(), typeof(NullableOperation),
             typeof(Reply), typeof(IProbeService), nameof(IProbeService.Find), null, default);
         Assert.IsType<ServiceCompleted>(result.Execution.Value);
         Assert.Null(result.Execution.Require<Reply?>(allowNull: true));
@@ -80,7 +80,7 @@ public class ServiceOperationPipelineTests
     }
 
     private static async Task<RequestInboundContext> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
-        => await new RequestInboundPipelineExecutor(provider).ExecuteAsync(new Query(), typeof(ProbeOperation), typeof(Reply),
+        => await new ApplicationServiceExecutionAdapter(provider).ExecuteAsync(new Query(), typeof(ProbeOperation), typeof(Reply),
             typeof(IProbeService), nameof(IProbeService.Read), null, cancellationToken);
 
     public sealed record Query;
@@ -120,20 +120,18 @@ public class ServiceOperationPipelineTests
             => Task.FromResult<Reply?>(null);
     }
 
-    public sealed class Deny : IRequestInboundMiddleware
+    public sealed class Deny : IInvocationFilter
     {
-        public TopologyComparison Compare(IRequestInboundMiddleware other) => TopologyComparison.DoesNotMatter;
-        public ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
+        public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
         {
             context.Reject(new Failure("403", "Forbidden"));
             return ValueTask.CompletedTask;
         }
     }
 
-    public sealed class Normalize : IRequestInboundMiddleware
+    public sealed class Normalize : IInvocationFilter
     {
-        public TopologyComparison Compare(IRequestInboundMiddleware other) => TopologyComparison.DoesNotMatter;
-        public ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
+        public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
             => next((RequestInboundContext)context.WithTenantId("normalized"), request, cancellationToken);
     }
 }

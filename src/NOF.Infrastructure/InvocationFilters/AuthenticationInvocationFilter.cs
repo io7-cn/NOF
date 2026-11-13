@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using System.IdentityModel.Tokens.Jwt;
@@ -9,46 +10,20 @@ using System.Security.Claims;
 
 namespace NOF.Infrastructure;
 
-public sealed class AuthenticationResourceServerInboundMiddleware :
-    IRequestInboundMiddleware,
-    ICommandInboundMiddleware,
-    INotificationInboundMiddleware
+/// <summary>Validates configured credentials before invocation policies.</summary>
+public sealed class AuthenticationInvocationFilter : IInvocationFilter
 {
-    public TopologyComparison Compare(IRequestInboundMiddleware other)
-        => other switch
-        {
-            TracingInboundMiddleware => TopologyComparison.After,
-            TenantInboundMiddleware => TopologyComparison.Before,
-            _ => TopologyComparison.DoesNotMatter
-        };
-
-    public TopologyComparison Compare(ICommandInboundMiddleware other)
-        => other switch
-        {
-            TracingInboundMiddleware => TopologyComparison.After,
-            TenantInboundMiddleware => TopologyComparison.Before,
-            _ => TopologyComparison.DoesNotMatter
-        };
-
-    public TopologyComparison Compare(INotificationInboundMiddleware other)
-        => other switch
-        {
-            TracingInboundMiddleware => TopologyComparison.After,
-            TenantInboundMiddleware => TopologyComparison.Before,
-            _ => TopologyComparison.DoesNotMatter
-        };
-
     private readonly IUserContext _userContext;
     private readonly ResourceServerJwksCacheService _jwksCacheService;
     private readonly AuthenticationResourceServerOptions _jwtOptions;
     private readonly JwtSecurityTokenHandler _tokenHandler;
-    private readonly ILogger<AuthenticationResourceServerInboundMiddleware> _logger;
+    private readonly ILogger<AuthenticationInvocationFilter> _logger;
 
-    public AuthenticationResourceServerInboundMiddleware(
+    public AuthenticationInvocationFilter(
         IUserContext userContext,
         ResourceServerJwksCacheService jwksCacheService,
         IOptions<AuthenticationResourceServerOptions> jwtOptions,
-        ILogger<AuthenticationResourceServerInboundMiddleware> logger)
+        ILogger<AuthenticationInvocationFilter> logger)
     {
         _userContext = userContext;
         _jwksCacheService = jwksCacheService;
@@ -60,27 +35,16 @@ public sealed class AuthenticationResourceServerInboundMiddleware :
         _logger = logger;
     }
 
-    public async ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (context.IsLocalInvocation)
+        if (context is RequestInboundContext { IsLocalInvocation: true })
         {
-            await next(context, request, cancellationToken);
+            await next(context, input, cancellationToken);
             return;
         }
-        var executionContext = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
-        await next(executionContext, request, cancellationToken);
-    }
-
-    public async ValueTask InvokeAsync(CommandInboundContext context, object message, CommandHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        var executionContext = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
-        await next(executionContext, message, cancellationToken);
-    }
-
-    public async ValueTask InvokeAsync(NotificationInboundContext context, object message, NotificationHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        var executionContext = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
-        await next(executionContext, message, cancellationToken);
+        var authenticated = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
+        await next(authenticated, input, cancellationToken);
     }
 
     private async ValueTask<TContext> AuthenticateAsync<TContext>(TContext context, CancellationToken cancellationToken)
@@ -153,6 +117,10 @@ public sealed class AuthenticationResourceServerInboundMiddleware :
                     _logger.LogDebug(ex, "access token validation failed from header {HeaderName}: {Message}", source.HeaderName, ex.Message);
                 }
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -8,13 +8,13 @@ using System.Reflection;
 
 namespace NOF.Infrastructure;
 
-public sealed class CommandInboundPipelineExecutor
+public sealed class CommandDeliveryExecutor
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IObjectSerializer _serializer;
     private readonly CommandHandlerRegistry _commandHandlerRegistry;
 
-    public CommandInboundPipelineExecutor(
+    public CommandDeliveryExecutor(
         IServiceProvider serviceProvider,
         IObjectSerializer serializer,
         CommandHandlerRegistry commandHandlerRegistry)
@@ -30,23 +30,12 @@ public sealed class CommandInboundPipelineExecutor
         IEnumerable<KeyValuePair<string, string?>>? headers,
         CancellationToken cancellationToken)
     {
-        var middlewares = new DependencyGraph<ICommandInboundMiddleware>(
-            _serviceProvider.GetServices<ICommandInboundMiddleware>()).GetExecutionOrder();
         var invoker = ResolveInvoker(handlerTypeName);
         var message = invoker.Bind(payload, _serializer.Deserialize);
         var context = CreateContext(invoker.HandlerType, invoker.MessageType, headers);
-        CommandHandlerDelegate terminal = (currentContext, currentMessage, ct)
+        InvocationDelegate terminal = (currentContext, currentMessage, ct)
             => ExecuteCommandHandlerAsync(_serviceProvider, invoker, currentContext, currentMessage, ct);
-        CommandHandlerDelegate pipeline = terminal;
-        for (var i = middlewares.Count - 1; i >= 0; i--)
-        {
-            var middleware = middlewares[i];
-            var next = pipeline;
-            pipeline = (currentContext, currentMessage, ct)
-                => ExecuteCommandMiddlewareAsync(middleware, currentContext, currentMessage, next, ct);
-        }
-
-        await pipeline(context, message, cancellationToken).ConfigureAwait(false);
+        await _serviceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, message, terminal, cancellationToken).ConfigureAwait(false);
     }
 
     private ICommandInboundHandlerInvoker ResolveInvoker(string handlerTypeName)
@@ -70,26 +59,16 @@ public sealed class CommandInboundPipelineExecutor
         var methodInfo = InboundContextReflection.ResolveHandlerMethodInfo(handlerType, messageType);
         return (CommandInboundContext)new CommandInboundContext
         {
-            MethodInfo = methodInfo,
+            HandlerMethodInfo = methodInfo,
             HandlerType = handlerType,
-            MessageType = messageType
+            InputType = messageType
         }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
-    }
-    private static async ValueTask ExecuteCommandMiddlewareAsync(
-        ICommandInboundMiddleware middleware,
-        CommandInboundContext context,
-        object message,
-        CommandHandlerDelegate next,
-        CancellationToken cancellationToken)
-    {
-        using var _ = Context.PushCurrent(context);
-        await middleware.InvokeAsync(context, message, next, cancellationToken).ConfigureAwait(false);
     }
 
     private static async ValueTask ExecuteCommandHandlerAsync(
         IServiceProvider services,
         ICommandInboundHandlerInvoker invoker,
-        CommandInboundContext context,
+        InvocationContext context,
         object message,
         CancellationToken cancellationToken)
     {
@@ -98,13 +77,13 @@ public sealed class CommandInboundPipelineExecutor
     }
 }
 
-public sealed class NotificationInboundPipelineExecutor
+public sealed class NotificationDeliveryExecutor
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IObjectSerializer _serializer;
     private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
 
-    public NotificationInboundPipelineExecutor(
+    public NotificationDeliveryExecutor(
         IServiceProvider serviceProvider,
         IObjectSerializer serializer,
         NotificationHandlerRegistry notificationHandlerRegistry)
@@ -120,23 +99,12 @@ public sealed class NotificationInboundPipelineExecutor
         IEnumerable<KeyValuePair<string, string?>>? headers,
         CancellationToken cancellationToken)
     {
-        var middlewares = new DependencyGraph<INotificationInboundMiddleware>(
-            _serviceProvider.GetServices<INotificationInboundMiddleware>()).GetExecutionOrder();
         var invoker = ResolveInvoker(handlerTypeName);
         var message = invoker.Bind(payload, _serializer.Deserialize);
         var context = CreateContext(invoker.HandlerType, invoker.MessageType, headers);
-        NotificationHandlerDelegate terminal = (currentContext, currentMessage, ct)
+        InvocationDelegate terminal = (currentContext, currentMessage, ct)
             => ExecuteNotificationHandlerAsync(_serviceProvider, invoker, currentContext, currentMessage, ct);
-        NotificationHandlerDelegate pipeline = terminal;
-        for (var i = middlewares.Count - 1; i >= 0; i--)
-        {
-            var middleware = middlewares[i];
-            var next = pipeline;
-            pipeline = (currentContext, currentMessage, ct)
-                => ExecuteNotificationMiddlewareAsync(middleware, currentContext, currentMessage, next, ct);
-        }
-
-        await pipeline(context, message, cancellationToken).ConfigureAwait(false);
+        await _serviceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, message, terminal, cancellationToken).ConfigureAwait(false);
     }
 
     private INotificationInboundHandlerInvoker ResolveInvoker(string handlerTypeName)
@@ -160,26 +128,16 @@ public sealed class NotificationInboundPipelineExecutor
         var methodInfo = InboundContextReflection.ResolveHandlerMethodInfo(handlerType, messageType);
         return (NotificationInboundContext)new NotificationInboundContext
         {
-            MethodInfo = methodInfo,
+            HandlerMethodInfo = methodInfo,
             HandlerType = handlerType,
-            MessageType = messageType
+            InputType = messageType
         }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
-    }
-    private static async ValueTask ExecuteNotificationMiddlewareAsync(
-        INotificationInboundMiddleware middleware,
-        NotificationInboundContext context,
-        object message,
-        NotificationHandlerDelegate next,
-        CancellationToken cancellationToken)
-    {
-        using var _ = Context.PushCurrent(context);
-        await middleware.InvokeAsync(context, message, next, cancellationToken).ConfigureAwait(false);
     }
 
     private static async ValueTask ExecuteNotificationHandlerAsync(
         IServiceProvider services,
         INotificationInboundHandlerInvoker invoker,
-        NotificationInboundContext context,
+        InvocationContext context,
         object message,
         CancellationToken cancellationToken)
     {
@@ -188,11 +146,11 @@ public sealed class NotificationInboundPipelineExecutor
     }
 }
 
-public sealed class RequestInboundPipelineExecutor
+public sealed class ApplicationServiceExecutionAdapter
 {
     private readonly IServiceProvider _serviceProvider;
 
-    public RequestInboundPipelineExecutor(IServiceProvider serviceProvider)
+    public ApplicationServiceExecutionAdapter(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
     }
@@ -210,26 +168,15 @@ public sealed class RequestInboundPipelineExecutor
         Context? localContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var middlewares = new DependencyGraph<IRequestInboundMiddleware>(
-            _serviceProvider.GetServices<IRequestInboundMiddleware>()).GetExecutionOrder();
         var context = CreateContext(request, handlerType, responseType, serviceType, methodName, headers);
         if (localContext is not null)
         {
             context = (RequestInboundContext)context.WithItems(localContext.Items);
             context.IsLocalInvocation = true;
         }
-        RequestHandlerDelegate terminal = (currentContext, currentRequest, ct)
-            => ExecuteRequestHandlerAsync(_serviceProvider, handlerType, currentContext, currentRequest, ct);
-        RequestHandlerDelegate pipeline = terminal;
-        for (var i = middlewares.Count - 1; i >= 0; i--)
-        {
-            var middleware = middlewares[i];
-            var next = pipeline;
-            pipeline = (currentContext, currentRequest, ct)
-                => ExecuteRequestMiddlewareAsync(middleware, currentContext, currentRequest, next, ct);
-        }
-
-        await pipeline(context, request, cancellationToken).ConfigureAwait(false);
+        InvocationDelegate terminal = (currentContext, currentRequest, ct)
+            => ExecuteRequestHandlerAsync(_serviceProvider, handlerType, (RequestInboundContext)currentContext, currentRequest, ct);
+        await _serviceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, request, terminal, cancellationToken).ConfigureAwait(false);
         return context;
     }
 
@@ -263,7 +210,7 @@ public sealed class RequestInboundPipelineExecutor
             ServiceMethodInfo = serviceMethodInfo,
             HandlerType = handlerType,
             HandlerMethodInfo = handlerMethodInfo,
-            RequestType = requestType,
+            InputType = requestType,
             ResponseType = responseType
         }.WithItems(InboundContextReflection.ReadHeaderItems(headers));
     }
@@ -282,16 +229,6 @@ public sealed class RequestInboundPipelineExecutor
         context.SetResponse(response);
     }
 
-    private static async ValueTask ExecuteRequestMiddlewareAsync(
-        IRequestInboundMiddleware middleware,
-        RequestInboundContext context,
-        object request,
-        RequestHandlerDelegate next,
-        CancellationToken cancellationToken)
-    {
-        using var _ = Context.PushCurrent(context);
-        await middleware.InvokeAsync(context, request, next, cancellationToken).ConfigureAwait(false);
-    }
 }
 /// <summary>Resolves handler and service metadata for inbound execution contexts.</summary>
 

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using NOF.Application;
 using NOF.Contract;
 using System.Reflection;
 using System.Security.Claims;
@@ -99,22 +100,22 @@ public sealed class DefaultInboundAuthorizationHandler(
     private static string ResolveOperationName(InboundAuthorizationContext context, bool input)
         => context.Kind switch
         {
-            InboundAuthorizationKind.Request when input => context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Request => context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Command => context.MessageType?.DisplayName ?? context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Notification => context.MessageType?.DisplayName ?? context.HandlerMethodInfo.Name,
+            InvocationKind.ApplicationService when input => context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name,
+            InvocationKind.ApplicationService => context.HandlerMethodInfo.Name,
+            InvocationKind.Command => context.InputType?.DisplayName ?? context.HandlerMethodInfo.Name,
+            InvocationKind.Notification => context.InputType?.DisplayName ?? context.HandlerMethodInfo.Name,
             _ => context.HandlerMethodInfo.Name
         };
 
     private static PermissionRequirement? ResolveInputRequirement(InboundAuthorizationContext context)
         => context.Kind switch
         {
-            InboundAuthorizationKind.Request when context.ServiceType is not null && context.ServiceMethodInfo is not null
+            InvocationKind.ApplicationService when context.ServiceType is not null && context.ServiceMethodInfo is not null
                 => ResolveRequestRequirement(context.ServiceType, context.ServiceMethodInfo),
-            InboundAuthorizationKind.Command when context.MessageType is not null
-                => GetRequirement(context.MessageType),
-            InboundAuthorizationKind.Notification when context.MessageType is not null
-                => GetRequirement(context.MessageType),
+            InvocationKind.Command when context.InputType is not null
+                => GetRequirement(context.InputType),
+            InvocationKind.Notification when context.InputType is not null
+                => GetRequirement(context.InputType),
             _ => null
         };
 

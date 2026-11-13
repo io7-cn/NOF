@@ -8,20 +8,20 @@ namespace NOF.Infrastructure;
 public sealed class CommandSender : ICommandSender
 {
     private readonly ICommandRider _rider;
-    private readonly IReadOnlyList<ICommandOutboundMiddleware> _middlewares;
+    private readonly MessageDelivery _delivery;
     private readonly IDbContext _dbContext;
     private readonly IObjectSerializer _objectSerializer;
     private readonly OutboxOrderSequenceAllocator _orderSequenceAllocator;
 
     public CommandSender(
         ICommandRider rider,
-        IEnumerable<ICommandOutboundMiddleware> middlewares,
+        MessageDelivery delivery,
         IDbContext dbContext,
         IObjectSerializer objectSerializer,
         OutboxOrderSequenceAllocator orderSequenceAllocator)
     {
         _rider = rider;
-        _middlewares = new DependencyGraph<ICommandOutboundMiddleware>(middlewares).GetExecutionOrder();
+        _delivery = delivery;
         _dbContext = dbContext;
         _objectSerializer = objectSerializer;
         _orderSequenceAllocator = orderSequenceAllocator;
@@ -50,25 +50,24 @@ public sealed class CommandSender : ICommandSender
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(commandType);
         ArgumentNullException.ThrowIfNull(context);
-        var outboundContext = new CommandOutboundContext(context);
+        await _delivery.ExecuteAsync(command, context, async (headers, token) =>
+        {
+            var dispatchRoutes = _objectSerializer.SerializeToText(
+                new[] { commandType.DisplayName },
+                typeof(string[]));
 
-        await ExecuteAsync(outboundContext, command, static (_, _, _) => ValueTask.CompletedTask, cancellationToken);
+            var order = orderKey is null
+                ? (OutboxOrder?)null
+                : await _orderSequenceAllocator.AllocateAsync(orderKey, completesOrderKey, token);
 
-        var dispatchRoutes = _objectSerializer.SerializeToText(
-            new[] { commandType.DisplayName },
-            typeof(string[]));
-
-        var order = orderKey is null
-            ? (OutboxOrder?)null
-            : await _orderSequenceAllocator.AllocateAsync(orderKey, completesOrderKey, cancellationToken);
-
-        _dbContext.Set<NOFOutboxMessage>().Add(NOFOutboxMessage.Create(
-            OutboxMessageType.Command,
-            dispatchRoutes,
-            _objectSerializer.Serialize(command).ToArray(),
-            _objectSerializer.SerializeToText(outboundContext.Headers, typeof(Dictionary<string, string?>)),
-            Activity.Current?.ToTraceParent(),
-            order));
+            _dbContext.Set<NOFOutboxMessage>().Add(NOFOutboxMessage.Create(
+                OutboxMessageType.Command,
+                dispatchRoutes,
+                _objectSerializer.Serialize(command).ToArray(),
+                _objectSerializer.SerializeToText(headers, typeof(Dictionary<string, string?>)),
+                Activity.Current?.ToTraceParent(),
+                order));
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendAsync(object command, Type commandType, Context context, CancellationToken cancellationToken = default)
@@ -76,30 +75,11 @@ public sealed class CommandSender : ICommandSender
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(commandType);
         ArgumentNullException.ThrowIfNull(context);
-        var outboundContext = new CommandOutboundContext(context);
-
-        await ExecuteAsync(outboundContext, command, async (_, message, ct) =>
+        await _delivery.ExecuteAsync(command, context, async (headers, token) =>
         {
-            var payload = _objectSerializer.Serialize(message, message.GetType());
-            await _rider.SendAsync(payload, commandType.DisplayName, outboundContext.Headers, ct).ConfigureAwait(false);
-        }, cancellationToken);
+            var payload = _objectSerializer.Serialize(command, command.GetType());
+            await _rider.SendAsync(payload, commandType.DisplayName, headers, token).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
     }
 
-    private ValueTask ExecuteAsync(
-        CommandOutboundContext context,
-        object message,
-        CommandOutboundHandlerDelegate dispatch,
-        CancellationToken cancellationToken)
-    {
-        var pipeline = dispatch;
-
-        for (var i = _middlewares.Count - 1; i >= 0; i--)
-        {
-            var middleware = _middlewares[i];
-            var next = pipeline;
-            pipeline = (currentContext, currentMessage, ct) => middleware.InvokeAsync(currentContext, currentMessage, next, ct);
-        }
-
-        return pipeline(context, message, cancellationToken);
-    }
 }

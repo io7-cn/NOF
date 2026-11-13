@@ -9,7 +9,7 @@ using Xunit;
 
 namespace NOF.Infrastructure.Tests.Middlewares;
 
-public sealed class HostTenantInboundMiddlewareTests
+public sealed class HostTenantInvocationFilterTests
 {
     [Theory]
     [InlineData(nameof(IHostTenantTestService.Host), "host")]
@@ -21,7 +21,7 @@ public sealed class HostTenantInboundMiddlewareTests
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
         using var provider = CreateProvider(authenticated: true);
         using var scope = provider.CreateScope();
-        var pipeline = scope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>();
+        var pipeline = scope.ServiceProvider.GetRequiredService<ApplicationServiceExecutionAdapter>();
         var result = await pipeline.ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(NOF.Testing.TestOutcome),
             typeof(IHostTenantTestService), method,
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "untrusted")], default);
@@ -39,7 +39,7 @@ public sealed class HostTenantInboundMiddlewareTests
     {
         using var provider = CreateProvider(authenticated: false);
         using var scope = provider.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<RequestInboundPipelineExecutor>()
+        var result = await scope.ServiceProvider.GetRequiredService<ApplicationServiceExecutionAdapter>()
             .ExecuteAsync(new Empty(), typeof(TenantProbeHandler), typeof(NOF.Testing.TestOutcome), typeof(IHostTenantTestService),
                 nameof(IHostTenantTestService.Host), null, default);
 
@@ -61,10 +61,11 @@ public sealed class HostTenantInboundMiddlewareTests
         Assert.Equal("caller", Context.Current.TenantId);
 
         provider.GetRequiredService<TenantProbe>().Throw = true;
-        var failed = await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(
-            scope.ServiceProvider, typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!,
-            new Empty(), Context.Empty, default);
-        Assert.NotNull(Assert.IsType<ServiceRejected>(failed.Value).Failure);
+        var failed = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await ApplicationServiceInvoker.InvokeAsync<IHostTenantTestService>(
+                scope.ServiceProvider, typeof(IHostTenantTestService).GetMethod(nameof(IHostTenantTestService.Host))!,
+                new Empty(), Context.Empty, default));
+        Assert.Equal("Simulated handler failure.", failed.Message);
         Assert.Equal("caller", Context.Current.TenantId);
     }
 

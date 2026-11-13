@@ -94,7 +94,7 @@ Contract 分析器只验证服务签名。HTTP 路由在端点模块显式声明
 Result 不再定义 CreateEmptyResponse。
 
 请求/响应出站 executor、delegate、context、middleware API 和 Client 生成继续保持移除。
-远程调用方自行维护 HttpClient/DelegatingHandler；Command/Notification 的消息出站投递管线保留。
+远程调用方自行维护 HttpClient/DelegatingHandler；消息出站元数据由投递组件直接准备，详见[统一调用扩展](invocation-extensions.md)。
 
 ## 破坏性迁移
 
@@ -113,3 +113,5 @@ Result 的 Failure 仍是业务数据。重新构建生成产物，删除自定�
 既有标签和发行版保持不可变；回滚时恢复配套的旧包与调用方代码。
 
 [声明可预期失败](expected-failures.md)可为每个操作生成封闭结果；方法声明表示成功类型，Descriptor 表示实际执行返回类型。
+
+[统一调用扩展](invocation-extensions.md)替代三套入站中间件，由宿主选择执行器；消息投递固定准备元数据，不再保留出站扩展链。

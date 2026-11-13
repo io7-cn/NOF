@@ -8,9 +8,9 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 - builder defaults and step orchestration
 - in-memory cache and messaging riders
-- OpenTelemetry registration and transport middleware
-- JWT resource server validation and command/notification token propagation
-- `[UseHostTenant]` application execution after authorization, registered by default through `HostTenantInboundMiddleware`
+- OpenTelemetry registration and unified invocation filters
+- JWT resource server validation and explicit transport authentication policies
+- `[UseHostTenant]` application execution after authorization, registered by default through `HostTenantInvocationFilter`
 - ambient `IMapper` and `IIdGenerator` activation through scoped `IDaemonService` implementations
 
 This lets consumers reference one package/project while still getting the full default infrastructure setup.
@@ -124,7 +124,7 @@ options do not authenticate broker headers. Restrict broker publishers and subsc
 and use `IInboundAuthorizationHandler` for `Command` and `Notification` to authorize
 the producer and catalog tenant. Carry only validated metadata from public requests.
 The handler's explicit `Context` contains the effective tenant; `WithTenantId` rewrites
-the same context item used by outbound tenant middleware. Do not reconstruct it from
+the same context item used by message delivery. Do not reconstruct it from
 untrusted transport headers. Returning `Denied` for a message stops its handler;
 it does not throw or automatically send the message to a dead-letter queue. Design and
 test rejection/acknowledgement semantics when adding consumer authorization.
@@ -255,3 +255,7 @@ For tests or lightweight local scenarios, `NOF.Infrastructure.EntityFrameworkCor
 ## License
 
 Apache-2.0
+
+## Invocation execution
+
+NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. See [execution and migration](../../docs/en/design/invocation-extensions.md).

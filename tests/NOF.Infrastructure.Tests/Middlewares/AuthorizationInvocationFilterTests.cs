@@ -1,19 +1,20 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using System.Security.Claims;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests.Middlewares;
 
-public sealed class AuthorizationInboundMiddlewareTests
+public sealed class AuthorizationInvocationFilterTests
 {
     [Theory]
-    [InlineData(InboundAuthorizationKind.Request)]
-    [InlineData(InboundAuthorizationKind.Command)]
-    [InlineData(InboundAuthorizationKind.Notification)]
-    public async Task InvokeAsync_UninitializedAuthorizationResult_ShouldNeverExecuteHandler(InboundAuthorizationKind kind)
+    [InlineData(InvocationKind.ApplicationService)]
+    [InlineData(InvocationKind.Command)]
+    [InlineData(InvocationKind.Notification)]
+    public async Task InvokeAsync_UninitializedAuthorizationResult_ShouldNeverExecuteHandler(InvocationKind kind)
     {
         var middleware = CreateMiddleware(new UserContext(), new UninitializedAuthorizationHandler());
         var nextCalled = false;
@@ -22,21 +23,21 @@ public sealed class AuthorizationInboundMiddlewareTests
         {
             switch (kind)
             {
-                case InboundAuthorizationKind.Request:
+                case InvocationKind.ApplicationService:
                     await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.AllowAnonymousMethod)), new TestRequest(), (_, _, _) =>
                     {
                         nextCalled = true;
                         return ValueTask.CompletedTask;
                     }, default);
                     break;
-                case InboundAuthorizationKind.Command:
+                case InvocationKind.Command:
                     await middleware.InvokeAsync(CreateCommandContext(typeof(TestRequest), typeof(TestHandler), nameof(TestHandler.AllowAnonymousHandler)), new TestRequest(), (_, _, _) =>
                     {
                         nextCalled = true;
                         return ValueTask.CompletedTask;
                     }, default);
                     break;
-                case InboundAuthorizationKind.Notification:
+                case InvocationKind.Notification:
                     await middleware.InvokeAsync(CreateNotificationContext(typeof(TestRequest), typeof(TestHandler), nameof(TestHandler.AllowAnonymousHandler)), new TestRequest(), (_, _, _) =>
                     {
                         nextCalled = true;
@@ -394,13 +395,13 @@ public sealed class AuthorizationInboundMiddlewareTests
 
         Assert.True(nextCalled);
         Assert.NotNull(handler.LastContext);
-        Assert.Equal(InboundAuthorizationKind.Request, handler.LastContext!.Kind);
+        Assert.Equal(InvocationKind.ApplicationService, handler.LastContext!.Kind);
         Assert.Same(request, handler.LastContext.Input);
         Assert.Equal(typeof(TestService), handler.LastContext.ServiceType);
         Assert.Equal(nameof(TestService.OverridePermissionMethod), handler.LastContext.ServiceMethodInfo?.Name);
         Assert.Equal(typeof(TestHandler), handler.LastContext.HandlerType);
         Assert.Equal(nameof(TestHandler.ExecutePermissionHandler), handler.LastContext.HandlerMethodInfo.Name);
-        Assert.Null(handler.LastContext.MessageType);
+        Assert.Null(handler.LastContext.InputType);
     }
 
     private static RequestInboundContext CreateRequestContext(string serviceMethodName, Type? responseType = null, string? handlerMethodName = null)
@@ -413,7 +414,7 @@ public sealed class AuthorizationInboundMiddlewareTests
             ServiceMethodInfo = serviceMethod,
             HandlerType = typeof(TestHandler),
             HandlerMethodInfo = handlerMethod,
-            RequestType = typeof(TestRequest),
+            InputType = typeof(TestRequest),
             ResponseType = responseType ?? typeof(NOF.Testing.TestOutcome)
         };
     }
@@ -422,9 +423,9 @@ public sealed class AuthorizationInboundMiddlewareTests
     {
         return new CommandInboundContext
         {
-            MethodInfo = handlerType.GetMethod(methodName)!,
+            HandlerMethodInfo = handlerType.GetMethod(methodName)!,
             HandlerType = handlerType,
-            MessageType = messageType
+            InputType = messageType
         };
     }
 
@@ -432,13 +433,13 @@ public sealed class AuthorizationInboundMiddlewareTests
     {
         return new NotificationInboundContext
         {
-            MethodInfo = handlerType.GetMethod(methodName)!,
+            HandlerMethodInfo = handlerType.GetMethod(methodName)!,
             HandlerType = handlerType,
-            MessageType = messageType
+            InputType = messageType
         };
     }
 
-    private static AuthorizationInboundMiddleware CreateMiddleware(
+    private static AuthorizationInvocationFilter CreateMiddleware(
         IUserContext userContext,
         IInboundAuthorizationHandler? authorizationHandler = null,
         TenantAuthorizationOptions? tenantOptions = null)

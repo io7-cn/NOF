@@ -5,7 +5,7 @@ using Xunit;
 
 namespace NOF.Infrastructure.Tests.Middlewares;
 
-public sealed class TracingInboundMiddlewareTests
+public sealed class TracingInvocationFilterTests
 {
     [Fact]
     public async Task InvokeAsync_ServiceCancellation_ShouldPropagateWithoutBecomingARejection()
@@ -17,7 +17,7 @@ public sealed class TracingInboundMiddlewareTests
             HandlerType = typeof(ServiceOperationPipelineTests.ProbeOperation),
             HandlerMethodInfo = typeof(ServiceOperationPipelineTests.ProbeOperation).GetMethod("HandleAsync",
                 [typeof(ServiceOperationPipelineTests.Query), typeof(Context), typeof(CancellationToken)])!,
-            RequestType = typeof(ServiceOperationPipelineTests.Query),
+            InputType = typeof(ServiceOperationPipelineTests.Query),
             ResponseType = typeof(ServiceOperationPipelineTests.Reply)
         };
         using var source = new CancellationTokenSource();
@@ -59,25 +59,25 @@ public sealed class TracingInboundMiddlewareTests
         Assert.Same(exception, actual);
     }
 
-    private static TracingInboundMiddleware CreateMiddleware()
+    private static TracingInvocationFilter CreateMiddleware()
         => new(
             Host.CreateApplicationBuilder().Environment,
-            NullLogger<TracingInboundMiddleware>.Instance);
+            NullLogger<TracingInvocationFilter>.Instance);
 
     private static CommandInboundContext CreateCommandContext()
         => new()
         {
-            MethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleCommand))!,
+            HandlerMethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleCommand))!,
             HandlerType = typeof(TestHandler),
-            MessageType = typeof(TestCommand)
+            InputType = typeof(TestCommand)
         };
 
     private static NotificationInboundContext CreateNotificationContext()
         => new()
         {
-            MethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleNotification))!,
+            HandlerMethodInfo = typeof(TestHandler).GetMethod(nameof(TestHandler.HandleNotification))!,
             HandlerType = typeof(TestHandler),
-            MessageType = typeof(TestNotification)
+            InputType = typeof(TestNotification)
         };
 
     private sealed class TestCommand;

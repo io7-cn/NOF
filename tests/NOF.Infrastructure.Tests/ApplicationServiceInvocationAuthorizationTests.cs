@@ -128,7 +128,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
 
     private static ServiceProvider BuildServiceProvider(ResourceServerJwksCacheService? authenticationCache = null)
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddLogging();
 
         services.AddScoped<IUserContext, UserContext>();
@@ -143,18 +143,18 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         services.AddScoped<ContextCheckHandler>();
         services.AddScoped<IApplicationServiceInvoker, ApplicationServiceInvocation>();
         services.AddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
-        services.AddTransient<AuthorizationInboundMiddleware>();
-        services.AddRequestInboundMiddleware<AuthorizationInboundMiddleware>();
+        services.AddTransient<AuthorizationInvocationFilter>();
+        services.AddInvocationFilter<AuthorizationInvocationFilter>();
         if (authenticationCache is not null)
         {
             services.AddSingleton(authenticationCache);
-            services.AddRequestInboundMiddleware<AuthenticationResourceServerInboundMiddleware>();
+            services.AddInvocationFilter<AuthenticationInvocationFilter>();
         }
         services.AddScoped<IEventPublisher, InMemoryEventPublisher>();
         services.AddScoped<IDaemonService, EventPublisherAmbientDaemonService>();
         services.AddScoped<IDaemonService, ScopeLifecycleDaemonService>();
 
-        services.AddScoped<RequestInboundPipelineExecutor>();
+        services.AddScoped<ApplicationServiceExecutionAdapter>();
         services.AddScoped<ApplicationServiceInvocationResolver>();
 
         var rpcServerRegistry = new ApplicationServiceRegistry();

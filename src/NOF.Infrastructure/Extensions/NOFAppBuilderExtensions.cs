@@ -100,9 +100,9 @@ public static partial class NOFInfrastructureExtensions
             #endregion
 
             #region Pipelines
-            builder.Services.TryAddScoped<CommandInboundPipelineExecutor>();
-            builder.Services.TryAddScoped<NotificationInboundPipelineExecutor>();
-            builder.Services.TryAddScoped<RequestInboundPipelineExecutor>();
+            builder.Services.TryAddScoped<CommandDeliveryExecutor>();
+            builder.Services.TryAddScoped<NotificationDeliveryExecutor>();
+            builder.Services.TryAddScoped<ApplicationServiceExecutionAdapter>();
             #endregion
 
             #region Application Services
@@ -111,30 +111,14 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.TryAddScoped<OutboxOrderSequenceAllocator>();
             #endregion
 
-            #region Outbound Middlewares
-            builder.Services.AddCommandOutboundMiddleware<TenantHeaderOutboundMiddleware>();
-            builder.Services.AddNotificationOutboundMiddleware<TenantHeaderOutboundMiddleware>();
-            builder.Services.AddCommandOutboundMiddleware<MessageIdOutboundMiddleware>();
-            builder.Services.AddNotificationOutboundMiddleware<MessageIdOutboundMiddleware>();
-            builder.Services.AddCommandOutboundMiddleware<TracingOutboundMiddleware>();
-            builder.Services.AddNotificationOutboundMiddleware<TracingOutboundMiddleware>();
-            #endregion
-
-            #region Inbound Middlewares
-            builder.Services.AddCommandInboundMiddleware<TenantInboundMiddleware>();
-            builder.Services.AddNotificationInboundMiddleware<TenantInboundMiddleware>();
-            builder.Services.AddRequestInboundMiddleware<TenantInboundMiddleware>();
-            builder.Services.AddRequestInboundMiddleware<AuthorizationInboundMiddleware>();
-            builder.Services.AddRequestInboundMiddleware<HostTenantInboundMiddleware>();
-            builder.Services.AddCommandInboundMiddleware<AuthorizationInboundMiddleware>();
-            builder.Services.AddNotificationInboundMiddleware<AuthorizationInboundMiddleware>();
-            builder.Services.AddCommandInboundMiddleware<TracingInboundMiddleware>();
-            builder.Services.AddNotificationInboundMiddleware<TracingInboundMiddleware>();
-            builder.Services.AddRequestInboundMiddleware<TracingInboundMiddleware>();
-            builder.Services.AddCommandInboundMiddleware<AutoInstrumentationInboundMiddleware>();
-            builder.Services.AddNotificationInboundMiddleware<AutoInstrumentationInboundMiddleware>();
-            builder.Services.AddRequestInboundMiddleware<AutoInstrumentationInboundMiddleware>();
-            #endregion
+            // Host defaults select the in-memory engine; a host can replace IInvocationPipeline.
+            builder.Services.UseInMemoryInvocationPipeline();
+            builder.Services.TryAddScoped<MessageDelivery>();
+            builder.Services.AddInvocationFilter<TracingInvocationFilter>(-400);
+            builder.Services.AddInvocationFilter<InstrumentationInvocationFilter>(-300);
+            builder.Services.AddInvocationFilter<TenantInvocationFilter>(-100);
+            builder.Services.AddInvocationFilter<AuthorizationInvocationFilter>(-50);
+            builder.Services.AddInvocationFilter<HostTenantInvocationFilter>(-25);
 
             #region Default Persistence
             builder.Services.TryAddScoped<ICacheServiceRider>(sp => new MemoryCacheServiceRider(

@@ -1,32 +1,20 @@
-using NOF.Contract;
-using System.ComponentModel;
+using NOF.Application;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 
 namespace NOF.Infrastructure;
 
-[EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class NotificationInboundContext : Context
+/// <summary>Metadata for an incoming notification delivery.</summary>
+public sealed class NotificationInboundContext : InvocationContext
 {
-    public required MethodInfo MethodInfo { get; init; }
+    /// <inheritdoc />
+    public override InvocationKind Kind => InvocationKind.Notification;
 
-    public required Type HandlerType { get; init; }
-
-    public required Type MessageType { get; init; }
+    /// <summary>Creates a delivery context.</summary>
+    public NotificationInboundContext() { }
 
     [SetsRequiredMembers]
-    private NotificationInboundContext(IReadOnlyDictionary<object, object?> items, NotificationInboundContext source)
-        : base(items)
-    {
-        MethodInfo = source.MethodInfo;
-        HandlerType = source.HandlerType;
-        MessageType = source.MessageType;
-    }
+    private NotificationInboundContext(IReadOnlyDictionary<object, object?> items, NotificationInboundContext source) : base(items, source) { }
 
-    public NotificationInboundContext()
-    {
-    }
-
-    protected override Context Clone(IReadOnlyDictionary<object, object?> items)
-        => new NotificationInboundContext(items, this);
+    /// <inheritdoc />
+    protected override NOF.Contract.Context Clone(IReadOnlyDictionary<object, object?> items) => new NotificationInboundContext(items, this);
 }

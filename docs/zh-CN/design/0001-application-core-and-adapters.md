@@ -68,7 +68,7 @@ UseCase 就是这套模型表达的应用操作，不是在 RPC 旁边再增加�
 
 随 Client 生成一同移除请求/响应出站管线。本地调用直接将 Context 和隔离的调用方身份
 快照传入入站应用策略；远程 HTTP 行为使用原生 DelegatingHandler 和 .NET 跟踪能力。
-Command/Notification 的消息出站投递管线继续保留。
+消息投递组件直接准备出站元数据，宿主决定统一调用扩展如何执行。
 
 ### 职责划分
 
@@ -132,3 +132,5 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 - [EF Core 事务](https://learn.microsoft.com/ef/core/saving/transactions)
 
 更新：通用 Contract Result/Result<T> 及消息头、字典便利扩展已删除。请使用当前[操作结果迁移指南](result-unions.md)。
+
+更新：共享[调用扩展](invocation-extensions.md)已下沉到 Application，由宿主选择执行方式，Infrastructure 提供可选的内存默认实现。HTTP 呈现继续使用原生能力，出站元数据由投递组件直接准备。

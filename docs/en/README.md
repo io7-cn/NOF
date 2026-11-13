@@ -50,3 +50,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Declared expected failures](design/expected-failures.md)
 
 - [Value object construction](design/value-objects.md)
+
+- [Invocation extensions](design/invocation-extensions.md)

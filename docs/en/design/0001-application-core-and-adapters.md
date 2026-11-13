@@ -88,7 +88,7 @@ business handler and context normalization can precede scoped dependency resolut
 Request/response outbound pipelines are removed with client generation. Local calls
 carry Context and an isolated caller-identity snapshot directly into the inbound
 application policies. Remote HTTP behavior belongs to native DelegatingHandler and
-.NET tracing. Command/Notification outbound delivery pipelines remain supported.
+.NET tracing. MessageDelivery prepares outbound metadata directly; hosts own invocation extension execution.
 
 ### Responsibility profile
 
@@ -170,3 +170,5 @@ tests, rather than speculative generality.
 - [EF Core transactions](https://learn.microsoft.com/ef/core/saving/transactions)
 
 Update: generic Contract Result/Result<T> and header/dictionary convenience extensions have since been removed. Use the current [operation result migration](result-unions.md).
+
+Update: shared [invocation extensions](invocation-extensions.md) now live in Application. Hosts select execution; Infrastructure supplies an optional in-memory default. HTTP presentation remains native, and outbound metadata is prepared directly by delivery.

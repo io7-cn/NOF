@@ -214,7 +214,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             {
                 case InboxMessageType.Command:
                     {
-                        var commandPipelineExecutor = services.GetRequiredService<CommandInboundPipelineExecutor>();
+                        var commandPipelineExecutor = services.GetRequiredService<CommandDeliveryExecutor>();
                         await commandPipelineExecutor.ExecuteAsync(
                             message.Payload,
                             handlerTypeName,
@@ -224,7 +224,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
                     }
                 case InboxMessageType.Notification:
                     {
-                        var notificationPipelineExecutor = services.GetRequiredService<NotificationInboundPipelineExecutor>();
+                        var notificationPipelineExecutor = services.GetRequiredService<NotificationDeliveryExecutor>();
                         await notificationPipelineExecutor.ExecuteAsync(
                             message.Payload,
                             handlerTypeName,

@@ -1,78 +1,52 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
-using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace NOF.Infrastructure;
 
-[EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class RequestInboundContext : Context
+/// <summary>Application-service adapter metadata, including optional HTTP response metadata.</summary>
+public sealed class RequestInboundContext : InvocationContext
 {
-    private readonly RequestInboundState _state;
+    private readonly IDictionary<string, string?> _responseHeaders;
 
-    public object? Response => Execution.Value is ServiceCompleted completed ? completed.Response : null;
+    /// <inheritdoc />
+    public override InvocationKind Kind => InvocationKind.ApplicationService;
 
-    /// <summary>Gets the execution outcome without conflating rejection with business failures.</summary>
-    public ServiceExecution Execution => _state.Execution;
+    /// <inheritdoc />
+    public override string OperationName => $"{ServiceType.DisplayName}.{ServiceMethodInfo.Name}";
 
-    /// <summary>Gets a policy rejection, if execution was rejected.</summary>
-    public Failure? Rejection => Execution.Value is ServiceRejected rejected ? rejected.Failure : null;
+    /// <summary>Gets metadata to be interpreted by the invoking adapter.</summary>
+    public IDictionary<string, string?> ResponseHeaders => _responseHeaders;
 
-    public IDictionary<string, string?> ResponseHeaders => _state.ResponseHeaders;
-
-    /// <summary>Whether identity was copied from the caller's trusted local scope rather than an HTTP token.</summary>
+    /// <summary>Whether trusted identity was copied from a local caller.</summary>
     public bool IsLocalInvocation { get; set; }
 
+    /// <summary>Gets the service contract.</summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public required Type ServiceType { get; init; }
 
+    /// <summary>Gets the contract method.</summary>
     public required MethodInfo ServiceMethodInfo { get; init; }
 
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)]
-    public required Type HandlerType { get; init; }
-
-    public required MethodInfo HandlerMethodInfo { get; init; }
-
-    public required Type RequestType { get; init; }
-
+    /// <summary>Gets the declared business response type.</summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     public required Type ResponseType { get; init; }
 
-    /// <summary>Completes execution with the operation's unchanged business value, including null.</summary>
-    public void SetResponse(object? response) => _state.Execution = new ServiceCompleted(response);
-
-    /// <summary>Rejects execution without manufacturing a business response.</summary>
-    public void Reject(Failure failure) => _state.Execution = new ServiceRejected(failure);
+    /// <summary>Creates an application invocation adapter context.</summary>
+    public RequestInboundContext() => _responseHeaders = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
     [SetsRequiredMembers]
-    private RequestInboundContext(IReadOnlyDictionary<object, object?> items, RequestInboundContext source)
-        : base(items)
+    private RequestInboundContext(IReadOnlyDictionary<object, object?> items, RequestInboundContext source) : base(items, source)
     {
-        _state = source._state;
+        _responseHeaders = source._responseHeaders;
         ServiceType = source.ServiceType;
         ServiceMethodInfo = source.ServiceMethodInfo;
-        HandlerType = source.HandlerType;
-        HandlerMethodInfo = source.HandlerMethodInfo;
-        RequestType = source.RequestType;
         ResponseType = source.ResponseType;
         IsLocalInvocation = source.IsLocalInvocation;
     }
 
-    public RequestInboundContext()
-    {
-        _state = new RequestInboundState();
-    }
-
-    protected override Context Clone(IReadOnlyDictionary<object, object?> items)
-        => new RequestInboundContext(items, this);
-
-    // Shared by immutable context clones so policies observe the same execution outcome.
-    private sealed class RequestInboundState
-    {
-        public ServiceExecution Execution { get; set; }
-
-        public IDictionary<string, string?> ResponseHeaders { get; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-    }
+    /// <inheritdoc />
+    protected override Context Clone(IReadOnlyDictionary<object, object?> items) => new RequestInboundContext(items, this);
 }

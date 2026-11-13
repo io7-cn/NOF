@@ -13,7 +13,7 @@ namespace NOF.Hosting.AspNetCore;
 /// </summary>
 public sealed class HttpRequestInboundAdapter(
     ApplicationServiceInvocationResolver invocationResolver,
-    RequestInboundPipelineExecutor inboundPipeline,
+    ApplicationServiceExecutionAdapter inboundPipeline,
     IOptions<HttpRequestHeaderOptions> httpHeaderOptions)
 {
     private readonly HttpRequestHeaderOptions _httpHeaderOptions = httpHeaderOptions.Value;

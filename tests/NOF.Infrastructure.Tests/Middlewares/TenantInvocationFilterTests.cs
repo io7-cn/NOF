@@ -1,15 +1,16 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests.Middlewares;
 
-public class TenantInboundMiddlewareTests
+public class TenantInvocationFilterTests
 {
     [Fact]
     public async Task InvokeAsync_WithoutIncomingTenantHeader_ShouldUseHostTenant()
     {
-        var middleware = new TenantInboundMiddleware();
+        var middleware = new TenantInvocationFilter();
         var message = new object();
         var inboundContext = CreateContext(message.GetType());
         var tenantDuringNext = string.Empty;
@@ -17,7 +18,7 @@ public class TenantInboundMiddlewareTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, tenantDuringNext);
 
-        ValueTask CaptureNextContext(CommandInboundContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
@@ -29,7 +30,7 @@ public class TenantInboundMiddlewareTests
     [Fact]
     public async Task InvokeAsync_WithIncomingTenantHeader_ShouldUseIncomingTenantHeader()
     {
-        var middleware = new TenantInboundMiddleware();
+        var middleware = new TenantInvocationFilter();
         var message = new object();
         var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
             .WithItem(NOFAbstractionConstants.Transport.Headers.TenantId, "tenanta");
@@ -38,7 +39,7 @@ public class TenantInboundMiddlewareTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask CaptureNextContext(CommandInboundContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
@@ -50,7 +51,7 @@ public class TenantInboundMiddlewareTests
     [Fact]
     public async Task InvokeAsync_WithLowercaseIncomingTenantHeader_ShouldUseIncomingTenantHeader()
     {
-        var middleware = new TenantInboundMiddleware();
+        var middleware = new TenantInvocationFilter();
         var message = new object();
         var inboundContext = (CommandInboundContext)CreateContext(message.GetType())
             .WithItem("x-tenant-id", "tenanta");
@@ -59,7 +60,7 @@ public class TenantInboundMiddlewareTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask CaptureNextContext(CommandInboundContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
@@ -72,9 +73,9 @@ public class TenantInboundMiddlewareTests
     {
         return new CommandInboundContext
         {
-            MethodInfo = typeof(object).GetMethod(nameof(ToString))!,
+            HandlerMethodInfo = typeof(object).GetMethod(nameof(ToString))!,
             HandlerType = typeof(object),
-            MessageType = messageType
+            InputType = messageType
         };
     }
 }

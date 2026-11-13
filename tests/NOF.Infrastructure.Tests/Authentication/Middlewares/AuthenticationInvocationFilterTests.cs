@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
 using System.IdentityModel.Tokens.Jwt;
@@ -11,7 +12,7 @@ using Xunit;
 
 namespace NOF.Infrastructure.Tests.Authentication.Middlewares;
 
-public sealed class AuthenticationResourceServerInboundMiddlewareTests
+public sealed class AuthenticationInvocationFilterTests
 {
     [Theory]
     [InlineData("https://auth.local", "api", "https://auth.local", "api", true)]
@@ -65,7 +66,7 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
         Assert.NotNull(userContext.User);
         Assert.False(userContext.User.IsAuthenticated);
 
-        ValueTask CaptureNextContext(RequestInboundContext context, object forwardedRequest, CancellationToken cancellationToken)
+        ValueTask CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
         {
             _ = forwardedRequest;
             _ = cancellationToken;
@@ -95,7 +96,7 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
         Assert.NotNull(userContext.User);
         Assert.False(userContext.User.IsAuthenticated);
 
-        ValueTask CaptureNextContext(RequestInboundContext context, object forwardedRequest, CancellationToken cancellationToken)
+        ValueTask CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
         {
             _ = forwardedRequest;
             _ = cancellationToken;
@@ -223,13 +224,13 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
         Assert.Equal("Alice", userContext.User.Name);
     }
 
-    private static AuthenticationResourceServerInboundMiddleware CreateMiddleware(
+    private static AuthenticationInvocationFilter CreateMiddleware(
         IUserContext userContext,
         ResourceServerJwksCacheService jwksCacheService,
         string? expectedIssuer = null,
         string? audience = null)
     {
-        return new AuthenticationResourceServerInboundMiddleware(
+        return new AuthenticationInvocationFilter(
             userContext,
             jwksCacheService,
             Microsoft.Extensions.Options.Options.Create(new AuthenticationResourceServerOptions
@@ -247,7 +248,7 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
                     }
                 ]
             }),
-            NullLogger<AuthenticationResourceServerInboundMiddleware>.Instance);
+            NullLogger<AuthenticationInvocationFilter>.Instance);
     }
 
     private static ResourceServerJwksCacheService CreateJwksService(IReadOnlyList<ManagedSigningKey> keys, string? issuer = null)
@@ -289,7 +290,7 @@ public sealed class AuthenticationResourceServerInboundMiddlewareTests
             ServiceMethodInfo = serviceMethod,
             HandlerType = typeof(object),
             HandlerMethodInfo = serviceMethod,
-            RequestType = typeof(object),
+            InputType = typeof(object),
             ResponseType = typeof(NOF.Testing.TestOutcome)
         };
     }

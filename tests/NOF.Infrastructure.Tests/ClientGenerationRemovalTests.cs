@@ -30,7 +30,7 @@ public class ClientGenerationRemovalTests
         {
             typeof(ApplicationServiceGenerator).Assembly,
             typeof(NativeHostBuilderBuildAnalyzer).Assembly,
-            typeof(OutboundMiddlewareDispatcherInjectionAnalyzer).Assembly
+            typeof(ValueObjectLengthConfigurationAnalyzer).Assembly
         };
         foreach (var assembly in assemblies.Distinct())
         {

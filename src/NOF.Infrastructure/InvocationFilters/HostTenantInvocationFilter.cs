@@ -1,4 +1,5 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics;
@@ -8,19 +9,13 @@ namespace NOF.Infrastructure;
 /// <summary>
 /// Applies contract-level host-tenant selection after authorization and before application service handler resolution.
 /// </summary>
-public sealed class HostTenantInboundMiddleware : IRequestInboundMiddleware
+public sealed class HostTenantInvocationFilter : IInvocationFilter
 {
     /// <inheritdoc />
-    public TopologyComparison Compare(IRequestInboundMiddleware other)
-        => other is TenantInboundMiddleware or AuthorizationInboundMiddleware
-            ? TopologyComparison.After
-            : TopologyComparison.DoesNotMatter;
-
-    /// <inheritdoc />
-    public async ValueTask InvokeAsync(RequestInboundContext context, object request,
-        RequestHandlerDelegate next, CancellationToken cancellationToken)
+    public async ValueTask InvokeAsync(InvocationContext context, object request,
+        InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (!UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo))
+        if (context is not RequestInboundContext service || !UseHostTenantAttribute.IsRequired(service.ServiceMethodInfo))
         {
             await next(context, request, cancellationToken);
             return;

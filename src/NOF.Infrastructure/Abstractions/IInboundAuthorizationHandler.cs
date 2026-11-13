@@ -1,4 +1,5 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using System.Reflection;
 using System.Security.Claims;
@@ -12,16 +13,9 @@ public interface IInboundAuthorizationHandler
         CancellationToken cancellationToken);
 }
 
-public enum InboundAuthorizationKind
-{
-    Request,
-    Command,
-    Notification
-}
-
 public sealed class InboundAuthorizationContext
 {
-    public required InboundAuthorizationKind Kind { get; init; }
+    public required InvocationKind Kind { get; init; }
 
     public required ClaimsPrincipal User { get; init; }
 
@@ -37,7 +31,7 @@ public sealed class InboundAuthorizationContext
 
     public MethodInfo? ServiceMethodInfo { get; init; }
 
-    public Type? MessageType { get; init; }
+    public Type? InputType { get; init; }
 }
 
 /// <summary>Contains either an explicit authorization grant or a denial.</summary>

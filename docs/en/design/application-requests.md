@@ -110,7 +110,7 @@ Result no longer defines CreateEmptyResponse.
 
 Request/response outbound executor/delegate/context/middleware APIs and client generation
 remain removed. Remote callers maintain HttpClient integrations and DelegatingHandler;
-Command/Notification outbound delivery pipelines remain supported.
+Invocation extensions and message delivery now follow the [host-selected execution model](invocation-extensions.md).
 
 ## Breaking migration
 
@@ -131,3 +131,5 @@ tooling. Existing tags/releases remain immutable; rollback restores a coherent e
 package/caller set.
 
 [Declared expected failures](expected-failures.md) generate a closed result per operation; the declared method return describes success, while the Descriptor describes the actual execution response.
+
+[Unified invocation extensions](invocation-extensions.md) replace the three inbound middleware families; hosts choose the engine. Message delivery prepares fixed metadata without an outbound extension chain.

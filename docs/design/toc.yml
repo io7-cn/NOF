@@ -31,3 +31,7 @@
   href: ../en/design/configuration-rest.md
 - name: 配置节点 REST 实现
   href: ../zh-CN/design/configuration-rest.md
+- name: Invocation extensions
+  href: ../en/design/invocation-extensions.md
+- name: 统一调用扩展
+  href: ../zh-CN/design/invocation-extensions.md

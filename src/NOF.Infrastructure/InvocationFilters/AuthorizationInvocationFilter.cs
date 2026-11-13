@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics;
@@ -8,109 +9,56 @@ using System.Security.Claims;
 
 namespace NOF.Infrastructure;
 
-public sealed class AuthorizationInboundMiddleware(
+/// <summary>Applies shared authorization and adapter-specific tenant rejection.</summary>
+public sealed class AuthorizationInvocationFilter(
     IUserContext userContext,
     IInboundAuthorizationHandler authorizationHandler,
     IOptions<AuthenticationResourceServerOptions> options,
     IOptions<TenantAuthorizationOptions> tenantOptions) :
-    ICommandInboundMiddleware,
-    INotificationInboundMiddleware,
-    IRequestInboundMiddleware
+    IInvocationFilter
 {
     private const string WwwAuthenticateHeader = "WWW-Authenticate";
     private readonly AuthenticationResourceServerOptions _options = options.Value;
     private readonly TenantAuthorizationOptions _tenantOptions = tenantOptions.Value;
 
-    /// <summary>Creates authorization middleware with the default tenant trust policy.</summary>
-    public AuthorizationInboundMiddleware(IUserContext userContext,
+    /// <summary>Creates an authorization filter with the default tenant trust policy.</summary>
+    public AuthorizationInvocationFilter(IUserContext userContext,
         IInboundAuthorizationHandler authorizationHandler,
         IOptions<AuthenticationResourceServerOptions> options)
         : this(userContext, authorizationHandler, options, Microsoft.Extensions.Options.Options.Create(new TenantAuthorizationOptions()))
     {
     }
 
-    public TopologyComparison Compare(ICommandInboundMiddleware other)
-        => other is TenantInboundMiddleware ? TopologyComparison.After : TopologyComparison.DoesNotMatter;
-
-    public TopologyComparison Compare(INotificationInboundMiddleware other)
-        => other is TenantInboundMiddleware ? TopologyComparison.After : TopologyComparison.DoesNotMatter;
-
-    public TopologyComparison Compare(IRequestInboundMiddleware other)
-        => other is TenantInboundMiddleware ? TopologyComparison.After : TopologyComparison.DoesNotMatter;
-
-    public async ValueTask InvokeAsync(CommandInboundContext context, object message, CommandHandlerDelegate next, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        var authorizationResult = await authorizationHandler.AuthorizeAsync(
-            new InboundAuthorizationContext
+        var service = context as RequestInboundContext;
+        var result = await authorizationHandler.AuthorizeAsync(new InboundAuthorizationContext
+        {
+            Kind = context.Kind,
+            User = userContext.User,
+            ExecutionContext = context,
+            Input = input,
+            HandlerType = context.HandlerType,
+            HandlerMethodInfo = context.HandlerMethodInfo,
+            ServiceType = service?.ServiceType,
+            ServiceMethodInfo = service?.ServiceMethodInfo,
+            InputType = service is null ? context.InputType : null
+        }, cancellationToken).ConfigureAwait(false);
+        var denial = GetDenial(result) ?? (service is null ? null : ValidateRequestTenant(service));
+        if (denial is not null)
+        {
+            if (service is not null)
             {
-                Kind = InboundAuthorizationKind.Command,
-                User = userContext.User,
-                ExecutionContext = context,
-                Input = message,
-                HandlerType = context.HandlerType,
-                HandlerMethodInfo = context.MethodInfo,
-                MessageType = context.MessageType
-            },
-            cancellationToken).ConfigureAwait(false);
-        if (GetDenial(authorizationResult) is not null)
-        {
-            return;
-        }
-
-        await next(WithTrustedTenant(context), message, cancellationToken);
-    }
-
-    public async ValueTask InvokeAsync(NotificationInboundContext context, object message, NotificationHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        var authorizationResult = await authorizationHandler.AuthorizeAsync(
-            new InboundAuthorizationContext
+                ApplyFailure(service, denial);
+            }
+            else
             {
-                Kind = InboundAuthorizationKind.Notification,
-                User = userContext.User,
-                ExecutionContext = context,
-                Input = message,
-                HandlerType = context.HandlerType,
-                HandlerMethodInfo = context.MethodInfo,
-                MessageType = context.MessageType
-            },
-            cancellationToken).ConfigureAwait(false);
-        if (GetDenial(authorizationResult) is not null)
-        {
+                context.Reject(denial.Result);
+            }
             return;
         }
-
-        await next(WithTrustedTenant(context), message, cancellationToken);
-    }
-
-    public async ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
-    {
-        var authorizationResult = await authorizationHandler.AuthorizeAsync(
-            new InboundAuthorizationContext
-            {
-                Kind = InboundAuthorizationKind.Request,
-                User = userContext.User,
-                ExecutionContext = context,
-                Input = request,
-                HandlerType = context.HandlerType,
-                HandlerMethodInfo = context.HandlerMethodInfo,
-                ServiceType = context.ServiceType,
-                ServiceMethodInfo = context.ServiceMethodInfo,
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        if (GetDenial(authorizationResult) is { } denied)
-        {
-            ApplyFailure(context, denied);
-            return;
-        }
-
-        if (ValidateRequestTenant(context) is { } tenantFailure)
-        {
-            ApplyFailure(context, tenantFailure);
-            return;
-        }
-
-        await next(WithTrustedTenant(context), request, cancellationToken);
+        await next(WithTrustedTenant(context), input, cancellationToken);
     }
 
     private static InboundAuthorizationResult.Denied? GetDenial(InboundAuthorizationResult result)

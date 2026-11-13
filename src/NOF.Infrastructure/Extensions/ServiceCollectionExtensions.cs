@@ -12,41 +12,6 @@ public static partial class NOFInfrastructureExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     extension(IServiceCollection services)
     {
-        public IServiceCollection AddCommandInboundMiddleware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TMiddleware>()
-            where TMiddleware : class, ICommandInboundMiddleware
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Scoped<ICommandInboundMiddleware, TMiddleware>());
-            return services;
-        }
-
-        public IServiceCollection AddCommandOutboundMiddleware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TMiddleware>()
-            where TMiddleware : class, ICommandOutboundMiddleware
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Scoped<ICommandOutboundMiddleware, TMiddleware>());
-            return services;
-        }
-
-        public IServiceCollection AddNotificationInboundMiddleware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TMiddleware>()
-            where TMiddleware : class, INotificationInboundMiddleware
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Scoped<INotificationInboundMiddleware, TMiddleware>());
-            return services;
-        }
-
-        public IServiceCollection AddNotificationOutboundMiddleware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TMiddleware>()
-            where TMiddleware : class, INotificationOutboundMiddleware
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Scoped<INotificationOutboundMiddleware, TMiddleware>());
-            return services;
-        }
-
-        public IServiceCollection AddRequestInboundMiddleware<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TMiddleware>()
-            where TMiddleware : class, IRequestInboundMiddleware
-        {
-            services.TryAddEnumerable(ServiceDescriptor.Scoped<IRequestInboundMiddleware, TMiddleware>());
-            return services;
-        }
-
         public IServiceCollection AddAuthenticationResourceServer(Action<AuthenticationResourceServerOptions> configureOptions)
         {
             ArgumentNullException.ThrowIfNull(configureOptions);
@@ -59,9 +24,7 @@ public static partial class NOFInfrastructureExtensions
             services.TryAddScoped<IAuthorizationServerMetadataService>(static serviceProvider =>
                 serviceProvider.GetRequiredService<HttpAuthorizationServerService>());
             services.ReplaceOrAddSingleton<ResourceServerJwksCacheService, ResourceServerJwksCacheService>();
-            services.AddRequestInboundMiddleware<AuthenticationResourceServerInboundMiddleware>();
-            services.AddCommandInboundMiddleware<AuthenticationResourceServerInboundMiddleware>();
-            services.AddNotificationInboundMiddleware<AuthenticationResourceServerInboundMiddleware>();
+            services.AddInvocationFilter<AuthenticationInvocationFilter>(-200);
             return services;
         }
 

@@ -123,9 +123,9 @@ await _commandSender.DeferSendAsync(new SendEmailCommand(order.Email, "Created",
 await _dbContext.SaveChangesAsync(cancellationToken);
 ```
 
-Pass the handler's explicit `Context`. Deferred dispatch runs the outbound middleware and stores
-its resulting headers and trace parent in the outbox; arbitrary context items and the authenticated
-principal are not automatically serialized. Tenant-header middleware uses the explicit context's
+Pass the handler's explicit `Context`. Deferred dispatch prepares message identity, tenant and trace metadata and stores
+these headers and trace parent in the outbox; arbitrary context items and the authenticated
+principal are not automatically serialized. Message delivery uses the explicit context's
 tenant item, falling back to `Context.Current.TenantId`. Pass the authorized handler context,
 and validate tenant access at public boundaries; passing `Context` alone does not establish tenant trust. Identity
 propagation requires an explicit outbound authentication policy. See the
@@ -247,3 +247,7 @@ Apache-2.0
 Generated operations inherit Contract-owned operation bases. Handler overrides use
 Task<Result> and new NotFound(...) with the original Contract case identity.
 No Create<Name> factories or custom expected-outcome analyzer are generated.
+
+### Invocation extensions
+
+`IInvocationFilter` is the unified extension contract for service operations, commands and notifications. Registration through `AddInvocationFilter<T>()` declares an extension; the host chooses `IInvocationPipeline` to execute it. The optional in-memory default lives in Infrastructure. See [host-selected execution](../../docs/en/design/invocation-extensions.md).

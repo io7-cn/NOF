@@ -25,7 +25,7 @@ var builder = NOFWebApplicationBuilder.Create(args);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
-builder.Services.AddRequestInboundMiddleware<ValidateReadOrder>();
+builder.Services.AddInvocationFilter<ValidateReadOrder>();
 await using var app = await builder.BuildAsync();
 app.MapOpenApi();
 app.Urls.Add("http://127.0.0.1:0");
@@ -208,17 +208,15 @@ public sealed class FindOrder : OrderServer.Find
         => Task.FromResult<OrderDto?>(null);
 }
 
-public sealed class ValidateReadOrder : IRequestInboundMiddleware
+public sealed class ValidateReadOrder : IInvocationFilter
 {
-    public TopologyComparison Compare(IRequestInboundMiddleware other) => TopologyComparison.DoesNotMatter;
-
-    public ValueTask InvokeAsync(RequestInboundContext context, object request, RequestHandlerDelegate next, CancellationToken cancellationToken)
+    public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (context.ServiceType == typeof(IOrderService)
-            && context.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
+        if (context is RequestInboundContext service && service.ServiceType == typeof(IOrderService)
+            && service.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
             && request is ReadOrderRequest { Page: < 0 })
         {
-            context.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "400";
+            service.ResponseHeaders[NOFInfrastructureConstants.Transport.Headers.HttpStatusCode] = "400";
             context.Reject(new Failure("order.page", "Page must be nonnegative"));
             return ValueTask.CompletedTask;
         }

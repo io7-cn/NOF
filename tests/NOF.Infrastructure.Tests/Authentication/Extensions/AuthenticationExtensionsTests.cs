@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
@@ -1776,21 +1777,11 @@ public sealed class AuthenticationExtensionsTests
         });
 
         await using var host = await builder.BuildTestHostAsync();
-        Assert.Contains(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(IRequestInboundMiddleware) &&
-            descriptor.ImplementationType == typeof(AuthenticationResourceServerInboundMiddleware));
-        Assert.Contains(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(ICommandInboundMiddleware) &&
-            descriptor.ImplementationType == typeof(AuthenticationResourceServerInboundMiddleware));
-        Assert.Contains(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(INotificationInboundMiddleware) &&
-            descriptor.ImplementationType == typeof(AuthenticationResourceServerInboundMiddleware));
-        Assert.DoesNotContain(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(ICommandOutboundMiddleware) &&
-            descriptor.ImplementationType?.Name.Contains("JwtTokenPropagationOutboundMiddleware", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(builder.Services, descriptor =>
-            descriptor.ServiceType == typeof(INotificationOutboundMiddleware) &&
-            descriptor.ImplementationType?.Name.Contains("JwtTokenPropagationOutboundMiddleware", StringComparison.Ordinal) == true);
+        Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(InvocationFilterRegistration)
+            && descriptor.ImplementationInstance is InvocationFilterRegistration registration
+            && registration.FilterType == typeof(AuthenticationInvocationFilter));
+        Assert.Null(typeof(MessageDelivery).Assembly.GetType("NOF.Infrastructure.ICommandOutboundMiddleware"));
+        Assert.Null(typeof(MessageDelivery).Assembly.GetType("NOF.Infrastructure.INotificationOutboundMiddleware"));
     }
 
     [Fact]

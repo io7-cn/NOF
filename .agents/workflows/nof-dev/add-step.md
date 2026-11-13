@@ -49,7 +49,7 @@ Use `TryAddInitializationStep` when only one implementation-type registration sh
 
 `BuildNOFAsync(...)` builds the host and then calls `InitializeNOFAsync()`. That method resolves all registered initialization steps, orders them with `DependencyGraph<IApplicationInitializationStep>`, and executes them sequentially. A dependency cycle throws `InvalidOperationException`.
 
-The same `ITopologizable<T>` / `TopologyComparison` model orders request/message middleware and endpoint modules, so follow the same comparison semantics when extending those pipelines.
+Initialization steps and endpoint modules retain topology ordering. Invocation filters instead use host-selected execution; the default in-memory engine uses AddInvocationFilter<T>(order). Do not reintroduce middleware Compare methods. See docs/en/design/invocation-extensions.md.
 
 ## 4. Test
 

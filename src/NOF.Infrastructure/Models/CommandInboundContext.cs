@@ -1,32 +1,20 @@
-using NOF.Contract;
-using System.ComponentModel;
+using NOF.Application;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 
 namespace NOF.Infrastructure;
 
-[EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class CommandInboundContext : Context
+/// <summary>Metadata for an incoming command delivery.</summary>
+public sealed class CommandInboundContext : InvocationContext
 {
-    public required MethodInfo MethodInfo { get; init; }
+    /// <inheritdoc />
+    public override InvocationKind Kind => InvocationKind.Command;
 
-    public required Type HandlerType { get; init; }
-
-    public required Type MessageType { get; init; }
+    /// <summary>Creates a delivery context.</summary>
+    public CommandInboundContext() { }
 
     [SetsRequiredMembers]
-    private CommandInboundContext(IReadOnlyDictionary<object, object?> items, CommandInboundContext source)
-        : base(items)
-    {
-        MethodInfo = source.MethodInfo;
-        HandlerType = source.HandlerType;
-        MessageType = source.MessageType;
-    }
+    private CommandInboundContext(IReadOnlyDictionary<object, object?> items, CommandInboundContext source) : base(items, source) { }
 
-    public CommandInboundContext()
-    {
-    }
-
-    protected override Context Clone(IReadOnlyDictionary<object, object?> items)
-        => new CommandInboundContext(items, this);
+    /// <inheritdoc />
+    protected override NOF.Contract.Context Clone(IReadOnlyDictionary<object, object?> items) => new CommandInboundContext(items, this);
 }
