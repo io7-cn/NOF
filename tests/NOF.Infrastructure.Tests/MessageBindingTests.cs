@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using Xunit;
@@ -13,7 +14,7 @@ public sealed class MessageBindingTests
         var registry = new MessageBindingRegistry();
         var bindings = new MessageBindingsBuilder(registry);
         var reference = new ServiceOperationReference<Message>(typeof(IService), nameof(IService.MayFail));
-        Assert.False(reference.CanSubmit);
+        Assert.False(ServiceOperationInspector.CanSubmit(reference));
         Assert.Throws<InvalidOperationException>(() => bindings.RouteToQueue(reference, "invalid.v1"));
         // Even a manually forged success-only descriptor must not bypass the Contract declaration.
         var descriptor = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));

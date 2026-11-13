@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.EntityFrameworkCore;
+using NOF.Abstraction;
 using NOF.CodeFixes;
 using NOF.Contract;
 using NOF.Domain;

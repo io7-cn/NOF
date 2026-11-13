@@ -42,7 +42,7 @@ Return the successful value or a declared branch directly. Unrelated errors cann
 
 ## References and execution descriptors
 
-Contract generates `INodeServiceOperations.Delete` as `ServiceOperationReference<DeleteNodeRequest>`. It contains identity, input and method metadata, and promises no generated response type. It needs no Application reference or partial interface.
+Contract generates `INodeServiceOperations.Delete` as `ServiceOperationReference<DeleteNodeRequest>`. It contains identity and input type, and promises no generated response type. It needs no Application reference or partial interface.
 
 Application generates `NodeService.Delete.Descriptor` as `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`. HTTP invocation, local invocation and operation mappings use this complete response type. NodeService.Delete.InvokeAsync returns that same Result. The typed descriptor's Reference property exposes its input-only producer reference; both forms share the same stable Id, not the same object instance.
 
@@ -69,3 +69,5 @@ Keep FailureCaseAttribute on Contract methods and remove partial from service in
 Use Contract operation references for producer routing and Application descriptors for HTTP/local execution and consumer bindings. Code that previously passed an Application descriptor to Send/RouteToQueue can use its Reference property. Do not treat the method's successful return type as the complete execution output.
 
 Keep JSON branch names/codes and custom data schemas stable when migrating. The CLR type ownership changes; the optional existing JSON discriminator format does not. Upgrade application, endpoints, JSON contexts and in-process callers together. Register source-generated JSON metadata from the new owning Application assembly when used. Both monolithic generator orders and a separately compiled metadata-only Contract are covered by tests.
+
+[Current Contract/Application/Abstraction boundaries](contract-boundaries.md).

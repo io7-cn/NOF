@@ -170,7 +170,7 @@ public sealed class TenantRequestAuthorizationTests
         {
             var result = await defaultHandler.AuthorizeAsync(context, cancellationToken);
             if (result is InboundAuthorizationResult.Denied || !context.User.IsAuthenticated
-                || UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo))
+                || ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo))
             {
                 return result;
             }

@@ -15,7 +15,7 @@ public sealed class HostTenantInvocationFilter : IInvocationFilter
     public async ValueTask InvokeAsync(InvocationContext context, object request,
         InvocationDelegate next, CancellationToken cancellationToken)
     {
-        if (!UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo))
+        if (!ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo))
         {
             await next(context, request, cancellationToken);
             return;

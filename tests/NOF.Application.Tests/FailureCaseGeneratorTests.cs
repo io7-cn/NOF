@@ -15,6 +15,7 @@ public sealed class FailureCaseGeneratorTests
     private const string Contract = """
         using NOF.Contract;
         using System.Text.Json;
+        using NOF.Application;
         public sealed record Query(long Id);
         public sealed record ConflictDetails(long NodeId);
         public interface IService : IApplicationService
@@ -55,8 +56,8 @@ public sealed class FailureCaseGeneratorTests
             }
             """, out _);
         Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-        Assert.Equal(typeof(IApplicationService).Assembly, typeof(ServiceOperation).Assembly);
-        Assert.DoesNotContain(typeof(ServiceOperation).Assembly.GetReferencedAssemblies(), assembly => assembly.Name == "NOF.Application");
+        Assert.Equal(typeof(ApplicationService).Assembly, typeof(ServiceOperation).Assembly);
+        Assert.DoesNotContain(typeof(IApplicationService).Assembly.GetReferencedAssemblies(), assembly => assembly.Name == "NOF.Application");
     }
 
     [Theory]
@@ -70,6 +71,7 @@ public sealed class FailureCaseGeneratorTests
     {
         var source = $$"""
             using NOF.Contract;
+            using NOF.Application;
             public record Query;
             public interface IService : IApplicationService
             {
@@ -141,6 +143,7 @@ public sealed class FailureCaseGeneratorTests
         var output = Generate("""
             using NOF.Contract;
             using System.Text.Json;
+            using NOF.Application;
             public sealed record Query;
             public readonly record struct Details(int Count);
             public interface IService : IApplicationService

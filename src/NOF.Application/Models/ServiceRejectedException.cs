@@ -1,6 +1,6 @@
 using NOF.Abstraction;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Reports a rejected service invocation when its business response has no failure case.</summary>
 public sealed class ServiceRejectedException : Exception

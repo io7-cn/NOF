@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Identifies an execution boundary without assigning a message programming model.</summary>
 public enum InvocationOrigin

@@ -1,5 +1,3 @@
-using NOF.Contract;
-
 namespace NOF.Abstraction;
 
 /// <summary>

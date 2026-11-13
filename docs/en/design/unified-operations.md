@@ -79,7 +79,7 @@ This installs no local consumer. Producer and receiver must agree on the stable 
 
 `IOperationExecutor` executes a selected descriptor in the existing host scope and waits for completion. Local `IOperationInvoker` creates an isolated scope and copies verified identity; HTTP uses the request scope; Inbox uses its existing transaction scope so handler changes, receipt progress and newly staged messages commit together. No handler instance is constructed before invocation filters run.
 
-Contract-owned `InvocationContext` composes semantic `Context` and supplies Operation, InvocationId, Origin (Local/Http/Message), implementation policy metadata and ServiceExecution. Filters may replace semantic context through WithContext/WithTenantId; views share the execution outcome. `Context.Current` contains the semantic Context, not the InvocationContext. Pass `invocation.Context` to nested semantic APIs. Identity has one source, scoped IUserContext.
+Application-owned `InvocationContext` composes semantic `Context` and supplies Operation, InvocationId, Origin (Local/Http/Message), implementation policy metadata and ServiceExecution. Filters may replace semantic context through WithContext/WithTenantId; views share the execution outcome. `Context.Current` contains the semantic Context, not the InvocationContext. Pass `invocation.Context` to nested semantic APIs. Identity has one source, scoped IUserContext.
 
 All origins run contract and implementation authorization policies. Message authentication does not deserialize producer claims or access tokens. Hosts establish their consumer identity through their selected pipeline/filter before authorization; an anonymous consumer cannot invoke a protected operation. Broker ingress and tenant headers must be restricted by the host's trust boundary. Strict tenant options apply to all operation origins.
 
@@ -120,3 +120,5 @@ The first version accepts private readonly List<T>/HashSet<T> fields in top-leve
 The EF Core adapter applies field access only to relationships explicitly mapped as OwnsMany, after application model configuration. It validates the association and rejects conflicting explicit access modes/field mappings. The attribute creates no relationship. HasMany, skip navigations and NHibernate collection replacement are outside this automatic convention. The sample ConfigNode uses the generated view and existing strong-typed OwnsMany mapping. The unsafe general Mut extension is removed; use aggregate methods instead.
 
 [Application-owned failure results and descriptor migration](expected-failures.md).
+
+[Current Contract/Application/Abstraction boundaries](contract-boundaries.md).

@@ -99,6 +99,8 @@ If a type is missing JSON metadata, NOF throws an `InvalidOperationException` th
 
 Apache-2.0
 
-`Failure(code, message)` is the shared failure value for domain rules and Result
-unions. Its Code and Message are preserved across layers without conversion;
-Domain supplies the optional Throw extension and domain exception types.
+`Failure(code, message)` is a shared value for policy rejection and protocol adapters.
+Predictable business failures use Contract declarations and Application-generated cases;
+Domain exceptions and the former Throw extension are removed.
+
+Semantic Context is exposed directly as NOF.Abstraction.Context. The former Contract namespace/type-forwarder is removed; execution models live in Application. See [boundaries](../../docs/en/design/contract-boundaries.md).

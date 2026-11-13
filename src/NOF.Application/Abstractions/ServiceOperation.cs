@@ -1,4 +1,4 @@
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Provides the runtime invocation boundary for a generated application service operation.</summary>
 public abstract class ServiceOperation

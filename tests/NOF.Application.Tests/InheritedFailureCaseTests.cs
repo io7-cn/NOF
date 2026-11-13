@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Application.SourceGenerator;
 using NOF.Contract;
@@ -22,6 +23,7 @@ public sealed class InheritedFailureCaseTests
             using System.Linq;
             using System.Threading;
             using System.Threading.Tasks;
+            using NOF.Abstraction;
             public sealed record Query(int Mode);
             public sealed record Details(int Count);
             public interface IService : IApplicationService

@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace NOF.Contract;
 
 /// <summary>
@@ -18,13 +16,4 @@ public sealed class UseHostTenantAttribute : MetadataAttribute
     {
     }
 
-    /// <summary>
-    /// Checks whether a contract method requests host-tenant execution, including equivalent metadata attributes.
-    /// Client tenant selectors can use this to recognize host operations.
-    /// </summary>
-    public static bool IsRequired(MemberInfo? serviceMethodInfo)
-        => serviceMethodInfo?.GetCustomAttributes<MetadataAttribute>(inherit: true)
-            .Any(static attribute => string.Equals(attribute.Key, MetadataKey, StringComparison.OrdinalIgnoreCase)
-                && bool.TryParse(attribute.Value, out var enabled)
-                && enabled) == true;
 }

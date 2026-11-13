@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting;
 using NOF.Infrastructure.EntityFrameworkCore;

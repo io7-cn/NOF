@@ -13,7 +13,6 @@ public class EventHandlerRegistrationGeneratorTests
     {
         const string source = """
             using NOF.Abstraction;
-            using NOF.Contract;
             namespace App
             {
                 public record MyEvent;

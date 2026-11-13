@@ -196,14 +196,12 @@ The host selects an `IObjectStorageRider`; application handlers continue to depe
 
 Apache-2.0
 
-[FailureCase declarations](../../docs/en/design/expected-failures.md) expand operation return types into Contract-owned closed outcomes; registration, descriptors and local invocation all use that generated response type.
-
-Generated operations inherit Contract-owned operation bases. Handler overrides use
-Task<Result> and new NotFound(...) with the original Contract case identity.
-No Create<Name> factories or custom expected-outcome analyzer are generated.
+[FailureCase declarations](../../docs/en/design/expected-failures.md) stay on Contract methods. Application generates closed outcomes inside each operation; registration, descriptors and local invocation use that generated response type. Handler overrides use `Task<Result>` and `new NotFound(...)`. No case factories or custom expected-outcome analyzer are generated.
 
 ### Invocation extensions
 
 `IInvocationFilter` is the unified extension contract for service operations, commands and notifications. Registration through `AddInvocationFilter<T>()` declares an extension; the host chooses `IInvocationPipeline` to execute it. The optional in-memory default lives in Infrastructure. See [host-selected execution](../../docs/en/design/invocation-extensions.md).
 
 FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Contract references contain identity/input only; execution descriptors contain the complete output. See [expected failures](../../docs/en/design/expected-failures.md).
+
+Execution models, descriptors and policy interpretation belong to this package. Contract holds declarations and input-only references; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).

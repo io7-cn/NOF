@@ -58,7 +58,7 @@ public sealed class AuthorizationInvocationFilter(
 
     private InboundAuthorizationResult.Denied? ValidateRequestTenant(InvocationContext context)
     {
-        var isHostOperation = UseHostTenantAttribute.IsRequired(context.ServiceMethodInfo);
+        var isHostOperation = ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo);
         var isAuthenticated = userContext.User.IsAuthenticated;
         var trustedTenant = isAuthenticated ? userContext.User.TenantId : null;
         var normalizedTenant = TenantId.Normalize(trustedTenant);

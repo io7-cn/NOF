@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 
 namespace NOF.Infrastructure;
@@ -19,7 +20,7 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentException.ThrowIfNullOrWhiteSpace(queue);
-        if (!operation.CanSubmit)
+        if (!ServiceOperationInspector.CanSubmit(operation))
         {
             throw new InvalidOperationException($"Operation '{operation.Id}' declares a response or expected failures and cannot be submitted as fire-and-forget work.");
         }
@@ -79,7 +80,7 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
         {
             var bindings = Freeze().ToArray();
             if (_queues.Values.Any(queue => _topics.Values.Contains(queue.Route, StringComparer.Ordinal))
-                || bindings.Any(binding => !binding.Operation.CanSubmit || binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
+                || bindings.Any(binding => !ServiceOperationInspector.CanSubmit(binding.Operation) || binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
                 || bindings.GroupBy(binding => binding.ConsumerId, StringComparer.Ordinal).Any(group => group.Count() != 1)
                 || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Count() != 1)
                 || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Operation.Id, StringComparer.Ordinal).Any(group => group.Count() != 1))
@@ -133,7 +134,7 @@ public sealed class MessageBindingTarget<T>(MessageBindingRegistry registry, str
     public void To(ServiceOperationDescriptor<T, Empty> operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        if (!operation.CanSubmit)
+        if (!ServiceOperationInspector.CanSubmit(operation))
         {
             throw new InvalidOperationException($"Operation '{operation.Id}' declares a response or expected failures and cannot discard its output.");
         }

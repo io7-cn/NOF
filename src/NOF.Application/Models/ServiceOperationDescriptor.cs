@@ -1,7 +1,8 @@
+using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Identifies one contract operation independently of its implementation and transport.</summary>
 public abstract class ServiceOperationDescriptor : ServiceOperationReference
@@ -12,7 +13,10 @@ public abstract class ServiceOperationDescriptor : ServiceOperationReference
         string operationName, bool allowsNullResponse) : base(serviceType, operationName)
     {
         AllowsNullResponse = allowsNullResponse;
+        MethodInfo = ServiceOperationInspector.ResolveMethod(this);
     }
+    /// <summary>Gets resolved Contract method and policy metadata.</summary>
+    public System.Reflection.MethodInfo MethodInfo { get; }
     /// <summary>Gets the complete business output type, including generated failure branches.</summary>
     public abstract Type ResponseType { get; }
     /// <summary>Gets whether execution allows a null output.</summary>
@@ -28,6 +32,7 @@ public sealed class ServiceOperationDescriptor<TRequest, TResponse> : ServiceOpe
         string operationName, bool allowsNullResponse = false) : base(serviceType, operationName, allowsNullResponse)
     {
         Reference = new(serviceType, operationName);
+        ServiceOperationInspector.ValidateReference(Reference);
     }
     /// <summary>Gets the input-only reference for producer routing.</summary>
     public ServiceOperationReference<TRequest> Reference { get; }

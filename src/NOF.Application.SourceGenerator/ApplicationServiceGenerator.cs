@@ -107,7 +107,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             var failureDeclarations = ExpectedFailureModel.Declarations(method);
-            var operationBase = $"global::NOF.Contract.ServiceOperation<{requestTypeName}, {responseType}>";
+            var operationBase = $"global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>";
             sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
             sb.AppendLine("    {");
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -121,10 +121,10 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 FailureCaseEmitter.EmitMembers(sb, method, ExpectedFailureModel.OperationTypeName(method, classSymbol));
             }
             sb.AppendLine("        /// <summary>Gets this application's descriptor with its complete response type.</summary>");
-            sb.AppendLine($"        public static global::NOF.Contract.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
+            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<{responseType}> InvokeAsync(");
-            sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Contract.Context context,");
+            sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Abstraction.Context context,");
             sb.AppendLine("            global::System.Threading.CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);");

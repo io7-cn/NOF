@@ -2,7 +2,7 @@ using NOF.Abstraction;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Carries an in-process completion or rejection between generated service invocation and adapters.</summary>
 /// <remarks>This runtime integration type is never a business response or a wire envelope.</remarks>

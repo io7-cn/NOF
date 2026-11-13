@@ -4,7 +4,7 @@
 
 NOF.Application 为服务操作、命令和通知定义一个扩展点：
 `IInvocationFilter.InvokeAsync(InvocationContext, object, InvocationDelegate, CancellationToken)`。
-Contract 中的 InvocationContext 组合语义 Context，提供操作描述符、入口来源、输入与 Handler 元数据以及执行结果，不依赖 HTTP。
+Application 中的 InvocationContext 组合语义 Context，提供操作描述符、入口来源、输入与 Handler 元数据以及执行结果，不依赖 HTTP。
 预期业务结果仍使用操作专属 Union，策略拒绝与业务返回分开。
 
 注册扩展只声明扩展，不会选择执行器，也不保证扩展自动生效。宿主通过
@@ -68,3 +68,5 @@ HTTP 路由、绑定、原生中间件、端点过滤器、ProblemDetails 和异
 应用、基础设施和宿主包须协调升级。
 
 [当前统一操作与消息绑定 API](unified-operations.md)。
+
+[当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。

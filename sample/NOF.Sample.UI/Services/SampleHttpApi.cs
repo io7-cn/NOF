@@ -51,7 +51,8 @@ public abstract class SampleHttpApi(HttpClient httpClient)
     {
         if (!response.IsSuccessStatusCode)
         {
-            throw new ServiceRejectedException(await ReadProblemAsync(response, ct));
+            var failure = await ReadProblemAsync(response, ct);
+            throw new HttpRequestException(failure.Message, null, response.StatusCode);
         }
         return await response.Content.ReadFromJsonAsync(JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), ct)
             ?? throw new InvalidOperationException("The resource response was empty.");

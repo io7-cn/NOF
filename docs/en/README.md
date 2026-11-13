@@ -58,3 +58,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Persistence boundaries](design/persistence-boundaries.md)
 
 - [Unified operations and collections](design/unified-operations.md)
+
+- [Contract declaration and execution boundaries](design/contract-boundaries.md)

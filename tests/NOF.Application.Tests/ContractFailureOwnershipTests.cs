@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
 using NOF.Application.SourceGenerator;
 using NOF.Contract;
 using Xunit;
@@ -24,6 +25,10 @@ public sealed class ContractFailureOwnershipTests
                 Empty Run(Query request);
             }
             """, true, typeof(IApplicationService));
+        // Compile Contract independently, even if other tests loaded runtime assemblies first.
+        contract = contract.RemoveReferences(contract.References.Where(reference =>
+            Path.GetFileNameWithoutExtension(reference.Display) is { } name
+            && name.StartsWith("NOF.", StringComparison.Ordinal) && name != "NOF.Contract"));
         using var image = new MemoryStream();
         var contractEmit = contract.Emit(image);
         Assert.True(contractEmit.Success, string.Join("\n", contractEmit.Diagnostics));

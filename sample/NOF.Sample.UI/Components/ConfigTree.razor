@@ -50,7 +50,7 @@
     {
         try
         {
-            var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Contract.Context.Empty);
+            var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Abstraction.Context.Empty);
             _treeData = response.Nodes.Select(node => new TreeNodeData
             {
                 Key = node.Id.ToString(),
@@ -60,10 +60,10 @@
                 Children = null
             }).ToList();
         }
-        catch (ServiceRejectedException rejected)
+        catch (HttpRequestException rejected)
         {
             _treeData = [];
-            Message.Error(rejected.Failure.Message);
+            Message.Error(rejected.Message);
         }
     }
 
@@ -73,7 +73,7 @@
         var result = await NOFService.GetConfigNodeChildrenAsync(new GetConfigNodeChildrenRequest
         {
             Id = nodeId
-        }, NOF.Contract.Context.Empty);
+        }, NOF.Abstraction.Context.Empty);
         var children = Message.UnwrapWithMessage(result);
 
         if (children == null || children.ChildrenIds.Count == 0)
@@ -88,7 +88,7 @@
             var childResult = await NOFService.GetConfigNodeByIdAsync(new GetConfigNodeByIdRequest
             {
                 Id = childId
-            }, NOF.Contract.Context.Empty);
+            }, NOF.Abstraction.Context.Empty);
             var childNode = Message.UnwrapWithMessage(childResult)?.Node;
             if (childNode != null)
             {
@@ -152,7 +152,7 @@
             var getNodeResult = await NOFService.GetConfigNodeByIdAsync(new GetConfigNodeByIdRequest
             {
                 Id = dropNodeId
-            }, NOF.Contract.Context.Empty);
+            }, NOF.Abstraction.Context.Empty);
             var targetNode = Message.UnwrapWithMessage(getNodeResult)?.Node;
             newParentId = targetNode?.ParentId;
         }
@@ -162,7 +162,7 @@
         {
             NodeId = dragNodeId,
             NewParentId = newParentId
-        }, NOF.Contract.Context.Empty);
+        }, NOF.Abstraction.Context.Empty);
 
         if (result is NOF.Contract.Empty)
         {

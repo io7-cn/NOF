@@ -1,10 +1,11 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using System.Net;
 using System.Text.Json;
 using Xunit;
 
-namespace NOF.Contract.Tests;
+namespace NOF.Application.Tests;
 
 public class ServiceExecutionTests
 {

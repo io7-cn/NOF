@@ -75,6 +75,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
         const string source = """
             using NOF.Application;
             using NOF.Contract;
+            using NOF.Abstraction;
 
             namespace App
             {
@@ -128,6 +129,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
         const string source = """
             using NOF.Application;
             using NOF.Contract;
+            using NOF.Abstraction;
 
             namespace App;
 

@@ -1,6 +1,6 @@
 using NOF.Abstraction;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Explains a policy rejection independently of transport response codes.</summary>
 public enum RejectionReason

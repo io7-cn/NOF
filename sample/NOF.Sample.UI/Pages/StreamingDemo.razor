@@ -107,7 +107,7 @@
         {
             var result = await NOFService.WatchSampleStreamAsync(
                 _request,
-                NOF.Contract.Context.Empty,
+                NOF.Abstraction.Context.Empty,
                 _streamCancellationTokenSource.Token);
             if (result is not IAsyncEnumerable<SampleStreamEvent> success)
             {
