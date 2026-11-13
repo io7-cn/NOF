@@ -45,36 +45,18 @@ builder.Services.AddMessageBindings(bindings =>
 
 Queue/Subscription.To 只接受 ServiceOperationDescriptor<T, Empty>，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
 
-## 调用与投递
+## 调用与可靠意图
+
+InvokeAsync 等待应用操作完成。即时远程调用使用具体客户端；事务性工作通过 IOutbox.EnqueueAsync(message, context, options, ct) 暂存，再保存同一 IUnitOfWork，返回的是意图 ID，不是远程业务结果。基础设施注册稳定消息标识/版本与 IOutboxHandler<T>，Outbox 不认识队列或服务操作。
 
 ```csharp
-// 等待业务完成，创建隔离的本地执行作用域。
 await MailService.Send.InvokeAsync(services, mail, context, ct);
-
-// IMessageDispatcher：等待接受投递，不代表业务已经执行。
-await messages.SendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
-await messages.PublishAsync(new OrderCreated(orderId), context, ct);
-
-// 暂存到当前事务，随后与业务修改一同提交。
-await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
-await messages.DeferPublishAsync(new OrderCreated(orderId), context, ct);
+await memoryClient.SendAsync("mail.send.v1", mail, context, ct);
+await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
 
-有序版本依次接收操作描述符（仅发送）、消息、orderKey、Context、可选 completesOrderKey 和取消令牌，原有连续序号约束不变。可靠接受不等于外部业务副作用恰好执行一次。
-
-没有本地消费者的生产者只配置出站路由：
-
-```csharp
-services.AddMessageBindings(bindings =>
-{
-    bindings.RouteToQueue(new ServiceOperationReference<SendMail>(
-        typeof(IMailService), nameof(IMailService.Send)), "mail.send.v1");
-    bindings.Topic<OrderCreated>("orders.created.v1");
-});
-```
-
-这些声明不会启动本地消费者。收发双方约定稳定路由和载荷格式，不再持久化 CLR 消息类型名作为发布路由。注册表属于 DI，首次使用后冻结，并拒绝身份冲突。
+消息绑定只负责入站，保留 Queue/Subscription.To，移除生产者 RouteToQueue/Topic 声明。同一操作可以接多个明确队列；具体客户端显式指定物理目标。注册、强类型适配器、重试与部署迁移见[通用事务性发件箱](transactional-outbox.md)。
 
 ## 一个执行边界
 
@@ -92,11 +74,9 @@ HTTP 状态码和认证挑战头由 HttpRequestInboundAdapter 处理；Rejection
 
 TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests 和 RejectMismatchedTenantForRequests 分别更名为 RequireAuthenticatedTenant 和 RejectMismatchedTenant，策略现在适用于所有操作来源。
 
-用 IMessageDispatcher 替换 ICommandSender/INotificationPublisher；将消息 Handler 改成返回 Empty 的服务操作，显式声明队列/订阅，并向 Send/DeferSend 传入操作描述符。用 InvocationContext＋Origin 替换三种入站上下文和 InvocationKind。复用作用域调用 IOperationExecutor，需要隔离作用域时调用 IOperationInvoker。删除的 API 不保留兼容适配器。
+旧 Command/Notification Handler 改成返回 Empty 的操作与明确入站 Queue/Subscription 绑定，旧上下文子类改用 InvocationContext＋Origin。即时调用使用具体客户端；延迟 API 改为 IOutbox.EnqueueAsync 加选项。旧分派器与出站路由 API 不保留兼容层。
 
-升级前必须处理旧路由记录。推荐停止生产者，由旧版本排空 Outbox、代理队列和 Inbox，确认没有待处理、占用中或仍需恢复的失败记录，再部署收发双方的新绑定并恢复生产。此路径不需要数据库结构迁移。
-
-无法排空时，先停止全部工作器，编写应用自己的明确映射迁移：Outbox.DispatchRoutes 中的旧消息类型字符串改为稳定队列/主题；Inbox.Route 中的旧 Handler/队列名改为 queue:<queue> 或 subscription:<subscription>；同时迁移每个租户库的 NOFInboxOrderState.Route。包括保留的已处理记录以维持去重，处理键冲突并保留顺序进度，同时迁移或重放消息代理积压。备份并验证映射后再启动。NOF 不猜测旧 Handler 名的对应关系，也不会静默丢弃无法解析的收件记录。
+通用 Outbox 必须在排空旧记录后执行结构迁移，按[发件箱迁移步骤](transactional-outbox.md)部署。此前 Inbox/Broker 路由名变更仍需排空，或为所有租户显式映射旧记录、订阅与顺序状态，备份并保留去重/顺序进度，不猜测未解析路由。
 
 ## 聚合拥有的集合
 

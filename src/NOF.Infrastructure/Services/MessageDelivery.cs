@@ -12,7 +12,8 @@ public sealed class MessageDelivery(IOptions<DeploymentOptions> deployment)
 {
     /// <summary>Creates one message identity, tenant and trace envelope for sending or staging an outbox message.</summary>
     public async ValueTask ExecuteAsync(object message, Context context,
-        Func<Dictionary<string, string?>, CancellationToken, ValueTask> dispatch, CancellationToken cancellationToken)
+        Func<Dictionary<string, string?>, CancellationToken, ValueTask> dispatch, CancellationToken cancellationToken,
+        OutboxDeliveryContext? deliveryContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var activity = NOFHostingConstants.Outbound.Source.StartActivity($"Outbound: {message.GetType().DisplayName}", ActivityKind.Producer);
@@ -21,10 +22,19 @@ public sealed class MessageDelivery(IOptions<DeploymentOptions> deployment)
             ? supplied : Context.Current.TenantId;
         var headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
-            [NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString(),
+            [NOFAbstractionConstants.Transport.Headers.MessageId] = (deliveryContext?.MessageId ?? Guid.NewGuid()).ToString(),
             [NOFAbstractionConstants.Transport.Headers.TenantId] = TenantId.Normalize(tenant),
             [NOFAbstractionConstants.Transport.Headers.TraceParent] = Activity.Current?.ToTraceParent()
         };
+        if (deliveryContext?.OrderKey is { } orderKey)
+        {
+            headers[NOFAbstractionConstants.Transport.Headers.OrderKey] = orderKey;
+            headers[NOFAbstractionConstants.Transport.Headers.Sequence] = deliveryContext.Sequence!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (deliveryContext.CompletesOrderKey)
+            {
+                headers[NOFAbstractionConstants.Transport.Headers.CompletesOrderKey] = bool.TrueString;
+            }
+        }
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageId, headers[NOFAbstractionConstants.Transport.Headers.MessageId]);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.TenantId, headers[NOFAbstractionConstants.Transport.Headers.TenantId]);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageType, message.GetType().Name);

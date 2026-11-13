@@ -28,10 +28,31 @@ builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
 builder.Services.AddInvocationFilter<ValidateReadOrder>();
+builder.Services.AddSingleton<SmokeOutboxStore>();
+builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
+builder.Services.AddOutbox(outbox => outbox.Add<SmokeIntent, SmokeIntentHandler>("smoke.intent", 1));
 await using var app = builder.Build();
 app.UseNOF();
 app.MapNOFEndpoints();
 app.MapOpenApi();
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.ResolveDaemonServices();
+    var messageId = await scope.ServiceProvider.GetRequiredService<IOutbox>()
+        .EnqueueAsync(new SmokeIntent("typed"), Context.Empty);
+    var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
+        ?? throw new InvalidOperationException("The outbox did not stage its snapshot");
+    Expect(record.Id == messageId && record.MessageType == "smoke.intent" && record.SchemaVersion == 1,
+        "Outbox identity or schema was lost");
+    await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType, record.SchemaVersion)
+        .Deliver(scope.ServiceProvider, record, new OutboxDeliveryContext
+        {
+            MessageId = record.Id,
+            Context = Context.Empty,
+            Attempt = 1
+        }, CancellationToken.None);
+    Expect(SmokeIntentHandler.Delivered == "typed", "The statically registered outbox handler did not run");
+}
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
@@ -277,6 +298,7 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 
 [JsonSerializable(typeof(NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
 [JsonSerializable(typeof(Empty))]
+[JsonSerializable(typeof(SmokeIntent))]
 [JsonSerializable(typeof(NOF.Sample.ConfigNodeName))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(OrderDto))]
@@ -284,6 +306,38 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 [JsonSerializable(typeof(OrderReadReceipt))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 public partial class SmokeJsonContext : JsonSerializerContext;
+
+public sealed record SmokeIntent(string Value);
+public sealed class SmokeIntentHandler : IOutboxHandler<SmokeIntent>
+{
+    public static string? Delivered { get; private set; }
+    public ValueTask HandleAsync(SmokeIntent message, OutboxDeliveryContext context, CancellationToken cancellationToken)
+    {
+        Delivered = message.Value;
+        return ValueTask.CompletedTask;
+    }
+}
+
+// This smoke exercises the codec and typed delivery delegate, without an AOT-incompatible memory ORM.
+public sealed class SmokeOutboxStore : IOutboxStore
+{
+    public NOFOutboxMessage? Record { get; private set; }
+    public void Stage(NOFOutboxMessage message) => Record = message;
+    public async IAsyncEnumerable<NOFOutboxMessage> AtomicClaimPendingMessagesAsync(int batchSize = 100,
+        TimeSpan? claimTimeout = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+    public ValueTask AtomicReleaseClaimsAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
+        => ValueTask.CompletedTask;
+    public ValueTask<int> AtomicMarkAsSentAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(0);
+    public ValueTask AtomicRecordDeliveryFailureAsync(NOFOutboxMessage message, string errorMessage, bool permanent = false,
+        CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    public Task<(int Messages, int Compacted, int Completed)> CleanupAsync(DateTime olderThan, CancellationToken cancellationToken)
+        => Task.FromResult((0, 0, 0));
+}
 
 [AutoInject(ServiceLifetime.Singleton)]
 public sealed class SmokeEndpointModule : IHttpEndpointModule

@@ -52,3 +52,5 @@ The backplane implementation uses dedicated `nof.backplane.*` fanout exchanges a
 
 - [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)
 - [`RabbitMQ.Client`](https://www.nuget.org/packages/RabbitMQ.Client)
+
+Immediate messages use concrete MemoryMessageClient/RabbitMQMessageClient with explicit destinations. Generic IOutbox intents are interpreted by host-registered IOutboxHandler<T> adapters; AddRabbitMQ does not replace the memory client. Inbound Queue/Subscription bindings remain separate. See [transactional outbox](../../../docs/en/design/transactional-outbox.md).

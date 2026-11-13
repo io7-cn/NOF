@@ -1,6 +1,6 @@
 ---
 name: nof-app-development
-description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, IMessageDispatcher, InvocationContext, IUnitOfWork, aggregate repositories, Result, or CacheKey<T>.
+description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, IOutbox, InvocationContext, IUnitOfWork, aggregate repositories, Result, or CacheKey<T>.
 ---
 
 # NOF Application Development
@@ -26,7 +26,7 @@ Use native ASP.NET Core endpoints for HTTP binding, TypedResults, files and Open
 
 Client generation is completely removed: no client interfaces, HTTP clients or local clients. Generic Contract Result/Result<T> and their factories/classifier are removed; FailureCase generates operation-specific Result unions. Success/Success<T> and WithMessage are removed; successful messages belong to business DTOs. Keep proto-style synchronous contracts. Use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely. HTTP routing belongs in IHttpEndpointModule using native ASP.NET Core binding/TypedResults and HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct). Modules use AutoInject(Singleton) plus application-part initialization. Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint/transport annotations, route generators and protocol readers are deleted without a compatibility layer. Explicit endpoint modules own all HTTP routes. Use native TypedResults.ServerSentEvents and platform SseParser for SSE.
 
-All five inbound/outbound middleware families, delegates, outbound contexts and Add*Middleware APIs are removed. Application defines IInvocationFilter/InvocationContext/InvocationDelegate and IInvocationPipeline; AddInvocationFilter<T>(order) only declares scoped extensions. Hosts decide execution; NOF hosts select the optional Infrastructure InMemoryInvocationPipeline via UseInMemoryInvocationPipeline(). Filters resolve lazily in ascending stable order under the current context; authorization/tenant checks precede handler construction. MessageDelivery directly prepares ID, tenant and producer trace metadata for immediate and outbox sends. Native ASP.NET Core owns HTTP middleware/endpoint filters/exception presentation; technical exceptions propagate to the host. Local invocation transfers Context and an isolated identity snapshot. See docs/en/design/invocation-extensions.md.
+All five inbound/outbound middleware families, delegates, outbound contexts and Add*Middleware APIs are removed. Application defines IInvocationFilter/InvocationContext/InvocationDelegate and IInvocationPipeline; AddInvocationFilter<T>(order) only declares scoped extensions. Hosts decide execution; NOF hosts select the optional Infrastructure InMemoryInvocationPipeline via UseInMemoryInvocationPipeline(). Filters resolve lazily in ascending stable order under the current context; authorization/tenant checks precede handler construction. Concrete clients use MessageDelivery for envelope metadata; generic Outbox restores allowlisted tenant/trace metadata in fresh attempt scopes. Native ASP.NET Core owns HTTP middleware/endpoint filters/exception presentation; technical exceptions propagate to the host. Local invocation transfers Context and an isolated identity snapshot. See docs/en/design/invocation-extensions.md.
 
 ## Message and RPC Types
 
@@ -43,12 +43,7 @@ Generated service operations receive InvocationContext plus CancellationToken; i
 | Interface | Method | Use |
 |---|---|---|
 | Generated server operation | `Service.Operation.InvokeAsync(services, request, context, ct)` | policy-controlled in-process invocation; remote callers own HTTP integration |
-| `IMessageDispatcher` | `SendAsync(descriptor, command, context, ct)` | immediate command dispatch |
-| `IMessageDispatcher` | `DeferSendAsync(descriptor, command, context, ct)` | stage a command in the current outbox |
-| `IMessageDispatcher` | `DeferSendOrderedAsync(descriptor, command, orderKey, context, ..., ct)` | stage ordered command delivery |
-| `IMessageDispatcher` | `PublishAsync(notification, context, ct)` | immediate fan-out |
-| `IMessageDispatcher` | `DeferPublishAsync(notification, context, ct)` | stage a notification in the current outbox |
-| `IMessageDispatcher` | `DeferPublishOrderedAsync(notification, orderKey, context, ..., ct)` | stage ordered notification delivery |
+| `IOutbox` | `EnqueueAsync(message, context, options, ct)` | snapshot an intent in the current unit of work; infrastructure owns delivery |
 | `IEventPublisher` | `PublishAsync(payload, context, ct)` | current-scope in-memory event dispatch |
 
 Save the same scoped `IUnitOfWork` after a deferred dispatch to commit the application changes and outbox record together.
@@ -77,7 +72,7 @@ Save the same scoped `IUnitOfWork` after a deferred dispatch to commit the appli
 | invoke operations in process | plain contracts and Service.Operation.InvokeAsync |
 | persist application data | aggregate repositories / DTO query ports / IUnitOfWork; choose the provider in the host |
 | cache data | `CacheKey<T>` + `ICacheService`; optionally replace the memory rider with Redis |
-| send cross-boundary work | `IMessageDispatcher` / `IMessageDispatcher`, passing the current `Context` |
+| send cross-boundary work | a concrete client, or IOutbox for transactional work |
 | add an OAuth/OIDC server | `AddOidcServer(...)` |
 | validate access tokens | `services.AddAuthenticationResourceServer(...)` |
 
@@ -96,8 +91,10 @@ Value objects implement static bool IsValid(T, out string? errorMessage) and opt
 
 IsValid always has out string? errorMessage. Detailed TryFrom returns a non-null failure message and null on success; From uses the same text with ArgumentException. DomainException/DomainValidationException are removed. Application handlers forward TryFrom messages into FailureCase rather than duplicate wording.
 
-Unified operations: service implementation bases stay in ApplicationService. Contract generates no code; NOF.Contract.SourceGenerator retains its name and declaration analyzers only. Application owns ServiceOperationReference; use Service.Operation.Descriptor.Reference or construct remote producer references explicitly; plain interfaces and IApplicationServiceImplementation need no partial modifier. FailureCase remains on non-partial Contract methods; Application generates the concrete Result and cases. IOperationExecutor runs a selected operation in the current scope, IOperationInvoker isolates local calls, and all origins run the same policy boundary. Use invocation.Context for nested semantic APIs. RequestInboundContext, CommandInboundContext, NotificationInboundContext and InvocationKind are removed. HTTP response metadata stays in HTTP adapters. See docs/en/design/unified-operations.md.
+Unified operations: service implementation bases stay in ApplicationService. Contract generates no code; NOF.Contract.SourceGenerator retains its name and declaration analyzers only. Application owns operation identity metadata; immediate transport calls use concrete clients, and generic intents use IOutbox; plain interfaces and IApplicationServiceImplementation need no partial modifier. FailureCase remains on non-partial Contract methods; Application generates the concrete Result and cases. IOperationExecutor runs a selected operation in the current scope, IOperationInvoker isolates local calls, and all origins run the same policy boundary. Use invocation.Context for nested semantic APIs. RequestInboundContext, CommandInboundContext, NotificationInboundContext and InvocationKind are removed. HTTP response metadata stays in HTTP adapters. See docs/en/design/unified-operations.md.
 
 Domain collections: [ReadOnlyCollection] on private readonly List<T>/HashSet<T> fields in top-level non-generic partial classes generates a cached live IReadOnlyCollection view and CollectionBackingField metadata. OwnsMany field access is configured by EF Core after model configuration; explicit conflicts fail. Mut is removed. Use ReferenceEqualityComparer.Instance for entity HashSet navigation fields. NOF020 validates fields/names; NOF021 requests partial with a code fix.
 
 Contract contains declarations and data models only and has no NOF runtime dependency. Execution models/descriptors/outcomes/rejections live in NOF.Application. Context is NOF.Abstraction.Context; no Contract type forwarding remains. ServiceOperationReference is Application-owned identity/input data only; Contract no longer generates IServiceOperations.Method entries. ServiceOperationInspector in Application resolves and validates references, checks CanSubmit and reads RequiresHostTenant metadata; UseHostTenantAttribute.IsRequired is removed. Clients use native HTTP exceptions, not Application execution rejections. See docs/en/design/contract-boundaries.md.
+
+Generic outbox: IMessageDispatcher and outbound RouteToQueue/Topic are removed. Register one stable message ID/version and IOutboxHandler<T> per type through AddOutbox. Concrete MemoryMessageClient/RabbitMQMessageClient coexist. Claims are owner-fenced and stream-aware; retries retain MessageId. Permanent failures block their stream. No user credentials are persisted. Drain old outbox and back up every tenant database before the explicit schema migration; do not automatically reinterpret legacy records. See docs/en/design/transactional-outbox.md.

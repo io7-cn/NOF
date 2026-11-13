@@ -42,11 +42,11 @@ public sealed class DeleteNode : NodeService.Delete
 
 ## 操作引用与完整执行描述符
 
-Contract 不再生成代码。NOF.Contract.SourceGenerator 保留原名和声明分析器。ServiceOperationReference<TRequest> 归 Application；使用 Service.Operation.Descriptor.Reference，或为远端生产者显式构造引用，无需引入接收方实现。
+Contract 不再生成代码。NOF.Contract.SourceGenerator 保留原名和声明分析器。操作身份元数据和完整描述符归 Application；远程生产使用具体客户端或通用 IOutbox 意图，与服务描述符无关。
 
 Application 生成 `NodeService.Delete.Descriptor`，类型为 `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`。HTTP、本地调用及操作映射使用这个完整返回类型；NodeService.Delete.InvokeAsync 返回相同 Result。完整描述符的 Reference 属性可用于只需要输入的生产者路由。两者拥有相同稳定 Id，不再要求是同一对象实例。
 
-消息消费绑定仍只接受实际返回 Empty 的完整描述符。发送虽然使用输入引用，也会检查 Contract 声明：成功类型是 Empty、但声明了 FailureCase 的操作仍可能失败，不能作为无返回任务提交；Queue/Subscription/RouteToQueue 都会拒绝这种配置。手写一个只包含成功类型的描述符也不能绕过检查。
+消息消费绑定仍只接受实际返回 Empty 的完整描述符。Queue/Subscription 拒绝成功类型为 Empty 但声明了 FailureCase 的操作，手写成功描述符也不能绕过检查。Outbox 消息是独立意图；若基础设施处理器选择调用应用操作，需显式解释其结果。
 
 ## 处理方式与分层
 
@@ -66,8 +66,10 @@ HTTP 模块显式把 Application 分支映射成 TypedResults、资源或 Proble
 
 FailureCaseAttribute 继续放在 Contract 方法上，移除接口的 partial。将 `IService.<Operation>Operation.Result` 及其分支引用改为 `Service.Operation.Result` 和 Service.Operation.Case。旧 Contract 操作基类和兼容别名不保留。已经使用继承的 `Task<Result>`、new Case(...) 的 Handler 无需改变这部分写法。
 
-生产者路由使用 Application 操作引用；HTTP、本地执行和消费者绑定使用 Application 完整描述符。此前向 Send/RouteToQueue 传入 Application 描述符的代码可以改传其 Reference。不能把接口声明的成功类型当作完整执行返回类型。
+HTTP、本地执行和入站绑定使用 Application 完整描述符；即时客户端和通用 Outbox 意图不按操作引用路由。不能把接口声明的成功类型当作完整执行返回类型。
 
 迁移时保持 JSON 分支名称、错误码与自定义数据结构稳定；此次改变 CLR 类型归属，不改变既有可选 JSON 判别格式。同步升级 Application、端点、JSON 上下文和进程内调用方。测试覆盖单体项目中两种生成器顺序，以及从独立编译 Contract 元数据生成 Application 结果。
 
 [当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。
+
+参见[通用事务性发件箱](transactional-outbox.md)。

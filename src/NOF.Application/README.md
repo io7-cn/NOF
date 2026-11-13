@@ -81,19 +81,16 @@ public sealed class Watch : OrderService.Watch
 
 The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> Watch(WatchOrdersRequest request);`.
 
-### Message consumers and transactional submission
+### Message consumers and transactional intents
 
-Use ordinary ApplicationService operations for consumers and IMessageDispatcher for sending/publishing. The host declares explicit bindings; no command/notification handler base or registry remains.
+Inbound Queue/Subscription bindings target ordinary Empty-returning application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
 
 ```csharp
-services.AddMessageBindings(bindings =>
-    bindings.Queue<SendMail>("mail.send.v1").To(MailService.Send.Descriptor));
-await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, invocation.Context, cancellationToken);
-await messages.DeferPublishAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken);
+await outbox.EnqueueAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken: cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-See the [complete migration and routing guide](../../docs/en/design/unified-operations.md) and [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs). InvokeAsync waits for execution; Send/Publish wait for acceptance; Defer methods stage an intent committed with the scoped unit of work. Ordered variants retain their contiguous stream contract. Only message ID, tenant and trace metadata travel automatically, not arbitrary items or principals.
+The host registers stable message IDs/versions and IOutboxHandler<T> adapters. Enqueue snapshots without sending or saving; the returned Guid is an intent ID. OutboxEnqueueOptions carries optional stream ordering. No IMessageDispatcher, deferred Send/Publish family or operation-based producer routing remains. See [transactional outbox](../../docs/en/design/transactional-outbox.md) and the [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs).
 
 ### Persistence boundaries
 

@@ -37,7 +37,10 @@ public sealed partial class PersistenceOutboxStore(IPersistenceSession session, 
         var rowsUpdated = await _session.Set<NOFOutboxMessage>()
             .Where(m => m.Status == OutboxMessageStatus.Pending &&
                         m.RetryCount < _options.MaxRetryCount &&
+                        (m.NextAttemptAtUtc == null || m.NextAttemptAtUtc <= now) &&
                         (m.ClaimedBy == null || m.ClaimExpiresAtUtc == null || m.ClaimExpiresAtUtc <= now))
+            .Where(m => m.OrderKey == null || !_session.Set<NOFOutboxMessage>().Any(prior =>
+                prior.OrderKey == m.OrderKey && prior.Sequence < m.Sequence && prior.Status != OutboxMessageStatus.Sent))
             .OrderBy(m => m.CreatedAtUtc)
             .ThenBy(m => m.Id)
             .Take(batchSize)
@@ -65,78 +68,60 @@ public sealed partial class PersistenceOutboxStore(IPersistenceSession session, 
         }
     }
 
-    public async ValueTask AtomicReleaseClaimsAsync(
-        IEnumerable<Guid> messageIds,
-        CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async ValueTask AtomicReleaseClaimsAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
     {
-        await _session.Set<NOFOutboxMessage>()
-            .Where(m => messageIds.Contains(m.Id) && m.Status == OutboxMessageStatus.Pending)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(m => m.RetryCount, m => m.RetryCount - 1)
-                .SetProperty(m => m.ClaimedBy, (string?)null)
-                .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null),
-                cancellationToken);
+        foreach (var message in messages)
+        {
+            await _session.Set<NOFOutboxMessage>()
+                .Where(m => m.Id == message.Id && m.ClaimedBy != null && m.ClaimedBy == message.ClaimedBy && m.Status == OutboxMessageStatus.Pending)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(m => m.RetryCount, m => m.RetryCount - 1)
+                    .SetProperty(m => m.ClaimedBy, (string?)null)
+                    .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null), cancellationToken);
+        }
     }
 
-    public async ValueTask<int> AtomicMarkAsSentAsync(
-        IEnumerable<Guid> messageIds,
-        CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async ValueTask<int> AtomicMarkAsSentAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
     {
+        var count = 0;
         var sentAt = DateTime.UtcNow;
-
-        return await _session.Set<NOFOutboxMessage>()
-            .Where(m => messageIds.Contains(m.Id) && m.Status == OutboxMessageStatus.Pending)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(m => m.Status, OutboxMessageStatus.Sent)
-                .SetProperty(m => m.SentAtUtc, sentAt)
-                .SetProperty(m => m.ClaimedBy, (string?)null)
-                .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null),
-                cancellationToken);
+        foreach (var message in messages)
+        {
+            count += await _session.Set<NOFOutboxMessage>()
+                .Where(m => m.Id == message.Id && m.ClaimedBy != null && m.ClaimedBy == message.ClaimedBy && m.Status == OutboxMessageStatus.Pending)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(m => m.Status, OutboxMessageStatus.Sent)
+                    .SetProperty(m => m.SentAtUtc, sentAt)
+                    .SetProperty(m => m.NextAttemptAtUtc, (DateTime?)null)
+                    .SetProperty(m => m.ClaimedBy, (string?)null)
+                    .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null), cancellationToken);
+        }
+        return count;
     }
 
-    public async ValueTask AtomicRecordDeliveryFailureAsync(
-        NOFOutboxMessage message,
-        string errorMessage,
-        CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async ValueTask AtomicRecordDeliveryFailureAsync(NOFOutboxMessage message, string errorMessage,
+        bool permanent = false, CancellationToken cancellationToken = default)
     {
         var failedAt = DateTime.UtcNow;
-        var rowsUpdated = message.RetryCount >= _options.MaxRetryCount
-            ? await _session.Set<NOFOutboxMessage>()
-                .Where(m => m.Id == message.Id && m.Status == OutboxMessageStatus.Pending)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(m => m.Status, OutboxMessageStatus.Failed)
-                    .SetProperty(m => m.ErrorMessage, errorMessage)
-                    .SetProperty(m => m.FailedAtUtc, failedAt)
-                    .SetProperty(m => m.ClaimedBy, (string?)null)
-                    .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null),
-                    cancellationToken)
-            : await _session.Set<NOFOutboxMessage>()
-                .Where(m => m.Id == message.Id && m.Status == OutboxMessageStatus.Pending)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(m => m.Status, OutboxMessageStatus.Pending)
-                    .SetProperty(m => m.ErrorMessage, errorMessage)
-                    .SetProperty(m => m.FailedAtUtc, failedAt)
-                    .SetProperty(m => m.ClaimedBy, (string?)null)
-                    .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null),
-                    cancellationToken);
-
-        if (rowsUpdated == 0)
+        var terminal = permanent || message.RetryCount >= _options.MaxRetryCount;
+        var status = terminal ? OutboxMessageStatus.Failed : OutboxMessageStatus.Pending;
+        DateTime? nextAttempt = terminal ? null : failedAt.Add(_options.RetryDelay);
+        var error = errorMessage.Length > 2048 ? errorMessage[..2048] : errorMessage;
+        var updated = await _session.Set<NOFOutboxMessage>()
+            .Where(m => m.Id == message.Id && m.ClaimedBy != null && m.ClaimedBy == message.ClaimedBy && m.Status == OutboxMessageStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.Status, status)
+                .SetProperty(m => m.ErrorMessage, error)
+                .SetProperty(m => m.FailedAtUtc, failedAt)
+                .SetProperty(m => m.NextAttemptAtUtc, nextAttempt)
+                .SetProperty(m => m.ClaimedBy, (string?)null)
+                .SetProperty(m => m.ClaimExpiresAtUtc, (DateTime?)null), cancellationToken);
+        if (updated == 0)
         {
-            _logger.LogDebug("Message {MessageId} already processed or not in pending state", message.Id);
-            return;
-        }
-
-        if (message.RetryCount >= _options.MaxRetryCount)
-        {
-            _logger.LogWarning(
-                "Message {MessageId} marked as permanently failed after {RetryCount} retries. Error: {Error}",
-                message.Id, message.RetryCount, errorMessage);
-        }
-        else
-        {
-            _logger.LogWarning(
-                "Message {MessageId} scheduled for retry #{RetryCount}. Error: {Error}",
-                message.Id, message.RetryCount, errorMessage);
+            _logger.LogDebug("Ignored failure from expired owner for outbox message {MessageId}", message.Id);
         }
     }
 }

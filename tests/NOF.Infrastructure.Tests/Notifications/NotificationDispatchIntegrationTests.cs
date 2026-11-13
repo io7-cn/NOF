@@ -30,7 +30,7 @@ public sealed class NotificationDispatchIntegrationTests
         try
         {
             using var scope = host.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<IMessageDispatcher>().PublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
+            await scope.ServiceProvider.GetRequiredService<MemoryMessageClient>().PublishAsync("test.failing.v1", new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
             var receipt = await WaitForInboxStatusAsync(host.Services, InboxMessageStatus.Failed, timeout.Token);
             Assert.Equal(1, receipt.RetryCount);
             Assert.Equal("subscription:rejected", receipt.Route);
@@ -42,7 +42,7 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     [Fact]
-    public async Task DeferPublishOrderedAsync_ShouldQualifyKeyAndAllocateContiguousSequences()
+    public async Task EnqueueOrderedAsync_ShouldQualifyKeyAndAllocateContiguousSequences()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -50,24 +50,14 @@ public sealed class NotificationDispatchIntegrationTests
 
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
-        var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IOutbox>();
         var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var environment = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value;
 
-        await publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("first"),
-            "Invoice:42",
-            Context.Empty);
-        await publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("second"),
-            "Invoice:42",
-            Context.Empty,
-            completesOrderKey: true);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("after-terminal"),
-            "Invoice:42",
-            Context.Empty));
-        await publisher.DeferPublishAsync(new ConcreteNotification("unordered"), Context.Empty);
+        await publisher.EnqueueAsync(new ConcreteNotification("first"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask();
+        await publisher.EnqueueAsync(new ConcreteNotification("second"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42", CompletesOrderKey = true }).AsTask();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => publisher.EnqueueAsync(new ConcreteNotification("after-terminal"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask());
+        await publisher.EnqueueAsync(new ConcreteNotification("unordered"), Context.Empty);
         await dbContext.SaveChangesAsync();
 
         var messages = await dbContext.Set<NOFOutboxMessage>()
@@ -91,11 +81,8 @@ public sealed class NotificationDispatchIntegrationTests
         Assert.False(unordered.CompletesOrderKey);
 
         using var secondScope = host.Services.CreateScope();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => secondPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("after-persisted-terminal"),
-            "Invoice:42",
-            Context.Empty));
+        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IOutbox>();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => secondPublisher.EnqueueAsync(new ConcreteNotification("after-persisted-terminal"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask());
     }
 
     [Fact]
@@ -108,30 +95,21 @@ public sealed class NotificationDispatchIntegrationTests
         using var host = builder.Build();
         using var firstScope = host.Services.CreateScope();
         using var secondScope = host.Services.CreateScope();
-        var firstPublisher = firstScope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+        var firstPublisher = firstScope.ServiceProvider.GetRequiredService<IOutbox>();
+        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IOutbox>();
         var firstDbContext = firstScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var secondDbContext = secondScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
 
-        await firstPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("first-instance"),
-            "Invoice:99",
-            Context.Empty);
-        await secondPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("second-instance"),
-            "Invoice:99",
-            Context.Empty);
+        await firstPublisher.EnqueueAsync(new ConcreteNotification("first-instance"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
+        await secondPublisher.EnqueueAsync(new ConcreteNotification("second-instance"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
 
         await firstDbContext.SaveChangesAsync();
         await Assert.ThrowsAsync<DbUpdateException>(() => secondDbContext.SaveChangesAsync());
 
         using var retryScope = host.Services.CreateScope();
-        var retryPublisher = retryScope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+        var retryPublisher = retryScope.ServiceProvider.GetRequiredService<IOutbox>();
         var retryDbContext = retryScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        await retryPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("retry"),
-            "Invoice:99",
-            Context.Empty);
+        await retryPublisher.EnqueueAsync(new ConcreteNotification("retry"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
         await retryDbContext.SaveChangesAsync();
 
         var sequences = await retryDbContext.Set<NOFOutboxOrderState>()
@@ -175,8 +153,8 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
-                await publisher.PublishAsync(new ConcreteNotification("published"), Context.Empty, timeout.Token);
+                var publisher = scope.ServiceProvider.GetRequiredService<MemoryMessageClient>();
+                await publisher.PublishAsync("test.concrete.v1", new ConcreteNotification("published"), Context.Empty, cancellationToken: timeout.Token);
             }
 
             var probe = host.Services.GetRequiredService<NotificationDispatchProbe>();
@@ -225,8 +203,8 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
-                await publisher.PublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
+                var publisher = scope.ServiceProvider.GetRequiredService<MemoryMessageClient>();
+                await publisher.PublishAsync("test.failing.v1", new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
             }
 
             var probe = host.Services.GetRequiredService<FailingNotificationProbe>();
@@ -248,11 +226,11 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     [Fact]
-    public async Task DeferPublishAsync_WhenDeliveryFails_ShouldUseAllRetriesAndReportFailedBatch()
+    public async Task EnqueueAsync_WhenDeliveryFails_ShouldUseAllRetriesAndReportFailedBatch()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        ConfigureMessages(builder.Services);
+        ConfigureMessages(builder.Services, failingDelivery: true);
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -260,8 +238,8 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.MaxRetryCount = 2;
         });
 
-        var rider = new AlwaysFailingNotificationRider();
-        builder.Services.ReplaceOrAddSingleton<INotificationRider>(rider);
+        var rider = new AlwaysFailingOutboxHandler();
+        builder.Services.AddSingleton(rider);
         var loggerProvider = new CapturingLoggerProvider();
         builder.Logging.ClearProviders();
         builder.Logging.AddProvider(loggerProvider);
@@ -274,9 +252,9 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+                var publisher = scope.ServiceProvider.GetRequiredService<IOutbox>();
                 var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-                await publisher.DeferPublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
+                await publisher.EnqueueAsync(new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
                 await dbContext.SaveChangesAsync(timeout.Token);
             }
 
@@ -323,7 +301,7 @@ public sealed class NotificationDispatchIntegrationTests
 
         try
         {
-            var rider = host.Services.GetRequiredService<INotificationRider>();
+            var rider = host.Services.GetRequiredService<MemoryNotificationRider>();
             var serializer = host.Services.GetRequiredService<IObjectSerializer>();
             const string orderKey = "ProducerService:Invoice:42";
 
@@ -355,7 +333,7 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     private static Task PublishOrderedAsync(
-        INotificationRider rider,
+        MemoryNotificationRider rider,
         IObjectSerializer serializer,
         OrderedNotification notification,
         string orderKey,
@@ -461,17 +439,14 @@ public sealed class NotificationDispatchIntegrationTests
 
     private sealed record FailingNotification;
 
-    private sealed class AlwaysFailingNotificationRider : INotificationRider
+    private sealed class AlwaysFailingOutboxHandler : IOutboxHandler<FailingNotification>
     {
         private int _attemptCount;
 
         public int AttemptCount => Volatile.Read(ref _attemptCount);
 
-        public Task PublishAsync(
-            ReadOnlyMemory<byte> payload,
-            string messageRoute,
-            IEnumerable<KeyValuePair<string, string?>>? headers,
-            CancellationToken cancellationToken = default)
+        public ValueTask HandleAsync(FailingNotification message, OutboxDeliveryContext context,
+            CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _attemptCount);
             throw new InvalidOperationException("Transport unavailable.");
@@ -529,14 +504,21 @@ public sealed class NotificationDispatchIntegrationTests
         public void MarkBase() => Interlocked.Increment(ref _baseCount);
     }
 
-    private static void ConfigureMessages(IServiceCollection services)
+    private static void ConfigureMessages(IServiceCollection services, bool failingDelivery = false)
     {
-        services.AddMessageBindings(bindings =>
+        services.AddOutbox(outbox =>
         {
-            bindings.Topic<ConcreteNotification>("test.concrete.v1");
-            bindings.Topic<BaseNotification>("test.base.v1");
-            bindings.Topic<FailingNotification>("test.failing.v1");
-            bindings.Topic<OrderedNotification>("test.ordered.v1");
+            outbox.Add<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>("test.concrete.v1");
+            outbox.Add<BaseNotification, NotificationOutboxHandler<BaseNotification>>("test.base.v1");
+            outbox.Add<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>("test.ordered.v1");
+            if (failingDelivery)
+            {
+                outbox.Add<FailingNotification, AlwaysFailingOutboxHandler>("test.failing.v1");
+            }
+            else
+            {
+                outbox.Add<FailingNotification, NotificationOutboxHandler<FailingNotification>>("test.failing.v1");
+            }
         });
         var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
         registry.Add(new(typeof(INotificationOperations), typeof(object))
@@ -550,6 +532,17 @@ public sealed class NotificationDispatchIntegrationTests
                 ["Ordered"] = new(typeof(OrderedNotificationHandler), typeof(OrderedNotification), typeof(Empty)),
             }
         });
+    }
+
+    public sealed class NotificationOutboxHandler<T>(MemoryMessageClient client) : IOutboxHandler<T>
+    {
+        public async ValueTask HandleAsync(T message, OutboxDeliveryContext context, CancellationToken ct)
+        {
+            var topic = typeof(T) == typeof(ConcreteNotification) ? "test.concrete.v1"
+                : typeof(T) == typeof(BaseNotification) ? "test.base.v1"
+                : typeof(T) == typeof(OrderedNotification) ? "test.ordered.v1" : "test.failing.v1";
+            await client.PublishAsync(topic, message, context, ct);
+        }
     }
 
     private interface INotificationOperations : IApplicationService

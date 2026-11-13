@@ -44,8 +44,9 @@ public static partial class NOFInfrastructureRabbitMQExtensions
                     "RabbitMQ publisher confirmation tracking must be enabled when publisher confirmations are enabled.")
                 .ValidateOnStart();
             services.ReplaceOrAddSingleton<RabbitMQConnectionManager, RabbitMQConnectionManager>();
-            services.ReplaceOrAddSingleton<ICommandRider, RabbitMQCommandRider>();
-            services.ReplaceOrAddSingleton<INotificationRider, RabbitMQNotificationRider>();
+            services.ReplaceOrAddSingleton<RabbitMQCommandRider, RabbitMQCommandRider>();
+            services.ReplaceOrAddSingleton<RabbitMQNotificationRider, RabbitMQNotificationRider>();
+            services.ReplaceOrAddScoped<RabbitMQMessageClient, RabbitMQMessageClient>();
             services.AddHostedService<RabbitMQConsumerHostedService>();
             return services;
         }

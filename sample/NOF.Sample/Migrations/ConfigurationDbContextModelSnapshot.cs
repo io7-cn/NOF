@@ -327,10 +327,6 @@ namespace NOF.Sample.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("DispatchRoutes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -342,7 +338,15 @@ namespace NOF.Sample.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("MessageType")
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SchemaVersion")
                         .HasColumnType("integer");
 
                     b.Property<string>("OrderKey")
@@ -387,6 +391,8 @@ namespace NOF.Sample.Migrations
                     b.HasIndex("Status", "ClaimExpiresAtUtc");
 
                     b.HasIndex("Status", "CreatedAtUtc");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
 
                     b.ToTable("NOFOutboxMessage", (string)null);
                 });

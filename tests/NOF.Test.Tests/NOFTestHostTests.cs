@@ -92,27 +92,13 @@ public class NOFTestHostTests
     }
 
     [Fact]
-    public async Task SendAsync_Command_ShouldResolveCommandSenderFromScope()
+    public async Task EnqueueAsync_StagesThroughTheExistingScope()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddScoped<IMessageDispatcher, FakeMessageDispatcher>();
-
+        builder.Services.AddScoped<IOutbox, FakeOutbox>();
         await using var host = builder.BuildTestHost();
-        Func<Task> act = () => host.SendAsync(new ServiceOperationReference<TestCommand>(typeof(ITestMessages), nameof(ITestMessages.Send)), new TestCommand("do-it"));
-
-        Assert.Null(await Record.ExceptionAsync(act));
-    }
-
-    [Fact]
-    public async Task PublishAsync_ShouldResolveNotificationPublisherFromScope()
-    {
-        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddScoped<IMessageDispatcher, FakeMessageDispatcher>();
-
-        await using var host = builder.BuildTestHost();
-        Func<Task> act = () => host.PublishAsync(new TestNotification("evt"));
-
-        Assert.Null(await Record.ExceptionAsync(act));
+        using var scope = host.CreateScope();
+        Assert.Equal(FakeOutbox.Id, await scope.EnqueueAsync(new TestCommand("do-it")));
     }
 
     [Fact]
@@ -218,14 +204,11 @@ public class NOFTestHostTests
 
     private interface ITestMessages : IApplicationService { Empty Send(TestCommand request); }
 
-    private sealed class FakeMessageDispatcher : IMessageDispatcher
+    private sealed class FakeOutbox : IOutbox
     {
-        public Task SendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferSendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferSendOrderedAsync<T>(ServiceOperationReference<T> operation, T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task PublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferPublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferPublishOrderedAsync<T>(T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public static readonly Guid Id = Guid.NewGuid();
+        public ValueTask<Guid> EnqueueAsync<T>(T message, Context context, OutboxEnqueueOptions? options = null,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(Id);
     }
 
     private sealed class LazyProbe

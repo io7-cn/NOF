@@ -118,15 +118,10 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
         return invocation(_scope.ServiceProvider, context ?? Context, cancellationToken);
     }
 
-    public Task SendAsync<TCommand>(ServiceOperationReference<TCommand> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        return GetRequiredService<IMessageDispatcher>().SendAsync(operation, command, context ?? Context, cancellationToken);
-    }
-
-    public Task PublishAsync<TNotification>(TNotification notification, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        return GetRequiredService<IMessageDispatcher>().PublishAsync(notification, context ?? Context, cancellationToken);
-    }
+    /// <summary>Stages an intent in this scope; save its unit of work explicitly before disposing.</summary>
+    public ValueTask<Guid> EnqueueAsync<T>(T message, Context? context = null,
+        OutboxEnqueueOptions? options = null, CancellationToken cancellationToken = default)
+        => GetRequiredService<IOutbox>().EnqueueAsync(message, context ?? Context, options, cancellationToken);
 
     public void Dispose()
     {

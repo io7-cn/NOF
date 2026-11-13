@@ -1,5 +1,5 @@
 ---
-description: Replace NOF's in-memory command and notification riders with RabbitMQ
+description: Add an explicit RabbitMQ client and inbound message consumers
 ---
 
 # Add RabbitMQ Messaging
@@ -19,7 +19,7 @@ builder.Services.AddRabbitMQ(options =>
 });
 ```
 
-`AddRabbitMQ(...)` configures options, replaces `ICommandRider` and `INotificationRider`, and registers the RabbitMQ consumer hosted service.
+`AddRabbitMQ(...)` configures options, registers concrete RabbitMQMessageClient and its consumer hosted service. It does not replace MemoryMessageClient.
 
 ## 3. Configure the Connection
 
@@ -35,24 +35,16 @@ builder.Services.AddRabbitMQ(options =>
 
 The options also expose durability, auto-delete, prefetch, requeue, and publisher-confirmation settings.
 
-## 4. Send with the NOF Abstractions
+## 4. Use the Concrete Client or Generic Outbox
 
 ```csharp
-await commandSender.SendAsync(command, context, cancellationToken);
-await notificationPublisher.PublishAsync(notification, context, cancellationToken);
-```
-
-Transport routing comes from source-generated command and notification handler metadata; callers do not specify a queue or exchange.
-
-For writes that must commit with outgoing work:
-
-```csharp
-await commandSender.DeferSendAsync(command, context, cancellationToken);
-await notificationPublisher.DeferPublishAsync(notification, context, cancellationToken);
+await rabbitClient.SendAsync("mail.send.v1", command, context, cancellationToken);
+await rabbitClient.PublishAsync("orders.created.v1", notification, context, cancellationToken);
+await outbox.EnqueueAsync(notification, context, cancellationToken: cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-Use the ordered deferred variants only when messages form one strict stream. The framework qualifies the order key with the producer service name and allocates sequence numbers transactionally.
+The host registers AddOutbox stable schemas and IOutboxHandler<T> adapters using RabbitMQMessageClient. Use its OutboxDeliveryContext overload to retain message ID and ordering. Inbound Queue/Subscription bindings are independent. See docs/en/design/transactional-outbox.md.
 
 ## 5. Optional RabbitMQ Backplane
 

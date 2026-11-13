@@ -53,3 +53,8 @@
   href: ../en/design/contract-boundaries.md
 - name: Contract 分层边界
   href: ../zh-CN/design/contract-boundaries.md
+
+- name: Generic transactional outbox
+  href: ../en/design/transactional-outbox.md
+- name: 通用事务性发件箱
+  href: ../zh-CN/design/transactional-outbox.md

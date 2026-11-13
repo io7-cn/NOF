@@ -23,3 +23,5 @@ For types and members, continue to the [API reference](~/api/index.md).
 - [Unified operations and collections](../en/design/unified-operations.md)
 
 - [Contract boundaries](../en/design/contract-boundaries.md)
+
+- [Generic transactional outbox](../en/design/transactional-outbox.md) ([简体中文](../zh-CN/design/transactional-outbox.md))

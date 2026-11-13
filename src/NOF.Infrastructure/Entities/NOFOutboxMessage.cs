@@ -14,8 +14,9 @@ public class NOFOutboxMessage
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public int RetryCount { get; set; }
 
-    public OutboxMessageType MessageType { get; set; }
-    public string DispatchRoutes { get; set; } = null!;
+    public string MessageType { get; set; } = null!;
+    public int SchemaVersion { get; set; } = 1;
+    public DateTime? NextAttemptAtUtc { get; set; }
     public byte[] Payload { get; set; } = null!;
     public string Headers { get; set; } = null!;
     public DateTime? SentAtUtc { get; set; }
@@ -32,8 +33,8 @@ public class NOFOutboxMessage
     public bool CompletesOrderKey { get; set; }
 
     internal static NOFOutboxMessage Create(
-        OutboxMessageType messageType,
-        string dispatchRoutes,
+        string messageType,
+        int schemaVersion,
         byte[] payload,
         string headers,
         string? traceParent,
@@ -45,7 +46,7 @@ public class NOFOutboxMessage
             Id = Guid.CreateVersion7(new DateTimeOffset(createdAtUtc)),
             CreatedAtUtc = createdAtUtc,
             MessageType = messageType,
-            DispatchRoutes = dispatchRoutes,
+            SchemaVersion = schemaVersion,
             Payload = payload,
             Headers = headers,
             TraceParent = traceParent,
@@ -71,12 +72,6 @@ public class NOFOutboxMessage
             }
         }
     }
-}
-
-public enum OutboxMessageType
-{
-    Command = 0,
-    Notification = 1
 }
 
 public enum OutboxMessageStatus

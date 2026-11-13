@@ -1,9 +1,9 @@
 namespace NOF.Infrastructure;
 
 /// <summary>Submits a selected queue binding to the durable in-memory inbox transport.</summary>
-public sealed class MemoryCommandRider(MessageBindingRegistry bindings, MessageInboxReceiver receiver) : ICommandRider
+public sealed class MemoryCommandRider(MessageBindingRegistry bindings, MessageInboxReceiver receiver)
 {
-    /// <inheritdoc />
+    /// <summary>Submits an encoded transport envelope.</summary>
     public Task SendAsync(ReadOnlyMemory<byte> payload, string messageRoute,
         IEnumerable<KeyValuePair<string, string?>>? headers, CancellationToken cancellationToken = default)
     {

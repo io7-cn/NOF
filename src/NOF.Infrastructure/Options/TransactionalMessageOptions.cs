@@ -15,6 +15,9 @@ public sealed class TransactionalMessageProcessorOptions
 
     public int MaxRetryCount { get; set; } = 5;
 
+    /// <summary>Gets or sets the minimum delay between outbox attempts; zero uses the polling cadence.</summary>
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.Zero;
+
     public TimeSpan ClaimTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     public TimeSpan CleanupInterval { get; set; } = TimeSpan.FromHours(1);

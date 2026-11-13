@@ -98,20 +98,16 @@ public sealed class MyHandler(IUserContext userContext)
 }
 ```
 
-## Immediate and Deferred Messaging
+## Immediate Calls and Transactional Intents
 
 ```csharp
-await commandSender.SendAsync(command, context, cancellationToken);
-await notificationPublisher.PublishAsync(notification, context, cancellationToken);
-
-await notificationPublisher.DeferPublishAsync(
-    new OrderCreatedNotification(order.Id),
-    context,
-    cancellationToken);
+await client.SendAsync("mail.send.v1", message, context, cancellationToken);
+await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), context,
+    cancellationToken: cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-Deferred messages are staged in the current unit of work; IUnitOfWork.SaveChangesAsync saves them with aggregate and projection changes on the same scoped provider context. Explicit transactions commit separately.
+The client is concrete. IOutbox only stages; the host registers AddOutbox schemas and IOutboxHandler<T> adapters. Explicit transactions require commit. See docs/en/design/transactional-outbox.md.
 
 ## Server Operation Call
 

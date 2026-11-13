@@ -1,9 +1,9 @@
 namespace NOF.Infrastructure;
 
 /// <summary>Accepts one independent durable receipt per stable subscription.</summary>
-public sealed class MemoryNotificationRider(MessageBindingRegistry bindings, MessageInboxReceiver receiver) : INotificationRider
+public sealed class MemoryNotificationRider(MessageBindingRegistry bindings, MessageInboxReceiver receiver)
 {
-    /// <inheritdoc />
+    /// <summary>Submits an encoded transport envelope.</summary>
     public async Task PublishAsync(ReadOnlyMemory<byte> payload, string messageRoute,
         IEnumerable<KeyValuePair<string, string?>>? headers, CancellationToken cancellationToken = default)
     {

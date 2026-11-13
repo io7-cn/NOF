@@ -18,6 +18,11 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDemoService>();
+builder.Services.AddOutbox(outbox =>
+{
+    outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
+    outbox.Add<OrderCreated, OrderCreatedOutboxHandler>("sample.order-created", 1);
+});
 builder.Services.AddMessageBindings(bindings =>
 {
     bindings.Queue<SendEmail>("sample.mail.v1").To(MessageDemoService.SendMail.Descriptor);

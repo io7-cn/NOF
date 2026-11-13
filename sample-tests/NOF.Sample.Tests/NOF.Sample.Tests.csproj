@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
@@ -37,6 +38,7 @@
     <ProjectReference Include="..\..\src\NOF.Abstraction.SourceGenerator\NOF.Abstraction.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <Compile Include="..\..\sample\NOF.Sample\Persistence\ConfigNodePersistence.cs" Link="Persistence\ConfigNodePersistence.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Endpoints\ConfigNodeEndpoints.cs" Link="Endpoints\ConfigNodeEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261113130000_GenericOutbox.cs" Link="Migrations\GenericOutbox.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.EntityFrameworkCore\NOF.Infrastructure.EntityFrameworkCore.csproj" />

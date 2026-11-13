@@ -42,11 +42,11 @@ Return the successful value or a declared branch directly. Unrelated errors cann
 
 ## References and execution descriptors
 
-Contract generates no code. NOF.Contract.SourceGenerator retains its name and declaration analyzers. Application owns ServiceOperationReference<TRequest>; use Service.Operation.Descriptor.Reference or explicitly construct a reference for remote production without importing the receiving implementation.
+Contract generates no code. NOF.Contract.SourceGenerator retains its name and declaration analyzers. Application owns operation identity metadata and complete descriptors. Remote production uses concrete clients or generic IOutbox intents, independently of service descriptors.
 
 Application generates `NodeService.Delete.Descriptor` as `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`. HTTP invocation, local invocation and operation mappings use this complete response type. NodeService.Delete.InvokeAsync returns that same Result. The typed descriptor's Reference property exposes its input-only producer reference; both forms share the same stable Id, not the same object instance.
 
-Message consumers still bind only complete Empty-output descriptors. Sending accepts an input-only reference but checks the Contract declaration: an Empty success with FailureCase is not a payload-free operation, and Queue/Subscription/RouteToQueue reject it. This also prevents a manually constructed success-only descriptor from discarding failures.
+Message consumers still bind only complete Empty-output descriptors. Queue/Subscription reject Empty success methods with FailureCase, including forged success-only descriptors. Outbox messages are independent intents; infrastructure handlers explicitly interpret any application result they choose to invoke.
 
 ## Handling and layer boundaries
 
@@ -66,8 +66,10 @@ When explicitly serializing generated unions, compile the owning Application ass
 
 Keep FailureCaseAttribute on Contract methods and remove partial from service interfaces. Replace `IService.<Operation>Operation.Result` and its branch references with `Service.Operation.Result` and Service.Operation.Case. No Contract operation base or compatibility aliases remain. Handlers that already use inherited `Task<Result>` and new Case(...) keep that source shape.
 
-Use Application operation references for producer routing and Application descriptors for HTTP/local execution and consumer bindings. Code that previously passed an Application descriptor to Send/RouteToQueue can use its Reference property. Do not treat the method's successful return type as the complete execution output.
+Use complete Application descriptors for HTTP/local execution and inbound bindings. Immediate clients and generic Outbox intents do not route by an operation reference. Do not treat the method's successful return type as the complete execution output.
 
 Keep JSON branch names/codes and custom data schemas stable when migrating. The CLR type ownership changes; the optional existing JSON discriminator format does not. Upgrade application, endpoints, JSON contexts and in-process callers together. Register source-generated JSON metadata from the new owning Application assembly when used. Both monolithic generator orders and a separately compiled metadata-only Contract are covered by tests.
 
 [Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
+
+See [generic transactional outbox](transactional-outbox.md).

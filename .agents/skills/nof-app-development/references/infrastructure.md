@@ -97,7 +97,7 @@ builder.Services.AddRabbitMQ(options =>
 });
 ```
 
-This replaces the default `ICommandRider` and `INotificationRider` and adds the consumer hosted service. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
+This registers the concrete RabbitMQMessageClient and inbound consumer hosted service alongside MemoryMessageClient. Outbox adapters explicitly choose their client; no default transport interface is replaced. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
 
 ## OAuth/OIDC Authority
 

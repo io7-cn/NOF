@@ -15,7 +15,6 @@ public sealed class MessageBindingTests
         var bindings = new MessageBindingsBuilder(registry);
         var reference = new ServiceOperationReference<Message>(typeof(IService), nameof(IService.MayFail));
         Assert.False(ServiceOperationInspector.CanSubmit(reference));
-        Assert.Throws<InvalidOperationException>(() => bindings.RouteToQueue(reference, "invalid.v1"));
         // Even a manually forged success-only descriptor must not bypass the Contract declaration.
         var descriptor = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
         Assert.Throws<InvalidOperationException>(() => bindings.Queue<Message>("invalid.v1").To(descriptor));
@@ -33,23 +32,24 @@ public sealed class MessageBindingTests
         bindings.Queue<Message>("second.v1").To(Second);
         bindings.Subscription<Message>("facts.v1", "projection").To(First);
         bindings.Subscription<Message>("facts.v1", "audit").To(Second);
-        Assert.Equal("first.v1", registry.GetQueue(First));
-        Assert.Equal("second.v1", registry.GetQueue(Second));
+        Assert.Equal("first.v1", registry.GetConsumer("queue:first.v1").Route);
+        Assert.Equal("second.v1", registry.GetConsumer("queue:second.v1").Route);
         Assert.Equal(First.Id, registry.GetConsumer("subscription:projection").Operation.Id);
         Assert.Equal(Second.Id, registry.GetConsumer("subscription:audit").Operation.Id);
-        Assert.Throws<InvalidOperationException>(() => bindings.Topic<Message>("late.v1"));
+        Assert.Throws<InvalidOperationException>(() => bindings.Queue<Message>("late.v1").To(First));
     }
 
     [Fact]
-    public void ProducerRoutes_DoNotInstallLocalConsumers()
+    public void OneOperation_CanReceiveMultipleExplicitInboundQueues()
     {
         var registry = new MessageBindingRegistry();
         var bindings = new MessageBindingsBuilder(registry);
-        bindings.RouteToQueue(First.Reference, "remote.mail.v1");
-        bindings.Topic<Message>("facts.v1");
-        Assert.Equal("remote.mail.v1", registry.GetQueue(First));
-        Assert.Equal("facts.v1", registry.GetTopic(typeof(Message)));
-        Assert.Empty(registry.Bindings);
+        bindings.Queue<Message>("first.v1").To(First);
+        bindings.Queue<Message>("second.v1").To(First);
+        Assert.Equal(2, registry.Bindings.Count);
+        Assert.All(registry.Bindings, binding => Assert.Equal(First.Id, binding.Operation.Id));
+        Assert.Null(typeof(MessageBindingsBuilder).GetMethod("RouteToQueue"));
+        Assert.Null(typeof(MessageBindingsBuilder).GetMethod("Topic"));
     }
 
     [Fact]
@@ -65,12 +65,12 @@ public sealed class MessageBindingTests
     [Fact]
     public void HostRegistries_AreIsolated()
     {
-        var first = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First.Reference, "one.v1"));
-        var second = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First.Reference, "two.v1"));
+        var first = new ServiceCollection().AddMessageBindings(bindings => bindings.Queue<Message>("one.v1").To(First));
+        var second = new ServiceCollection().AddMessageBindings(bindings => bindings.Queue<Message>("two.v1").To(First));
         using var one = first.BuildServiceProvider();
         using var two = second.BuildServiceProvider();
-        Assert.Equal("one.v1", one.GetRequiredService<MessageBindingRegistry>().GetQueue(First));
-        Assert.Equal("two.v1", two.GetRequiredService<MessageBindingRegistry>().GetQueue(First));
+        Assert.Equal("one.v1", one.GetRequiredService<MessageBindingRegistry>().Bindings.Single().Route);
+        Assert.Equal("two.v1", two.GetRequiredService<MessageBindingRegistry>().Bindings.Single().Route);
     }
 
     [Theory]

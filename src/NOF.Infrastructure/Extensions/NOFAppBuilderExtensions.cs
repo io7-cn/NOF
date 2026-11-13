@@ -114,8 +114,7 @@ public static partial class NOFInfrastructureExtensions
             #endregion
 
             #region Application Services
-            builder.Services.TryAddScoped<IMessageDispatcher, MessageDispatcher>();
-            builder.Services.TryAddScoped<OutboxOrderSequenceAllocator>();
+            builder.Services.AddOutbox(static _ => { });
             #endregion
 
             // Host defaults select the in-memory engine; a host can replace IInvocationPipeline.
@@ -131,8 +130,9 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.TryAddScoped<ICacheServiceRider>(sp => new MemoryCacheServiceRider(
                 sp.GetRequiredService<MemoryCacheServiceRiderState>()));
             builder.Services.TryAddScoped<IObjectStorageRider, FileSystemObjectStorageRider>();
-            builder.Services.TryAddSingleton<ICommandRider, MemoryCommandRider>();
-            builder.Services.TryAddSingleton<INotificationRider, MemoryNotificationRider>();
+            builder.Services.TryAddSingleton<MemoryCommandRider>();
+            builder.Services.TryAddSingleton<MemoryNotificationRider>();
+            builder.Services.TryAddScoped<MemoryMessageClient>();
             #endregion
 
             return builder;
@@ -142,6 +142,7 @@ public static partial class NOFInfrastructureExtensions
             => options.PollingInterval > TimeSpan.Zero
                && options.BatchSize > 0
                && options.MaxRetryCount > 0
+               && options.RetryDelay >= TimeSpan.Zero
                && options.ClaimTimeout > TimeSpan.Zero
                && options.CleanupInterval > TimeSpan.Zero
                && options.RetentionPeriod > TimeSpan.Zero;

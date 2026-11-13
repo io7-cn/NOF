@@ -10,15 +10,15 @@ public static class TransactionalMessages
 
     public static async Task StageAsync(
         IUnitOfWork unitOfWork,
-        IMessageDispatcher messages,
+        IOutbox outbox,
         Guid orderId,
         string email,
         Context context,
         CancellationToken cancellationToken)
     {
         // Persist business changes using this same unitOfWork before saving.
-        await messages.DeferPublishAsync(new OrderCreated(orderId), context, cancellationToken);
-        await messages.DeferSendAsync(MessageDemoService.SendMail.Descriptor.Reference, new SendEmail(email, "Created", "Order created."), context, cancellationToken);
+        await outbox.EnqueueAsync(new OrderCreated(orderId), context, cancellationToken: cancellationToken);
+        await outbox.EnqueueAsync(new SendEmail(email, "Created", "Order created."), context, cancellationToken: cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

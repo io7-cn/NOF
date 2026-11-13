@@ -22,7 +22,7 @@ if (node is null)
     return new NotFound("Node not found.");
 }
 node.UpdateParent(parentId);
-await notifications.DeferPublishAsync(message, context, cancellationToken);
+await outbox.EnqueueAsync(message, context, cancellationToken: cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 

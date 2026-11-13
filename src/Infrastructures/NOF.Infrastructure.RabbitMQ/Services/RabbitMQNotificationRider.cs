@@ -6,7 +6,7 @@ using RabbitMQ.Client.Exceptions;
 
 namespace NOF.Infrastructure.RabbitMQ;
 
-public class RabbitMQNotificationRider : INotificationRider
+public class RabbitMQNotificationRider
 {
     private readonly RabbitMQConnectionManager _connectionManager;
     private readonly IOptions<RabbitMQOptions> _options;

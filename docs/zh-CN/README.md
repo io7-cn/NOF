@@ -52,3 +52,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [统一操作与聚合集合](design/unified-operations.md)
 
 - [Contract 声明与执行边界](design/contract-boundaries.md)
+
+- [通用事务性发件箱](design/transactional-outbox.md)

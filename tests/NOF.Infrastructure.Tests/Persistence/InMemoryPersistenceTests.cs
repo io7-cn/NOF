@@ -41,9 +41,9 @@ public class SqliteInMemoryPersistenceTests
 
         builder.Services.AddMessageBindings(bindings =>
         {
-            bindings.Topic<ScopedTransactionMessage>("scope.events.v1");
             bindings.Queue<ScopedTransactionMessage>("scope.work.v1").To(new(typeof(IScopeMessages), nameof(IScopeMessages.Apply)));
         });
+        builder.Services.AddOutbox(outbox => outbox.Add<ScopedTransactionMessage, ScopedTransactionOutboxHandler>("scope.intent.v1"));
         using var services = BuildServiceProvider(builder);
         using var scope = services.CreateScope();
         SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
@@ -55,18 +55,18 @@ public class SqliteInMemoryPersistenceTests
         }
 
         var application = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var publisher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
-        var sender = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+        var publisher = scope.ServiceProvider.GetRequiredService<IOutbox>();
+        var sender = scope.ServiceProvider.GetRequiredService<IOutbox>();
         await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
         {
             var state = new NOFOutboxOrderState { OrderKey = "shared", Sequence = 1 };
             concrete.Set<NOFOutboxOrderState>().Add(state);
             Assert.Same(state, Assert.Single(concrete.ChangeTracker.Entries<NOFOutboxOrderState>()).Entity);
             Assert.NotNull(concrete.Database.CurrentTransaction);
-            await publisher.DeferPublishAsync(new ScopedTransactionMessage("first"), Context.Current);
+            await publisher.EnqueueAsync(new ScopedTransactionMessage("first"), Context.Current);
             await application.SaveChangesAsync();
             concrete.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState { OrderKey = "native", Sequence = 2 });
-            await sender.DeferSendAsync(new ServiceOperationReference<ScopedTransactionMessage>(typeof(IScopeMessages), nameof(IScopeMessages.Apply)), new ScopedTransactionMessage("second"), Context.Current);
+            await sender.EnqueueAsync(new ScopedTransactionMessage("second"), Context.Current);
             await application.SaveChangesAsync();
             await application.SaveChangesAsync();
             Assert.Equal(2, await EFQuery.CountAsync(concrete.Set<NOFOutboxMessage>()));
@@ -84,6 +84,12 @@ public class SqliteInMemoryPersistenceTests
         var verification = verificationScope.ServiceProvider.GetRequiredService<DbContext>();
         Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxOrderState>()));
         Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxMessage>()));
+    }
+
+    public sealed class ScopedTransactionOutboxHandler : IOutboxHandler<ScopedTransactionMessage>
+    {
+        public ValueTask HandleAsync(ScopedTransactionMessage message, OutboxDeliveryContext context, CancellationToken ct)
+            => ValueTask.CompletedTask;
     }
 
     public interface IScopeMessages : IApplicationService { Empty Apply(ScopedTransactionMessage message); }
@@ -1570,10 +1576,9 @@ public class SqliteInMemoryPersistenceTests
         db.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
         {
             Id = id,
-            DispatchRoutes = "[\"System.String\"]",
             Payload = System.Text.Encoding.UTF8.GetBytes("payload"),
             Headers = "{}",
-            MessageType = OutboxMessageType.Command,
+            MessageType = "test.command",
             CreatedAtUtc = DateTime.UtcNow.AddMinutes(-1)
         });
         await db.SaveChangesAsync();
@@ -1614,6 +1619,55 @@ public class SqliteInMemoryPersistenceTests
     }
 
     [Fact]
+    public async Task SqliteOutboxClaims_BlockFailedPredecessors_AndFenceOldOwners()
+    {
+        using var services = CreateServiceProvider();
+        using var scope = services.CreateScope();
+        SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
+        var session = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+        var blocked = Guid.NewGuid();
+        var independent = Guid.NewGuid();
+        session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            MessageType = "test",
+            Payload = [],
+            Headers = "{}",
+            OrderKey = "stream",
+            Sequence = 1,
+            Status = OutboxMessageStatus.Failed
+        });
+        session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
+        {
+            Id = blocked,
+            MessageType = "test",
+            Payload = [],
+            Headers = "{}",
+            OrderKey = "stream",
+            Sequence = 2
+        });
+        session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
+        {
+            Id = independent,
+            MessageType = "test",
+            Payload = [],
+            Headers = "{}"
+        });
+        await session.SaveChangesAsync();
+        var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
+        var first = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
+        Assert.Equal(independent, first.Id);
+        await session.Set<NOFOutboxMessage>().Where(message => message.Id == independent)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(message => message.ClaimExpiresAtUtc, DateTime.UtcNow.AddSeconds(-1)));
+        var second = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
+        Assert.NotEqual(first.ClaimedBy, second.ClaimedBy);
+        Assert.Equal(0, await store.AtomicMarkAsSentAsync([first]));
+        await store.AtomicRecordDeliveryFailureAsync(first, "stale", permanent: true);
+        Assert.Equal(1, await store.AtomicMarkAsSentAsync([second]));
+        Assert.Empty(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
+    }
+
+    [Fact]
     public async Task OutboxRepository_ShouldNotClaimExpiredOrExhaustedMessagesBeyondRules()
     {
         using var services = CreateServiceProvider(new TransactionalMessageOptions
@@ -1629,20 +1683,18 @@ public class SqliteInMemoryPersistenceTests
         db.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
         {
             Id = id1,
-            DispatchRoutes = "[\"System.String\"]",
             Payload = System.Text.Encoding.UTF8.GetBytes("a"),
             Headers = "{}",
-            MessageType = OutboxMessageType.Command
+            MessageType = "test.command"
         });
 
         var id2 = Guid.NewGuid();
         db.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
         {
             Id = id2,
-            DispatchRoutes = "[\"System.String\"]",
             Payload = System.Text.Encoding.UTF8.GetBytes("b"),
             Headers = "{}",
-            MessageType = OutboxMessageType.Command
+            MessageType = "test.command"
         });
         await db.SaveChangesAsync();
 
@@ -1681,10 +1733,9 @@ public class SqliteInMemoryPersistenceTests
         db.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
         {
             Id = id,
-            DispatchRoutes = "[\"System.String\"]",
             Payload = System.Text.Encoding.UTF8.GetBytes("payload"),
             Headers = "{}",
-            MessageType = OutboxMessageType.Notification
+            MessageType = "test.notification"
         });
         await db.SaveChangesAsync();
 
@@ -1727,10 +1778,9 @@ public class SqliteInMemoryPersistenceTests
             {
                 Id = expiredId,
                 RetryCount = 2,
-                DispatchRoutes = "[\"System.String\"]",
                 Payload = System.Text.Encoding.UTF8.GetBytes("expired"),
                 Headers = "{}",
-                MessageType = OutboxMessageType.Command,
+                MessageType = "test.command",
                 ClaimedBy = "expired-claim",
                 ClaimExpiresAtUtc = now.AddSeconds(-1)
             },
@@ -1738,10 +1788,9 @@ public class SqliteInMemoryPersistenceTests
             {
                 Id = futureId,
                 RetryCount = 2,
-                DispatchRoutes = "[\"System.String\"]",
                 Payload = System.Text.Encoding.UTF8.GetBytes("future"),
                 Headers = "{}",
-                MessageType = OutboxMessageType.Command,
+                MessageType = "test.command",
                 ClaimedBy = "future-claim",
                 ClaimExpiresAtUtc = now.AddMinutes(5)
             });
@@ -1987,8 +2036,7 @@ public class SqliteInMemoryPersistenceTests
             dbContext.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
             {
                 Id = messageId,
-                DispatchRoutes = "[\"missing-handler\"]",
-                MessageType = (OutboxMessageType)999,
+                MessageType = "unknown.schema",
                 Payload = [],
                 Headers = "{}"
             });

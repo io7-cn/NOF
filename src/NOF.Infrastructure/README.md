@@ -263,3 +263,5 @@ NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T
 Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and provider query helpers are infrastructure collaboration only. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).
 
 See [unified operations](../../docs/en/design/unified-operations.md) for IOperationExecutor, host message bindings, durable consumer IDs and stored-route migration.
+
+Immediate messages use concrete MemoryMessageClient/RabbitMQMessageClient with explicit destinations. Generic IOutbox intents are interpreted by host-registered IOutboxHandler<T> adapters; AddRabbitMQ does not replace the memory client. Inbound Queue/Subscription bindings remain separate. See [transactional outbox](../../docs/en/design/transactional-outbox.md).

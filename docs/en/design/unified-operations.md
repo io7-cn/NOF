@@ -45,38 +45,18 @@ builder.Services.AddMessageBindings(bindings =>
 
 Queue/Subscription.To accepts only `ServiceOperationDescriptor<T, Empty>`. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
 
-## Invocation versus submission
+## Calls and durable intents
+
+InvokeAsync waits for an application operation to finish. Immediate remote calls use a concrete client. Transactional work uses IOutbox.EnqueueAsync(message, context, options, ct), followed by saving the same IUnitOfWork; its return value is an intent ID, not a remote business result. Infrastructure registers a stable message ID/version and IOutboxHandler<T>; the outbox knows neither queues nor service operations.
 
 ```csharp
-// Wait for business execution, in an isolated local scope.
 await MailService.Send.InvokeAsync(services, mail, context, ct);
-
-// IMessageDispatcher: wait for transport acceptance, not business execution.
-await messages.SendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
-await messages.PublishAsync(new OrderCreated(orderId), context, ct);
-
-// Stage in the current transaction; save business changes and delivery intent together.
-await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
-await messages.DeferPublishAsync(new OrderCreated(orderId), context, ct);
+await memoryClient.SendAsync("mail.send.v1", mail, context, ct);
+await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
 
-Ordered variants take the operation (for sending), payload, order key, Context, optional completesOrderKey and cancellation token. Their existing contiguous-sequence requirements remain. Acceptance is not exactly-once execution of external side effects.
-
-A producer with no local consumer configures outbound routes only:
-
-```csharp
-// Shared business Contract + framework Application; no receiver implementation.
-var sendMail = new ServiceOperationReference<SendMail>(
-    typeof(IMailService), nameof(IMailService.Send));
-services.AddMessageBindings(bindings =>
-{
-    bindings.RouteToQueue(sendMail, "mail.send.v1");
-    bindings.Topic<OrderCreated>("orders.created.v1");
-});
-```
-
-This installs no local consumer. Producer and receiver must agree on the stable route and payload schema. No CLR payload names are persisted as publication routes. Routing registries belong to DI, freeze on first use and reject conflicting identities.
+Message bindings are inbound only. Keep Queue/Subscription.To for consumer topology; remove producer RouteToQueue/Topic declarations. One operation may receive multiple queues. Concrete clients name physical destinations explicitly. See [generic transactional outbox](transactional-outbox.md) for registration, typed adapters, retries and deployment migration.
 
 ## One execution boundary
 
@@ -94,11 +74,9 @@ The memory and RabbitMQ transports use the same MessageInboxReceiver. It establi
 
 TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests and RejectMismatchedTenantForRequests are renamed to RequireAuthenticatedTenant and RejectMismatchedTenant; their policies now apply to every operation origin.
 
-Replace ICommandSender/INotificationPublisher with IMessageDispatcher. Replace message handlers with Empty-returning service operations, declare explicit queue/subscription bindings, and pass an operation descriptor to Send/DeferSend. Replace the three inbound context subclasses and InvocationKind with InvocationContext plus Origin. Use IOperationExecutor for an existing scope and IOperationInvoker for isolated local calls. Removed APIs have no compatibility adapter.
+Replace old command/notification handlers with Empty-returning operations and explicit inbound Queue/Subscription bindings. InvocationContext plus Origin replaces the old context subclasses. Immediate calls use concrete clients; deferred APIs become IOutbox.EnqueueAsync and options. Old dispatcher and producer routing APIs have no compatibility adapter.
 
-Do not start the new consumers against old routing records without preparation. The safest upgrade is to stop producers, drain the old outbox, broker queues and inbox with the old deployment, verify no pending/claimed/failed records need recovery, then deploy both sides with the new bindings and resume production. This requires no schema migration.
-
-If draining is impossible, stop all workers and create an application-owned migration with an explicit old-to-new mapping: old outbox DispatchRoutes payload-type strings to stable queue/topic routes; old inbox Route handler/queue names to `queue:<queue>` or `subscription:<subscription>`; and the corresponding NOFInboxOrderState.Route keys in every tenant database. Include retained processed receipts to preserve deduplication, resolve key collisions, preserve ordering/sequence progress and migrate/replay broker backlog. Back up and validate the mapping before restarting. NOF never guesses a handler-name migration or silently drops an unresolved receipt.
+The generic outbox requires a schema migration after draining legacy records. Follow the [outbox migration procedure](transactional-outbox.md). Earlier inbox/broker route-name changes still require draining or an explicit old-to-new receipt, subscription and order-state mapping in every tenant database. Back up, preserve deduplication and ordering progress, and never guess unresolved routes.
 
 ## Aggregate-owned collections
 

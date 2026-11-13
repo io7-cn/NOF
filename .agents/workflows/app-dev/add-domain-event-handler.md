@@ -37,32 +37,12 @@ await eventPublisher.PublishAsync(
 
 Domain methods may instead call `payload.PublishAsEvent()`. At a NOF handler/event boundary, the ambient publisher carries the current `Context` into nested in-memory events.
 
-## 3. Stage a Transactional Notification
+## 3. Stage a Transactional Intent
 
 ```csharp
-public sealed class CreateOrderHandler(
-    IDbContext dbContext,
-    IMessageDispatcher publisher)
-    : CommandHandler<CreateOrderCommand>
-{
-    public override async Task HandleAsync(
-        CreateOrderCommand command,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        var order = Order.Create(EmailAddress.From(command.CustomerEmail));
-        orders.Add(order);
-
-        await publisher.DeferPublishAsync(
-            new OrderCreatedNotification(order.Id),
-            context,
-            cancellationToken);
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
-}
+await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), invocation.Context,
+    cancellationToken: cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-`DeferPublishAsync(...)` and `DeferSendAsync(...)` add an outbox entity to the current outbox scope; saving that same context commits it with application data. Immediate `PublishAsync(...)` / `SendAsync(...)` bypass the outbox.
-
-For ordered streams, use `DeferPublishOrderedAsync(...)` or `DeferSendOrderedAsync(...)` with a stable order key. Set `completesOrderKey` only on the final message, and ensure every participating consumer sees an unbroken stream.
+Inject IOutbox in the Application operation. The host registers its stable ID/version and an IOutboxHandler<T> that calls a concrete client. Enqueue snapshots without sending or saving. Use OutboxEnqueueOptions for an ordered stream and complete only its final intent. See docs/en/design/transactional-outbox.md.
