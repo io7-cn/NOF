@@ -190,6 +190,7 @@ public sealed class ConfigNodeRestTests
         builder.WebHost.UseTestServer();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
+        builder.AddApplicationPart(typeof(NOF.Sample.Persistence.ConfigNodePersistence).Assembly);
         builder.AddApplicationService<NOFSampleService>();
         builder.AddApplicationService<PolicyProbeService>();
         builder.Services.AddSingleton<PolicyProbe>();

@@ -10,7 +10,7 @@ public static class TransactionalMessages
     public sealed record SendEmailCommand(string To, string Subject, string Body);
 
     public static async Task StageAsync(
-        IDbContext dbContext,
+        IUnitOfWork unitOfWork,
         INotificationPublisher notificationPublisher,
         ICommandSender commandSender,
         Guid orderId,
@@ -18,9 +18,9 @@ public static class TransactionalMessages
         Context context,
         CancellationToken cancellationToken)
     {
-        // Persist business changes using this same dbContext before saving.
+        // Persist business changes using this same unitOfWork before saving.
         await notificationPublisher.DeferPublishAsync(new OrderCreatedNotification(orderId), context, cancellationToken);
         await commandSender.DeferSendAsync(new SendEmailCommand(email, "Created", "Order created."), context, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

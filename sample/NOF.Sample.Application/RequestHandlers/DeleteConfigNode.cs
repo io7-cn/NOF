@@ -6,40 +6,40 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class DeleteConfigNode : NOFSampleService.DeleteConfigNode
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
+    private readonly IConfigNodeQueries _queries;
 
     public DeleteConfigNode(
-        IDbContext dbContext,
-        ICacheService cache)
+        IConfigNodeRepository nodes, IUnitOfWork unitOfWork,
+        IConfigNodeQueries queries, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
+        _queries = queries;
     }
 
     public override async Task<Result> HandleAsync(DeleteConfigNodeRequest request, Context context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.Id);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
+        var node = await _nodes.GetAsync(id, cancellationToken);
         if (node is null)
         {
             return new NotFound("Node not found.");
         }
 
         // 检查是否有子节点
-        var children = await _dbContext.Set<Entities.ConfigNodeChildren>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.NodeId == id, cancellationToken);
-        var hasChildren = children?.HasChildren() ?? false;
+        var hasChildren = await _queries.HasChildrenAsync(id, cancellationToken);
         if (hasChildren)
         {
             return new HasChildren(new NodeHasChildrenError(request.Id));
         }
 
         node.MarkAsDeleted();
-        _dbContext.Set<ConfigNode>().Remove(node);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _nodes.Remove(node);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(id), cancellationToken);

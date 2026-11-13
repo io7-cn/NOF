@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Infrastructure;
 
 namespace NOF.Infrastructure;
 
@@ -65,25 +66,24 @@ public sealed class MemoryNotificationRider : INotificationRider
         await using var scope = _serviceProvider.CreateAsyncScope();
         scope.ServiceProvider.ResolveDaemonServices();
 
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
+        var dbContext = scope.ServiceProvider.GetService<IInboxStore>();
         if (dbContext is null)
         {
             return true;
         }
 
         var order = InboxMessageOrdering.Parse(headers);
-        await InboxMessageOrdering.EnsureStateAsync(dbContext, messageId, route, order, cancellationToken);
-        dbContext.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(
+        var message = NOFInboxMessage.Create(
             messageId,
             messageType,
             route,
             payload.ToArray(),
             SerializeHeaders(headers),
-            order));
+            order);
 
         try
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.ReceiveAsync(message, order, cancellationToken);
             return true;
         }
         catch (DbUpdateException)

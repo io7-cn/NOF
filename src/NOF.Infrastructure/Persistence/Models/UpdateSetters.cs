@@ -1,6 +1,7 @@
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 
-namespace NOF.Domain;
+namespace NOF.Infrastructure;
 
 /// <summary>
 /// Describes a provider-agnostic batch update specification for a queryable entity set.

@@ -12,10 +12,9 @@ Domain primitives package for the [NOF Framework](https://github.com/XmmShp/NOF)
 - Domain-owned business values for predictable rule outcomes
 - Standard .NET argument exceptions for invalid construction
 - `IIdGenerator` and the ambient `IdGenerator` facade
-- `IRepository<TEntity>`, `IAsyncQueryable<T>`, and provider-agnostic batch update descriptors for repository abstractions
 - `AddNOFDomain()` for package-local runtime registration
 
-Unit-of-work orchestration remains in `NOF.Application` through `IDbContext`; repository abstractions live here so Domain services can express collection dependencies without referencing Application.
+Domain applications declare aggregate-specific repository interfaces. NOF.Domain provides no generic repository, query executor or update-expression DSL. Application coordinates commits through IUnitOfWork; see [persistence boundaries](../../docs/en/design/persistence-boundaries.md).
 
 ## Key Abstractions
 

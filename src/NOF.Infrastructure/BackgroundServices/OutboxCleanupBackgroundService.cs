@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
 using NOF.Hosting;
+using NOF.Infrastructure;
 namespace NOF.Infrastructure;
 
 /// <summary>
@@ -80,29 +81,14 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         scope.ServiceProvider.ResolveDaemonServices();
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
-        if (dbContext is null)
+        var store = scope.ServiceProvider.GetService<IOutboxStore>();
+        if (store is null)
         {
-            _logger.LogDebug("Skipping outbox cleanup because no IDbContext provider is registered.");
+            _logger.LogDebug("Skipping outbox cleanup because no IOutboxStore is registered.");
             return;
         }
         var olderThan = DateTime.UtcNow - _options.RetentionPeriod;
-        var deletedCount = await dbContext.Set<NOFOutboxMessage>()
-            .Where(m => m.Status == OutboxMessageStatus.Sent)
-            .Where(m => m.SentAtUtc != null && m.SentAtUtc < olderThan)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var compactedOrderStateCount = await dbContext.Set<NOFOutboxOrderState>()
-            .Where(state => state.CreatedAtUtc < olderThan)
-            .Where(state => dbContext.Set<NOFOutboxOrderState>().Any(newer =>
-                newer.OrderKey == state.OrderKey && newer.Sequence > state.Sequence))
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var deletedCompletedOrderStateCount = await dbContext.Set<NOFOutboxOrderState>()
-            .Where(state => state.CompletesOrderKey && state.CreatedAtUtc < olderThan)
-            .Where(state => !dbContext.Set<NOFOutboxMessage>().Any(message =>
-                message.OrderKey == state.OrderKey && message.Status != OutboxMessageStatus.Sent))
-            .ExecuteDeleteAsync(cancellationToken);
+        var (deletedCount, compactedOrderStateCount, deletedCompletedOrderStateCount) = await store.CleanupAsync(olderThan, cancellationToken);
 
         if (deletedCount > 0)
         {

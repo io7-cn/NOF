@@ -10,7 +10,7 @@ Entity Framework Core persistence package for the [NOF Framework](https://github
 - `UseDbContext<TDbContext>()`
 - `EFCoreSelector`
 - tenant-aware model customization and factory services
-- EF-backed `IInboxMessageStore` and `IDbContext` adapter
+- EF-backed `IInboxStore` and `IPersistenceSession` adapter
 - SQLite in-memory default persistence registration
 
 ## Installation
@@ -84,9 +84,9 @@ For lightweight local or test scenarios, call `AddNOFEntityFrameworkCore()` to r
 ### Sharing native operations with Application persistence
 
 `UseDbContext<AppDbContext>()` resolves `AppDbContext`, `NOFDbContext`, `DbContext`,
-and the application `IDbContext` adapter over the same scoped instance. A Host
+and the infrastructure session / application IUnitOfWork adapter over the same scoped instance. A Host
 implementation can inject `AppDbContext` to execute provider-specific SQL and join
-the transaction started through `IDbContext`. Factory-created contexts are independent.
+the transaction started through ITransactionManager. Factory-created contexts are independent.
 See [persistence boundaries](../../../docs/design/repository-uow.md) for connection,
 transaction, tenant, and retry requirements.
 
@@ -108,7 +108,7 @@ builder.UseDbContext<AppDbContext>()
     .MigrateOnStart();
 ```
 
-The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because NOF's `IDbContextFactory` creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
+The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because NOF's `IPersistenceSessionFactory` creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
 
 ## Custom tenant migration orchestration
 
@@ -178,7 +178,7 @@ builder.UseDbContext<AppDbContext, AppDbContextFactory>()
 
 The custom factory is registered as itself and as `NOFDbContextFactory<TDbContext>`,
 `ITenantDbContextFactory<TDbContext>`, EF Core's `IDbContextFactory<TDbContext>`, and NOF's
-provider-neutral `IDbContextFactory`. Prefer `WithConnectionStringResolver(...)` when only database
+provider-neutral `IPersistenceSessionFactory`. Prefer `WithConnectionStringResolver(...)` when only database
 routing differs; derive the factory when the context creation lifecycle itself must change.
 
 ## Soft delete
@@ -207,3 +207,5 @@ The entity-level setting takes precedence over the `DbContext` setting. Call `Ha
 Applications upgrading from a version where soft delete was enabled by default should add
 `WithSoftDelete(true)` before generating or applying further migrations if they intend to preserve
 their existing delete columns, indexes, filters, and behavior.
+
+Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and its query helpers are infrastructure collaboration only. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).

@@ -1,15 +1,16 @@
 using NOF.Application;
 using NOF.Contract;
+using NOF.Infrastructure;
 
 namespace NOF.Infrastructure.NHibernate;
 /// <summary>Creates database contexts backed by tenant-aware NHibernate sessions.</summary>
 
 public sealed class NHibernateDbContextFactory(
-    NHibernateSessionFactoryRegistry sessionFactoryRegistry) : IDbContextFactory
+    NHibernateSessionFactoryRegistry sessionFactoryRegistry) : IPersistenceSessionFactory
 {
-    public IDbContext CreateDbContext()
+    public IPersistenceSession CreateDbContext()
         => new NHibernateDbContextAdapter(sessionFactoryRegistry.OpenSession(TenantId.Normalize(Context.Current.TenantId)));
 
-    public IDbContext CreateDbContext(string tenantId)
+    public IPersistenceSession CreateDbContext(string tenantId)
         => new NHibernateDbContextAdapter(sessionFactoryRegistry.OpenSession(TenantId.Normalize(tenantId)));
 }

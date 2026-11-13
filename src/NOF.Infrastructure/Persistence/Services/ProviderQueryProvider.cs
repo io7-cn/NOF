@@ -1,12 +1,13 @@
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 
-namespace NOF.Application;
+namespace NOF.Infrastructure;
 
-public sealed class AsyncQueryProvider(IQueryProvider innerProvider, IAsyncQueryExecutor asyncExecutor) : IQueryProvider
+public sealed class ProviderQueryProvider(IQueryProvider innerProvider, IProviderQueryExecutor asyncExecutor) : IQueryProvider
 {
     private readonly IQueryProvider _innerProvider = innerProvider;
-    private readonly IAsyncQueryExecutor _asyncExecutor = asyncExecutor;
+    private readonly IProviderQueryExecutor _asyncExecutor = asyncExecutor;
 
     public IQueryable CreateQuery(Expression expression)
     {
@@ -19,7 +20,7 @@ public sealed class AsyncQueryProvider(IQueryProvider innerProvider, IAsyncQuery
     {
         ArgumentNullException.ThrowIfNull(expression);
 
-        return new AsyncQueryable<TElement>(_innerProvider.CreateQuery<TElement>(expression), _asyncExecutor);
+        return new ProviderQuery<TElement>(_innerProvider.CreateQuery<TElement>(expression), _asyncExecutor);
     }
 
     public object? Execute(Expression expression)

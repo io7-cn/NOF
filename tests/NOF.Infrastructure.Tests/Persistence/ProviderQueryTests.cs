@@ -1,6 +1,7 @@
+using NOF.Infrastructure;
 using Xunit;
 
-namespace NOF.Application.Tests;
+namespace NOF.Infrastructure.Tests.Persistence;
 
 public class QueryableAsyncExtensionsTests
 {
@@ -40,7 +41,7 @@ public class QueryableAsyncExtensionsTests
     [Fact]
     public async Task CountAsync_ShouldWorkOnWrappedQueryableChain()
     {
-        var query = Enumerable.Range(1, 10).AsQueryable().AsAsyncQueryable();
+        var query = Enumerable.Range(1, 10).AsQueryable().AsProviderQuery();
 
         var result = await query.Where(value => value % 2 == 0).CountAsync();
 

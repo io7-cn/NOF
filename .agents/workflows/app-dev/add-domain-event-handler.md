@@ -51,14 +51,14 @@ public sealed class CreateOrderHandler(
         CancellationToken cancellationToken)
     {
         var order = Order.Create(EmailAddress.From(command.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
+        orders.Add(order);
 
         await publisher.DeferPublishAsync(
             new OrderCreatedNotification(order.Id),
             context,
             cancellationToken);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
 ```

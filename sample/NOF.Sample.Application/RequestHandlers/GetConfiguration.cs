@@ -2,19 +2,18 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using NOF.Sample.Application.Repositories;
 using System.Text.Json.Nodes;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
 public class GetConfiguration : NOFSampleService.GetConfiguration
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeQueries _queries;
     private readonly ICacheService _cache;
 
-    public GetConfiguration(IDbContext dbContext, ICacheService cache)
+    public GetConfiguration(IConfigNodeQueries queries, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _queries = queries;
         _cache = cache;
     }
 
@@ -89,10 +88,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
             return cachedValue.Value;
         }
 
-        var dto = await _dbContext.Set<ConfigNode>()
-            .QueryNodeByName(name)
-            .ProjectTo<ConfigNodeDto>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var dto = await _queries.FindByNameAsync(name, cancellationToken);
         if (dto is null)
         {
             return null;
@@ -116,10 +112,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
             return cachedValue.Value;
         }
 
-        var dto = await _dbContext.Set<ConfigNode>()
-            .QueryNodeById(id)
-            .ProjectTo<ConfigNodeDto>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var dto = await _queries.FindAsync(id, cancellationToken);
         if (dto is null)
         {
             return null;

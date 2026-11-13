@@ -2,13 +2,14 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using NOF.Application;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using System.ComponentModel;
 
 namespace NOF.Infrastructure;
 
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class OutboxOrderSequenceAllocator(
-    IDbContext dbContext,
+    IPersistenceSession dbContext,
     IOptions<DeploymentOptions> deployment)
 {
     internal const int MaxOrderKeyLength = 512;

@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using NOF.Domain;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Infrastructure.EntityFrameworkCore.SourceGenerator;
 using System.Collections.Immutable;
@@ -14,7 +15,7 @@ public sealed class EfCoreFindUsageAnalyzerTests
 {
     private static readonly Type[] _refs =
     [
-        typeof(IRepository<>),
+        typeof(IEntitySet<>),
         typeof(DbContext),
         typeof(NOFDbContext),
         typeof(EntityFrameworkQueryableExtensions)
@@ -220,9 +221,9 @@ public sealed class EfCoreFindUsageAnalyzerTests
 
             public sealed class OrderHandler
             {
-                private readonly IDbContext _dbContext;
+                private readonly IPersistenceSession _dbContext;
 
-                public OrderHandler(IDbContext dbContext)
+                public OrderHandler(IPersistenceSession dbContext)
                 {
                     _dbContext = dbContext;
                 }

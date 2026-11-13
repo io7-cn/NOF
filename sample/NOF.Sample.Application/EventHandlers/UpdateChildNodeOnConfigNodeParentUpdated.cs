@@ -9,31 +9,29 @@ namespace NOF.Sample.Application.EventHandlers;
 /// </summary>
 public class UpdateChildNodeOnConfigNodeParentUpdated : InMemoryEventHandler<ConfigNodeParentUpdatedEvent>
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeHierarchyStore _hierarchy;
 
-    public UpdateChildNodeOnConfigNodeParentUpdated(IDbContext dbContext)
+    public UpdateChildNodeOnConfigNodeParentUpdated(IConfigNodeHierarchyStore hierarchy)
     {
-        _dbContext = dbContext;
+        _hierarchy = hierarchy;
     }
 
     public override async Task HandleAsync(ConfigNodeParentUpdatedEvent @event, Context context, CancellationToken cancellationToken)
     {
         if (@event.OldParentId.HasValue)
         {
-            var oldParentChildren = await _dbContext.Set<Entities.ConfigNodeChildren>()
-                .FirstOrDefaultAsync(c => c.NodeId == @event.OldParentId.Value, cancellationToken);
+            var oldParentChildren = await _hierarchy.GetAsync(@event.OldParentId.Value, cancellationToken);
             oldParentChildren?.RemoveChild(@event.NodeId);
         }
 
         if (@event.NewParentId.HasValue)
         {
-            var newParentChildren = await _dbContext.Set<Entities.ConfigNodeChildren>()
-                .FirstOrDefaultAsync(c => c.NodeId == @event.NewParentId.Value, cancellationToken);
+            var newParentChildren = await _hierarchy.GetAsync(@event.NewParentId.Value, cancellationToken);
 
             if (newParentChildren is null)
             {
                 newParentChildren = Entities.ConfigNodeChildren.Create(@event.NewParentId.Value);
-                _dbContext.Set<Entities.ConfigNodeChildren>().Add(newParentChildren);
+                _hierarchy.Add(newParentChildren);
             }
 
             newParentChildren.AddChild(@event.NodeId);

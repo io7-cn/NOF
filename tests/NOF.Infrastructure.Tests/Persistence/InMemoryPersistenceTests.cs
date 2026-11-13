@@ -11,6 +11,7 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Domain;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -48,13 +49,13 @@ public class SqliteInMemoryPersistenceTests
             Assert.Same(concrete, scope.ServiceProvider.GetRequiredService<TestDbContext>());
         }
 
-        var application = scope.ServiceProvider.GetRequiredService<NOF.Application.IDbContext>();
+        var application = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
         var sender = scope.ServiceProvider.GetRequiredService<ICommandSender>();
-        await using (var transaction = await application.BeginTransactionAsync())
+        await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
         {
             var state = new NOFOutboxOrderState { OrderKey = "shared", Sequence = 1 };
-            application.Set<NOFOutboxOrderState>().Add(state);
+            concrete.Set<NOFOutboxOrderState>().Add(state);
             Assert.Same(state, Assert.Single(concrete.ChangeTracker.Entries<NOFOutboxOrderState>()).Entity);
             Assert.NotNull(concrete.Database.CurrentTransaction);
             await publisher.DeferPublishAsync(new ScopedTransactionMessage("first"), Context.Current);
@@ -362,7 +363,7 @@ public class SqliteInMemoryPersistenceTests
         using (var setupScope = services.CreateScope())
         {
             SetTenant(setupScope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-            var dbContext = setupScope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = setupScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             dbContext.Set<NOFInboxOrderState>().Add(new NOFInboxOrderState
             {
                 Route = "OrderedHandler",
@@ -380,14 +381,8 @@ public class SqliteInMemoryPersistenceTests
 
         using var claimScope = services.CreateScope();
         SetTenant(claimScope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-        var claimDbContext = claimScope.ServiceProvider.GetRequiredService<IDbContext>();
-        var processor = services.GetServices<IHostedService>().OfType<InboxMessageBackgroundService>().Single();
-        var claimMethod = typeof(InboxMessageBackgroundService).GetMethod(
-            "AtomicClaimPendingMessagesAsync",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var claimedEnumerable = (IAsyncEnumerable<NOFInboxMessage>)claimMethod.Invoke(
-            processor,
-            [claimDbContext, 10, TimeSpan.FromMinutes(1), CancellationToken.None])!;
+        var store = claimScope.ServiceProvider.GetRequiredService<IInboxStore>();
+        var claimedEnumerable = store.AtomicClaimPendingMessagesAsync(10, TimeSpan.FromMinutes(1), CancellationToken.None);
         var claimed = new List<NOFInboxMessage>();
         await foreach (var message in claimedEnumerable)
         {
@@ -1745,7 +1740,7 @@ public class SqliteInMemoryPersistenceTests
             });
         await db.SaveChangesAsync();
 
-        var appDb = scope.ServiceProvider.GetRequiredService<IDbContext>();
+        var appDb = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var changed = await TransactionalMessageRecovery.MarkExpiredExhaustedOutboxMessagesAsFailedAsync(
             appDb,
             maxRetryCount: 2,
@@ -1813,7 +1808,7 @@ public class SqliteInMemoryPersistenceTests
             });
         await db.SaveChangesAsync();
 
-        var appDb = scope.ServiceProvider.GetRequiredService<IDbContext>();
+        var appDb = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var changed = await TransactionalMessageRecovery.MarkExpiredExhaustedInboxMessagesAsFailedAsync(
             appDb,
             maxRetryCount: 2,
@@ -1973,7 +1968,7 @@ public class SqliteInMemoryPersistenceTests
         {
             using var tenantContext = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             dbContext.Set<NOFInboxMessage>().Add(new NOFInboxMessage
             {
                 Id = messageId,
@@ -2007,8 +2002,8 @@ public class SqliteInMemoryPersistenceTests
                 {
                     using var tenantContext = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
                     using var scope = services.CreateScope();
-                    var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
-                    var message = await System.Linq.QueryableAsyncExtensions.FirstAsync(
+                    var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+                    var message = await NOF.Infrastructure.QueryableAsyncExtensions.FirstAsync(
                         dbContext.Set<NOFInboxMessage>(),
                         m => m.Id == messageId,
                         timeout.Token);
@@ -2016,7 +2011,7 @@ public class SqliteInMemoryPersistenceTests
                     {
                         failedCount++;
                     }
-                    var outboxMessage = await System.Linq.QueryableAsyncExtensions.FirstAsync(
+                    var outboxMessage = await NOF.Infrastructure.QueryableAsyncExtensions.FirstAsync(
                         dbContext.Set<NOFOutboxMessage>(),
                         m => m.Id == messageId,
                         timeout.Token);

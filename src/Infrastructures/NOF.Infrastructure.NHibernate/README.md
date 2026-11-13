@@ -9,7 +9,7 @@ NHibernate persistence package for the [NOF Framework](https://github.com/XmmShp
 Current scope:
 
 - `UseNHibernate()`
-- NHibernate-backed `IDbContext` and `IDbContextFactory`
+- NHibernate-backed `IPersistenceSession` and `IPersistenceSessionFactory`
 - contributor-based entity mapping through `IDbContextModelCreatingContributor`
 - tenant-aware connection-string resolution for `TenantMode.DatabasePerTenant`
 
@@ -46,3 +46,5 @@ builder.UseNHibernate()
     })
     .BuildSchemaOnInitialize();
 ```
+
+Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and its query helpers are infrastructure collaboration only. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).

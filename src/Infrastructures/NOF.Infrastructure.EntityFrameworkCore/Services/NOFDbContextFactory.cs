@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Infrastructure;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -17,7 +18,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 /// </summary>
 /// <typeparam name="TDbContext">The concrete NOF database context type.</typeparam>
 public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)] TDbContext>
-    : ITenantDbContextFactory<TDbContext>, IDbContextFactory
+    : ITenantDbContextFactory<TDbContext>, IPersistenceSessionFactory
     where TDbContext : NOFDbContext
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> MigrationLocks = new(StringComparer.Ordinal);
@@ -138,10 +139,10 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         return dbContext;
     }
 
-    IDbContext IDbContextFactory.CreateDbContext()
+    IPersistenceSession IPersistenceSessionFactory.CreateDbContext()
         => new EfCoreDbContextAdapter(CreateDbContext());
 
-    IDbContext IDbContextFactory.CreateDbContext(string tenantId)
+    IPersistenceSession IPersistenceSessionFactory.CreateDbContext(string tenantId)
         => new EfCoreDbContextAdapter(CreateDbContext(tenantId));
 
     private void EnsureSqliteSchemaInitialized(TDbContext dbContext, string contextType)

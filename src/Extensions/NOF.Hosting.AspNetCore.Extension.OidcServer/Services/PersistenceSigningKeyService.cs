@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NOF.Application;
+using NOF.Infrastructure;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -15,7 +16,7 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 public sealed class PersistenceSigningKeyService : ISigningKeyService
 {
     private readonly OAuthAuthorizationServerOptions _options;
-    private readonly IDbContext _dbContext;
+    private readonly IPersistenceSession _dbContext;
     private readonly ILogger<PersistenceSigningKeyService> _logger;
     private readonly IHostEnvironment _hostEnvironment;
     private readonly DeploymentOptions _deployment;
@@ -23,7 +24,7 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
 
     public PersistenceSigningKeyService(
         IOptions<OAuthAuthorizationServerOptions> options,
-        IDbContext dbContext,
+        IPersistenceSession dbContext,
         IHostEnvironment hostEnvironment,
         IOptions<DeploymentOptions> deployment,
         ILogger<PersistenceSigningKeyService> logger)

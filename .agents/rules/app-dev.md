@@ -24,7 +24,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 - RPC: `IApplicationService`, `ApplicationService<TService>`, generated nested operation bases and static Service.Operation.InvokeAsync entries; no client interfaces or implementations are generated.
 - Messaging: `CommandHandler<T>`, `NotificationHandler<T>`, `ICommandSender`, `INotificationPublisher`.
 - In-process events: `InMemoryEventHandler<T>`, `IEventPublisher`, `PublishAsEvent()`.
-- Persistence: `IDbContext`, `IDbContextFactory`, `IRepository<T>`, provider-neutral async LINQ extensions.
+- Persistence: domain-owned aggregate repositories, Application DTO query ports and IUnitOfWork; explicit transactions use ITransactionManager/ITransaction. Core generic ORM/query contracts are removed; see docs/en/design/persistence-boundaries.md.
 - Caching and mapping: `ICacheService`, `CacheKey<T>`, `IMapper`, `ProjectTo<TDestination>()`.
 - Match the successful `T` itself or shared `NOF.Abstraction.Failure`. Payload-free Result is union(Empty, Failure). Success/Success<T> and WithMessage are removed; successful messages belong to explicit business DTOs. Do not use removed `IsSuccess`, `Extra` or reflective result projections. See `docs/en/design/result-unions.md`.
 - Responses: plain business values, Empty, Optional<T>, or FailureCase-generated operation-specific Result unions. Generic Contract Result types are removed.
@@ -75,13 +75,13 @@ Add Redis and RabbitMQ through `builder.Services.AddRedisCache(...)` and `builde
 
 ## Persistence Convention
 
-Application code depends on `IDbContext` and `IRepository<T>`, not EF Core `DbContext`. The host owns `NOFDbContext`, EF model configuration, migrations, and the call to `UseDbContext<T>()`.
+Application code depends on aggregate repositories, DTO query ports and IUnitOfWork. The host owns `NOFDbContext`, EF model configuration, migrations, and the call to `UseDbContext<T>()`.
 
-Deferred messages are added to the current `IDbContext` and become transactional only when the same context saves successfully:
+Deferred messages are staged in the current unit of work and become transactional only when the same context saves successfully:
 
 ```csharp
 await notificationPublisher.DeferPublishAsync(notification, context, cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
 ## Authentication
@@ -89,7 +89,7 @@ await dbContext.SaveChangesAsync(cancellationToken);
 - Register a local OAuth/OIDC authority with `builder.AddOidcServer(...)` from `NOF.Hosting.AspNetCore.Extension.OidcServer`; its endpoints are mapped automatically.
 - Register JWT validation with `builder.Services.AddAuthenticationResourceServer(...)`, configuring `AuthorizationServerIssuer`, `ExpectedIssuer`, and optional `Audience`.
 - Read identity through `IUserContext`; read the normalized current tenant from the handler's explicit `Context.TenantId`.
-- OIDC persistence uses the configured `IDbContext`, so configure a durable provider and migrations for production.
+- OIDC persistence uses the configured infrastructure session, so configure a durable provider and migrations for production.
 
 ## Source Generators and Conventions
 

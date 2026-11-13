@@ -17,3 +17,5 @@ NOF keeps its runtime surface small by moving repetitive framework work into sou
 - [Public API](public-api.md) — compatibility and surface-area rules.
 
 For types and members, continue to the [API reference](~/api/index.md).
+
+- [Persistence boundaries](../en/design/persistence-boundaries.md) ([简体中文](../zh-CN/design/persistence-boundaries.md)) — aggregate repositories, DTO queries, shared commits and message stores.

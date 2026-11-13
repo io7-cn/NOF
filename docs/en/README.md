@@ -54,3 +54,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [Invocation extensions](design/invocation-extensions.md)
 
 - [Native host integration](design/native-hosting.md)
+
+- [Persistence boundaries](design/persistence-boundaries.md)

@@ -1,5 +1,6 @@
 using NOF.Application;
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Infrastructure;
@@ -7,12 +8,12 @@ namespace NOF.Infrastructure;
 
 [RequiresDynamicCode("The in-memory persistence provider exposes LINQ IQueryable over in-memory collections and is intended for tests/development, not Native AOT.")]
 [RequiresUnreferencedCode("The in-memory persistence provider snapshots arbitrary entity types via reflection and is intended for tests/development, not trimmed applications.")]
-public sealed class InMemoryDbContext(InMemoryPersistenceStore store) : IDbContext
+public sealed class InMemoryDbContext(InMemoryPersistenceStore store) : IPersistenceSession
 {
     private readonly List<InMemoryPersistenceChange> _changes = [];
     private readonly Dictionary<Type, List<TrackedInMemoryEntity>> _trackedEntities = [];
 
-    public IRepository<TEntity> Set<TEntity>()
+    public IEntitySet<TEntity> Set<TEntity>()
         where TEntity : class
         => new InMemoryRepository<TEntity>(this, store);
 
@@ -41,10 +42,10 @@ public sealed class InMemoryDbContext(InMemoryPersistenceStore store) : IDbConte
         return Task.FromResult(SaveChanges(acceptAllChangesOnSuccess));
     }
 
-    public IDbContextTransaction BeginTransaction()
+    public IPersistenceTransaction BeginTransaction()
         => new InMemoryDbContextTransaction(store);
 
-    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public Task<IPersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(BeginTransaction());
@@ -170,7 +171,7 @@ public sealed class TrackedInMemoryEntity(object entity, object original)
 }
 /// <summary>Implements repository operations over in-memory persistence.</summary>
 
-public sealed class InMemoryRepository<TEntity> : AsyncQueryable<TEntity>, IRepository<TEntity>
+public sealed class InMemoryRepository<TEntity> : ProviderQuery<TEntity>, IEntitySet<TEntity>
     where TEntity : class
 {
     private readonly InMemoryDbContext _dbContext;
@@ -180,10 +181,6 @@ public sealed class InMemoryRepository<TEntity> : AsyncQueryable<TEntity>, IRepo
     {
         _dbContext = dbContext;
     }
-
-    public int Count => _dbContext.Query<TEntity>().Count();
-
-    public bool IsReadOnly => false;
 
     public void Add(TEntity entity)
         => _dbContext.AddChange(InMemoryPersistenceChangeKind.Add, typeof(TEntity), entity);
@@ -195,71 +192,18 @@ public sealed class InMemoryRepository<TEntity> : AsyncQueryable<TEntity>, IRepo
         return ValueTask.CompletedTask;
     }
 
-    public void AddRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Add(entity);
-        }
-    }
-
-    public Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        AddRange(entities);
-        return Task.CompletedTask;
-    }
-
-    public void Attach(TEntity entity)
-    {
-        _ = entity;
-    }
-
-    public void AttachRange(IEnumerable<TEntity> entities)
-    {
-        _ = entities;
-    }
-
-    public void Update(TEntity entity)
-        => _dbContext.AddChange(InMemoryPersistenceChangeKind.Update, typeof(TEntity), entity);
-
-    public void UpdateRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Update(entity);
-        }
-    }
-
     public bool Remove(TEntity entity)
     {
         _dbContext.AddChange(InMemoryPersistenceChangeKind.Remove, typeof(TEntity), entity);
         return true;
     }
 
-    public void RemoveRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Remove(entity);
-        }
-    }
-
-    public void Clear()
-        => RemoveRange(_dbContext.Query<TEntity>().ToArray());
-
-    public bool Contains(TEntity item)
-        => _dbContext.Query<TEntity>().Contains(item);
-
-    public void CopyTo(TEntity[] array, int arrayIndex)
-        => _dbContext.Query<TEntity>().ToArray().CopyTo(array, arrayIndex);
-
-    public IAsyncQueryable<TEntity> AsNoTracking()
-        => new AsyncQueryable<TEntity>(_dbContext.Query<TEntity>(track: false), AsyncExecutor);
+    public IProviderQuery<TEntity> AsNoTracking()
+        => new ProviderQuery<TEntity>(_dbContext.Query<TEntity>(track: false), AsyncExecutor);
 }
 /// <summary>Executes asynchronous queries against in-memory persistence.</summary>
 
-public sealed class InMemoryPersistenceAsyncQueryExecutor<TEntity>(InMemoryPersistenceStore store) : InMemoryAsyncQueryExecutor
+public sealed class InMemoryPersistenceAsyncQueryExecutor<TEntity>(InMemoryPersistenceStore store) : InMemoryQueryExecutor
     where TEntity : class
 {
     public override Task<int> ExecuteDeleteAsync<TSource>(IQueryable<TSource> source, CancellationToken cancellationToken = default)
@@ -281,11 +225,10 @@ public sealed class InMemoryPersistenceAsyncQueryExecutor<TEntity>(InMemoryPersi
 }
 /// <summary>Implements transaction behavior for an in-memory database context.</summary>
 
-public sealed class InMemoryDbContextTransaction : IDbContextTransaction
+public sealed class InMemoryDbContextTransaction : IPersistenceTransaction
 {
     private readonly InMemoryPersistenceStore _store;
     private readonly InMemoryPersistenceSnapshot _snapshot;
-    private readonly Dictionary<string, InMemoryPersistenceSnapshot> _savepoints = new(StringComparer.Ordinal);
     private bool _completed;
 
     public InMemoryDbContextTransaction(InMemoryPersistenceStore store)
@@ -316,43 +259,6 @@ public sealed class InMemoryDbContextTransaction : IDbContextTransaction
     {
         cancellationToken.ThrowIfCancellationRequested();
         Rollback();
-        return Task.CompletedTask;
-    }
-
-    public void CreateSavepoint(string name)
-        => _savepoints[name] = _store.CaptureSnapshot();
-
-    public Task CreateSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        CreateSavepoint(name);
-        return Task.CompletedTask;
-    }
-
-    public void RollbackToSavepoint(string name)
-    {
-        if (!_savepoints.TryGetValue(name, out var snapshot))
-        {
-            throw new DbTransactionException($"Savepoint '{name}' does not exist.");
-        }
-
-        _store.RestoreSnapshot(snapshot);
-    }
-
-    public Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        RollbackToSavepoint(name);
-        return Task.CompletedTask;
-    }
-
-    public void ReleaseSavepoint(string name)
-        => _savepoints.Remove(name);
-
-    public Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ReleaseSavepoint(name);
         return Task.CompletedTask;
     }
 

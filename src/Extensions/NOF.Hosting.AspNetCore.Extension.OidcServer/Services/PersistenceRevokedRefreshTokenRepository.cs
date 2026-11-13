@@ -1,12 +1,13 @@
 using NOF.Application;
+using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed class PersistenceRevokedRefreshTokenRepository : IRevokedRefreshTokenRepository
 {
-    private readonly IDbContext _dbContext;
+    private readonly IPersistenceSession _dbContext;
 
-    public PersistenceRevokedRefreshTokenRepository(IDbContext dbContext)
+    public PersistenceRevokedRefreshTokenRepository(IPersistenceSession dbContext)
     {
         _dbContext = dbContext;
     }

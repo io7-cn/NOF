@@ -5,6 +5,7 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using System.Collections.Concurrent;
 using Xunit;
 
@@ -21,7 +22,7 @@ public sealed class NotificationDispatchIntegrationTests
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
         var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var environment = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value;
 
         await publisher.DeferPublishOrderedAsync(
@@ -79,8 +80,8 @@ public sealed class NotificationDispatchIntegrationTests
         using var secondScope = host.Services.CreateScope();
         var firstPublisher = firstScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
         var secondPublisher = secondScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var firstDbContext = firstScope.ServiceProvider.GetRequiredService<IDbContext>();
-        var secondDbContext = secondScope.ServiceProvider.GetRequiredService<IDbContext>();
+        var firstDbContext = firstScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+        var secondDbContext = secondScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
 
         await firstPublisher.DeferPublishOrderedAsync(
             new ConcreteNotification("first-instance"),
@@ -96,7 +97,7 @@ public sealed class NotificationDispatchIntegrationTests
 
         using var retryScope = host.Services.CreateScope();
         var retryPublisher = retryScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var retryDbContext = retryScope.ServiceProvider.GetRequiredService<IDbContext>();
+        var retryDbContext = retryScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         await retryPublisher.DeferPublishOrderedAsync(
             new ConcreteNotification("retry"),
             "Invoice:99",
@@ -255,7 +256,7 @@ public sealed class NotificationDispatchIntegrationTests
             using (var scope = host.Services.CreateScope())
             {
                 var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+                var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
                 await publisher.DeferPublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
                 await dbContext.SaveChangesAsync(timeout.Token);
             }
@@ -321,7 +322,7 @@ public sealed class NotificationDispatchIntegrationTests
             Assert.Equal([1, 2], probe.Values);
 
             using var verificationScope = host.Services.CreateScope();
-            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             var state = await dbContext.Set<NOFInboxOrderState>().SingleAsync(timeout.Token);
             Assert.Equal(3, state.NextSequence);
             Assert.NotNull(state.CompletedAtUtc);
@@ -378,7 +379,7 @@ public sealed class NotificationDispatchIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             var messages = await dbContext.Set<NOFInboxMessage>()
                 .AsNoTracking()
                 .OrderBy(static message => message.Route)
@@ -401,7 +402,7 @@ public sealed class NotificationDispatchIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             var message = await dbContext.Set<NOFInboxMessage>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(cancellationToken);
@@ -423,7 +424,7 @@ public sealed class NotificationDispatchIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
             var message = await dbContext.Set<NOFOutboxMessage>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(cancellationToken);

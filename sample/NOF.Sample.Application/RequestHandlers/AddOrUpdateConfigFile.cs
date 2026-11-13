@@ -7,20 +7,21 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
-    public AddOrUpdateConfigFile(IDbContext dbContext, ICacheService cache)
+    public AddOrUpdateConfigFile(IConfigNodeRepository nodes, IUnitOfWork unitOfWork, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
     public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
     {
         var id = ConfigNodeId.From(request.NodeId);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
+        var node = await _nodes.GetAsync(id, cancellationToken);
 
         if (node is null)
         {
@@ -37,7 +38,7 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
         }
 
         node.AddOrUpdateConfigFile(fileName, content);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(id), cancellationToken);

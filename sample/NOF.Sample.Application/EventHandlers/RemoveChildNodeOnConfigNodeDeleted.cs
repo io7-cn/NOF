@@ -9,28 +9,26 @@ namespace NOF.Sample.Application.EventHandlers;
 /// </summary>
 public class RemoveChildNodeOnConfigNodeDeleted : InMemoryEventHandler<ConfigNodeDeletedEvent>
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeHierarchyStore _hierarchy;
 
-    public RemoveChildNodeOnConfigNodeDeleted(IDbContext dbContext)
+    public RemoveChildNodeOnConfigNodeDeleted(IConfigNodeHierarchyStore hierarchy)
     {
-        _dbContext = dbContext;
+        _hierarchy = hierarchy;
     }
 
     public override async Task HandleAsync(ConfigNodeDeletedEvent @event, Context context, CancellationToken cancellationToken)
     {
         if (@event.ParentId.HasValue)
         {
-            var parentChildren = await _dbContext.Set<Entities.ConfigNodeChildren>()
-                .FirstOrDefaultAsync(c => c.NodeId == @event.ParentId.Value, cancellationToken);
+            var parentChildren = await _hierarchy.GetAsync(@event.ParentId.Value, cancellationToken);
             parentChildren?.RemoveChild(@event.Id);
         }
 
-        var nodeChildren = await _dbContext.Set<Entities.ConfigNodeChildren>()
-            .FirstOrDefaultAsync(c => c.NodeId == @event.Id, cancellationToken);
+        var nodeChildren = await _hierarchy.GetAsync(@event.Id, cancellationToken);
 
         if (nodeChildren is not null)
         {
-            _dbContext.Set<Entities.ConfigNodeChildren>().Remove(nodeChildren);
+            _hierarchy.Remove(nodeChildren);
         }
     }
 }

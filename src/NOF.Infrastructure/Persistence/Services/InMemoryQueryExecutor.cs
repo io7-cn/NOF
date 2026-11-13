@@ -1,14 +1,15 @@
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 
-namespace NOF.Application;
+namespace NOF.Infrastructure;
 
-public class InMemoryAsyncQueryExecutor : IAsyncQueryExecutor
+public class InMemoryQueryExecutor : IProviderQueryExecutor
 {
-    public static InMemoryAsyncQueryExecutor Instance { get; } = new();
+    public static InMemoryQueryExecutor Instance { get; } = new();
 
-    protected InMemoryAsyncQueryExecutor() { }
+    protected InMemoryQueryExecutor() { }
 
     public IAsyncEnumerable<TSource> AsAsyncEnumerable<TSource>(IQueryable<TSource> source, CancellationToken cancellationToken = default)
     {

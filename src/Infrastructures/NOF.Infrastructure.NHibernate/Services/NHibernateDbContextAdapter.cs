@@ -1,6 +1,7 @@
 using NHibernate;
 using NOF.Application;
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -8,12 +9,12 @@ using System.Reflection;
 namespace NOF.Infrastructure.NHibernate;
 /// <summary>Adapts database context operations for NHibernate.</summary>
 
-public sealed class NHibernateDbContextAdapter(ISession session) : IDbContext
+public sealed class NHibernateDbContextAdapter(ISession session) : IPersistenceSession
 {
     private readonly ISession _session = session;
     private readonly NHibernateAsyncQueryExecutor _asyncExecutor = new(session);
 
-    public IRepository<TEntity> Set<TEntity>()
+    public IEntitySet<TEntity> Set<TEntity>()
         where TEntity : class
         => new NHibernateRepositoryAdapter<TEntity>(_session, _asyncExecutor);
 
@@ -44,7 +45,7 @@ public sealed class NHibernateDbContextAdapter(ISession session) : IDbContext
         return Task.FromResult(SaveChanges(acceptAllChangesOnSuccess));
     }
 
-    public IDbContextTransaction BeginTransaction()
+    public IPersistenceTransaction BeginTransaction()
     {
         try
         {
@@ -56,7 +57,7 @@ public sealed class NHibernateDbContextAdapter(ISession session) : IDbContext
         }
     }
 
-    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public Task<IPersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(BeginTransaction());
@@ -64,9 +65,9 @@ public sealed class NHibernateDbContextAdapter(ISession session) : IDbContext
 }
 /// <summary>Adapts database transactions for NHibernate.</summary>
 
-public sealed class NHibernateDbContextTransactionAdapter(ITransaction transaction) : IDbContextTransaction
+public sealed class NHibernateDbContextTransactionAdapter(global::NHibernate.ITransaction transaction) : IPersistenceTransaction
 {
-    private readonly ITransaction _transaction = transaction;
+    private readonly global::NHibernate.ITransaction _transaction = transaction;
 
     public Guid TransactionId { get; } = Guid.NewGuid();
 
@@ -108,36 +109,6 @@ public sealed class NHibernateDbContextTransactionAdapter(ITransaction transacti
         return Task.CompletedTask;
     }
 
-    public void CreateSavepoint(string name)
-        => throw new NotSupportedException("NHibernate transaction savepoints are not implemented by NOF.Infrastructure.NHibernate yet.");
-
-    public Task CreateSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        CreateSavepoint(name);
-        return Task.CompletedTask;
-    }
-
-    public void RollbackToSavepoint(string name)
-        => throw new NotSupportedException("NHibernate transaction savepoints are not implemented by NOF.Infrastructure.NHibernate yet.");
-
-    public Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        RollbackToSavepoint(name);
-        return Task.CompletedTask;
-    }
-
-    public void ReleaseSavepoint(string name)
-        => throw new NotSupportedException("NHibernate transaction savepoints are not implemented by NOF.Infrastructure.NHibernate yet.");
-
-    public Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ReleaseSavepoint(name);
-        return Task.CompletedTask;
-    }
-
     public void Dispose()
         => _transaction.Dispose();
 
@@ -149,20 +120,16 @@ public sealed class NHibernateDbContextTransactionAdapter(ITransaction transacti
 }
 /// <summary>Implements repository operations for NHibernate.</summary>
 
-public sealed class NHibernateRepositoryAdapter<TEntity> : AsyncQueryable<TEntity>, IRepository<TEntity>
+public sealed class NHibernateRepositoryAdapter<TEntity> : ProviderQuery<TEntity>, IEntitySet<TEntity>
     where TEntity : class
 {
     private readonly ISession _session;
 
-    public NHibernateRepositoryAdapter(ISession session, IAsyncQueryExecutor asyncExecutor)
+    public NHibernateRepositoryAdapter(ISession session, IProviderQueryExecutor asyncExecutor)
         : base(session.Query<TEntity>(), asyncExecutor)
     {
         _session = session;
     }
-
-    public int Count => _session.Query<TEntity>().Count();
-
-    public bool IsReadOnly => false;
 
     public void Add(TEntity entity)
         => _session.Save(entity);
@@ -174,72 +141,18 @@ public sealed class NHibernateRepositoryAdapter<TEntity> : AsyncQueryable<TEntit
         return ValueTask.CompletedTask;
     }
 
-    public void AddRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Add(entity);
-        }
-    }
-
-    public Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        AddRange(entities);
-        return Task.CompletedTask;
-    }
-
-    public void Attach(TEntity entity)
-        => _session.Lock(entity, LockMode.None);
-
-    public void AttachRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Attach(entity);
-        }
-    }
-
-    public void Update(TEntity entity)
-        => _session.SaveOrUpdate(entity);
-
-    public void UpdateRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Update(entity);
-        }
-    }
-
     public bool Remove(TEntity entity)
     {
         _session.Delete(entity);
         return true;
     }
 
-    public void RemoveRange(IEnumerable<TEntity> entities)
-    {
-        foreach (var entity in entities)
-        {
-            Remove(entity);
-        }
-    }
-
-    public void Clear()
-        => RemoveRange(_session.Query<TEntity>().ToArray());
-
-    public bool Contains(TEntity item)
-        => _session.Query<TEntity>().Contains(item);
-
-    public void CopyTo(TEntity[] array, int arrayIndex)
-        => _session.Query<TEntity>().ToArray().CopyTo(array, arrayIndex);
-
-    public IAsyncQueryable<TEntity> AsNoTracking()
-        => new AsyncQueryable<TEntity>(_session.Query<TEntity>(), AsyncExecutor);
+    public IProviderQuery<TEntity> AsNoTracking()
+        => new ProviderQuery<TEntity>(_session.Query<TEntity>(), AsyncExecutor);
 }
 /// <summary>Executes asynchronous queries for NHibernate.</summary>
 
-public sealed class NHibernateAsyncQueryExecutor(ISession session) : IAsyncQueryExecutor
+public sealed class NHibernateAsyncQueryExecutor(ISession session) : IProviderQueryExecutor
 {
     private static readonly ConcurrentDictionary<string, Delegate> PropertySetters = new(StringComparer.Ordinal);
     private readonly ISession _session = session;
@@ -338,7 +251,7 @@ public sealed class NHibernateAsyncQueryExecutor(ISession session) : IAsyncQuery
     public Task<decimal?> AverageAsync(IQueryable<decimal?> source, CancellationToken cancellationToken = default) => Task.FromResult(Unwrap(source).Average());
 
     private static IQueryable<TSource> Unwrap<TSource>(IQueryable<TSource> source)
-        => source is IAsyncQueryableAccessor accessor
+        => source is IProviderQueryAccessor accessor
             ? (IQueryable<TSource>)accessor.Query
             : source;
 

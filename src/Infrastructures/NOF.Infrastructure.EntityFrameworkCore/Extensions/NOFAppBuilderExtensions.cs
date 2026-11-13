@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NOF.Application;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Diagnostics.CodeAnalysis;
 
@@ -31,16 +32,16 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.AddOptions<DbContextConfigurationOptions>();
             builder.Services.TryAddSingleton<SqliteInMemoryConnectionKeeper>();
             builder.Services.ReplaceOrAdd(ServiceDescriptor.Scoped<NOFDbContextFactory<TDbContext>, NOFDbContextFactory<TDbContext>>());
-            builder.Services.ReplaceOrAddScoped<IDbContextFactory>(sp => sp.GetRequiredService<NOFDbContextFactory<TDbContext>>());
+            builder.Services.ReplaceOrAddScoped<IPersistenceSessionFactory>(sp => sp.GetRequiredService<NOFDbContextFactory<TDbContext>>());
             builder.Services.ReplaceOrAddScoped<ITenantDbContextFactory<TDbContext>>(sp =>
                 sp.GetRequiredService<NOFDbContextFactory<TDbContext>>());
             builder.Services.ReplaceOrAddScoped<IDbContextFactory<TDbContext>>(sp =>
                 sp.GetRequiredService<ITenantDbContextFactory<TDbContext>>());
             builder.Services.ReplaceOrAddScoped<NOFDbContext>(sp => sp.GetRequiredService<NOFDbContextFactory<TDbContext>>().CreateDbContext());
             builder.Services.ReplaceOrAddScoped<DbContext>(sp => sp.GetRequiredService<NOFDbContext>());
-            builder.Services.ReplaceOrAddScoped<IDbContext>(sp =>
+            builder.Services.ReplaceOrAddScoped<IPersistenceSession>(sp =>
                 new EfCoreDbContextAdapter(sp.GetRequiredService<DbContext>()));
-            builder.Services.AddRepositoryProviders();
+            builder.Services.AddPersistenceServices();
             if (typeof(TDbContext) != typeof(NOFDbContext))
             {
                 builder.Services.ReplaceOrAddScoped(sp => (TDbContext)sp.GetRequiredService<NOFDbContext>());

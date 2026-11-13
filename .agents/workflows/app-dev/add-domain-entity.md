@@ -111,7 +111,7 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 
-public sealed class OrderCreatedProjectionHandler(IDbContext dbContext)
+public sealed class OrderCreatedProjectionHandler(IOrderProjectionStore projections)
     : InMemoryEventHandler<OrderCreatedEvent>
 {
     public override Task HandleAsync(
@@ -119,7 +119,7 @@ public sealed class OrderCreatedProjectionHandler(IDbContext dbContext)
         Context context,
         CancellationToken cancellationToken)
     {
-        dbContext.Set<OrderProjection>().Add(OrderProjection.From(@event));
+        projections.Add(OrderProjection.From(@event));
         return Task.CompletedTask;
     }
 }
@@ -130,7 +130,7 @@ The handler is registered by its generated assembly initializer when the contain
 ## 5. Persist from the Application Layer
 
 ```csharp
-public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
+public sealed class CreateOrder(IOrderRepository orders, IUnitOfWork unitOfWork) : OrderService.CreateOrder
 {
     public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
@@ -138,11 +138,11 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         CancellationToken cancellationToken)
     {
         var order = Order.Create(EmailAddress.From(request.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        orders.Add(order);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return Empty.Instance;
     }
 }
 ```
 
-Application code uses `IDbContext` / `IRepository<T>`. Concrete EF Core `DbContext` and `NOFDbContext` stay in the host project.
+Application code uses owned aggregate/query interfaces and IUnitOfWork. Concrete EF Core `DbContext` and `NOFDbContext` stay in the host project.

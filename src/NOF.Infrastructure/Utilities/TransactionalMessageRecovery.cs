@@ -1,4 +1,5 @@
 using NOF.Application;
+using NOF.Infrastructure;
 
 namespace NOF.Infrastructure;
 /// <summary>Recovers transactional messages whose processing claims have expired.</summary>
@@ -8,7 +9,7 @@ public static class TransactionalMessageRecovery
     private const string MaxRetryExceededError = "Exceeded max retry count";
 
     public static Task<int> MarkExpiredExhaustedInboxMessagesAsFailedAsync(
-        IDbContext dbContext,
+        IPersistenceSession dbContext,
         int maxRetryCount,
         DateTime now,
         CancellationToken cancellationToken)
@@ -29,7 +30,7 @@ public static class TransactionalMessageRecovery
     }
 
     public static Task<int> MarkExpiredExhaustedOutboxMessagesAsFailedAsync(
-        IDbContext dbContext,
+        IPersistenceSession dbContext,
         int maxRetryCount,
         DateTime now,
         CancellationToken cancellationToken)

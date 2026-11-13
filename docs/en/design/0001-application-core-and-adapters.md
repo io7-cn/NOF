@@ -174,3 +174,5 @@ Update: generic Contract Result/Result<T> and header/dictionary convenience exte
 Update: shared [invocation extensions](invocation-extensions.md) now live in Application. Hosts select execution; Infrastructure supplies an optional in-memory default. HTTP presentation remains native, and outbound metadata is prepared directly by delivery.
 
 Update: native builders and lifecycle services now replace NOF host wrappers and initialization topology. See [native hosting](native-hosting.md).
+
+Update: the [persistence boundary](persistence-boundaries.md) now uses aggregate repositories, DTO query ports and IUnitOfWork. The generic ORM facade is absent from core.

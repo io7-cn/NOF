@@ -33,14 +33,20 @@ public static partial class NOFInfrastructureExtensions
         public IServiceCollection AddInMemoryPersistence()
         {
             services.ReplaceOrAddSingleton<InMemoryPersistenceStore, InMemoryPersistenceStore>();
-            services.ReplaceOrAddScoped<IDbContext, InMemoryDbContext>();
-            services.AddRepositoryProviders();
+            services.ReplaceOrAddScoped<IPersistenceSession, InMemoryDbContext>();
+            services.AddPersistenceServices();
             return services;
         }
 
-        public IServiceCollection AddRepositoryProviders()
+        public IServiceCollection AddPersistenceServices()
         {
-            services.TryAddScoped(typeof(IRepository<>), typeof(RepositoryProvider<>));
+            services.AddOptions<TransactionalMessageOptions>();
+            services.AddLogging();
+            services.TryAddScoped<PersistenceUnitOfWork>();
+            services.TryAddScoped<IInboxStore, PersistenceInboxStore>();
+            services.TryAddScoped<IOutboxStore, PersistenceOutboxStore>();
+            services.TryAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
+            services.TryAddScoped<ITransactionManager>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
             return services;
         }
 

@@ -1,6 +1,7 @@
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using System.Diagnostics;
 
 namespace NOF.Infrastructure;
@@ -9,20 +10,20 @@ public sealed class CommandSender : ICommandSender
 {
     private readonly ICommandRider _rider;
     private readonly MessageDelivery _delivery;
-    private readonly IDbContext _dbContext;
+    private readonly IOutboxStore _outbox;
     private readonly IObjectSerializer _objectSerializer;
     private readonly OutboxOrderSequenceAllocator _orderSequenceAllocator;
 
     public CommandSender(
         ICommandRider rider,
         MessageDelivery delivery,
-        IDbContext dbContext,
+        IOutboxStore outbox,
         IObjectSerializer objectSerializer,
         OutboxOrderSequenceAllocator orderSequenceAllocator)
     {
         _rider = rider;
         _delivery = delivery;
-        _dbContext = dbContext;
+        _outbox = outbox;
         _objectSerializer = objectSerializer;
         _orderSequenceAllocator = orderSequenceAllocator;
     }
@@ -60,7 +61,7 @@ public sealed class CommandSender : ICommandSender
                 ? (OutboxOrder?)null
                 : await _orderSequenceAllocator.AllocateAsync(orderKey, completesOrderKey, token);
 
-            _dbContext.Set<NOFOutboxMessage>().Add(NOFOutboxMessage.Create(
+            _outbox.Stage(NOFOutboxMessage.Create(
                 OutboxMessageType.Command,
                 dispatchRoutes,
                 _objectSerializer.Serialize(command).ToArray(),

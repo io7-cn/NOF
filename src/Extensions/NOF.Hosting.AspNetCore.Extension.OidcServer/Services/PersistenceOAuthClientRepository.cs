@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Infrastructure;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,7 +13,7 @@ using System.Text.Json;
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed class PersistenceOAuthClientRepository(
-    IDbContext dbContext,
+    IPersistenceSession dbContext,
     ICacheService cacheService,
     IOptions<OAuthAuthorizationServerOptions> oauthOptions) : IOAuthClientRepository, IOAuthClientRegistrationRepository
 {

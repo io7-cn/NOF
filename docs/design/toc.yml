@@ -39,3 +39,7 @@
   href: ../en/design/native-hosting.md
 - name: 原生宿主迁移
   href: ../zh-CN/design/native-hosting.md
+- name: Persistence boundary migration
+  href: ../en/design/persistence-boundaries.md
+- name: 持久化边界迁移
+  href: ../zh-CN/design/persistence-boundaries.md

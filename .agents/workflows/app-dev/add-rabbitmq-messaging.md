@@ -49,7 +49,7 @@ For writes that must commit with outgoing work:
 ```csharp
 await commandSender.DeferSendAsync(command, context, cancellationToken);
 await notificationPublisher.DeferPublishAsync(notification, context, cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
 Use the ordered deferred variants only when messages form one strict stream. The framework qualifies the order key with the producer service name and allocates sequence numbers transactionally.

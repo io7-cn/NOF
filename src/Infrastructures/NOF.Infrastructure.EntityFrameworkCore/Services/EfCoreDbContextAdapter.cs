@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NOF.Application;
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 using System.Reflection;
 using AppDbException = NOF.Application.DbException;
@@ -15,12 +16,12 @@ using EfDbUpdateException = Microsoft.EntityFrameworkCore.DbUpdateException;
 namespace NOF.Infrastructure.EntityFrameworkCore;
 /// <summary>Adapts database context operations for EF Core.</summary>
 
-public sealed class EfCoreDbContextAdapter(DbContext dbContext) : IDbContext
+public sealed class EfCoreDbContextAdapter(DbContext dbContext) : IPersistenceSession
 {
     private readonly DbContext _dbContext = dbContext;
     private readonly EfCoreAsyncQueryExecutor _asyncExecutor = new();
 
-    public IRepository<TEntity> Set<TEntity>()
+    public IEntitySet<TEntity> Set<TEntity>()
         where TEntity : class
         => new EfCoreRepositoryAdapter<TEntity>(_dbContext.Set<TEntity>(), _asyncExecutor);
 
@@ -54,7 +55,7 @@ public sealed class EfCoreDbContextAdapter(DbContext dbContext) : IDbContext
         }
     }
 
-    public IDbContextTransaction BeginTransaction()
+    public IPersistenceTransaction BeginTransaction()
     {
         try
         {
@@ -68,7 +69,7 @@ public sealed class EfCoreDbContextAdapter(DbContext dbContext) : IDbContext
         }
     }
 
-    public async Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public async Task<IPersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         try
         {
@@ -84,7 +85,7 @@ public sealed class EfCoreDbContextAdapter(DbContext dbContext) : IDbContext
 }
 /// <summary>Adapts database transactions for EF Core.</summary>
 
-public sealed class EfCoreDbContextTransactionAdapter(EfDbContextTransaction transaction) : IDbContextTransaction
+public sealed class EfCoreDbContextTransactionAdapter(EfDbContextTransaction transaction) : IPersistenceTransaction
 {
     private readonly EfDbContextTransaction _transaction = transaction;
 
@@ -142,90 +143,6 @@ public sealed class EfCoreDbContextTransactionAdapter(EfDbContextTransaction tra
         }
     }
 
-    public void CreateSavepoint(string name)
-    {
-        try
-        {
-            _transaction.CreateSavepoint(name);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to create transaction savepoint '{name}'.");
-        }
-    }
-
-    public async Task CreateSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _transaction.CreateSavepointAsync(name, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to create transaction savepoint '{name}'.");
-        }
-    }
-
-    public void RollbackToSavepoint(string name)
-    {
-        try
-        {
-            _transaction.RollbackToSavepoint(name);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to roll back to transaction savepoint '{name}'.");
-        }
-    }
-
-    public async Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _transaction.RollbackToSavepointAsync(name, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to roll back to transaction savepoint '{name}'.");
-        }
-    }
-
-    public void ReleaseSavepoint(string name)
-    {
-        try
-        {
-            _transaction.ReleaseSavepoint(name);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to release transaction savepoint '{name}'.");
-        }
-    }
-
-    public async Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _transaction.ReleaseSavepointAsync(name, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            throw EfCoreExceptionTranslator.TranslateTransactionException(
-                ex,
-                $"Failed to release transaction savepoint '{name}'.");
-        }
-    }
-
     public void Dispose()
         => _transaction.Dispose();
 
@@ -234,19 +151,15 @@ public sealed class EfCoreDbContextTransactionAdapter(EfDbContextTransaction tra
 }
 /// <summary>Implements repository operations for EF Core.</summary>
 
-public sealed class EfCoreRepositoryAdapter<TEntity> : AsyncQueryable<TEntity>, IRepository<TEntity>
+public sealed class EfCoreRepositoryAdapter<TEntity> : ProviderQuery<TEntity>, IEntitySet<TEntity>
     where TEntity : class
 {
     private readonly DbSet<TEntity> _dbSet;
 
-    public EfCoreRepositoryAdapter(DbSet<TEntity> dbSet, IAsyncQueryExecutor asyncExecutor) : base(dbSet, asyncExecutor)
+    public EfCoreRepositoryAdapter(DbSet<TEntity> dbSet, IProviderQueryExecutor asyncExecutor) : base(dbSet, asyncExecutor)
     {
         _dbSet = dbSet;
     }
-
-    public int Count => _dbSet.Count();
-
-    public bool IsReadOnly => false;
 
     public void Add(TEntity entity)
         => _dbSet.Add(entity);
@@ -254,48 +167,18 @@ public sealed class EfCoreRepositoryAdapter<TEntity> : AsyncQueryable<TEntity>, 
     public ValueTask AddAsync(TEntity entity, CancellationToken cancellationToken = default)
         => new(_dbSet.AddAsync(entity, cancellationToken).AsTask());
 
-    public void AddRange(IEnumerable<TEntity> entities)
-        => _dbSet.AddRange(entities);
-
-    public Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
-        => _dbSet.AddRangeAsync(entities, cancellationToken);
-
-    public void Attach(TEntity entity)
-        => _dbSet.Attach(entity);
-
-    public void AttachRange(IEnumerable<TEntity> entities)
-        => _dbSet.AttachRange(entities);
-
-    public void Update(TEntity entity)
-        => _dbSet.Update(entity);
-
-    public void UpdateRange(IEnumerable<TEntity> entities)
-        => _dbSet.UpdateRange(entities);
-
     public bool Remove(TEntity entity)
     {
         _dbSet.Remove(entity);
         return true;
     }
 
-    public void RemoveRange(IEnumerable<TEntity> entities)
-        => _dbSet.RemoveRange(entities);
-
-    public void Clear()
-        => RemoveRange(_dbSet.ToArray());
-
-    public bool Contains(TEntity item)
-        => _dbSet.Contains(item);
-
-    public void CopyTo(TEntity[] array, int arrayIndex)
-        => _dbSet.ToArray().CopyTo(array, arrayIndex);
-
-    public IAsyncQueryable<TEntity> AsNoTracking()
-        => new AsyncQueryable<TEntity>(_dbSet.AsNoTracking(), AsyncExecutor);
+    public IProviderQuery<TEntity> AsNoTracking()
+        => new ProviderQuery<TEntity>(_dbSet.AsNoTracking(), AsyncExecutor);
 }
 /// <summary>Executes asynchronous queries for EF Core.</summary>
 
-public sealed class EfCoreAsyncQueryExecutor : IAsyncQueryExecutor
+public sealed class EfCoreAsyncQueryExecutor : IProviderQueryExecutor
 {
     private static readonly MethodInfo ApplyConstantSetPropertyMethod = typeof(EfCoreAsyncQueryExecutor)
         .GetMethod(nameof(ApplyConstantSetProperty), BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -303,7 +186,7 @@ public sealed class EfCoreAsyncQueryExecutor : IAsyncQueryExecutor
         .GetMethod(nameof(ApplyComputedSetProperty), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static IQueryable<TSource> Unwrap<TSource>(IQueryable<TSource> source)
-        => source is IAsyncQueryableAccessor accessor
+        => source is IProviderQueryAccessor accessor
             ? (IQueryable<TSource>)accessor.Query
             : source;
 

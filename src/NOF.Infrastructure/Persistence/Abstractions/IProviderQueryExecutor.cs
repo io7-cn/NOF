@@ -1,12 +1,13 @@
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 
-namespace NOF.Domain;
+namespace NOF.Infrastructure;
 
 /// <summary>
 /// Executes asynchronous terminal operations for a LINQ query.
 /// Concrete data providers decide whether execution is truly asynchronous or falls back to synchronous evaluation.
 /// </summary>
-public interface IAsyncQueryExecutor
+public interface IProviderQueryExecutor
 {
     IAsyncEnumerable<TSource> AsAsyncEnumerable<TSource>(IQueryable<TSource> source, CancellationToken cancellationToken = default);
 

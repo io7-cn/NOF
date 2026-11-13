@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Infrastructure;
 using System.ComponentModel;
 using System.Globalization;
 
@@ -46,7 +47,7 @@ public static class InboxMessageOrdering
     }
 
     public static async Task EnsureStateAsync(
-        IDbContext dbContext,
+        IPersistenceSession dbContext,
         Guid messageId,
         string route,
         InboxMessageOrder? order,

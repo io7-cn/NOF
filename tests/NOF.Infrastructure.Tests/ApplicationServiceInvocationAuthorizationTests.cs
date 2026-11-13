@@ -6,6 +6,7 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Domain;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using System.Security.Claims;
 using Xunit;
 
@@ -104,7 +105,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         await using var provider = BuildServiceProvider();
         await using var callerScope = provider.CreateAsyncScope();
 
-        var dbContext = callerScope.ServiceProvider.GetRequiredService<IDbContext>();
+        var dbContext = callerScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var marker = callerScope.ServiceProvider.GetRequiredService<LocalScopeMarker>();
         var invoker = callerScope.ServiceProvider.GetRequiredService<IApplicationServiceInvoker>();
 
@@ -132,7 +133,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         services.AddLogging();
 
         services.AddScoped<IUserContext, UserContext>();
-        services.AddScoped<IDbContext, LocalScopedDbContext>();
+        services.AddScoped<IPersistenceSession, LocalScopedDbContext>();
         services.AddScoped<LocalScopeMarker>();
         services.AddSingleton<InvocationRecorder>();
         services.AddSingleton<LocalScopeProbe>();
@@ -203,9 +204,9 @@ public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<Co
 
 public sealed record GetFleetOverviewResponse(string Name);
 
-public sealed record ScopeCheckRequest(IDbContext ExpectedDbContext, LocalScopeMarker ExpectedMarker);
+public sealed record ScopeCheckRequest(IPersistenceSession ExpectedDbContext, LocalScopeMarker ExpectedMarker);
 
-public sealed record ScopeCheckEvent(IDbContext HandlerDbContext, LocalScopeMarker HandlerMarker);
+public sealed record ScopeCheckEvent(IPersistenceSession HandlerDbContext, LocalScopeMarker HandlerMarker);
 
 public sealed class LocalScopeMarker;
 
@@ -270,7 +271,7 @@ public sealed class ScopeLifecycleDaemonService : IDaemonService, IAsyncDisposab
 }
 
 public sealed class ScopeCheckHandler(
-    IDbContext dbContext,
+    IPersistenceSession dbContext,
     LocalScopeMarker marker,
     LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, NOF.Testing.TestOutcome>
 {
@@ -286,7 +287,7 @@ public sealed class ScopeCheckHandler(
 }
 
 public sealed class ScopeCheckEventHandler(
-    IDbContext dbContext,
+    IPersistenceSession dbContext,
     LocalScopeMarker marker,
     LocalScopeProbe probe) : InMemoryEventHandler<ScopeCheckEvent>
 {
@@ -299,9 +300,9 @@ public sealed class ScopeCheckEventHandler(
     }
 }
 
-public sealed class LocalScopedDbContext : IDbContext
+public sealed class LocalScopedDbContext : IPersistenceSession
 {
-    public IRepository<TEntity> Set<TEntity>()
+    public IEntitySet<TEntity> Set<TEntity>()
         where TEntity : class
         => throw new NotSupportedException();
 
@@ -317,10 +318,10 @@ public sealed class LocalScopedDbContext : IDbContext
     public Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         => Task.FromResult(0);
 
-    public IDbContextTransaction BeginTransaction()
+    public IPersistenceTransaction BeginTransaction()
         => throw new NotSupportedException();
 
-    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public Task<IPersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
 }
 

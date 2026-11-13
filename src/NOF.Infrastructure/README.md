@@ -37,7 +37,7 @@ This package includes:
 - in-memory riders (`MemoryCommandRider`, `MemoryNotificationRider`)
 - in-memory persistence for tests/development (`services.AddInMemoryPersistence()`)
 - in-process event publisher (`IEventPublisher`)
-- database-agnostic persistence adapters for `IDbContext`, Domain `IRepository<T>`, and async query extensions
+- database-agnostic persistence adapters for `IPersistenceSession`, application-owned aggregate repositories, and async query extensions
 - outbox / inbox entities and transactional message background services
 - JWT resource server primitives (`services.AddAuthenticationResourceServer(...)`, JWKS fetching/cache, inbound token validation)
 
@@ -259,3 +259,5 @@ Apache-2.0
 ## Invocation execution
 
 NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. See [execution and migration](../../docs/en/design/invocation-extensions.md).
+
+Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and provider query helpers are infrastructure collaboration only. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).

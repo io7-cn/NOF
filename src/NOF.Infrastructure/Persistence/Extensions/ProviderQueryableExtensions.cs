@@ -1,30 +1,31 @@
 using NOF.Application;
 using NOF.Domain;
+using NOF.Infrastructure;
 using System.Linq.Expressions;
 
-namespace System.Linq;
+namespace NOF.Infrastructure;
 
 /// <summary>
-/// Provider-agnostic asynchronous query helpers for application-layer LINQ.
-/// Queries execute through the current <see cref="IAsyncQueryExecutor"/> when available.
+/// Infrastructure-only query helpers for shared provider-backed stores.
+/// Queries execute through the current <see cref="IProviderQueryExecutor"/> when available.
 /// </summary>
 public static class QueryableAsyncExtensions
 {
     extension<TSource>(IQueryable<TSource> source)
     {
-        public IAsyncQueryable<TSource> AsAsyncQueryable()
+        public IProviderQuery<TSource> AsProviderQuery()
         {
             ArgumentNullException.ThrowIfNull(source);
-            return source as IAsyncQueryable<TSource> ?? new AsyncQueryable<TSource>(source, InMemoryAsyncQueryExecutor.Instance);
+            return source as IProviderQuery<TSource> ?? new ProviderQuery<TSource>(source, InMemoryQueryExecutor.Instance);
         }
 
         public IAsyncEnumerable<TSource> AsAsyncEnumerable(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AsAsyncEnumerable(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AsAsyncEnumerable(source, cancellationToken);
 
         public Task<int> ExecuteDeleteAsync(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ExecuteDeleteAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ExecuteDeleteAsync(source, cancellationToken);
 
         public Task<int> ExecuteUpdateAsync(
             Func<UpdateSetters<TSource>, UpdateSetters<TSource>> setPropertyCalls,
@@ -36,16 +37,16 @@ public static class QueryableAsyncExtensions
             var setters = setPropertyCalls(new UpdateSetters<TSource>())
                 ?? throw new InvalidOperationException("The batch update setter builder cannot be null.");
 
-            return source.AsAsyncQueryable().AsyncExecutor.ExecuteUpdateAsync(source, setters, cancellationToken);
+            return source.AsProviderQuery().AsyncExecutor.ExecuteUpdateAsync(source, setters, cancellationToken);
         }
 
         public Task<List<TSource>> ToListAsync(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ToListAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ToListAsync(source, cancellationToken);
 
         public Task<TSource[]> ToArrayAsync(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ToArrayAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ToArrayAsync(source, cancellationToken);
 
         public async Task<Dictionary<TKey, TElement>> ToDictionaryAsync<TKey, TElement>(
             Func<TSource, TKey> keySelector,
@@ -81,7 +82,7 @@ public static class QueryableAsyncExtensions
 
         public Task LoadAsync(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.LoadAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.LoadAsync(source, cancellationToken);
 
         public async Task ForEachAsync(
             Action<TSource> action,
@@ -97,7 +98,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<bool> AnyAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AnyAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AnyAsync(source, cancellationToken);
 
         public Task<bool> AnyAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -112,15 +113,15 @@ public static class QueryableAsyncExtensions
         public Task<bool> AllAsync(
             Expression<Func<TSource, bool>> predicate,
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AllAsync(source, predicate, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AllAsync(source, predicate, cancellationToken);
 
         public Task<bool> ContainsAsync(
             TSource value,
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ContainsAsync(source, value, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ContainsAsync(source, value, cancellationToken);
 
         public Task<int> CountAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.CountAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.CountAsync(source, cancellationToken);
 
         public Task<int> CountAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -133,7 +134,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<long> LongCountAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.LongCountAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.LongCountAsync(source, cancellationToken);
 
         public Task<long> LongCountAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -146,7 +147,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource> FirstAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.FirstAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.FirstAsync(source, cancellationToken);
 
         public Task<TSource> FirstAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -160,7 +161,7 @@ public static class QueryableAsyncExtensions
 
         public Task<TSource?> FirstOrDefaultAsync(
             CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.FirstOrDefaultAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.FirstOrDefaultAsync(source, cancellationToken);
 
         public Task<TSource?> FirstOrDefaultAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -173,7 +174,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource> SingleAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.SingleAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.SingleAsync(source, cancellationToken);
 
         public Task<TSource> SingleAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -186,7 +187,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource?> SingleOrDefaultAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.SingleOrDefaultAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.SingleOrDefaultAsync(source, cancellationToken);
 
         public Task<TSource?> SingleOrDefaultAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -199,7 +200,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource> LastAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.LastAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.LastAsync(source, cancellationToken);
 
         public Task<TSource> LastAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -212,7 +213,7 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource?> LastOrDefaultAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.LastOrDefaultAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.LastOrDefaultAsync(source, cancellationToken);
 
         public Task<TSource?> LastOrDefaultAsync(
             Expression<Func<TSource, bool>> predicate,
@@ -225,13 +226,13 @@ public static class QueryableAsyncExtensions
         }
 
         public Task<TSource> ElementAtAsync(int index, CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ElementAtAsync(source, index, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ElementAtAsync(source, index, cancellationToken);
 
         public Task<TSource?> ElementAtOrDefaultAsync(int index, CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.ElementAtOrDefaultAsync(source, index, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.ElementAtOrDefaultAsync(source, index, cancellationToken);
 
         public Task<TSource> MinAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.MinAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.MinAsync(source, cancellationToken);
 
         public Task<TResult> MinAsync<TResult>(
             Expression<Func<TSource, TResult>> selector,
@@ -239,7 +240,7 @@ public static class QueryableAsyncExtensions
             => source.Select(selector).MinAsync(cancellationToken);
 
         public Task<TSource> MaxAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.MaxAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.MaxAsync(source, cancellationToken);
 
         public Task<TResult> MaxAsync<TResult>(
             Expression<Func<TSource, TResult>> selector,
@@ -310,90 +311,90 @@ public static class QueryableAsyncExtensions
     extension(IQueryable<int> source)
     {
         public Task<int> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<int?> source)
     {
         public Task<int?> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double?> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<long> source)
     {
         public Task<long> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<long?> source)
     {
         public Task<long?> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double?> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<float> source)
     {
         public Task<float> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<float> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<float?> source)
     {
         public Task<float?> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<float?> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<double> source)
     {
         public Task<double> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<double?> source)
     {
         public Task<double?> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<double?> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<decimal> source)
     {
         public Task<decimal> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<decimal> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 
     extension(IQueryable<decimal?> source)
     {
         public Task<decimal?> SumAsync(CancellationToken cancellationToken = default)
-        => source.AsAsyncQueryable().AsyncExecutor.SumAsync(source, cancellationToken);
+        => source.AsProviderQuery().AsyncExecutor.SumAsync(source, cancellationToken);
 
         public Task<decimal?> AverageAsync(CancellationToken cancellationToken = default)
-            => source.AsAsyncQueryable().AsyncExecutor.AverageAsync(source, cancellationToken);
+            => source.AsProviderQuery().AsyncExecutor.AverageAsync(source, cancellationToken);
     }
 }

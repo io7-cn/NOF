@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
 using NOF.Hosting;
+using NOF.Infrastructure;
 
 namespace NOF.Infrastructure;
 
@@ -81,25 +82,14 @@ public sealed class InboxCleanupBackgroundService : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         scope.ServiceProvider.ResolveDaemonServices();
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
-        if (dbContext is null)
+        var store = scope.ServiceProvider.GetService<IInboxStore>();
+        if (store is null)
         {
-            _logger.LogDebug("Skipping inbox cleanup because no IDbContext provider is registered.");
+            _logger.LogDebug("Skipping inbox cleanup because no IInboxStore is registered.");
             return;
         }
         var olderThan = DateTime.UtcNow - _options.RetentionPeriod;
-        var deletedCount = await dbContext.Set<NOFInboxMessage>()
-            .Where(m => m.Status == InboxMessageStatus.Processed)
-            .Where(m => m.ProcessedAtUtc != null && m.ProcessedAtUtc < olderThan)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var deletedOrderStateCount = await dbContext.Set<NOFInboxOrderState>()
-            .Where(state => state.CompletedAtUtc != null && state.CompletedAtUtc < olderThan)
-            .Where(state => !dbContext.Set<NOFInboxMessage>().Any(message =>
-                message.Route == state.Route &&
-                message.OrderKey == state.OrderKey &&
-                message.Status == InboxMessageStatus.Pending))
-            .ExecuteDeleteAsync(cancellationToken);
+        var (deletedCount, deletedOrderStateCount) = await store.CleanupAsync(olderThan, cancellationToken);
 
         if (deletedCount > 0)
         {

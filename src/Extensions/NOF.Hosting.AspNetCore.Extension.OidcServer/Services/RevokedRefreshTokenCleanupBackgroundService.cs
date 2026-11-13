@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
@@ -63,7 +64,7 @@ public sealed class RevokedRefreshTokenCleanupBackgroundService : BackgroundServ
     {
         using var scope = _serviceScopeFactory.CreateScope();
         scope.ServiceProvider.ResolveDaemonServices();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
         var now = DateTime.UtcNow;
         var expiredTokens = dbContext.Set<RevokedRefreshToken>()
             .Where(token => token.ExpiresAtUtc <= now)

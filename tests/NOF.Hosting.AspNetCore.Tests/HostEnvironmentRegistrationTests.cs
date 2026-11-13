@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NOF.Infrastructure;
 using Xunit;
 
 namespace NOF.Hosting.AspNetCore.Tests;
@@ -35,6 +36,6 @@ public sealed class HostEnvironmentRegistrationTests
         app.UseNOF();
         app.MapNOFEndpoints();
 
-        Assert.NotNull(app.Services.GetRequiredService<Application.IDbContext>());
+        Assert.NotNull(app.Services.GetRequiredService<Application.IUnitOfWork>());
     }
 }

@@ -113,7 +113,7 @@ public sealed class NOFSampleHarnessTests
             Assert.NotNull(Assert.IsType<GetConfigNodeByIdResponse>(parent.Value));
             Assert.Equal("parent-b", Assert.IsType<GetConfigNodeByIdResponse>(parent.Value)!.Node.Name);
 
-            var projection = await scope.GetRequiredService<IDbContext>()
+            var projection = await scope.GetRequiredService<IPersistenceSession>()
                 .Set<ConfigNodeChildren>()
                 .FirstOrDefaultAsync(entity => entity.NodeId == ConfigNodeId.From(parentId));
 
@@ -127,6 +127,7 @@ public sealed class NOFSampleHarnessTests
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddApplicationPartOf<NOFSampleService>();
         builder.AddApplicationPart(typeof(SampleHarnessMappings).Assembly);
+        builder.AddApplicationPart(typeof(NOF.Sample.Persistence.ConfigNodePersistence).Assembly);
         builder.AddApplicationService<NOFSampleService>();
 
         return Task.FromResult(builder.BuildTestHost());

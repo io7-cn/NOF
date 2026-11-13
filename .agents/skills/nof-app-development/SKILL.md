@@ -1,6 +1,6 @@
 ---
 name: nof-app-development
-description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, CommandHandler<T>, NotificationHandler<T>, IDbContext, IRepository<T>, Result, or CacheKey<T>.
+description: Build .NET applications using the NOF (Neat Opinionated Framework) with clean architecture, RPC/CQRS messaging, provider-neutral persistence, source generators, caching, and OAuth/OIDC. Use when creating or changing a NOF app or when working with abstractions such as IApplicationService, ApplicationService<T>, CommandHandler<T>, NotificationHandler<T>, IUnitOfWork, aggregate repositories, Result, or CacheKey<T>.
 ---
 
 # NOF Application Development
@@ -16,7 +16,7 @@ MyApp.Application/ application services and handlers, message/event handlers, ma
 MyApp/             host and concrete persistence/transport configuration
 ```
 
-Application code should remain provider-neutral by using `IDbContext` and `IRepository<T>`; concrete EF Core or NHibernate types belong in the host.
+Application code depends on domain-owned aggregate repositories, Application DTO query ports and IUnitOfWork. Do not expose IQueryable, ICollection repositories or tracking operations. Concrete persistence belongs in host/infrastructure implementations. See docs/en/design/persistence-boundaries.md.
 
 ## Application use cases
 
@@ -52,7 +52,7 @@ All generated RPC handlers, command handlers, notification handlers, and in-memo
 | `INotificationPublisher` | `DeferPublishOrderedAsync(notification, orderKey, context, ..., ct)` | stage ordered notification delivery |
 | `IEventPublisher` | `PublishAsync(payload, context, ct)` | current-scope in-memory event dispatch |
 
-Save the same `IDbContext` after a deferred dispatch to commit the application changes and outbox record together.
+Save the same scoped `IUnitOfWork` after a deferred dispatch to commit the application changes and outbox record together.
 
 `PublishAsEvent()` uses the ambient publisher and current handler context. Prefer an injected `IEventPublisher` and its explicit async API when asynchronous control or test visibility matters.
 
@@ -76,7 +76,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 |---|---|
 | expose REST HTTP | IHttpEndpointModule, native MapGet/MapPost/TypedResults, generated operation Descriptor |
 | invoke operations in process | plain contracts and Service.Operation.InvokeAsync |
-| persist application data | `IDbContext` / `IRepository<T>`; choose EF Core or NHibernate in the host |
+| persist application data | aggregate repositories / DTO query ports / IUnitOfWork; choose the provider in the host |
 | cache data | `CacheKey<T>` + `ICacheService`; optionally replace the memory rider with Redis |
 | send cross-boundary work | `ICommandSender` / `INotificationPublisher`, passing the current `Context` |
 | add an OAuth/OIDC server | `AddOidcServer(...)` |

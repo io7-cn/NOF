@@ -36,17 +36,16 @@ public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
-    private readonly IDbContext _dbContext;
+    private readonly IOrderQueries _orders;
 
-    public GetOrder(IDbContext dbContext)
+    public GetOrder(IOrderQueries orders)
     {
-        _dbContext = dbContext;
+        _orders = orders;
     }
 
     public override async Task<Result> HandleAsync(GetOrderRequest request, Context context, CancellationToken cancellationToken)
     {
-        var order = await _dbContext.Set<Order>()
-            .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
+        var order = await _orders.FindAsync(request.Id, cancellationToken);
         if (order is null)
         {
             return new NotFound("Order not found");
@@ -120,7 +119,7 @@ contains the complete deferred-dispatch example.
 ```csharp
 await _notificationPublisher.DeferPublishAsync(new OrderCreatedNotification(order.Id), context, cancellationToken);
 await _commandSender.DeferSendAsync(new SendEmailCommand(order.Email, "Created", "Order created."), context, cancellationToken);
-await _dbContext.SaveChangesAsync(cancellationToken);
+await _unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
 Pass the handler's explicit `Context`. Deferred dispatch prepares message identity, tenant and trace metadata and stores
@@ -136,20 +135,14 @@ With an explicit transaction, `SaveChangesAsync` writes inside that transaction 
 recover using a fresh context and an application idempotency key. See
 [persistence boundaries](../../docs/design/repository-uow.md).
 
-### Persistence Abstractions
+### Persistence boundaries
 
-Application code should depend on `IDbContext` from `NOF.Application`, repository abstractions from `NOF.Domain`, and async query helpers under `NOF.Application` rather than a concrete ORM type.
-
-```csharp
-using NOF.Application;
-using NOF.Domain;
-
-var exists = await _dbContext.Set<Order>()
-    .AsNoTracking()
-    .AnyAsync(order => order.Id == request.Id, cancellationToken);
-```
-
-The async query surface is exposed through `IAsyncQueryable<T>` in `NOF.Domain` plus extension methods such as `AnyAsync`, `CountAsync`, `FirstOrDefaultAsync`, `SingleAsync`, `ToListAsync`, `SumAsync`, and `AverageAsync`. Concrete infrastructure adapters decide how those terminal operations are executed.
+Declare aggregate-specific repositories in Domain and DTO query interfaces in Application.
+Use IUnitOfWork.SaveChangesAsync to save staged aggregate, projection and outbox changes
+through one scoped persistence context. Optional ITransactionManager exposes async commit
+and rollback. IDbContext, generic repositories, async query executors and update expressions
+are removed from core. Native queries and ORM state belong in infrastructure implementations.
+See [migration and transaction semantics](../../docs/en/design/persistence-boundaries.md).
 
 ### Object Mapping (`IMapper`)
 
@@ -167,7 +160,8 @@ Those mappings become available once the assembly is added via `AddApplicationPa
 Apply a generated mapping directly to a query after filtering, ordering, and paging:
 
 ```csharp
-var orders = await _dbContext.Set<Order>()
+// Inside a persistence/query adapter using its native query source:
+var orders = await orderQuery
     .AsNoTracking()
     .Where(order => order.IsActive)
     .ProjectTo<OrderDto>()

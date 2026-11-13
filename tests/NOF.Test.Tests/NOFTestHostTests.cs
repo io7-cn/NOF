@@ -157,14 +157,14 @@ public class NOFTestHostTests
 
         await host.ExecuteAsync(async scope =>
         {
-            var dbContext = scope.GetRequiredService<IDbContext>();
+            var dbContext = scope.GetRequiredService<IPersistenceSession>();
             dbContext.Set<TestEntity>().Add(new TestEntity { Name = "persisted" });
             await dbContext.SaveChangesAsync();
         });
 
         var entity = await host.ExecuteAsync(async scope =>
         {
-            return await scope.GetRequiredService<IDbContext>()
+            return await scope.GetRequiredService<IPersistenceSession>()
                 .Set<TestEntity>()
                 .FirstOrDefaultAsync(item => item.Name == "persisted");
         });

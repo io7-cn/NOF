@@ -100,7 +100,7 @@ dotnet ef database update --project MyApp --startup-project MyApp --context AppD
 Application handlers inject `IDbContext` or `IRepository<T>`, not EF Core `DbContext`:
 
 ```csharp
-public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
+public sealed class CreateOrder(IOrderRepository orders, IUnitOfWork unitOfWork) : OrderService.CreateOrder
 {
     public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
@@ -108,8 +108,8 @@ public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
         CancellationToken cancellationToken)
     {
         var order = Order.Create(EmailAddress.From(request.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        orders.Add(order);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return Empty.Instance;
     }
 }

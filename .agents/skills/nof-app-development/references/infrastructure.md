@@ -1,6 +1,12 @@
-# NOF Infrastructure Setup Reference
+# Infrastructure integration
 
-Concrete providers are host concerns. Application handlers should continue to depend on `IDbContext`, `IRepository<T>`, `ICacheService`, `ICommandSender`, and `INotificationPublisher`.
+Business code depends on domain aggregate repositories, Application DTO query ports and
+IUnitOfWork. Infrastructure-only IPersistenceSession/IEntitySet/IProviderQuery are provider
+collaboration for shared stores, never a replacement business facade. See
+`docs/en/design/persistence-boundaries.md` and its Chinese edition.
+
+
+Concrete providers are host concerns. Application handlers depend on domain-specific repositories, DTO query ports, IUnitOfWork, ICacheService and messaging interfaces.
 
 ## EF Core + PostgreSQL
 
@@ -36,7 +42,7 @@ tenant-scoped transactional messages and are not guaranteed to be empty.
 
 `NOFDbContext` applies the registered model contributors for inbox, outbox, and ordered-message entities. It also supplies value-object conversion/length conventions, multi-tenancy, and opt-in soft delete. Soft delete is disabled by default; use `.WithSoftDelete(true)` for a context-wide opt-in or `HasSoftDelete()` in EF model configuration for an entity-level opt-in.
 
-The host may inject EF `DbContext` or the concrete context, but application handlers should use `IDbContext` / `IRepository<T>` so they remain provider-neutral.
+The host may inject EF `DbContext` or the concrete context, but application handlers use owned aggregate/read ports and IUnitOfWork.
 
 For dynamic database selection, replace the template lookup with `.WithConnectionStringResolver(...)`. Its context provides the normalized tenant ID, concrete `DbContext` type, tenant mode, fallback template, and scoped services, so the resolver can consult a tenant catalog, secret store, or shard map before `WithOptions(...)` configures the provider.
 

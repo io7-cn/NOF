@@ -61,18 +61,14 @@ public sealed class GetOrder : OrderService.GetOrder
 [Mappable<Order, GetOrderResponse>]
 public static partial class Mappings;
 
-public sealed class GetOrder(IDbContext dbContext) : OrderService.GetOrder
+public sealed class GetOrder(IOrderQueries queries) : OrderService.GetOrder
 {
     public override async Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        var response = await dbContext.Set<Order>()
-            .AsNoTracking()
-            .Where(order => order.Id == request.Id)
-            .ProjectTo<GetOrderResponse>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var response = await queries.FindAsync(request.Id, cancellationToken);
 
         return response is null
             ? new NotFound("Order not found")
@@ -86,11 +82,10 @@ Register the source/destination pair with `[Mappable<,>]`, then filter, order, a
 ## Domain Update
 
 ```csharp
-var order = await dbContext.Set<Order>()
-    .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
+var order = await orders.GetAsync(request.Id, cancellationToken);
 
 order!.Confirm();
-await dbContext.SaveChangesAsync(cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
 ## Access User and Tenant
@@ -113,10 +108,10 @@ await notificationPublisher.DeferPublishAsync(
     new OrderCreatedNotification(order.Id),
     context,
     cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-Deferred messages are inserted into the current `IDbContext`; saving that same context is the transaction boundary.
+Deferred messages are staged in the current unit of work; IUnitOfWork.SaveChangesAsync saves them with aggregate and projection changes on the same scoped provider context. Explicit transactions commit separately.
 
 ## Server Operation Call
 

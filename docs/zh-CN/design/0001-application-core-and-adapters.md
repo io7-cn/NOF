@@ -136,3 +136,5 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 更新：共享[调用扩展](invocation-extensions.md)已下沉到 Application，由宿主选择执行方式，Infrastructure 提供可选的内存默认实现。HTTP 呈现继续使用原生能力，出站元数据由投递组件直接准备。
 
 更新：宿主包装及初始化拓扑已由原生 Builder 和生命周期服务替代，见[原生宿主集成](native-hosting.md)。
+
+更新：[持久化边界](persistence-boundaries.md)已改用聚合仓储、DTO 读取接口和 IUnitOfWork，核心不再提供通用 ORM 外观。

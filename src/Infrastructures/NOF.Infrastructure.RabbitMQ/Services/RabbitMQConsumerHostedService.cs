@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -257,25 +258,24 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
         await using var scope = _serviceProvider.CreateAsyncScope();
         scope.ServiceProvider.ResolveDaemonServices();
 
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
+        var dbContext = scope.ServiceProvider.GetService<IInboxStore>();
         if (dbContext is null)
         {
             return;
         }
 
         var order = InboxMessageOrdering.Parse(headers);
-        await InboxMessageOrdering.EnsureStateAsync(dbContext, messageId, route, order, cancellationToken);
-        dbContext.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(
+        var message = NOFInboxMessage.Create(
             messageId,
             messageType,
             route,
             payload.ToArray(),
             SerializeHeaders(headers),
-            order));
+            order);
 
         try
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.ReceiveAsync(message, order, cancellationToken);
         }
         catch (DbUpdateException)
         {
@@ -299,15 +299,13 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
             await using var scope = _serviceProvider.CreateAsyncScope();
             scope.ServiceProvider.ResolveDaemonServices();
 
-            var dbContext = scope.ServiceProvider.GetService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetService<IInboxStore>();
             if (dbContext is null)
             {
                 return false;
             }
 
-            return await dbContext.Set<NOFInboxMessage>()
-                .Where(message => message.Id == messageId && message.Route == route)
-                .AnyAsync(cancellationToken)
+            return await dbContext.ExistsAsync(messageId, route, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch

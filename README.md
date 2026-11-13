@@ -21,26 +21,28 @@ breaking changes, and the persistence dependency boundary. NOF 11.0.0 remains th
 - **State Machines** - declarative, event-driven state machine builder with persistent context
 - **Multi-Tenancy** - tenant-aware persistence and deployment-aware runtime defaults
 - **Object Storage** - provider-neutral streaming storage with tenant-aware key isolation
-- **Modular Pipeline** - dependency-aware registration and initialization steps
+- **Native Hosting** - platform builders, explicit endpoint modules, and host-selected invocation extensions
 - **OpenTelemetry** - built-in tracing, metrics, and logging integration
 
 ## Runtime Model Highlights
 
-- `Registry` is a first-class builder property and owns handler, mapper, RPC, and auto-inject metadata.
-- Auto-injected services are stored as native `ServiceDescriptor` entries in `Registry.AutoInjectRegistry`.
+- Handler, mapping and application-service registries are DI-owned singleton instances, frozen on first read.
+- Application-part initializers add auto-injected services as native ServiceDescriptor registrations.
 - Message metadata is registered through source-generated handler registries, and inbound dispatch resolves a generated per-handler invoker instead of relying on a process-wide static type resolver.
 - `Mapper`, `IdGenerator`, and `EventPublisher` expose ambient async-flow convenience APIs while still supporting explicit dependency paths.
 - Built-in in-memory cache state is isolated per host through DI singletons rather than process-wide mutable `static` fields.
 
 Application services keep generated Service.Operation overrides and support ordinary DTOs, nullable values and business unions. Local calls need no transport declaration; HTTP routes live in endpoint modules; legacy HTTP RPC adapters and annotations are deleted. See the [architecture decision](docs/en/design/0001-application-core-and-adapters.md) and [migration guide](docs/en/design/application-requests.md).
 
+Persistence uses application-owned aggregate repositories, DTO query ports and IUnitOfWork. The generic core ORM facade is removed; provider queries and reliable-message stores belong in Infrastructure. See the [persistence migration](docs/en/design/persistence-boundaries.md) ([简体中文](docs/zh-CN/design/persistence-boundaries.md)).
+
 ## Packages
 
 | Package                                                                                                                           | Description                                                                                                             |
 | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, ambient headers, and in-memory event primitives                                       |
-| [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, failures, domain exceptions, and ID generation                                       |
-| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>` |
+| [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, validation and ID generation                                       |
+| [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - application service contracts, DTOs and declared operation outcomes |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - RPC servers, handlers, state machines, mapping, caching, and object-storage contracts              |
 | [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Native host integration - application-part registration, deployment options, and JWT identity primitives             |
 | [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - runtime defaults, object storage, transactional messaging, OpenTelemetry, auth resource server, and service wiring |
@@ -97,9 +99,9 @@ In `DatabasePerTenant` mode, NOF deliberately uses one model and one migration c
 
 See the [Result Union migration guide](docs/en/design/result-unions.md) ([简体中文](docs/zh-CN/design/result-unions.md)) for the NOF 12 breaking contract.
 
-## Streaming RPC
+## Streaming operations
 
-NOF RPC contracts can expose server-streaming operations by returning `Result<IAsyncEnumerable<T>>` from the contract surface. Generated server operation entries return `Task<Result<IAsyncEnumerable<T>>>`. Client generation is completely removed; remote HTTP integration is maintained by callers.
+Application contracts can return IAsyncEnumerable<T> directly. Generated server operation entries return Task<IAsyncEnumerable<T>>. Client generation is completely removed; remote HTTP integration is maintained by callers.
 
 ```csharp
 public record WatchOrdersRequest(Guid CustomerId);
@@ -107,20 +109,17 @@ public record OrderEvent(Guid OrderId, string Status);
 
 public interface IOrderService : IApplicationService
 {
-    Result<IAsyncEnumerable<OrderEvent>> Watch(WatchOrdersRequest request);
+    IAsyncEnumerable<OrderEvent> Watch(WatchOrdersRequest request);
 }
 ```
 
-Server invocation stays result-first:
+Server invocation uses the generated operation:
 
 ```csharp
-var result = await OrderService.Watch.InvokeAsync(services, new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
-if (result is IAsyncEnumerable<OrderEvent> events)
+var events = await OrderService.Watch.InvokeAsync(services, new WatchOrdersRequest(customerId), Context.Empty, cancellationToken);
+await foreach (var item in events.WithCancellation(cancellationToken))
 {
-    await foreach (var item in events.WithCancellation(cancellationToken))
-    {
-        Console.WriteLine($"{item.OrderId}: {item.Status}");
-    }
+    Console.WriteLine($"{item.OrderId}: {item.Status}");
 }
 ```
 
@@ -130,10 +129,10 @@ HTTP endpoint modules in `NOF.Hosting.AspNetCore` use native ASP.NET Core server
 
 ```text
 NOF.Abstraction                <- Shared annotations, user context, in-memory events
-NOF.Domain                     <- Value objects, failures, domain utilities
+NOF.Domain                     <- Value objects, domain utilities and ID generation
 NOF.Contract                   <- RPC contracts, payload models, business outcomes
-NOF.Application                <- RPC servers, handlers, state machines, mapping, caching
-NOF.Hosting        <- Host builder and step contracts
+NOF.Application                <- Application operations, policies, work units, mapping and caching
+NOF.Hosting                    <- Native host integration and deployment options
 NOF.Infrastructure             <- Builder defaults, shared runtime pipeline, and auth resource server
 NOF.UI                         <- Shared UI components and browser client primitives
 NOF.Test                       <- Test host helpers for application and integration testing
