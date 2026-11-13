@@ -68,10 +68,10 @@ public sealed class TenantRequestAuthorizationTests
         app.UseNOF();
         app.MapNOFEndpoints();
         app.MapPost("/tenant", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
-            TypedResults.Ok((await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)), request, ct)).ExpectSuccess()))
+            Present(await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)), request, ct)))
             .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
         app.MapPost("/host", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
-            TypedResults.Ok((await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)), request, ct)).ExpectSuccess()))
+            Present(await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)), request, ct)))
             .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
         app.MapPost("/stream", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
             await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)), request, ct))
@@ -126,6 +126,9 @@ public sealed class TenantRequestAuthorizationTests
         Assert.True(documentedResponses.GetProperty("403").GetProperty("content").TryGetProperty("application/problem+json", out _));
     }
 
+    private static IResult Present(object? result) => result is IResult native
+        ? native : TypedResults.Ok(InvocationResult.Value(result));
+
     public interface ITenantService : IApplicationService
     {
         [RequirePermission]
@@ -177,7 +180,7 @@ public sealed class TenantRequestAuthorizationTests
             // Application-owned catalog/readiness check uses trusted identity, before service resolution.
             return context.User.TenantId == "tenanta"
                 ? result
-                : new InboundAuthorizationResult.Denied(NOF.Testing.TestOutcome.Fail("403", "Tenant is not available"), RejectionReason.Authorization, []);
+                : new InboundAuthorizationResult.Denied(NOF.Testing.TestOutcome.Fail("403", "Tenant is not available"), AuthorizationFailureReason.Authorization, []);
         }
     }
 

@@ -2,76 +2,75 @@
 
 [简体中文](../../zh-CN/design/invocation-extensions.md) · [Development](../README.md)
 
-NOF.Application defines one extension point for service operations, commands and notifications:
-`IInvocationFilter.InvokeAsync(InvocationContext, object, InvocationDelegate, CancellationToken)`.
-Application owns InvocationContext, which composes semantic Context and supplies an operation descriptor, invocation origin, input/handler metadata and an execution outcome. It has no HTTP dependency.
-Expected business outcomes remain operation-specific unions; policy rejection is separate.
+Infrastructure owns `IInvocationFilter`, `InvocationDelegate`, `IInvocationPipeline`, registration rules and effective plans. Application owns `InvocationContext`, operation descriptors and strongly typed business handlers. Semantic `Context` remains in Abstraction. Local event handlers are named `LocalEventHandler<T>`; `IEventPublisher` and current-scope event semantics remain unchanged.
 
-Registering an extension does not select an execution engine or cause it to run. The host owns
-`IInvocationPipeline`, including whether, where and in what order extensions execute. The optional
-NOF.Infrastructure in-memory engine is the default selected by NOF host builders.
+A business handler returns `Task<TBusiness>` (including its generated closed Result union). A filter returns `ValueTask<object?>`, as does `next`; complete invocation returns `Task<object?>`. Filters can return a failure, short circuit with a permitted business value, or inspect/transform the downstream value. No ServiceExecution, ServiceCompleted, ServiceRejected or ServiceRejectedException remains. InvocationContext has no mutable response/rejection state. Context clones preserve invocation identity, not a shared result slot. Technical exceptions and cancellation propagate unchanged.
+
+## Three application scopes
 
 ```csharp
-// Application composition: a reusable extension definition, without selecting an engine.
-services.AddInvocationFilter<AuditFilter>(order: 0);
-
-// Host composition: choose the default, or supply your own IInvocationPipeline.
+services.AddInvocationFilters(filters =>
+{
+    filters.Global.Use<AuditFilter>();
+    filters.Service<IOrderService>().Use<RateLimitFilter>(10);
+    filters.UseCase(OrderService.Read.Descriptor).Exclude<RateLimitFilter>();
+});
 services.UseInMemoryInvocationPipeline();
-// services.AddScoped<IInvocationPipeline, MyHostInvocationPipeline>();
 ```
 
-`AddInvocationFilter<T>` registers a scoped filter and one immutable definition per filter type.
-The default engine executes ascending numeric order, preserving registration order for ties.
-It resolves each filter only when its stage runs, under the current execution context. This lets
-normalization and authorization run before later filter dependencies and business handlers resolve.
-Direct DI registrations of `IInvocationFilter` also work at order zero, with ordinary DI construction
-semantics; use the definition API when constructor timing matters. Filters call `next` to continue,
-can replace immutable context items through a context clone, and may short circuit. Clones share
-the outcome. The default engine binds and restores `Context.Current` around every stage and terminal,
-checks cancellation and propagates exceptions unchanged.
+`AddInvocationFilter<T>(order)` is the global shorthand. Registration declares filters; the host chooses whether/how to run them. NOF hosts select the optional in-memory engine. A custom `IInvocationPipeline` must also implement `IInvocationPlanProvider.Describe` and describe its actual execution, rather than every registered filter. Direct DI registration as `IInvocationFilter` does not enable a stage; register a concrete filter/factory and use the configuration API.
+
+The default engine nests Global → Service → UseCase. Service identifies a Contract interface; UseCase identifies a full operation descriptor. Within each scope, ascending numeric order is followed by registration sequence. Duplicate active types execute once at their outer position. Conflicting explicit orders are errors; to reposition an inherited filter, exclude at one scope and re-enable at a deeper scope. Re-enabled filters take the new scope/order. Use and Exclude for the same type in the same scope conflict in either declaration order. A scope cannot silently override that conflict.
+
+Excluded filters contribute no runtime stages or failure descriptions. Rules do not leak to sibling services/operations or other hosts. Rules freeze on plan resolution; late mutation fails. Generated operation mappings and captured implementation types allow startup validation and description without constructing handlers or filters.
+
+Filters resolve lazily in the current scope under the normalized semantic context. The engine binds/restores `Context.Current` around each stage and terminal, validates invocation identity and returned values, and checks cancellation before resolving dependencies. Authorization and tenant selection therefore precede handler construction. Built-in global order remains tracing (-400), instrumentation (-300), optional authentication (-200), tenant (-100), authorization (-50), host tenant (-25).
+
+## Filter-owned failure declarations
 
 ```csharp
-public sealed class AuditFilter(ILogger<AuditFilter> logger) : IInvocationFilter
+[FailureCase("Exceeded", "000429")]
+[FailureCase("Unavailable", typeof(LimitDetails))]
+public sealed partial class RateLimitFilter : IInvocationFilter
 {
-    public async ValueTask InvokeAsync(InvocationContext context, object input,
-        InvocationDelegate next, CancellationToken cancellationToken)
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input,
+        InvocationDelegate next, CancellationToken ct)
     {
-        logger.LogInformation("Invoking {Operation}", context.OperationName);
-        await next(context, input, cancellationToken);
+        if (input is ReadOrderRequest { Page: < 0 })
+        {
+            return new Exceeded("Invalid page");
+        }
+        return await next(context, input, ct);
     }
 }
 ```
 
-The built-in defaults are tracing (-400), instrumentation (-300), optional resource-server
-authentication (-200), tenant normalization (-100), authorization (-50) and host-tenant switching
-(-25). These are defaults of this host configuration, not ordering rules imposed on every host.
-A replacement engine must deliberately preserve its required authentication, authorization, tenant,
-cancellation and scope guarantees. Calling a handler directly bypasses the boundary. Service and
-message adapters provide the terminal; they no longer assemble independent middleware chains.
+`FailureCaseAttribute` remains declared in Contract and may also annotate a top-level nongeneric partial filter class. Infrastructure.SourceGenerator generates nested sealed branches and a static, read-only `RateLimitFilter.FailureCases` catalog. It generates no Filter.Result union or factories. Default branches have ErrorCode/Message; custom-data branches have Error only. Name is a C# identifier; opaque codes need not be identifiers. Contract.SourceGenerator reports NOF220 for invalid declarations and still generates no Contract code.
 
-HTTP routing, binding, native middleware, endpoint filters, ProblemDetails and exception presentation
-stay in ASP.NET Core. HTTP endpoints invoke the application boundary through `HttpContext.InvokeAsync`;
-they do not adapt HTTP middleware into a second application middleware stack. Technical exceptions
-reach the host's exception handling; tracing records and rethrows them. Cancellation is not a business rejection.
+`IInvocationFilter.FailureCases` defaults to empty. Its static virtual `Describe(InvocationDescriptionContext)` defaults to IncludeAll. A custom static description can select its own subset:
 
-Message sending has no extensible outbound middleware chain. `MessageDelivery` prepares message ID,
-normalized tenant and producer Activity/trace headers for both immediate delivery and outbox staging.
-Arbitrary context items and user principals are not serialized. Outbox staging still requires saving
-the same database context, and ordered delivery, retries and idempotency remain delivery responsibilities.
-Transport-specific send policies belong in the selected rider or host integration.
+```csharp
+public static void Describe(InvocationDescriptionContext description)
+{
+    if (description.Origin == InvocationOrigin.Http)
+    {
+        description.Include<Exceeded>();
+    }
+}
+```
+
+`Include<TFailure>()` rejects types outside that filter's catalog. Description exposes operation/origin and immutable configuration/attribute metadata, with no scoped service provider or request identity. Built-in authorization description uses the same policy resolver as execution, including real implementation metadata and host tenant/custom-authorizer options.
+
+The effective `InvocationPlan` contains the selected filters, their selected FailureCases and operation BusinessCases. Runtime rejects failures omitted from that effective catalog and unknown result values, including uninitialized native unions. `InvocationResult.Value(value)` unwraps a boxed business union for an adapter's native switch; the execution path preserves the original business value.
+
+HTTP modules retain explicit ASP.NET Core binding and TypedResults. Built-in authorization values retain native ProblemDetails/challenge behavior; feature modules map custom filter/business cases explicitly. HTTP Fluent binding, response conventions and generated OpenAPI optimizations are deferred. Message consumption uses the same result path: expected filter failures roll back business work and mark the inbox record failed without a technical retry. Immediate/outbox message sending has no outbound middleware chain.
 
 ## Breaking migration
 
-Remove all five request/command/notification inbound and command/notification outbound middleware
-interfaces, their delegates, outbound context types and `Add*Middleware` registrations. Implement
-`IInvocationFilter` once, register with `AddInvocationFilter`, and select a host engine. Replace
-`Compare` topology constraints with host-owned ordering in the default engine. The outbound dispatcher
-injection analyzer is removed with its extension surface. All entry points use one sealed InvocationContext; the three inbound context subclasses and InvocationKind are removed. Context.Current carries invocation.Context.
+- Rename InMemoryEventHandler<T> to LocalEventHandler<T>; keep IEventPublisher.
+- Import NOF.Infrastructure for filter/pipeline interfaces and configuration. Return the result of next or a declared case instead of mutating InvocationContext.
+- Match complete invocation results as object values; business handlers retain their closed typed returns. Remove execution wrappers, Reject/SetResponse and exception-based expected failure handling.
+- Replace direct IInvocationFilter DI activation with Global/Service/UseCase Use/Exclude declarations.
+- Update custom engines to provide their effective plan. Upgrade runtime, generators, adapters and callers together.
 
-Standalone test/service providers must choose `UseInMemoryInvocationPipeline()` explicitly;
-NOF host builders already do so. Custom hosts can replace `IInvocationPipeline` without changing
-application filters. Upgrade application, infrastructure and hosting packages together.
-
-[Current unified operation and message binding API](unified-operations.md).
-
-[Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
+[Unified operations](unified-operations.md) · [Expected failures](expected-failures.md) · [Layer boundaries](contract-boundaries.md)

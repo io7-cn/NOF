@@ -27,7 +27,12 @@ builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
-builder.Services.AddInvocationFilter<ValidateReadOrder>();
+builder.Services.AddInvocationFilters(filters =>
+{
+    filters.Global.Use<ValidateReadOrder>();
+    filters.Service<IExpectedOrderService>().Exclude<ValidateReadOrder>();
+    filters.UseCase(ExpectedOrderService.Evaluate.Descriptor).Use<ValidateReadOrder>(5);
+});
 builder.Services.AddSingleton<SmokeOutboxStore>();
 builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
 builder.Services.AddOutbox(outbox => outbox.Add<SmokeIntent, SmokeIntentHandler>("smoke.intent", 1));
@@ -57,20 +62,25 @@ app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.ResolveDaemonServices();
+    var plan = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>()
+        .Describe(OrderServer.Read.Descriptor, InvocationOrigin.Http);
+    Expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
+        "Generated filter catalog was not captured without reflection");
+    Expect(ValidateReadOrder.FailureCases.Single().ErrorCode == "order.page", "Filter error code was lost");
     var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(preview.Label == "preview", "Operations sharing request/response types lost their identity");
+    Expect(preview is OrderDto { Label: "preview" }, "Operations sharing request/response types lost their identity");
     var plain = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(plain.Label == "local", "Local invocation failed");
+    Expect(plain is OrderDto { Label: "local" }, "Local invocation failed");
     Expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
         "Nullable local response was rejected");
     var decision = await PlainOrderService.Decide.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(decision is Failure { Code: "order.missing" }, "Business union invocation failed");
+    Expect(InvocationResult.Value(decision) is Failure { Code: "order.missing" }, "Business union invocation failed");
     var missing = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
-    Expect(missing is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
+    Expect(InvocationResult.Value(missing) is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
     var conflict = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = 0 }, Context.Empty);
-    Expect(conflict is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
+    Expect(InvocationResult.Value(conflict) is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
         "Typed expected failure data was lost");
 }
 await app.StartAsync();
@@ -233,16 +243,16 @@ public sealed class FindOrder : OrderServer.Find
         => Task.FromResult<OrderDto?>(null);
 }
 
-public sealed class ValidateReadOrder : IInvocationFilter
+[FailureCase("InvalidPage", "order.page")]
+public sealed partial class ValidateReadOrder : IInvocationFilter
 {
-    public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
+    public ValueTask<object?> InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
     {
         if (context.ServiceType == typeof(IOrderService)
             && context.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
             && request is ReadOrderRequest { Page: < 0 })
         {
-            context.Reject(new Failure("order.page", "Page must be nonnegative"));
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(new InvalidPage("Page must be nonnegative"));
         }
         return next(context, request, cancellationToken);
     }
@@ -355,38 +365,50 @@ public sealed class SmokeEndpointModule : IHttpEndpointModule
     }
     public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ExpectedAsync(
         Guid id, int? page, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(ExpectedOrderService.Evaluate.Descriptor,
-            new ReadOrderRequest { Id = id, Page = page }, ct)).Match<Results<Ok<OrderDto>, ProblemHttpResult>>(
-            order => TypedResults.Ok(order),
-            error => TypedResults.Problem(statusCode: 404, detail: error.Message),
-            error => TypedResults.Problem(statusCode: 409, detail: $"Conflict for {error.Error.Id}"));
+        => InvocationResult.Value(await http.InvokeAsync(ExpectedOrderService.Evaluate.Descriptor,
+            new ReadOrderRequest { Id = id, Page = page }, ct)) switch
+        {
+            OrderDto order => TypedResults.Ok(order),
+            ExpectedOrderService.Evaluate.Missing error => TypedResults.Problem(statusCode: 404, detail: error.Message),
+            ExpectedOrderService.Evaluate.Conflict error => TypedResults.Problem(statusCode: 409, detail: $"Conflict for {error.Error.Id}"),
+            ProblemHttpResult problem => problem,
+            _ => throw new InvalidOperationException("Unexpected outcome")
+        };
 
-    public static async Task<Ok<OrderDto>> ReadProtectedAsync(Guid id, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok((await http.InvokeAsync(OrderServer.ReadProtected.Descriptor, new ReadOrderRequest { Id = id }, ct)).Value as OrderDto
-            ?? throw new InvalidOperationException("Protected handler returned no resource"));
-    public static async Task<Results<Ok<OrderDto>, NoContent>> FindAsync(Guid id, HttpContext http, CancellationToken ct)
-        => await http.InvokeAsync(PlainOrderService.Find.Descriptor, new ReadOrderRequest { Id = id }, ct) is { } value
-            ? TypedResults.Ok(value) : TypedResults.NoContent();
+    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ReadProtectedAsync(Guid id, HttpContext http, CancellationToken ct)
+        => PresentOrder(await http.InvokeAsync(OrderServer.ReadProtected.Descriptor, new ReadOrderRequest { Id = id }, ct));
+    public static async Task<Results<Ok<OrderDto>, NoContent, ProblemHttpResult>> FindAsync(Guid id, HttpContext http, CancellationToken ct)
+        => InvocationResult.Value(await http.InvokeAsync(PlainOrderService.Find.Descriptor, new ReadOrderRequest { Id = id }, ct)) switch
+        {
+            OrderDto order => TypedResults.Ok(order),
+            null => TypedResults.NoContent(),
+            ProblemHttpResult problem => problem,
+            _ => throw new InvalidOperationException("Unexpected outcome")
+        };
     public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> DecideAsync(Guid id, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(PlainOrderService.Decide.Descriptor, new ReadOrderRequest { Id = id }, ct)).Value switch
+        => PresentOrder(await http.InvokeAsync(PlainOrderService.Decide.Descriptor, new ReadOrderRequest { Id = id }, ct), 404);
+    public static async Task<Results<Ok<OrderReadReceipt>, ProblemHttpResult>> MessageAsync(Guid id, HttpContext http, CancellationToken ct)
+        => InvocationResult.Value(await http.InvokeAsync(OrderServer.ReadWithMessage.Descriptor, new ReadOrderRequest { Id = id }, ct)) switch
         {
-            OrderDto value => TypedResults.Ok(value),
-            Failure failure => TypedResults.Problem(statusCode: 404, detail: failure.Message),
-            _ => throw new InvalidOperationException("No outcome")
+            OrderReadReceipt receipt => TypedResults.Ok(receipt),
+            ProblemHttpResult problem => problem,
+            _ => throw new InvalidOperationException("Unexpected outcome")
         };
-    public static async Task<Ok<OrderReadReceipt>> MessageAsync(Guid id, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok((await http.InvokeAsync(OrderServer.ReadWithMessage.Descriptor, new ReadOrderRequest { Id = id }, ct)).Value as OrderReadReceipt
-            ?? throw new InvalidOperationException("Message handler returned no resource"));
     public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> UpdateAsync(Guid id, UpdateBody body, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(OrderServer.Update.Descriptor,
-            new UpdateOrderRequest { Id = id, Status = body.State }, ct)).Value switch
+        => PresentOrder(await http.InvokeAsync(OrderServer.Update.Descriptor,
+            new UpdateOrderRequest { Id = id, Status = body.State }, ct));
+    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ReadAsync(Guid id, int? page, HttpContext http, CancellationToken ct)
+        => PresentOrder(await http.InvokeAsync(OrderServer.ReadValue.Descriptor, new ReadOrderRequest { Id = id, Page = page }, ct));
+    private static Results<Ok<OrderDto>, ProblemHttpResult> PresentOrder(object? result, int failureStatus = 400)
+        => InvocationResult.Value(result) switch
         {
-            OrderDto value => TypedResults.Ok(value),
-            Failure failure => TypedResults.Problem(statusCode: 400, detail: failure.Message),
-            _ => throw new InvalidOperationException("No outcome")
+            OrderDto order => TypedResults.Ok(order),
+            Failure failure => TypedResults.Problem(statusCode: failureStatus, detail: failure.Message),
+            ValidateReadOrder.InvalidPage failure => TypedResults.Problem(statusCode: 400, detail: failure.Message,
+                extensions: new Dictionary<string, object?> { ["code"] = failure.ErrorCode }),
+            ProblemHttpResult problem => problem,
+            _ => throw new InvalidOperationException("Unexpected outcome")
         };
-    public static async Task<Ok<OrderDto>> ReadAsync(Guid id, int? page, HttpContext http, CancellationToken ct)
-        => TypedResults.Ok(await http.InvokeAsync(OrderServer.ReadValue.Descriptor, new ReadOrderRequest { Id = id, Page = page }, ct));
 }
 
 public union OrderReceipt(OrderReadReceipt, Failure);

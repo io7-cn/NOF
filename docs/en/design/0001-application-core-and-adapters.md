@@ -176,3 +176,5 @@ Update: shared [invocation extensions](invocation-extensions.md) now live in App
 Update: native builders and lifecycle services now replace NOF host wrappers and initialization topology. See [native hosting](native-hosting.md).
 
 Update: the [persistence boundary](persistence-boundaries.md) now uses aggregate repositories, DTO query ports and IUnitOfWork. The generic ORM facade is absent from core.
+
+Update: execution-policy failures now return generated filter-owned cases through the same open invocation result path as business values. Handlers retain closed typed returns. Infrastructure owns three-scope filter plans, Use/Exclude and static FailureCases/Describe; mutable context outcomes and rejection exceptions are removed. This supersedes the separate execution-outcome model above. See [current invocation extensions](invocation-extensions.md). HTTP Fluent binding/response/OpenAPI work remains deferred.

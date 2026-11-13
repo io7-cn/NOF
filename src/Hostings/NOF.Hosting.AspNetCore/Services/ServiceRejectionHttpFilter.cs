@@ -1,31 +1,29 @@
 using Microsoft.AspNetCore.Http;
-using NOF.Application;
-using NOF.Contract;
+using Microsoft.AspNetCore.Http.HttpResults;
 using NOF.Infrastructure;
 
 namespace NOF.Hosting.AspNetCore;
 
-/// <summary>Maps application policy rejection to native ProblemDetails without changing business responses.</summary>
+/// <summary>Preserves the existing native authorization presentation using returned values.</summary>
 public sealed class ServiceRejectionHttpFilter : IEndpointFilter
 {
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        try
+        var result = await next(context);
+        return result is AuthorizationInvocationFilter.AuthenticationRequired or AuthorizationInvocationFilter.PermissionDenied or AuthorizationInvocationFilter.PolicyDenied ? ToProblem(result) : result;
+    }
+    /// <summary>Maps built-in policy values to the existing ProblemDetails shape, without exception propagation.</summary>
+    public static ProblemHttpResult ToProblem(object failure)
+    {
+        var (status, code, message) = failure switch
         {
-            return await next(context);
-        }
-        catch (ServiceRejectedException rejected)
-        {
-            var status = rejected.Reason switch
-            {
-                RejectionReason.Authentication => StatusCodes.Status401Unauthorized,
-                RejectionReason.Authorization => StatusCodes.Status403Forbidden,
-                _ => StatusCodes.Status400BadRequest
-            };
-            return TypedResults.Problem(statusCode: status, title: "Application request rejected",
-                detail: rejected.Failure.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = rejected.Failure.Code });
-        }
+            AuthorizationInvocationFilter.AuthenticationRequired value => (401, value.ErrorCode, value.Message),
+            AuthorizationInvocationFilter.PermissionDenied value => (403, value.Error.ErrorCode, value.Error.Message),
+            AuthorizationInvocationFilter.PolicyDenied value => (400, value.Error.ErrorCode, value.Error.Message),
+            _ => throw new InvalidOperationException($"No native HTTP mapping is configured for filter failure '{failure.GetType()}'.")
+        };
+        return TypedResults.Problem(statusCode: status, title: "Application request rejected", detail: message,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
     }
 }

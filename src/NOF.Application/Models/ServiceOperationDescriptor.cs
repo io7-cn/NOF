@@ -21,6 +21,8 @@ public abstract class ServiceOperationDescriptor : ServiceOperationReference
     public abstract Type ResponseType { get; }
     /// <summary>Gets whether execution allows a null output.</summary>
     public bool AllowsNullResponse { get; }
+    /// <summary>Gets statically described business branches.</summary>
+    public virtual IReadOnlyList<ServiceOperationResultCase> ResultCases => [new(ResponseType)];
 }
 
 /// <summary>A typed execution descriptor whose output is known by the Application implementation.</summary>
@@ -29,10 +31,11 @@ public sealed class ServiceOperationDescriptor<TRequest, TResponse> : ServiceOpe
     /// <summary>Creates a typed operation reference.</summary>
     public ServiceOperationDescriptor(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
-        string operationName, bool allowsNullResponse = false) : base(serviceType, operationName, allowsNullResponse)
+        string operationName, bool allowsNullResponse = false, IReadOnlyList<ServiceOperationResultCase>? resultCases = null) : base(serviceType, operationName, allowsNullResponse)
     {
         Reference = new(serviceType, operationName);
         ServiceOperationInspector.ValidateReference(Reference);
+        ResultCases = Array.AsReadOnly((resultCases ?? [new(typeof(TResponse))]).ToArray());
     }
     /// <summary>Gets the input-only reference for producer routing.</summary>
     public ServiceOperationReference<TRequest> Reference { get; }
@@ -40,4 +43,6 @@ public sealed class ServiceOperationDescriptor<TRequest, TResponse> : ServiceOpe
     public override Type RequestType => typeof(TRequest);
     /// <inheritdoc />
     public override Type ResponseType => typeof(TResponse);
+    /// <inheritdoc />
+    public override IReadOnlyList<ServiceOperationResultCase> ResultCases { get; }
 }

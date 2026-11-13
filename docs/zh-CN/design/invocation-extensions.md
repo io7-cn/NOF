@@ -1,72 +1,76 @@
-# 由宿主选择的统一调用扩展
+# 宿主选择的调用扩展
 
-[English](../../en/design/invocation-extensions.md) · [开发指南](../README.md)
+[English](../../en/design/invocation-extensions.md) · [开发文档](../README.md)
 
-NOF.Application 为服务操作、命令和通知定义一个扩展点：
-`IInvocationFilter.InvokeAsync(InvocationContext, object, InvocationDelegate, CancellationToken)`。
-Application 中的 InvocationContext 组合语义 Context，提供操作描述符、入口来源、输入与 Handler 元数据以及执行结果，不依赖 HTTP。
-预期业务结果仍使用操作专属 Union，策略拒绝与业务返回分开。
+Infrastructure 拥有 IInvocationFilter、InvocationDelegate、IInvocationPipeline、配置规则和有效执行计划。Application 拥有 InvocationContext、操作描述符与强类型业务 Handler。语义 Context 仍属于 Abstraction。本地事件处理器重命名为 LocalEventHandler<T>；IEventPublisher 和当前作用域事件语义保持不变。
 
-注册扩展只声明扩展，不会选择执行器，也不保证扩展自动生效。宿主通过
-`IInvocationPipeline` 决定是否执行、在哪执行以及执行顺序。
-NOF.Infrastructure 提供可选的内存默认实现，NOF 宿主构建器默认选择它。
+业务 Handler 返回 Task<TBusiness>（包括生成的闭合 Result union）。Filter 和 next 返回 ValueTask<object?>，完整调用返回 Task<object?>。Filter 可以返回失败、以允许的业务值短路，或者查看并转换下游结果。ServiceExecution、ServiceCompleted、ServiceRejected、ServiceRejectedException 已删除。InvocationContext 不再保存可变响应或拒绝状态；克隆只保留调用身份与语义信息。技术异常和取消原样传播。
+
+## 三层应用范围
 
 ```csharp
-// 应用组合：声明可复用扩展，不选择执行器。
-services.AddInvocationFilter<AuditFilter>(order: 0);
-
-// 宿主组合：选择默认实现，或者提供自己的 IInvocationPipeline。
+services.AddInvocationFilters(filters =>
+{
+    filters.Global.Use<AuditFilter>();
+    filters.Service<IOrderService>().Use<RateLimitFilter>(10);
+    filters.UseCase(OrderService.Read.Descriptor).Exclude<RateLimitFilter>();
+});
 services.UseInMemoryInvocationPipeline();
-// services.AddScoped<IInvocationPipeline, MyHostInvocationPipeline>();
 ```
 
-`AddInvocationFilter<T>` 注册 scoped Filter，同一类型只保留一份不可变定义。
-默认实现按数值从小到大执行，同序号保持注册顺序；每一阶段到达时才在当前执行上下文中
-解析对应 Filter，让归一化和授权先于后续依赖及业务 Handler 的构造。
-直接通过 DI 注册 `IInvocationFilter` 也支持，顺序为零，遵循普通 DI 的构造时机；
-需要控制构造时机时使用定义注册 API。Filter 调用 `next` 继续，可以通过克隆替换上下文项，
-也可以短路；克隆共享执行结果。默认执行器在各阶段及终点绑定并恢复 `Context.Current`，
-检查取消，并原样传播异常。
+AddInvocationFilter<T>(order) 是 Global 的快捷方式。注册只声明扩展，由宿主决定如何执行。NOF 宿主默认选择内存引擎；自定义 IInvocationPipeline 同时实现 IInvocationPlanProvider.Describe，描述自己真实采用的执行计划。直接向 DI 注册 IInvocationFilter 不会启用阶段；先注册具体类型/工厂，再通过配置 API 应用。
+
+默认嵌套顺序为 Global → Service → UseCase。Service 绑定 Contract 接口，UseCase 绑定完整操作描述符。每层按数字 order 升序，同值按注册顺序。重复启用同一类型只执行一次并保留外层位置；显式 order 冲突时报错。需要改变继承位置时，先在一层 Exclude，再在更深层重新 Use；重新启用采用新层级和顺序。同层同类型同时 Use/Exclude 无论声明先后都冲突，不做隐式覆盖。
+
+已排除 Filter 不执行，也不调用 Describe、不贡献失败目录。配置不泄漏到同级服务、操作或其他宿主。首次解析计划后冻结，后续修改失败。生成的操作映射和实际实现类型元数据支持启动校验与描述，不需要构造处理器或 Filter。
+
+Filter 在运行到该阶段时才从当前作用域解析，构造时已绑定规范化的语义上下文。引擎在各阶段和终端绑定/恢复 Context.Current，校验调用身份及返回值，并在解析依赖前检查取消。授权和租户选择先于 Handler 构造。内置 Global 顺序仍为 tracing(-400)、instrumentation(-300)、可选 authentication(-200)、tenant(-100)、authorization(-50)、host tenant(-25)。
+
+## Filter 自有的失败声明
 
 ```csharp
-public sealed class AuditFilter(ILogger<AuditFilter> logger) : IInvocationFilter
+[FailureCase("Exceeded", "000429")]
+[FailureCase("Unavailable", typeof(LimitDetails))]
+public sealed partial class RateLimitFilter : IInvocationFilter
 {
-    public async ValueTask InvokeAsync(InvocationContext context, object input,
-        InvocationDelegate next, CancellationToken cancellationToken)
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input,
+        InvocationDelegate next, CancellationToken ct)
     {
-        logger.LogInformation("Invoking {Operation}", context.OperationName);
-        await next(context, input, cancellationToken);
+        if (input is ReadOrderRequest { Page: < 0 })
+        {
+            return new Exceeded("Invalid page");
+        }
+        return await next(context, input, ct);
     }
 }
 ```
 
-内置默认顺序为追踪（-400）、指标（-300）、可选的资源服务器认证（-200）、
-租户归一化（-100）、授权（-50）、宿主租户切换（-25）。这些是默认宿主配置，
-不是所有宿主都必须采用的框架排序协议。替换执行器时，宿主需明确保留所需的认证、授权、
-租户、取消和作用域保证；直接调用 Handler 会绕过边界。
-服务和消息适配器只提供执行终点，不再分别组装中间件链。
+FailureCaseAttribute 继续定义在 Contract，也支持标在顶层非泛型 partial Filter 类上。Infrastructure.SourceGenerator 生成嵌套 sealed 分支及静态只读 RateLimitFilter.FailureCases 目录；不生成 Filter.Result 或工厂。默认分支有 ErrorCode/Message，自定义数据分支只提供 Error。Name 必须是 C# 标识符，错误码可以是数字等任意不透明字符串。Contract.SourceGenerator 仍只做分析，非法声明报告 NOF220。
 
-HTTP 路由、绑定、原生中间件、端点过滤器、ProblemDetails 和异常呈现留给 ASP.NET Core。
-端点通过 `HttpContext.InvokeAsync` 进入应用边界，不把 HTTP 中间件改装成第二套应用管线。
-技术异常由宿主异常处理接收；追踪只记录并重新抛出。取消不会转成业务拒绝。
+IInvocationFilter.FailureCases 静态虚成员默认空，Describe 默认 IncludeAll。自定义静态描述可以选择本 Filter 的子集：
 
-消息发送不再提供可扩展的出站中间件链。`MessageDelivery` 为直接发送和 Outbox 暂存统一准备
-消息 ID、归一化租户及 Producer Activity/追踪头，不序列化任意上下文项或用户身份。
-暂存后仍须保存同一个数据库上下文；顺序投递、重试和幂等继续由投递机制负责。
-传输专属发送策略由所选 Rider 或宿主集成承担。
+```csharp
+public static void Describe(InvocationDescriptionContext description)
+{
+    if (description.Origin == InvocationOrigin.Http)
+    {
+        description.Include<Exceeded>();
+    }
+}
+```
+
+Include<TFailure>() 不能选择本目录以外的类型。描述只提供操作、来源、配置/Attribute 元数据，不提供作用域服务或请求身份。内置授权描述与执行共用策略解析，包含真实实现侧元数据、宿主租户选项和自定义授权器配置。
+
+有效 InvocationPlan 同时包含实际 Filter、选中的 FailureCases 与操作 BusinessCases。返回不属于有效目录的失败、未知业务值和未初始化 union 都是契约错误。适配器可通过 InvocationResult.Value(value) 解开装箱 union 再用原生 switch；执行路径保留原始业务返回值。
+
+HTTP 模块继续显式使用 ASP.NET Core 绑定和 TypedResults，内置授权值保留 ProblemDetails 与 challenge 行为；自定义 Filter/业务分支由模块显式映射。HTTP Fluent 绑定、响应约定和 OpenAPI 生成优化留待后续。消息消费使用相同结果路径，预期 Filter 失败回滚业务事务并将 inbox 标为失败，不执行技术异常重试。消息直接发送与 outbox 均不恢复出站中间件。
 
 ## 破坏性迁移
 
-删除原有五套请求/命令/通知入站及命令/通知出站中间件接口、Delegate、出站上下文和
-`Add*Middleware` 注册方法。统一实现一次 `IInvocationFilter`，通过 `AddInvocationFilter`
-声明，再由宿主选择执行器。原 `Compare` 拓扑约束改为默认执行器中的宿主排序。
-出站扩展面删除后，对应 Dispatcher 注入分析器一起移除。
-请求和消息上下文统一继承 `InvocationContext` 的 `HandlerMethodInfo` 和 `InputType`。
+- InMemoryEventHandler<T> 改名为 LocalEventHandler<T>，保留 IEventPublisher。
+- Filter/管道与配置引用 NOF.Infrastructure；返回 next 的值或已声明分支，不再修改 InvocationContext。
+- 完整调用按 object 值匹配，业务 Handler 保持强类型闭合返回；删除执行包装、Reject/SetResponse 和预期失败异常处理。
+- 直接 IInvocationFilter DI 应用改为 Global/Service/UseCase 的 Use/Exclude。
+- 自定义引擎提供真实有效计划；运行时、生成器、适配器和调用方配套升级。
 
-独立测试或服务容器需显式选择 `UseInMemoryInvocationPipeline()`；NOF 宿主构建器已默认选择。
-自定义宿主可以替换 `IInvocationPipeline`，无需修改应用 Filter。
-应用、基础设施和宿主包须协调升级。
-
-[当前统一操作与消息绑定 API](unified-operations.md)。
-
-[当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。
+[统一操作](unified-operations.md) · [可预期失败](expected-failures.md) · [分层边界](contract-boundaries.md)

@@ -1,4 +1,6 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using NOF.SourceGeneration;
 using System;
@@ -35,6 +37,19 @@ public sealed class FailureCaseAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeService(SymbolAnalysisContext output, INamedTypeSymbol service)
     {
+        var filterDeclarations = service.GetAttributes().Where(ExpectedFailureModel.IsDeclaration).ToArray();
+        if (filterDeclarations.Length > 0)
+        {
+            var isFilter = service.TypeKind == TypeKind.Class && service.AllInterfaces.Any(type => type.ToDisplayString() == "NOF.Infrastructure.IInvocationFilter");
+            var partial = service.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is ClassDeclarationSyntax declaration
+                && declaration.Modifiers.Any(SyntaxKind.PartialKeyword));
+            if (!isFilter || !partial || service.ContainingType is not null || service.Arity != 0)
+            {
+                Report(output, service, "FailureCase on a class requires a top-level, non-generic partial IInvocationFilter.");
+            }
+            ValidateDeclarations(output, service, filterDeclarations, service.Name);
+            return;
+        }
         var methods = service.GetMembers().OfType<IMethodSymbol>()
             .Where(method => ExpectedFailureModel.Declarations(method).Length > 0).ToArray();
         if (methods.Length == 0)
@@ -59,23 +74,28 @@ public sealed class FailureCaseAnalyzer : DiagnosticAnalyzer
                 Report(output, method, "FailureCase methods require one request, a non-nullable synchronous success type and a unique operation name.");
                 continue;
             }
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var declaration in declarations)
+            ValidateDeclarations(output, method, declarations, method.Name);
+        }
+    }
+
+    private static void ValidateDeclarations(SymbolAnalysisContext output, ISymbol owner, AttributeData[] declarations, string ownerName)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declaration in declarations)
+        {
+            var name = ExpectedFailureModel.CaseName(declaration);
+            if (!ExpectedFailureModel.ValidName(name)
+                || !ExpectedFailureModel.HasCustomError(declaration) && string.IsNullOrWhiteSpace(ExpectedFailureModel.Code(declaration))
+                || ExpectedFailureModel.HasCustomError(declaration) && (ExpectedFailureModel.ErrorType(declaration) is not { } errorType
+                    || errorType.TypeKind == TypeKind.Error || errorType.SpecialType == SpecialType.System_Void
+                    || errorType is INamedTypeSymbol { IsUnboundGenericType: true }
+                    || errorType.IsRefLikeType || errorType.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
+                || name == ownerName || name is "FailureCases" or "Describe" or "InvokeAsync" or "Result" or "RequestType" or "ResponseType" or "AllowsNullResponse" or "HandleAsync" or "Descriptor" or "Match" or "JsonClassifier" or "ErrorCode" or "Message" or "Error" or "Kind"
+                    or "Value" or "Equals" or "GetHashCode" or "ToString" or "GetType" or "Deconstruct" or "EqualityContract" or "PrintMembers"
+                || !names.Add(name)
+                || declaration.AttributeClass?.TypeArguments.Any(type => type.TypeKind == TypeKind.Error) == true)
             {
-                var name = ExpectedFailureModel.CaseName(declaration);
-                if (!ExpectedFailureModel.ValidName(name)
-                    || !ExpectedFailureModel.HasCustomError(declaration) && string.IsNullOrWhiteSpace(ExpectedFailureModel.Code(declaration))
-                    || ExpectedFailureModel.HasCustomError(declaration) && (ExpectedFailureModel.ErrorType(declaration) is not { } errorType
-                        || errorType.TypeKind == TypeKind.Error || errorType.SpecialType == SpecialType.System_Void
-                        || errorType is INamedTypeSymbol { IsUnboundGenericType: true }
-                        || errorType.IsRefLikeType || errorType.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
-                    || name == method.Name || name is "Result" or "RequestType" or "ResponseType" or "AllowsNullResponse" or "HandleAsync" or "Descriptor" or "InvokeAsync" or "Match" or "JsonClassifier" or "ErrorCode" or "Message" or "Error" or "Kind"
-                        or "Value" or "Equals" or "GetHashCode" or "ToString" or "GetType" or "Deconstruct" or "EqualityContract" or "PrintMembers"
-                    || !names.Add(name)
-                    || declaration.AttributeClass?.TypeArguments.Any(type => type.TypeKind == TypeKind.Error) == true)
-                {
-                    Report(output, method, "Each FailureCase requires a unique valid C# name that does not collide with operation members. The optional second argument is either a nonblank error code or a closed usable error data type; omitting it defaults the error code to the name.");
-                }
+                Report(output, owner, "Each FailureCase requires a unique valid C# name that does not collide with operation members. The optional second argument is either a nonblank error code or a closed usable error data type; omitting it defaults the error code to the name.");
             }
         }
     }

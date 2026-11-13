@@ -102,8 +102,14 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         {
             try
             {
-                await ProcessSingleMessageAsync(message, cancellationToken);
-                succeededCount++;
+                if (await ProcessSingleMessageAsync(message, cancellationToken))
+                {
+                    succeededCount++;
+                }
+                else
+                {
+                    failedCount++;
+                }
             }
             catch (Exception)
             {
@@ -123,8 +129,17 @@ public sealed class InboxMessageBackgroundService : BackgroundService
                 var message = orderedMessages[index];
                 try
                 {
-                    await ProcessSingleMessageAsync(message, cancellationToken);
-                    succeededCount++;
+                    if (await ProcessSingleMessageAsync(message, cancellationToken))
+                    {
+                        succeededCount++;
+                    }
+                    else
+                    {
+                        failedCount++;
+                        groupFailed = true;
+                        await ReleaseUnprocessedOrderedMessagesAsync(orderedMessages.Skip(index + 1), cancellationToken);
+                        break;
+                    }
                 }
                 catch (Exception)
                 {
@@ -155,19 +170,19 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             failedCount);
     }
 
-    private async Task ProcessSingleMessageAsync(
+    private async Task<bool> ProcessSingleMessageAsync(
         NOFInboxMessage message,
         CancellationToken cancellationToken)
     {
         if (message.Status != InboxMessageStatus.Pending)
         {
-            return;
+            return false;
         }
 
         if (message.RetryCount > _options.MaxRetryCount)
         {
             await MarkFailedAsync(message, "Exceeded max retry count", cancellationToken);
-            throw new InvalidOperationException($"Inbox message '{message.Id}' exceeded the maximum retry count.");
+            return false;
         }
 
         await using var scope = _serviceProvider.CreateAsyncScope();
@@ -184,7 +199,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             if (pendingMessage is null)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return;
+                return false;
             }
 
             var orderState = await store.LoadAndValidateOrderStateAsync(pendingMessage, cancellationToken);
@@ -203,8 +218,15 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
             using var activity = StartBoundaryActivity(message, traceParent);
 
-            await services.GetRequiredService<MessageOperationExecutor>().ExecuteAsync(
+            var outcome = await services.GetRequiredService<MessageOperationExecutor>().ExecuteAsync(
                 pendingMessage.Payload, pendingMessage.Route, processingHeaders, cancellationToken);
+
+            if (outcome is IInvocationFailure)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                await MarkFailedAsync(message, outcome.ToString() ?? "Invocation declined", cancellationToken);
+                return false;
+            }
 
             pendingMessage.Status = InboxMessageStatus.Processed;
             pendingMessage.ProcessedAtUtc = DateTime.UtcNow;
@@ -225,12 +247,13 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            return true;
         }
         catch (Exception ex)
         {
             await transaction.RollbackAsync(cancellationToken);
 
-            if (ex is ServiceRejectedException || message.RetryCount >= _options.MaxRetryCount)
+            if (message.RetryCount >= _options.MaxRetryCount)
             {
                 await MarkFailedAsync(message, ex.Message, cancellationToken, ex);
             }

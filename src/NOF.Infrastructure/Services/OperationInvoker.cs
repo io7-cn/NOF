@@ -9,7 +9,7 @@ namespace NOF.Infrastructure;
 public sealed class OperationInvoker(IServiceProvider services) : IOperationInvoker
 {
     /// <inheritdoc />
-    public async Task<ServiceExecution> InvokeAsync(ServiceOperationDescriptor operation, object input,
+    public async Task<object?> InvokeAsync(ServiceOperationDescriptor operation, object input,
         Context context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -30,6 +30,6 @@ public sealed class OperationInvoker(IServiceProvider services) : IOperationInvo
         scope.ServiceProvider.ResolveDaemonServices();
         var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
             .ExecuteAsync(operation, input, context, InvocationOrigin.Local, cancellationToken).ConfigureAwait(false);
-        return result.Execution;
+        return result;
     }
 }

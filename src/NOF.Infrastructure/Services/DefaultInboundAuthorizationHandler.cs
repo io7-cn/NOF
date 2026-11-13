@@ -15,30 +15,21 @@ public sealed class DefaultInboundAuthorizationHandler(
     {
         _ = cancellationToken;
 
-        var inputRequirement = ResolveInputRequirement(context);
-        var inputFailure = AuthorizeRequirement(
-            context,
-            inputRequirement,
-            ResolveOperationName(context, input: true));
-        if (inputFailure is not null)
+        var policy = InvocationAuthorizationPolicy.Resolve(context.ServiceType, context.ServiceMethodInfo,
+            context.HandlerType, context.HandlerMethodInfo);
+        foreach (var permission in policy.Requirements)
         {
-            return ValueTask.FromResult<InboundAuthorizationResult>(inputFailure);
-        }
-
-        var executionRequirement = ResolveExecutionRequirement(context);
-        var executionFailure = AuthorizeRequirement(
-            context,
-            executionRequirement,
-            ResolveOperationName(context, input: false));
-        if (executionFailure is not null)
-        {
-            return ValueTask.FromResult<InboundAuthorizationResult>(executionFailure);
+            var failure = AuthorizeRequirement(context, new PermissionRequirement(permission, false), context.HandlerMethodInfo.Name);
+            if (failure is not null)
+            {
+                return ValueTask.FromResult<InboundAuthorizationResult>(failure);
+            }
         }
 
         logger.LogDebug(
             "Authorization passed for {HandlerType}/{OperationName}",
             context.HandlerType.DisplayName,
-            ResolveOperationName(context, input: false));
+            context.HandlerMethodInfo.Name);
         return ValueTask.FromResult<InboundAuthorizationResult>(InboundAuthorizationResult.Success);
     }
 
@@ -65,7 +56,7 @@ public sealed class DefaultInboundAuthorizationHandler(
                 operationName);
             return new InboundAuthorizationResult.Denied(
                 new global::NOF.Abstraction.Failure("401", "Please login first"),
-                Reason: RejectionReason.Authentication,
+                Reason: AuthorizationFailureReason.Authentication,
                 ChallengePermissions: GetPermissions(requirement.Value));
         }
 
@@ -90,35 +81,11 @@ public sealed class DefaultInboundAuthorizationHandler(
                 permission);
             return new InboundAuthorizationResult.Denied(
                 new global::NOF.Abstraction.Failure("403", "Insufficient permissions"),
-                Reason: RejectionReason.Authorization,
+                Reason: AuthorizationFailureReason.Authorization,
                 ChallengePermissions: requiredPermissions);
         }
 
         return null;
-    }
-
-    private static string ResolveOperationName(InboundAuthorizationContext context, bool input)
-        => input ? context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name : context.HandlerMethodInfo.Name;
-
-    private static PermissionRequirement? ResolveInputRequirement(InboundAuthorizationContext context)
-        => context.ServiceType is not null && context.ServiceMethodInfo is not null
-            ? ResolveRequestRequirement(context.ServiceType, context.ServiceMethodInfo) : null;
-
-    private static PermissionRequirement? ResolveExecutionRequirement(InboundAuthorizationContext context)
-        => GetRequirement(context.HandlerMethodInfo) ?? GetRequirement(context.HandlerType);
-
-    private static PermissionRequirement? ResolveRequestRequirement(Type serviceType, MethodInfo serviceMethodInfo)
-        => GetRequirement(serviceMethodInfo) ?? GetRequirement(serviceType);
-
-    private static PermissionRequirement? GetRequirement(MemberInfo memberInfo)
-    {
-        var attr = memberInfo.GetCustomAttributes(inherit: true)
-            .OfType<MetadataAttribute>()
-            .LastOrDefault(static attr => string.Equals(attr.Key, RequirePermissionAttribute.MetadataKey, StringComparison.OrdinalIgnoreCase));
-
-        return attr is null
-            ? null
-            : new PermissionRequirement(attr.Value, RequiresAllPermissions: false);
     }
 
     private static IReadOnlyCollection<string> ResolveGrantedPermissions(ClaimsPrincipal user)

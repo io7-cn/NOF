@@ -13,7 +13,7 @@ public sealed class InvocationTestDescriptor(Type service, string name, Type inp
 
 public static class InvocationTestExtensions
 {
-    public static Task<ServiceExecution> InvokeAsync<TService>(this IOperationInvoker invoker, string name, object input,
+    public static Task<object?> InvokeAsync<TService>(this IOperationInvoker invoker, string name, object input,
         Context context, CancellationToken cancellationToken = default)
         => invoker.InvokeAsync(new InvocationTestDescriptor(typeof(TService), name, input.GetType(), typeof(TService).GetMethod(name)!.ReturnType),
             input, context, cancellationToken);

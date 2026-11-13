@@ -44,7 +44,7 @@ Return the successful value or a declared branch directly. Unrelated errors cann
 
 Contract generates no code. NOF.Contract.SourceGenerator retains its name and declaration analyzers. Application owns operation identity metadata and complete descriptors. Remote production uses concrete clients or generic IOutbox intents, independently of service descriptors.
 
-Application generates `NodeService.Delete.Descriptor` as `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`. HTTP invocation, local invocation and operation mappings use this complete response type. NodeService.Delete.InvokeAsync returns that same Result. The typed descriptor's Reference property exposes its input-only producer reference; both forms share the same stable Id, not the same object instance.
+Application generates `NodeService.Delete.Descriptor` as `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`. HTTP invocation, local invocation and operation mappings use this complete response type. NodeService.Delete.InvokeAsync returns Task<object?>, containing the business Result or an effective filter failure; HandleAsync retains Task<Result>. The typed descriptor's Reference property exposes its input-only producer reference; both forms share the same stable Id, not the same object instance.
 
 Message consumers still bind only complete Empty-output descriptors. Queue/Subscription reject Empty success methods with FailureCase, including forged success-only descriptors. Outbox messages are independent intents; infrastructure handlers explicitly interpret any application result they choose to invoke.
 
@@ -52,7 +52,7 @@ Message consumers still bind only complete Empty-output descriptors. Queue/Subsc
 
 Use native C# union switch expressions for exhaustiveness checking (CS8509), or the generated Match helper. Ordinary C# discard, catch-all and switch-statement behavior remains unchanged. NOF adds no checked-result analyzer or ExpectedOutcome marker. Default/uninitialized unions are invalid at the invocation boundary.
 
-Domain returns its own business values without referencing Contract. Application maps them to the declared operation branches. Technical exceptions and cancellation propagate; standard .NET exceptions represent invariant misuse. Shared Abstraction.Failure and ServiceRejected represent execution-policy rejection separately from a completed business result.
+Domain returns its own business values without referencing Contract. Application maps them to the declared operation branches. Technical exceptions and cancellation propagate; standard .NET exceptions represent invariant misuse. Filter failures use generated branches and the same returned-value path; the effective host plan selects their catalog.
 
 HTTP modules explicitly map application cases to TypedResults/resources/ProblemDetails. The configuration-node CRUD and OAuth sample adapters use Application-owned cases. Result is an in-process outcome, not a mandatory wire envelope.
 
@@ -73,3 +73,5 @@ Keep JSON branch names/codes and custom data schemas stable when migrating. The 
 [Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
 
 See [generic transactional outbox](transactional-outbox.md).
+
+Filter classes may also declare FailureCase; see [filter catalogs and effective plans](invocation-extensions.md). They generate branches/catalogs only, never a Filter.Result union.

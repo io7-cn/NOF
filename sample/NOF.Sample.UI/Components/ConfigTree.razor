@@ -50,7 +50,12 @@
     {
         try
         {
-            var response = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Abstraction.Context.Empty);
+            var response = Message.UnwrapWithMessage(await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Abstraction.Context.Empty));
+            if (response is null)
+            {
+                _treeData = [];
+                return;
+            }
             _treeData = response.Nodes.Select(node => new TreeNodeData
             {
                 Key = node.Id.ToString(),

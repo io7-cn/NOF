@@ -8,7 +8,7 @@ namespace NOF.Infrastructure;
 public sealed class MessageOperationExecutor(MessageBindingRegistry bindings, IObjectSerializer serializer, IOperationExecutor executor)
 {
     /// <summary>Executes one subscription in its existing inbox transaction and scope.</summary>
-    public async Task ExecuteAsync(ReadOnlyMemory<byte> payload, string consumerId,
+    public async Task<object?> ExecuteAsync(ReadOnlyMemory<byte> payload, string consumerId,
         IEnumerable<KeyValuePair<string, string?>>? headers, CancellationToken cancellationToken)
     {
         var binding = bindings.GetConsumer(consumerId);
@@ -16,6 +16,10 @@ public sealed class MessageOperationExecutor(MessageBindingRegistry bindings, IO
             ?? throw new InvalidOperationException($"Cannot deserialize message for '{consumerId}'.");
         var context = Context.Empty.WithItems(InboundContextReflection.ReadHeaderItems(headers));
         var invocation = await executor.ExecuteAsync(binding.Operation, input, context, InvocationOrigin.Message, cancellationToken).ConfigureAwait(false);
-        invocation.Execution.Require<Empty>();
+        if (invocation is not IInvocationFailure && InvocationResult.Value(invocation) is not Empty)
+        {
+            throw new InvalidOperationException("The message operation did not return Empty or a declared filter failure.");
+        }
+        return invocation;
     }
 }

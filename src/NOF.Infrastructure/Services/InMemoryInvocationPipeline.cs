@@ -1,49 +1,94 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
-using NOF.Contract;
 
 namespace NOF.Infrastructure;
 
-/// <summary>Default in-memory execution engine. Other hosts can replace IInvocationPipeline.</summary>
-public sealed class InMemoryInvocationPipeline(IServiceProvider services, IEnumerable<InvocationFilterRegistration> registrations, IEnumerable<IInvocationFilter> directFilters) : IInvocationPipeline
+/// <summary>Optional default engine; execution and descriptions share exactly one effective plan.</summary>
+public sealed class InMemoryInvocationPipeline(IServiceProvider services, InvocationPlanFactory plans) : IInvocationPipeline
 {
-    private readonly InvocationFilterRegistration[] _filters = registrations.Concat(directFilters.Select(filter => new InvocationFilterRegistration(filter.GetType(), _ => filter, 0)))
-        .OrderBy(registration => registration.Order).ToArray();
-
     /// <inheritdoc />
-    public ValueTask ExecuteAsync(InvocationContext context, object input, InvocationDelegate terminal, CancellationToken cancellationToken)
+    public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin) => plans.Describe(operation, origin);
+    /// <inheritdoc />
+    public InvocationPlan Describe(InvocationContext context) => plans.Describe(context);
+    /// <inheritdoc />
+    public async ValueTask<object?> ExecuteAsync(InvocationContext context, object input, InvocationDelegate terminal, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var plan = Describe(context);
         InvocationDelegate pipeline = async (current, value, token) =>
         {
+            ValidateIdentity(context, current);
             token.ThrowIfCancellationRequested();
             using var ambient = Context.PushCurrent(current.Context);
-            await terminal(current, value, token).ConfigureAwait(false);
+            return await terminal(current, value, token).ConfigureAwait(false);
         };
-        for (var i = _filters.Length - 1; i >= 0; i--)
+        for (var index = plan.Filters.Count - 1; index >= 0; index--)
         {
-            var registration = _filters[i];
+            var filter = plan.Filters[index];
             var next = pipeline;
             pipeline = async (current, value, token) =>
             {
+                ValidateIdentity(context, current);
                 token.ThrowIfCancellationRequested();
                 using var ambient = Context.PushCurrent(current.Context);
-                await registration.Resolve(services).InvokeAsync(current, value, next, token).ConfigureAwait(false);
+                return plan.Validate(await filter.Resolve(services).InvokeAsync(current, value, next, token).ConfigureAwait(false));
             };
         }
-        return pipeline(context, input, cancellationToken);
+        return plan.Validate(await pipeline(context, input, cancellationToken).ConfigureAwait(false));
+    }
+    private static void ValidateIdentity(InvocationContext original, InvocationContext current)
+    {
+        if (original.Operation != current.Operation || original.HandlerType != current.HandlerType
+            || original.HandlerMethodInfo != current.HandlerMethodInfo || original.Origin != current.Origin
+            || original.InvocationId != current.InvocationId)
+        {
+            throw new InvalidOperationException("A filter may normalize semantic context, not replace invocation identity or operation metadata.");
+        }
     }
 }
 
-/// <summary>Selects the optional default invocation engine for a host.</summary>
+/// <summary>Validates the selected default engine before any hosted service starts.</summary>
+public sealed class InvocationPlanValidationService(InvocationPlanFactory plans) : IHostedLifecycleService
+{
+    /// <inheritdoc />
+    public Task StartingAsync(CancellationToken cancellationToken) { plans.ValidateConfiguration(); return Task.CompletedTask; }
+    /// <inheritdoc />
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>Selects optional in-memory execution without overriding a custom host engine.</summary>
 public static class InMemoryInvocationPipelineExtensions
 {
-    /// <summary>Registers the in-memory default only when the host has not supplied another engine.</summary>
+    /// <summary>Registers the default engine and construction-free plan validation.</summary>
     public static IServiceCollection UseInMemoryInvocationPipeline(this IServiceCollection services)
     {
+        services.AddOptions<TenantAuthorizationOptions>();
+        services.TryAddSingleton<ApplicationServiceRegistry>();
+        services.GetOrAddSingleton<InvocationFilterRegistry>();
+        services.TryAddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<TenantAuthorizationOptions>>().Value;
+            var authorization = services.LastOrDefault(item => !item.IsKeyedService && item.ServiceType == typeof(IInboundAuthorizationHandler));
+            var engine = services.LastOrDefault(item => !item.IsKeyedService && item.ServiceType == typeof(IInvocationPipeline));
+            return new InvocationPlanHostConfiguration(authorization is not null && authorization.ImplementationType != typeof(DefaultInboundAuthorizationHandler),
+                options.RequireAuthenticatedTenant, options.RejectMismatchedTenant, engine?.ImplementationType == typeof(InMemoryInvocationPipeline));
+        });
+        services.TryAddSingleton<InvocationPlanFactory>();
         services.TryAddScoped<IInvocationPipeline, InMemoryInvocationPipeline>();
+        services.TryAddScoped<IInvocationPlanProvider>(provider => provider.GetRequiredService<IInvocationPipeline>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InvocationPlanValidationService>());
         return services;
     }
 }

@@ -1,7 +1,6 @@
 using NOF.Abstraction;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace NOF.Application;
 
@@ -19,8 +18,6 @@ public enum InvocationOrigin
 /// <summary>Describes one operation execution, composing its immutable semantic context.</summary>
 public sealed class InvocationContext
 {
-    private readonly StrongBox<ServiceExecution> _execution;
-
     /// <summary>Gets the semantic information allowed to flow into nested calls.</summary>
     public Context Context { get; private init; } = Context.Empty;
     /// <summary>Gets the operation selected by the host.</summary>
@@ -48,22 +45,7 @@ public sealed class InvocationContext
     public IReadOnlyDictionary<object, object?> Items => Context.Items;
     /// <summary>Reads a semantic context item.</summary>
     public bool TryGetItem(object key, out object? value) => Context.TryGetItem(key, out value);
-    /// <summary>Gets the shared execution outcome.</summary>
-    public ServiceExecution Execution => _execution.Value;
-    /// <summary>Gets the completed business response.</summary>
-    public object? Response => Execution.Value is ServiceCompleted completed ? completed.Response : null;
-    /// <summary>Gets an execution policy rejection.</summary>
-    public Failure? Rejection => Execution.Value is ServiceRejected rejected ? rejected.Failure : null;
-    /// <summary>Gets permissions required by the rejecting authorization policy.</summary>
-    public IReadOnlyList<string> RequiredPermissions => Execution.Value is ServiceRejected rejected ? rejected.RequiredPermissions : [];
-    /// <summary>Completes the operation, including a declared null response.</summary>
-    public void SetResponse(object? response) => _execution.Value = new ServiceCompleted(response);
-    /// <summary>Rejects an operation without embedding transport response details.</summary>
-    public void Reject(Failure failure, IReadOnlyList<string>? requiredPermissions = null, RejectionReason reason = RejectionReason.Policy)
-    {
-        _execution.Value = new ServiceRejected(failure, reason, requiredPermissions);
-    }
-    /// <summary>Creates an execution view carrying different semantic items and the same outcome.</summary>
+    /// <summary>Creates an execution view carrying different semantic items and the same invocation identity.</summary>
     public InvocationContext WithContext(Context context) => new(this, context);
     /// <summary>Creates a view with one semantic item.</summary>
     public InvocationContext WithItem(object key, object? value) => WithContext(Context.WithItem(key, value));
@@ -76,7 +58,6 @@ public sealed class InvocationContext
     /// <summary>Creates an execution context.</summary>
     public InvocationContext()
     {
-        _execution = new();
         InvocationId = Guid.NewGuid().ToString("N");
     }
 
@@ -90,6 +71,5 @@ public sealed class InvocationContext
         InvocationId = source.InvocationId;
         HandlerType = source.HandlerType;
         HandlerMethodInfo = source.HandlerMethodInfo;
-        _execution = source._execution;
     }
 }

@@ -38,7 +38,11 @@ public sealed record ServiceOperationMapping(
     Type RequestType,
     [param: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
     [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
-    Type ReturnType);
+    Type ReturnType)
+{
+    /// <summary>Gets the complete generated descriptor for construction-free plan validation.</summary>
+    public ServiceOperationDescriptor? Descriptor { get; init; }
+}
 
 /// <summary>
 /// Base type for source-generated application service containers.

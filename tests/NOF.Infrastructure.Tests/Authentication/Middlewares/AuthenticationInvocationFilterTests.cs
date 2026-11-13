@@ -41,7 +41,7 @@ public sealed class AuthenticationInvocationFilterTests
         await middleware.InvokeAsync(context, new object(), (next, _, _) =>
         {
             forwarded = next.Context;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.Equal(authenticated, userContext.User.IsAuthenticated);
@@ -66,13 +66,13 @@ public sealed class AuthenticationInvocationFilterTests
         Assert.NotNull(userContext.User);
         Assert.False(userContext.User.IsAuthenticated);
 
-        ValueTask CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
+        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
         {
             _ = forwardedRequest;
             _ = cancellationToken;
             nextCalled = true;
             forwardedContext = context.Context;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }
     }
 
@@ -96,13 +96,13 @@ public sealed class AuthenticationInvocationFilterTests
         Assert.NotNull(userContext.User);
         Assert.False(userContext.User.IsAuthenticated);
 
-        ValueTask CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
+        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedRequest, CancellationToken cancellationToken)
         {
             _ = forwardedRequest;
             _ = cancellationToken;
             nextCalled = true;
             forwardedContext = context.Context;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }
     }
 
@@ -131,7 +131,7 @@ public sealed class AuthenticationInvocationFilterTests
             await middleware.InvokeAsync(executionContext, request, (_, _, _) =>
             {
                 nextCalled = true;
-                return ValueTask.CompletedTask;
+                return ValueTask.FromResult<object?>(Empty.Instance);
             }, default);
         }
 
@@ -163,7 +163,7 @@ public sealed class AuthenticationInvocationFilterTests
         await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -191,7 +191,7 @@ public sealed class AuthenticationInvocationFilterTests
         var inboundContext = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
 
-        await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.CompletedTask, default);
+        await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         Assert.True(userContext.User.IsAuthenticated);
         Assert.Contains(userContext.User.Claims, claim => claim.Type == "scope" && claim.Value == "orders.read orders.write");
@@ -219,7 +219,7 @@ public sealed class AuthenticationInvocationFilterTests
         var inboundContext = (InvocationContext)CreateInboundContext()
             .WithItem(NOFAbstractionConstants.Transport.Headers.Authorization, $"Bearer {token}");
 
-        await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.CompletedTask, default);
+        await middleware.InvokeAsync(inboundContext, new object(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         Assert.Equal("Alice", userContext.User.Name);
     }

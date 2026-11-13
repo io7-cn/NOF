@@ -7,7 +7,7 @@ namespace NOF.Sample.Application.EventHandlers;
 /// <summary>
 /// 节点删除时从父节点的子节点列表中移除
 /// </summary>
-public class RemoveChildNodeOnConfigNodeDeleted : InMemoryEventHandler<ConfigNodeDeletedEvent>
+public class RemoveChildNodeOnConfigNodeDeleted : LocalEventHandler<ConfigNodeDeletedEvent>
 {
     private readonly IConfigNodeHierarchyStore _hierarchy;
 

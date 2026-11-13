@@ -7,7 +7,7 @@ namespace NOF.Sample.Application.EventHandlers;
 /// <summary>
 /// 节点父节点更新时同步更新子节点列表
 /// </summary>
-public class UpdateChildNodeOnConfigNodeParentUpdated : InMemoryEventHandler<ConfigNodeParentUpdatedEvent>
+public class UpdateChildNodeOnConfigNodeParentUpdated : LocalEventHandler<ConfigNodeParentUpdatedEvent>
 {
     private readonly IConfigNodeHierarchyStore _hierarchy;
 

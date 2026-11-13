@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore;
+using NOF.Infrastructure;
 using NOF.Sample.Application;
 
 namespace NOF.Sample.Endpoints;
@@ -37,78 +38,123 @@ public sealed class ConfigNodeEndpoints : IHttpEndpointModule
     }
 
     public static async Task<Results<CreatedAtRoute<CreatedConfigNode>, ProblemHttpResult>> CreateAsync([FromBody] CreateConfigNodeBody body, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.CreateConfigNode.Descriptor,
-            new CreateConfigNodeRequest { Name = body.Name, ParentId = body.ParentId }, ct)).Match<Results<CreatedAtRoute<CreatedConfigNode>, ProblemHttpResult>>(
-            node => TypedResults.CreatedAtRoute(node, GetNodeRoute, new { id = node.Id }),
-            error => ToProblem(error.ErrorCode, error.Message, 409),
-            error => ToProblem(error.ErrorCode, error.Message, 422),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.CreateConfigNode.Descriptor,
+            new CreateConfigNodeRequest { Name = body.Name, ParentId = body.ParentId }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            CreatedConfigNode node => TypedResults.CreatedAtRoute(node, GetNodeRoute, new { id = node.Id }),
+            NOFSampleService.CreateConfigNode.NameConflict error => ToProblem(error.ErrorCode, error.Message, 409),
+            NOFSampleService.CreateConfigNode.ParentNotFound error => ToProblem(error.ErrorCode, error.Message, 422),
+            NOFSampleService.CreateConfigNode.InvalidInput error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<Ok<ConfigNodeDto>, ProblemHttpResult>> GetAsync(long id, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.GetConfigNodeById.Descriptor,
-            new GetConfigNodeByIdRequest { Id = id }, ct)).Match<Results<Ok<ConfigNodeDto>, ProblemHttpResult>>(
-            found => TypedResults.Ok(found.Node),
-            error => ToProblem(error.ErrorCode, error.Message, 404));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.GetConfigNodeById.Descriptor,
+            new GetConfigNodeByIdRequest { Id = id }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            GetConfigNodeByIdResponse found => TypedResults.Ok(found.Node),
+            NOFSampleService.GetConfigNodeById.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<Ok<GetConfigNodeChildrenResponse>, ProblemHttpResult>> GetChildrenAsync(long id, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.GetConfigNodeChildren.Descriptor,
-            new GetConfigNodeChildrenRequest { Id = id }, ct)).Match<Results<Ok<GetConfigNodeChildrenResponse>, ProblemHttpResult>>(
-            children => TypedResults.Ok(children),
-            error => ToProblem(error.ErrorCode, error.Message, 404));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.GetConfigNodeChildren.Descriptor,
+            new GetConfigNodeChildrenRequest { Id = id }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            GetConfigNodeChildrenResponse children => TypedResults.Ok(children),
+            NOFSampleService.GetConfigNodeChildren.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-            new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 409),
-            error => ToProblem(error.ErrorCode, error.Message, 422));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
+            new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            Empty _ => TypedResults.NoContent(),
+            NOFSampleService.UpdateConfigNodeParent.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.UpdateConfigNodeParent.ParentCycle error => ToProblem(error.ErrorCode, error.Message, 409),
+            NOFSampleService.UpdateConfigNodeParent.ParentNotFound error => ToProblem(error.ErrorCode, error.Message, 422),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(long id, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.DeleteConfigNode.Descriptor,
-            new DeleteConfigNodeRequest { Id = id }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem("config_node.has_children", error.Error.Message, 409));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.DeleteConfigNode.Descriptor,
+            new DeleteConfigNodeRequest { Id = id }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            Empty _ => TypedResults.NoContent(),
+            NOFSampleService.DeleteConfigNode.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.DeleteConfigNode.HasChildren error => ToProblem("config_node.has_children", error.Error.Message, 409),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<NoContent, ProblemHttpResult>> PutFileAsync(long id, string fileName, [FromBody] ConfigFileBody body, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.AddOrUpdateConfigFile.Descriptor,
-            new AddOrUpdateConfigFileRequest { NodeId = id, FileName = fileName, Content = body.Content }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.AddOrUpdateConfigFile.Descriptor,
+            new AddOrUpdateConfigFileRequest { NodeId = id, FileName = fileName, Content = body.Content }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            Empty _ => TypedResults.NoContent(),
+            NOFSampleService.AddOrUpdateConfigFile.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.AddOrUpdateConfigFile.InvalidInput error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<NoContent, ProblemHttpResult>> DeleteFileAsync(long id, string fileName, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.RemoveConfigFile.Descriptor,
-            new RemoveConfigFileRequest { NodeId = id, FileName = fileName }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.RemoveConfigFile.Descriptor,
+            new RemoveConfigFileRequest { NodeId = id, FileName = fileName }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            Empty _ => TypedResults.NoContent(),
+            NOFSampleService.RemoveConfigFile.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.RemoveConfigFile.InvalidInput error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<NoContent, ProblemHttpResult>> SetActiveFileAsync(long id, [FromBody] ActiveConfigFileBody body, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.SetActiveFile.Descriptor,
-            new SetActiveFileRequest { NodeId = id, FileName = body.FileName }, ct)).Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.SetActiveFile.Descriptor,
+            new SetActiveFileRequest { NodeId = id, FileName = body.FileName }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            Empty _ => TypedResults.NoContent(),
+            NOFSampleService.SetActiveFile.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.SetActiveFile.InvalidInput error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<Ok<GetConfigurationResponse>, ProblemHttpResult>> GetConfigurationAsync(string appName, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.GetConfiguration.Descriptor,
-            new GetConfigurationRequest { AppName = appName }, ct)).Match<Results<Ok<GetConfigurationResponse>, ProblemHttpResult>>(
-            configuration => TypedResults.Ok(configuration),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.GetConfiguration.Descriptor,
+            new GetConfigurationRequest { AppName = appName }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            GetConfigurationResponse configuration => TypedResults.Ok(configuration),
+            NOFSampleService.GetConfiguration.NotFound error => ToProblem(error.ErrorCode, error.Message, 404),
+            NOFSampleService.GetConfiguration.InvalidInput error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
     public static async Task<Results<ServerSentEventsResult<SampleStreamEvent>, ProblemHttpResult>> WatchAsync(string? topic, int? count, int? intervalMilliseconds, bool? forceFailure, HttpContext http, CancellationToken ct)
-        => (await http.InvokeAsync(NOFSampleService.WatchSampleStream.Descriptor,
-            new WatchSampleStreamRequest { Topic = topic ?? "NOF Streaming Demo", Count = count ?? 5, IntervalMilliseconds = intervalMilliseconds ?? 1000, ForceFailure = forceFailure ?? false }, ct)).Match<Results<ServerSentEventsResult<SampleStreamEvent>, ProblemHttpResult>>(
-            events => TypedResults.ServerSentEvents(events),
-            error => ToProblem(error.ErrorCode, error.Message, 400));
+        => InvocationResult.Value(await http.InvokeAsync(NOFSampleService.WatchSampleStream.Descriptor,
+            new WatchSampleStreamRequest { Topic = topic ?? "NOF Streaming Demo", Count = count ?? 5, IntervalMilliseconds = intervalMilliseconds ?? 1000, ForceFailure = forceFailure ?? false }, ct)) switch
+        {
+            ProblemHttpResult problem => problem,
+            IAsyncEnumerable<SampleStreamEvent> events => TypedResults.ServerSentEvents(events),
+            NOFSampleService.WatchSampleStream.StreamUnavailable error => ToProblem(error.ErrorCode, error.Message, 400),
+            _ => throw new InvalidOperationException("Unmapped invocation result.")
+        };
 
-    public static async Task<Ok<List<ConfigNodeDto>>> GetRootsAsync(HttpContext http, CancellationToken ct)
+    public static async Task<Results<Ok<List<ConfigNodeDto>>, ProblemHttpResult>> GetRootsAsync(HttpContext http, CancellationToken ct)
     {
         var response = await http.InvokeAsync(NOFSampleService.GetRootConfigNodes.Descriptor, new GetRootConfigNodesRequest(), ct);
-        return TypedResults.Ok(response.Nodes);
+        return InvocationResult.Value(response) switch
+        {
+            GetRootConfigNodesResponse roots => TypedResults.Ok(roots.Nodes),
+            ProblemHttpResult problem => problem,
+            _ => throw new InvalidOperationException("Unexpected root query result.")
+        };
     }
 
     public static ProblemHttpResult ToProblem(string code, string message, int status)

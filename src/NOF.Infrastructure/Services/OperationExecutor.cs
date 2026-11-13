@@ -11,7 +11,7 @@ namespace NOF.Infrastructure;
 public sealed class OperationExecutor(IServiceProvider services, ApplicationServiceInvocationResolver resolver) : IOperationExecutor
 {
     /// <inheritdoc />
-    public async Task<InvocationContext> ExecuteAsync(ServiceOperationDescriptor operation, object input,
+    public async Task<object?> ExecuteAsync(ServiceOperationDescriptor operation, object input,
         Context context, InvocationOrigin origin, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -24,23 +24,28 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
         {
             throw new InvalidOperationException($"The operation descriptor does not match '{operation.Id}'.");
         }
+        var implementationType = services.GetRequiredService<ApplicationServiceRegistry>().GetOperationImplementation(mapping.HandlerType);
         var invocation = new InvocationContext
         {
             Operation = operation,
-            HandlerType = mapping.HandlerType,
-            HandlerMethodInfo = InboundContextReflection.ResolveHandlerMethodInfo(mapping.HandlerType, mapping.RequestType),
+            HandlerType = implementationType,
+            HandlerMethodInfo = InboundContextReflection.ResolveHandlerMethodInfo(implementationType, mapping.RequestType),
             Origin = origin
         }.WithContext(context);
-        await services.GetRequiredService<IInvocationPipeline>().ExecuteAsync(invocation, input, async (current, value, ct) =>
+        var pipeline = services.GetRequiredService<IInvocationPipeline>();
+        var plan = pipeline.Describe(invocation);
+        var result = await pipeline.ExecuteAsync(invocation, input, async (current, value, ct) =>
         {
             var handler = (ServiceOperation)services.GetRequiredService(mapping.HandlerType);
-            current.SetResponse(await handler.HandleAsync(value, current, ct).ConfigureAwait(false));
+            var business = await handler.HandleAsync(value, current, ct).ConfigureAwait(false);
+            InvocationResult.ValidateInitialization(business);
+            if (business is null ? !operation.AllowsNullResponse : !operation.ResponseType.IsInstanceOfType(business))
+            {
+                throw new InvalidOperationException($"The business response does not match '{operation.ResponseType}'.");
+            }
+            return business;
         }, cancellationToken).ConfigureAwait(false);
-        if (invocation.Execution.Value is null)
-        {
-            throw new InvalidOperationException($"Operation '{operation.Id}' produced no execution outcome.");
-        }
-        return invocation;
+        return plan.Validate(result);
     }
 }
 

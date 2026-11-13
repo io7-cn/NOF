@@ -106,6 +106,7 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
         foreach (var registration in registrations)
         {
             sb.AppendLine($"            services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Scoped(typeof({registration.ServiceType}), typeof({registration.ImplementationType})));");
+            sb.AppendLine($"            services.GetOrAddSingleton<global::NOF.Application.ApplicationServiceRegistry>().AddOperationImplementation(typeof({registration.ServiceType}), typeof({registration.ImplementationType}));");
         }
 
         sb.AppendLine("        }");

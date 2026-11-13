@@ -15,7 +15,7 @@ public sealed class InvocationPipelineTests
         var services = new ServiceCollection().AddInvocationFilter<MustNotRun>();
         using var provider = services.BuildServiceProvider();
         Assert.Null(provider.GetService<IInvocationPipeline>());
-        Assert.Single(provider.GetServices<InvocationFilterRegistration>());
+        Assert.NotNull(provider.GetService<InvocationFilterRegistry>());
     }
 
     [Fact]
@@ -27,13 +27,14 @@ public sealed class InvocationPipelineTests
         using var provider = services.BuildServiceProvider();
         var context = CreateContext();
         var executor = provider.GetRequiredService<IInvocationPipeline>();
-        await executor.ExecuteAsync(context, new object(), (current, _, _) =>
+        var result = await executor.ExecuteAsync(context, new object(), (current, _, _) =>
         {
-            current.SetResponse(current.TenantId);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(current.TenantId);
         }, default);
         Assert.IsType<HostPipeline>(executor);
-        Assert.Equal("host", context.Execution.Require<string>());
+        Assert.Equal("host", result);
+        Assert.Same(executor, provider.GetRequiredService<IInvocationPlanProvider>());
+        Assert.Empty(executor.Describe(context.Operation, context.Origin).Filters);
     }
 
     [Fact]
@@ -47,13 +48,13 @@ public sealed class InvocationPipelineTests
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var context = CreateContext();
-        await scope.ServiceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, new object(), async (current, _, _) =>
+        var result = await scope.ServiceProvider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(context, new object(), async (current, _, _) =>
         {
             await Task.Yield();
             Assert.Same(current.Context, Context.Current);
-            current.SetResponse(current.TenantId);
+            return current.TenantId;
         }, default);
-        Assert.Equal("normalized", context.Execution.Require<string>());
+        Assert.Equal("normalized", result);
         Assert.Equal("normalized", scope.ServiceProvider.GetRequiredService<Probe>().ConstructorTenant);
         Assert.Equal(1, scope.ServiceProvider.GetRequiredService<Probe>().Calls);
         Assert.Equal("caller", Context.Current.TenantId);
@@ -90,7 +91,7 @@ public sealed class InvocationPipelineTests
             await provider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(CreateContext(), new object(), (_, _, _) =>
             {
                 terminalCalled = true;
-                return ValueTask.CompletedTask;
+                return ValueTask.FromResult<object?>(Empty.Instance);
             }, source.Token));
         Assert.False(terminalCalled);
     }
@@ -99,24 +100,25 @@ public sealed class InvocationPipelineTests
     {
         HandlerType = typeof(InvocationPipelineTests),
         HandlerMethodInfo = typeof(InvocationPipelineTests).GetMethod(nameof(FilterRegistration_AloneDoesNotSelectOrRunAnEngine))!,
-        Operation = new InvocationTestDescriptor(typeof(object), nameof(ToString), typeof(object), typeof(Empty))
+        Operation = new InvocationTestDescriptor(typeof(object), nameof(ToString), typeof(object), typeof(string))
     };
 
     public sealed class HostPipeline : IInvocationPipeline
     {
-        public ValueTask ExecuteAsync(InvocationContext context, object input, InvocationDelegate terminal, CancellationToken ct)
+        public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin) => new(operation, origin, [], []);
+        public ValueTask<object?> ExecuteAsync(InvocationContext context, object input, InvocationDelegate terminal, CancellationToken ct)
             => terminal((InvocationContext)context.WithTenantId("host"), input, ct);
     }
 
     public sealed class MustNotRun : IInvocationFilter
     {
-        public ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
             => throw new InvalidOperationException("The host did not choose to run this filter");
     }
 
     public sealed class Normalize : IInvocationFilter
     {
-        public ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
             => next((InvocationContext)context.WithTenantId("normalized"), input, ct);
     }
 
@@ -124,10 +126,10 @@ public sealed class InvocationPipelineTests
     {
         public string ConstructorTenant { get; } = Context.Current.TenantId;
         public int Calls { get; private set; }
-        public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
         {
             Calls++;
-            await next(context, input, ct);
+            return await next(context, input, ct);
         }
     }
 }

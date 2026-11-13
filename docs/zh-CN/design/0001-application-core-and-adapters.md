@@ -138,3 +138,5 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 更新：宿主包装及初始化拓扑已由原生 Builder 和生命周期服务替代，见[原生宿主集成](native-hosting.md)。
 
 更新：[持久化边界](persistence-boundaries.md)已改用聚合仓储、DTO 读取接口和 IUnitOfWork，核心不再提供通用 ORM 外观。
+
+更新：执行策略失败现在返回 Filter 自有生成分支，与业务值共用开放调用结果路径，Handler 保持闭合强类型返回。Infrastructure 拥有三层 Filter 计划、Use/Exclude 与静态 FailureCases/Describe；可变上下文结果与拒绝异常已移除，替代上述独立执行结果模型。详见[当前调用扩展](invocation-extensions.md)。HTTP Fluent 绑定、响应及 OpenAPI 优化继续暂缓。

@@ -9,7 +9,7 @@ Provides shared contracts and annotations intended for use across layers:
 - `[AutoInject]` via `Microsoft.Extensions.DependencyInjection`
 - the foundational `NOF.Contract.Context` execution context type
 - async-flow ambient execution context access through `Context.Current`
-- `InMemoryEventHandler<TEvent>` / `IEventPublisher`
+- `LocalEventHandler<TEvent>` / `IEventPublisher`
 - `AddNOFAbstraction()` for package-local runtime registration
 - ambient event publishing helpers via `EventPublisher` and `PublishAsEvent(...)`
 
@@ -18,7 +18,7 @@ Provides shared contracts and annotations intended for use across layers:
 NOF provides a scoped in-memory event mechanism for invoking distributed handlers within the same dependency injection scope.
 
 - Any non-null `object` can be used as an in-memory event payload
-- `InMemoryEventHandler<TEvent>` handles that payload together with its `Context`
+- `LocalEventHandler<TEvent>` handles that payload together with its `Context`
 - `IEventPublisher` dispatches the event and the same `Context` instance to all handlers resolved from the current scope
 
 This mechanism can be used by domain aggregates, application services, or any other in-scope collaboration that should remain in-process.
@@ -34,7 +34,7 @@ For convenience, NOF also exposes an ambient publisher facade:
 The ambient publisher and context have separate lifetimes. The daemon service binds the publisher once for the dependency injection scope, while NOF binds `Context.Current` at RPC, command, notification, and nested event-dispatch boundaries. Calls outside a bound execution context use `Context.Empty`. Ambient access is a convenience for infrastructure APIs that do not receive a context parameter; handlers should continue using their explicit `Context`, and `IEventPublisher` remains the primary event-publishing contract.
 
 ```csharp
-public sealed class OrderCreatedHandler : InMemoryEventHandler<OrderCreated>
+public sealed class OrderCreatedHandler : LocalEventHandler<OrderCreated>
 {
     public override Task HandleAsync(
         OrderCreated @event,

@@ -14,11 +14,10 @@ public class ServiceOperationPipelineTests
     {
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ProbeOperation>(_ => throw new InvalidOperationException("Handler constructed"));
-        services.AddScoped<IInvocationFilter, Deny>();
+        services.AddInvocationFilter<Deny>();
         using var provider = services.BuildServiceProvider();
         var result = await Execute(provider);
-        Assert.Equal("403", Assert.IsType<ServiceRejected>(result.Execution.Value).Failure.Code);
-        Assert.Null(result.Response);
+        Assert.Equal("403", Assert.IsType<Denied>(result).ErrorCode);
     }
 
     [Fact]
@@ -27,18 +26,18 @@ public class ServiceOperationPipelineTests
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<ProbeOperation>();
-        services.AddScoped<IInvocationFilter, Normalize>();
+        services.AddInvocationFilter<Normalize>();
         using var provider = services.BuildServiceProvider();
         using var firstScope = provider.CreateScope();
         using var otherScope = provider.CreateScope();
         var first = await Execute(firstScope.ServiceProvider);
         var again = await Execute(firstScope.ServiceProvider);
         var other = await Execute(otherScope.ServiceProvider);
-        var reply = first.Execution.Require<Reply>();
+        var reply = Assert.IsType<Reply>(first);
         Assert.Equal("normalized", reply.Tenant);
         Assert.Equal("normalized", reply.ConstructorTenant);
-        Assert.Equal(reply.HandlerId, again.Execution.Require<Reply>().HandlerId);
-        Assert.NotEqual(reply.HandlerId, other.Execution.Require<Reply>().HandlerId);
+        Assert.Equal(reply.HandlerId, Assert.IsType<Reply>(again).HandlerId);
+        Assert.NotEqual(reply.HandlerId, Assert.IsType<Reply>(other).HandlerId);
         Assert.Equal("caller", Context.Current.TenantId);
     }
 
@@ -72,12 +71,10 @@ public class ServiceOperationPipelineTests
         services.AddScoped<NullableOperation>();
         using var provider = services.BuildServiceProvider();
         var result = await CreateExecutor(provider, typeof(NullableOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply?>(typeof(IProbeService), nameof(IProbeService.Find), true), new Query(), Context.Empty, InvocationOrigin.Local);
-        Assert.IsType<ServiceCompleted>(result.Execution.Value);
-        Assert.Null(result.Execution.Require<Reply?>(allowNull: true));
-        Assert.Null(result.Rejection);
+        Assert.Null(result);
     }
 
-    private static Task<InvocationContext> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
+    private static Task<object?> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
         => CreateExecutor(provider, typeof(ProbeOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local, cancellationToken);
 
     private static OperationExecutor CreateExecutor(IServiceProvider provider, Type implementation)
@@ -131,18 +128,19 @@ public class ServiceOperationPipelineTests
             => Task.FromResult<Reply?>(null);
     }
 
+    public sealed record Denied(string ErrorCode) : IInvocationFailure;
     public sealed class Deny : IInvocationFilter
     {
-        public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
+        public static IReadOnlyList<InvocationFailureCase> FailureCases => [new("deny", typeof(Denied), typeof(Denied), "403", value => value, _ => "Forbidden")];
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
         {
-            context.Reject(new Failure("403", "Forbidden"));
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(new Denied("403"));
         }
     }
 
     public sealed class Normalize : IInvocationFilter
     {
-        public ValueTask InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
             => next((InvocationContext)context.WithTenantId("normalized"), request, cancellationToken);
     }
 }

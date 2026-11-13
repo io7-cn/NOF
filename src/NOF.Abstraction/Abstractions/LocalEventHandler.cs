@@ -6,7 +6,7 @@ namespace NOF.Abstraction;
 /// Non-generic base type for in-memory event handlers. Not intended for direct use.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public abstract class InMemoryEventHandler
+public abstract class LocalEventHandler
 {
     public abstract Task HandleAsync(object @event, Context context, CancellationToken cancellationToken);
 }
@@ -15,7 +15,7 @@ public abstract class InMemoryEventHandler
 /// Handles in-memory events of the specified type within the current scope.
 /// </summary>
 /// <typeparam name="TEvent">The event payload type.</typeparam>
-public abstract class InMemoryEventHandler<TEvent> : InMemoryEventHandler
+public abstract class LocalEventHandler<TEvent> : LocalEventHandler
 {
     /// <inheritdoc />
     public sealed override Task HandleAsync(object @event, Context context, CancellationToken cancellationToken)

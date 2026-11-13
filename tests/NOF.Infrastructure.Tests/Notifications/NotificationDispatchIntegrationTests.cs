@@ -14,6 +14,60 @@ namespace NOF.Infrastructure.Tests.Notifications;
 public sealed class NotificationDispatchIntegrationTests
 {
     [Fact]
+    public async Task OrderedFilterFailure_BlocksSuccessorsWithoutExceptionsOrTechnicalRetries()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.AddNOF();
+        ConfigureMessages(builder.Services);
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
+        builder.Services.AddMessageBindings(bindings => bindings.Subscription<OrderedNotification>("test.ordered.v1", "ordered")
+            .To(new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        var calls = new List<int>();
+        builder.Services.AddSingleton(calls);
+        builder.Services.AddInvocationFilter<CountingDeny>();
+        var logs = new CapturingLoggerProvider();
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(logs);
+        using var host = builder.Build();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var rider = host.Services.GetRequiredService<MemoryNotificationRider>();
+        var serializer = host.Services.GetRequiredService<IObjectSerializer>();
+        await PublishOrderedAsync(rider, serializer, new OrderedNotification(1), "Producer:42", 1, false, timeout.Token);
+        await PublishOrderedAsync(rider, serializer, new OrderedNotification(2), "Producer:42", 2, true, timeout.Token);
+        await host.StartAsync(timeout.Token);
+        try
+        {
+            await WaitUntilAsync(() => logs.Messages.Contains("Inbox batch processed: 0 processed, 1 failed"), timeout.Token);
+            using var scope = host.Services.CreateScope();
+            var session = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+            var receipts = await session.Set<NOFInboxMessage>().AsNoTracking().OrderBy(item => item.Sequence).ToListAsync(timeout.Token);
+            Assert.Equal(InboxMessageStatus.Failed, receipts[0].Status);
+            Assert.Equal(1, receipts[0].RetryCount);
+            Assert.Equal(InboxMessageStatus.Pending, receipts[1].Status);
+            Assert.Equal(0, receipts[1].RetryCount);
+            Assert.Null(receipts[1].ClaimedBy);
+            Assert.Equal([1], calls);
+            var order = await session.Set<NOFInboxOrderState>().SingleAsync(timeout.Token);
+            Assert.Equal(1, order.BlockedSequence);
+            Assert.Equal(1, order.NextSequence);
+        }
+        finally
+        {
+            await host.StopAsync(CancellationToken.None);
+        }
+    }
+
+    public sealed class CountingDeny(List<int> calls) : IInvocationFilter
+    {
+        public static IReadOnlyList<InvocationFailureCase> FailureCases => ServiceOperationPipelineTests.Deny.FailureCases;
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        {
+            calls.Add(((OrderedNotification)input).Value);
+            return ValueTask.FromResult<object?>(new ServiceOperationPipelineTests.Denied("403"));
+        }
+    }
+
+    [Fact]
     public async Task RejectedOperation_IsTerminalWithoutConstructingHandlerOrRetrying()
     {
         var builder = Host.CreateApplicationBuilder();

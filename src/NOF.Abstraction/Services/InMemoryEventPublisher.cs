@@ -30,7 +30,7 @@ public sealed class InMemoryEventPublisher : IEventPublisher
         {
             foreach (var handlerType in _eventHandlerRegistry.GetHandlerTypes(eventType))
             {
-                if (_serviceProvider.GetService(handlerType) is not InMemoryEventHandler handler)
+                if (_serviceProvider.GetService(handlerType) is not LocalEventHandler handler)
                 {
                     throw new InvalidOperationException($"Event handler type '{handlerType}' is not registered in the current scope.");
                 }

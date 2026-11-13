@@ -80,7 +80,7 @@ public sealed class MessageBindingTests
     public async Task OperationPolicies_ApplyToEveryOrigin_BeforeHandlerConstruction(InvocationOrigin origin)
     {
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
-        services.AddScoped<IInvocationFilter, Reject>();
+        services.AddInvocationFilter<Reject>();
         services.AddScoped<Handler>(_ => throw new InvalidOperationException("Constructed a rejected handler"));
         using var provider = services.BuildServiceProvider();
         var registry = new ApplicationServiceRegistry();
@@ -90,8 +90,7 @@ public sealed class MessageBindingTests
         });
         var executor = new OperationExecutor(provider, new ApplicationServiceInvocationResolver(provider, registry));
         var result = await executor.ExecuteAsync(First, new Message(), Context.Empty, origin);
-        Assert.Equal("403", result.Rejection!.Code);
-        Assert.Equal(["work.send"], result.RequiredPermissions);
+        Assert.Equal("403", Assert.IsType<Denied>(result).ErrorCode);
     }
 
     public interface IService : IApplicationService
@@ -102,12 +101,13 @@ public sealed class MessageBindingTests
         Empty MayFail(Message input);
     }
     public sealed record Message;
+    public sealed record Denied(string ErrorCode) : IInvocationFailure;
     public sealed class Reject : IInvocationFilter
     {
-        public ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+        public static IReadOnlyList<InvocationFailureCase> FailureCases => [new("deny", typeof(Denied), typeof(Denied), "403", value => value, _ => "Denied")];
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
         {
-            context.WithTenantId("selected").Reject(new("403", "Denied"), ["work.send"]);
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(new Denied("403"));
         }
     }
     public sealed class Handler : ServiceOperation<Message, Empty>

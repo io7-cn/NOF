@@ -36,15 +36,14 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
     }
 
     /// <inheritdoc />
-    public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
         if (context.Origin is InvocationOrigin.Local or InvocationOrigin.Message)
         {
-            await next(context, input, cancellationToken);
-            return;
+            return await next(context, input, cancellationToken);
         }
         var authenticated = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
-        await next(authenticated, input, cancellationToken);
+        return await next(authenticated, input, cancellationToken);
     }
 
     private async ValueTask<InvocationContext> AuthenticateAsync(InvocationContext context, CancellationToken cancellationToken)

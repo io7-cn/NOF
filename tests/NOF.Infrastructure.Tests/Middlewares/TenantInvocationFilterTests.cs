@@ -18,12 +18,12 @@ public class TenantInvocationFilterTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, tenantDuringNext);
 
-        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
             tenantDuringNext = context.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }
     }
 
@@ -39,12 +39,12 @@ public class TenantInvocationFilterTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
             tenantDuringNext = context.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }
     }
 
@@ -60,12 +60,12 @@ public class TenantInvocationFilterTests
         await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
             tenantDuringNext = context.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }
     }
 

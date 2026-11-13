@@ -12,7 +12,7 @@ public sealed class HttpRequestInboundAdapter(IOperationExecutor executor,
     IOptions<HttpRequestHeaderOptions> headerOptions, IOptions<AuthenticationResourceServerOptions> authenticationOptions)
 {
     /// <summary>Runs one operation in the existing HTTP request scope.</summary>
-    public async Task<InvocationContext> InvokeAsync(ServiceOperationDescriptor operation, object input,
+    public async Task<object?> InvokeAsync(ServiceOperationDescriptor operation, object input,
         HttpContext http, CancellationToken cancellationToken)
     {
         var items = new Dictionary<object, object?>();
@@ -25,18 +25,23 @@ public sealed class HttpRequestInboundAdapter(IOperationExecutor executor,
             }
         }
         var result = await executor.ExecuteAsync(operation, input, Context.Empty.WithItems(items), InvocationOrigin.Http, cancellationToken).ConfigureAwait(false);
-        if (result.Execution.Value is ServiceRejected { Reason: RejectionReason.Authentication or RejectionReason.Authorization } rejection)
+        if (result is AuthorizationInvocationFilter.AuthenticationRequired or AuthorizationInvocationFilter.PermissionDenied)
         {
-            var parameters = new List<string> { rejection.Reason == RejectionReason.Authorization ? "error=\"insufficient_scope\"" : "error=\"invalid_token\"" };
+            var forbidden = result is AuthorizationInvocationFilter.PermissionDenied;
+            var parameters = new List<string> { forbidden ? "error=\"insufficient_scope\"" : "error=\"invalid_token\"" };
             if (authenticationOptions.Value.AuthorizationServerIssuer is { Length: > 0 } issuer)
             {
                 parameters.Add($"authorization_server=\"{Escape(issuer)}\"");
             }
-            if (rejection.Reason == RejectionReason.Authorization && result.RequiredPermissions.Count > 0)
+            if (result is AuthorizationInvocationFilter.PermissionDenied denied && denied.Error.RequiredPermissions.Count > 0)
             {
-                parameters.Add($"scope=\"{Escape(string.Join(' ', result.RequiredPermissions))}\"");
+                parameters.Add($"scope=\"{Escape(string.Join(' ', denied.Error.RequiredPermissions))}\"");
             }
             http.Response.Headers.WWWAuthenticate = $"Bearer {string.Join(", ", parameters)}";
+        }
+        if (result is AuthorizationInvocationFilter.AuthenticationRequired or AuthorizationInvocationFilter.PermissionDenied or AuthorizationInvocationFilter.PolicyDenied)
+        {
+            return ServiceRejectionHttpFilter.ToProblem(result);
         }
         return result;
     }

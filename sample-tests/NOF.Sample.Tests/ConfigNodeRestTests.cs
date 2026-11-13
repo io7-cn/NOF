@@ -85,7 +85,7 @@ public sealed class ConfigNodeRestTests
         using var http = app.GetTestClient();
         var api = new HttpSampleApi(http);
         Assert.IsType<Empty>((await api.CreateConfigNodeAsync(new() { Name = "ui" }, Context.Empty)).Value);
-        var root = Assert.Single((await api.GetRootConfigNodesAsync(new(), Context.Empty)).Nodes);
+        var root = Assert.Single((await api.GetRootConfigNodesAsync(new(), Context.Empty)).ExpectSuccess().Nodes);
         Assert.IsType<Empty>((await api.AddOrUpdateConfigFileAsync(new()
         { NodeId = root.Id, FileName = "settings.json", Content = "{\"port\":8080}" }, Context.Empty)).Value);
         Assert.IsType<Empty>((await api.SetActiveFileAsync(new()

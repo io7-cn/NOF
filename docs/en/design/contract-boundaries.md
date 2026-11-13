@@ -7,9 +7,9 @@ NOF.Contract contains declarations and data models only. Its runtime assembly re
 | Owner | Types and responsibilities |
 |---|---|
 | Contract | IApplicationService, FailureCase/policy metadata attributes, requests, successful DTOs, custom error data, Empty/Optional/Page |
-| Application | ServiceOperationReference, ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, ServiceExecution/ServiceCompleted/ServiceRejected/RejectionReason/ServiceRejectedException, invocation interfaces and metadata interpretation |
+| Application | ServiceOperationReference, ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata and invocation interfaces |
 | Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure and other foundation services |
-| Host/infrastructure | Transport adaptation, identity establishment, selected invocation engine, HTTP presentation, queue routing and durable receipt/retry behavior |
+| Host/infrastructure | IInvocationFilter/InvocationDelegate/IInvocationPipeline, effective plans/catalogs, transport adaptation, identity establishment, selected invocation engine, HTTP presentation, queue routing and durable receipt/retry behavior |
 
 ## Declaring versus executing
 
@@ -39,7 +39,7 @@ NodeService.Read.Descriptor supplies the complete response type and resolved met
 
 ## Migration
 
-- Import NOF.Application for ServiceOperationReference, ServiceOperation, InvocationContext, descriptors, execution outcomes and rejection types. No Contract aliases/forwarders are retained.
+- Import NOF.Application for ServiceOperationReference, ServiceOperation, InvocationContext, descriptors and business result metadata. No Contract aliases/forwarders are retained.
 - Import NOF.Abstraction for Context and replace explicit NOF.Contract.Context references. Its semantic behavior and ambient async-flow restoration stay the same. The obsolete Contract TypeForwardedTo entry is removed intentionally.
 - Remove generated IServiceOperations.Method producer routing. Immediate calls use concrete clients; transactional messages use IOutbox.EnqueueAsync with infrastructure handlers. Inbound consumers retain full operation descriptors.
 - Replace reference.MethodInfo/CanSubmit with Application-owned ServiceOperationInspector calls where direct inspection is needed. Normal application invocation and message binding APIs already validate; business handlers do not need to repeat it.

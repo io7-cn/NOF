@@ -62,7 +62,7 @@ await unitOfWork.SaveChangesAsync(ct);
 
 IOperationExecutor 在宿主现有作用域内执行已确定的操作并等待完成。IOperationInvoker 为本地调用创建新作用域并复制已验证身份；HTTP 复用请求作用域；Inbox 复用既有事务作用域，使业务修改、处理进度和新增 Outbox 一同提交。过滤器执行前不会构造 Handler。
 
-Application 中的 InvocationContext 组合语义 Context，提供 Operation、InvocationId、Origin（Local/Http/Message）、实现策略元数据和 ServiceExecution。过滤器通过 WithContext/WithTenantId 替换语义信息，各视图共享执行结果。Context.Current 保存语义 Context；向嵌套语义 API 传递 invocation.Context。身份唯一来源仍是作用域内的 IUserContext。
+Application 中的 InvocationContext 组合语义 Context，提供 Operation、InvocationId、Origin（Local/Http/Message）、实现策略元数据。过滤器通过 WithContext/WithTenantId 替换语义信息，视图保留调用身份，结果通过返回值传播。Context.Current 保存语义 Context；向嵌套语义 API 传递 invocation.Context。身份唯一来源仍是作用域内的 IUserContext。
 
 所有入口执行相同的契约与实现授权策略。消息入口不会反序列化生产者身份或访问令牌；宿主在授权前通过所选管道/过滤器建立消费者身份，匿名消费者不能调用受保护操作。宿主应限制消息代理入口和租户头的信任边界。严格租户策略适用于所有操作来源。
 

@@ -28,6 +28,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             using NOF.Application;
             using NOF.Contract;
             using NOF.Hosting.AspNetCore;
+            using NOF.Infrastructure;
             using NOF.Domain;
             using System.Threading;
             using System.Threading.Tasks;
@@ -54,7 +55,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record AppEvent(string Value);
 
-            public sealed class AppEventHandler : InMemoryEventHandler<AppEvent>
+            public sealed class AppEventHandler : LocalEventHandler<AppEvent>
             {
                 public override Task HandleAsync(AppEvent @event, Context context, CancellationToken cancellationToken)
                     => Task.CompletedTask;
@@ -63,6 +64,14 @@ public sealed class AllSourceGeneratorsMonolithTests
             public sealed record AppCommand(string Value);
 
             public sealed record PingRequest(string Value);
+
+            [AutoInject(ServiceLifetime.Scoped)]
+            [FailureCase("Denied", "000403")]
+            public sealed partial class PolicyFilter : IInvocationFilter
+            {
+                public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+                    => ValueTask.FromResult<object?>(new Denied("declined"));
+            }
 
             public interface IDemoService : IApplicationService
             {
@@ -91,7 +100,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(IServiceCollection),
             typeof(AutoInjectAttribute),
             typeof(AssemblyInitializeAttribute),
-            typeof(InMemoryEventHandler<>),
+            typeof(LocalEventHandler<>),
             typeof(MappableAttribute<,>),
             typeof(ApplicationService<>),
             typeof(IApplicationService),
@@ -107,7 +116,8 @@ public sealed class AllSourceGeneratorsMonolithTests
             new ValueObjectGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
-            new ApplicationServiceGenerator().AsSourceGenerator()
+            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new FilterFailureCaseGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {
@@ -122,7 +132,8 @@ public sealed class AllSourceGeneratorsMonolithTests
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
         Assert.DoesNotContain("ServiceClient", generatedCode);
-        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.DemoServer.Ping.Result> InvokeAsync", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<object?> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
+        Assert.Contains("IReadOnlyList<global::NOF.Infrastructure.InvocationFailureCase> FailureCases", generatedCode);
     }
 }

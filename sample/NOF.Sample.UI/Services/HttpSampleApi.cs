@@ -39,11 +39,13 @@ public sealed class HttpSampleApi(HttpClient httpClient) : SampleHttpApi(httpCli
             _ => throw new InvalidOperationException("The REST response contained no outcome.")
         };
 
-    public async Task<GetRootConfigNodesResponse> GetRootConfigNodesAsync(GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken = default)
-        => new()
+    public async Task<UiResponse<GetRootConfigNodesResponse>> GetRootConfigNodesAsync(GetRootConfigNodesRequest request, Context context, CancellationToken cancellationToken = default)
+        => (await SendResourceAsync<GetRootConfigNodesRequest, List<ConfigNodeDto>>(HttpMethod.Get,
+            "./api/config-nodes", request, context, cancellationToken)).Value switch
         {
-            Nodes = await SendValueAsync<GetRootConfigNodesRequest, List<ConfigNodeDto>>(HttpMethod.Get,
-            "./api/config-nodes", request, context, cancellationToken)
+            List<ConfigNodeDto> nodes => new GetRootConfigNodesResponse { Nodes = nodes },
+            Failure failure => failure,
+            _ => throw new InvalidOperationException("The REST response contained no outcome.")
         };
 
     public Task<UiResponse<GetConfigurationResponse>> GetConfigurationAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken = default)

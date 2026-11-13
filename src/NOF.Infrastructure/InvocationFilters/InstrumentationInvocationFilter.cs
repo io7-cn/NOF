@@ -13,7 +13,7 @@ public sealed class InstrumentationInvocationFilter : IInvocationFilter
     private static readonly Counter<long> Errors = NOFInfrastructureConstants.InboundPipeline.Meter.CreateCounter<long>(NOFInfrastructureConstants.InboundPipeline.Metrics.ErrorCounter);
 
     /// <inheritdoc />
-    public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
         var tags = new TagList
         {
@@ -23,8 +23,9 @@ public sealed class InstrumentationInvocationFilter : IInvocationFilter
         var start = Stopwatch.GetTimestamp();
         try
         {
-            await next(context, input, cancellationToken);
+            var result = await next(context, input, cancellationToken);
             Count.Add(1, tags);
+            return result;
         }
         catch
         {

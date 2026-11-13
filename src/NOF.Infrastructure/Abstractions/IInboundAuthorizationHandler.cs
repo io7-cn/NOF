@@ -32,6 +32,17 @@ public sealed class InboundAuthorizationContext
     public Type? InputType { get; init; }
 }
 
+/// <summary>Classifies the authorization provider's denial before the filter returns its typed case.</summary>
+public enum AuthorizationFailureReason
+{
+    /// <summary>Other provider policy.</summary>
+    Policy,
+    /// <summary>Authentication is required.</summary>
+    Authentication,
+    /// <summary>Permission or tenant trust is insufficient.</summary>
+    Authorization
+}
+
 /// <summary>Contains either an explicit authorization grant or a denial.</summary>
 public union InboundAuthorizationResult(InboundAuthorizationResult.Allowed, InboundAuthorizationResult.Denied)
 {
@@ -41,7 +52,7 @@ public union InboundAuthorizationResult(InboundAuthorizationResult.Allowed, Inbo
     /// <summary>Rejects the operation with a failure and the semantic authorization denial.</summary>
     public sealed record Denied(
         Failure Result,
-        RejectionReason Reason,
+        AuthorizationFailureReason Reason,
         IReadOnlyList<string> ChallengePermissions);
 
     /// <summary>Gets the shared authorization grant.</summary>

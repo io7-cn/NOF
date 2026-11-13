@@ -85,7 +85,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var originalReturnTypeName = ExpectedFailureModel.Declarations(method).Length > 0
                 ? ExpectedFailureModel.ResultTypeName(method, classSymbol)
                 : method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.ServiceOperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})),");
+            sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.ServiceOperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})) {{ Descriptor = {method.Name}.Descriptor }},");
         }
         sb.AppendLine("        };");
         sb.AppendLine();
@@ -121,16 +121,24 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 FailureCaseEmitter.EmitMembers(sb, method, ExpectedFailureModel.OperationTypeName(method, classSymbol));
             }
             sb.AppendLine("        /// <summary>Gets this application's descriptor with its complete response type.</summary>");
-            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
+            var caseCatalog = new StringBuilder();
+            caseCatalog.Append("[new(typeof(").Append(method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append("))");
+            foreach (var failure in failureDeclarations)
+            {
+                var caseName = ExpectedFailureModel.CaseName(failure);
+                caseCatalog.Append(", new(typeof(").Append(caseName).Append("), true, ").Append(SymbolDisplay.FormatLiteral(caseName, true)).Append(')');
+            }
+            caseCatalog.Append(']');
+            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")}, resultCases: {caseCatalog});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
-            sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<{responseType}> InvokeAsync(");
+            sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<object?> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Abstraction.Context context,");
             sb.AppendLine("            global::System.Threading.CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);");
             sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IOperationInvoker>(services);");
             sb.AppendLine($"            var execution = await invoker.InvokeAsync(Descriptor, request, context, cancellationToken).ConfigureAwait(false);");
-            sb.AppendLine($"            return execution.Require<{responseType}>(allowNull: {(allowNull ? "true" : "false")});");
+            sb.AppendLine("            return execution;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine();

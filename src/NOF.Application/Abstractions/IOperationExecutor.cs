@@ -7,7 +7,7 @@ namespace NOF.Application;
 public interface IOperationExecutor
 {
     /// <summary>Runs operation policies before constructing its implementation.</summary>
-    Task<InvocationContext> ExecuteAsync(ServiceOperationDescriptor operation, object input,
+    Task<object?> ExecuteAsync(ServiceOperationDescriptor operation, object input,
         Context context, InvocationOrigin origin, CancellationToken cancellationToken = default);
 }
 
@@ -15,6 +15,6 @@ public interface IOperationExecutor
 public interface IOperationInvoker
 {
     /// <summary>Waits for operation completion; this API never completes merely on enqueue.</summary>
-    Task<ServiceExecution> InvokeAsync(ServiceOperationDescriptor operation, object input,
+    Task<object?> InvokeAsync(ServiceOperationDescriptor operation, object input,
         Context context, CancellationToken cancellationToken = default);
 }

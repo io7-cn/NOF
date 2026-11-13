@@ -24,7 +24,7 @@ public sealed class HostTenantInvocationFilterTests
         var pipeline = scope.ServiceProvider.GetRequiredService<IOperationExecutor>();
         var result = await pipeline.ExecuteAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome>(typeof(IHostTenantTestService), method), new Empty(), Context.Empty.WithTenantId("untrusted"), InvocationOrigin.Http);
 
-        Assert.IsType<Empty>(Assert.IsType<NOF.Testing.TestOutcome>(result.Response).Value);
+        Assert.IsType<Empty>(InvocationResult.Value(result));
         var probe = provider.GetRequiredService<TenantProbe>();
         Assert.Equal(expectedTenant, probe.DependencyTenant);
         Assert.Equal(expectedTenant, probe.HandlerTenant);
@@ -40,7 +40,7 @@ public sealed class HostTenantInvocationFilterTests
         var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
             .ExecuteAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(), Context.Empty, InvocationOrigin.Http);
 
-        Assert.Equal("401", Assert.IsType<Failure>(result.Rejection).Code);
+        Assert.Equal("401", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).ErrorCode);
         Assert.Null(provider.GetRequiredService<TenantProbe>().DependencyTenant);
     }
 
@@ -52,7 +52,7 @@ public sealed class HostTenantInvocationFilterTests
         using var scope = provider.CreateScope();
         var result = await scope.ServiceProvider.GetRequiredService<IOperationInvoker>().InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
-        Assert.IsType<Empty>(result.Require<NOF.Testing.TestOutcome>(NOF.Testing.TestOutcome.CreateFailure).Value);
+        Assert.IsType<Empty>(InvocationResult.Value(result));
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
         Assert.Equal("caller", Context.Current.TenantId);
 

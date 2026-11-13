@@ -10,10 +10,18 @@ public sealed class ExecutionBoundaryTests
     [Fact]
     public void ExecutionModels_BelongToApplication_AndSemanticContextToAbstraction()
     {
-        foreach (var type in new[] { typeof(ServiceOperationReference), typeof(ServiceOperationReference<>), typeof(ServiceOperation), typeof(ServiceOperation<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(ServiceOperationDescriptor), typeof(ServiceOperationDescriptor<,>), typeof(ServiceExecution), typeof(ServiceCompleted), typeof(ServiceRejected), typeof(RejectionReason), typeof(ServiceRejectedException) })
+        foreach (var type in new[] { typeof(ServiceOperationReference), typeof(ServiceOperationReference<>), typeof(ServiceOperation), typeof(ServiceOperation<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(ServiceOperationDescriptor), typeof(ServiceOperationDescriptor<,>) })
         {
             Assert.Equal(typeof(ApplicationService).Assembly, type.Assembly);
             Assert.Equal("NOF.Application", type.Namespace);
+        }
+        foreach (var name in new[] { "ServiceExecution", "ServiceCompleted", "ServiceRejected", "ServiceRejectedException", "IInvocationFilter", "IInvocationPipeline" })
+        {
+            Assert.Null(typeof(ApplicationService).Assembly.GetType("NOF.Application." + name));
+        }
+        foreach (var name in new[] { "Execution", "Response", "Rejection", "RequiredPermissions" })
+        {
+            Assert.Null(typeof(InvocationContext).GetProperty(name));
         }
         Assert.Equal(typeof(Failure).Assembly, typeof(Context).Assembly);
         Assert.Equal("NOF.Abstraction", typeof(Context).Namespace);

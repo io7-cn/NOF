@@ -112,7 +112,7 @@ using NOF.Application;
 using NOF.Contract;
 
 public sealed class OrderCreatedProjectionHandler(IOrderProjectionStore projections)
-    : InMemoryEventHandler<OrderCreatedEvent>
+    : LocalEventHandler<OrderCreatedEvent>
 {
     public override Task HandleAsync(
         OrderCreatedEvent @event,

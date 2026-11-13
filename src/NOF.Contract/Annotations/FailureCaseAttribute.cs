@@ -1,7 +1,7 @@
 namespace NOF.Contract;
 
-/// <summary>Declares a named expected failure on an application service operation.</summary>
-[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+/// <summary>Declares a named expected failure on a service method or partial invocation filter.</summary>
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class FailureCaseAttribute : Attribute
 {
     /// <summary>Declares a message failure whose error code defaults to its C# branch name.</summary>

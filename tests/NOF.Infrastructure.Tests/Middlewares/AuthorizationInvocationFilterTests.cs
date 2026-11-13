@@ -25,7 +25,7 @@ public sealed class AuthorizationInvocationFilterTests
             await middleware.InvokeAsync(invocation, new TestRequest(), (_, _, _) =>
             {
                 nextCalled = true;
-                return ValueTask.CompletedTask;
+                return ValueTask.FromResult<object?>(Empty.Instance);
             }, default);
         }
 
@@ -65,16 +65,16 @@ public sealed class AuthorizationInvocationFilterTests
             .WithTenantId(requestTenant);
         string? forwardedTenant = null;
 
-        await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
         {
             forwardedTenant = forwarded.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         if (errorCode is not null)
         {
             Assert.Null(forwardedTenant);
-            Assert.Equal(errorCode, Assert.IsType<Failure>(context.Rejection).Code);
+            Assert.Equal(errorCode, AsFailure(outcome).Code);
         }
         else
         {
@@ -91,14 +91,14 @@ public sealed class AuthorizationInvocationFilterTests
         });
         var context = CreateRequestContext(nameof(TestService.AllowAnonymousMethod));
         var nextCalled = false;
-        await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.False(nextCalled);
-        Assert.Equal("401", Assert.IsType<Failure>(context.Rejection).Code);
+        Assert.Equal("401", AsFailure(outcome).Code);
     }
 
     [Fact]
@@ -112,9 +112,9 @@ public sealed class AuthorizationInvocationFilterTests
             RejectMismatchedTenant = true
         });
         var deniedContext = CreateRequestContext(nameof(TestService.HostMethod));
-        await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) =>
+        var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) =>
             throw new InvalidOperationException("An unauthorized host handler must not run"), default);
-        Assert.Equal("403", Assert.IsType<Failure>(deniedContext.Rejection).Code);
+        Assert.Equal("403", AsFailure(deniedOutcome).Code);
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage"));
@@ -122,7 +122,7 @@ public sealed class AuthorizationInvocationFilterTests
         await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.HostMethod)), new TestRequest(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
         Assert.True(nextCalled);
     }
@@ -138,13 +138,13 @@ public sealed class AuthorizationInvocationFilterTests
         var context = (InvocationContext)CreateCommandContext(
             typeof(TestRequest), typeof(TestHandler), nameof(TestHandler.AllowAnonymousHandler)).WithTenantId("internaltenant");
         string? forwardedTenant = null;
-        await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
         {
             forwardedTenant = forwarded.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
         Assert.Null(forwardedTenant);
-        Assert.Equal("401", context.Rejection!.Code);
+        Assert.Equal("401", AsFailure(outcome).Code);
     }
 
     [Fact]
@@ -157,10 +157,10 @@ public sealed class AuthorizationInvocationFilterTests
             nameof(TestService.LoginOnlyMethod)).WithTenantId("untrusted");
 
         string? forwardedTenant = null;
-        await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
         {
             forwardedTenant = forwarded.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         // Characterizes the default. Public hosts must add tenant authorization.
@@ -178,7 +178,7 @@ public sealed class AuthorizationInvocationFilterTests
         await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.AllowAnonymousMethod)), request, (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -191,9 +191,9 @@ public sealed class AuthorizationInvocationFilterTests
         var middleware = CreateMiddleware(userContext);
 
         var context = CreateRequestContext(nameof(TestService.LoginOnlyMethod));
-        await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
-        var response = Assert.IsType<Failure>(context.Rejection);
+        var response = AsFailure(outcome);
         Assert.NotNull(response);
         Assert.Equal("401", response.Code);
         Assert.Equal("Please login first", response.Message);
@@ -207,9 +207,9 @@ public sealed class AuthorizationInvocationFilterTests
         var middleware = CreateMiddleware(userContext);
 
         var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
-        await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
+        var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
-        var denied = Assert.IsType<Failure>(deniedContext.Rejection);
+        var denied = AsFailure(deniedOutcome);
         Assert.Equal("403", denied.Code);
 
         userContext.Logout();
@@ -219,7 +219,7 @@ public sealed class AuthorizationInvocationFilterTests
         await middleware.InvokeAsync(allowedContext, new TestRequest(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -233,9 +233,9 @@ public sealed class AuthorizationInvocationFilterTests
         var middleware = CreateMiddleware(userContext);
 
         var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler));
-        await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.CompletedTask, default);
+        var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
-        var denied = Assert.IsType<Failure>(deniedContext.Rejection);
+        var denied = AsFailure(deniedOutcome);
         Assert.Equal("403", denied.Code);
 
         userContext.Logout();
@@ -247,7 +247,7 @@ public sealed class AuthorizationInvocationFilterTests
         await middleware.InvokeAsync(allowedContext, new TestRequest(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -261,13 +261,13 @@ public sealed class AuthorizationInvocationFilterTests
         var middleware = CreateMiddleware(userContext);
 
         var context = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
-        await middleware.InvokeAsync(
+        var outcome = await middleware.InvokeAsync(
             context,
             new TestRequest(),
-            (_, _, _) => ValueTask.CompletedTask,
+            (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance),
             default);
 
-        var denied = Assert.IsType<Failure>(context.Rejection);
+        var denied = AsFailure(outcome);
         Assert.Equal("403", denied.Code);
     }
 
@@ -284,10 +284,10 @@ public sealed class AuthorizationInvocationFilterTests
             handlerMethodName: nameof(TestHandler.AllowAnonymousHandler)).WithTenantId("tenanta");
 
         var tenantDuringNext = string.Empty;
-        await middleware.InvokeAsync(context, new TestRequest(), (forwardedContext, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new TestRequest(), (forwardedContext, _, _) =>
         {
             tenantDuringNext = forwardedContext.TenantId;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.Equal("tenantb", tenantDuringNext);
@@ -303,10 +303,10 @@ public sealed class AuthorizationInvocationFilterTests
         var context = CreateCommandContext(typeof(ProtectedCommand), typeof(CommandHandlerWithPermission), nameof(CommandHandlerWithPermission.Handle));
 
         var nextCalled = false;
-        await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
         Assert.False(nextCalled);
 
@@ -314,10 +314,10 @@ public sealed class AuthorizationInvocationFilterTests
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(
             ClaimTypes.Permission, "message",
             ClaimTypes.Permission, "handler"));
-        await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
+        outcome = await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -334,10 +334,10 @@ public sealed class AuthorizationInvocationFilterTests
         var context = CreateNotificationContext(typeof(ProtectedNotification), typeof(NotificationHandlerWithPermission), nameof(NotificationHandlerWithPermission.Handle));
 
         var nextCalled = false;
-        await middleware.InvokeAsync(context, new ProtectedNotification(), (_, _, _) =>
+        var outcome = await middleware.InvokeAsync(context, new ProtectedNotification(), (_, _, _) =>
         {
             nextCalled = true;
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
         Assert.True(nextCalled);
@@ -360,7 +360,7 @@ public sealed class AuthorizationInvocationFilterTests
             {
                 Assert.Same(request, forwardedRequest);
                 nextCalled = true;
-                return ValueTask.CompletedTask;
+                return ValueTask.FromResult<object?>(Empty.Instance);
             },
             default);
 
@@ -374,6 +374,14 @@ public sealed class AuthorizationInvocationFilterTests
         Assert.Equal(nameof(TestHandler.ExecutePermissionHandler), handler.LastContext.HandlerMethodInfo.Name);
         Assert.Equal(typeof(TestRequest), handler.LastContext.InputType);
     }
+
+    private static Failure AsFailure(object? value) => value switch
+    {
+        AuthorizationInvocationFilter.AuthenticationRequired failure => new(failure.ErrorCode, failure.Message),
+        AuthorizationInvocationFilter.PermissionDenied failure => new(failure.Error.ErrorCode, failure.Error.Message),
+        AuthorizationInvocationFilter.PolicyDenied failure => new(failure.Error.ErrorCode, failure.Error.Message),
+        _ => throw new InvalidOperationException("Expected an authorization failure.")
+    };
 
     private static InvocationContext CreateRequestContext(string serviceMethodName, Type? responseType = null, string? handlerMethodName = null, InvocationOrigin origin = InvocationOrigin.Http)
     {

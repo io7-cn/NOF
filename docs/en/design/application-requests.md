@@ -64,7 +64,7 @@ public sealed class OrderEndpoints : IHttpEndpointModule
         endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
         {
             var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
-            return order is null ? Results.NotFound() : Results.Ok(order);
+            return order is IResult native ? native : order is null ? Results.NotFound() : Results.Ok(InvocationResult.Value(order));
         }).AddEndpointFilter<ServiceRejectionHttpFilter>();
     }
 }
@@ -73,7 +73,7 @@ public sealed class OrderEndpoints : IHttpEndpointModule
 Each generated operation exposes a typed `Descriptor` containing contract identity,
 operation name and nullability, with no HTTP dependency. `HttpContext.InvokeAsync`
 uses it to run HTTP authentication and the application inbound pipeline. It preserves
-policy response headers and returns the declared business value. The descriptor avoids
+policy response headers and returns the business value or mapped built-in native Problem result. The descriptor avoids
 string operation names or repeated request/response generic arguments at the endpoint.
 
 `ServiceRejectionHttpFilter` maps execution rejection to native ProblemDetails, honoring
@@ -94,11 +94,7 @@ host registration and verification.
 
 ## Execution and transport boundaries
 
-ServiceExecution distinguishes completed business values (including declared null)
-from policy rejection. It is an invocation outcome, never a wire envelope or handler
-return contract. All generated typed InvokeAsync entries report policy rejection as
-ServiceRejectedException, including operations returning Result. No result-specific
-failure factory is generated. Business Failure cases remain ordinary returned values.
+Business handlers retain Task<TBusiness>; filters/next return ValueTask<object?> and complete InvokeAsync returns Task<object?>. Match the returned business union/value or generated filter branch. InvocationContext has no mutable outcome and expected failures do not use exceptions. Effective plans validate the permitted business and filter cases. See [invocation extensions](invocation-extensions.md).
 
 Legacy HTTP RPC and JSON-RPC adapters are deleted, including HttpEndpoint, HttpVerb,
 transport annotations, automatic route mapping, transport registration, dedicated result
@@ -120,12 +116,11 @@ Invocation extensions and message delivery now follow the [host-selected executi
 | Generated clients and client marker | removed; explicit HTTP integration or server InvokeAsync |
 | Contract HttpEndpoint / transport annotations | deleted; HTTP endpoint modules own explicit routes |
 | IRpcResponse and CreateEmptyResponse | removed; business unions and explicit adapter conversion |
-| Generated Result failure projection on rejection | ServiceRejectedException; HTTP filter maps policy rejection |
+| Generated Result failure projection on rejection | returned filter failure; explicit native HTTP mapping |
 | String operation identity at native endpoints | generated Service.Operation.Descriptor |
 | AddRequestHandler / separate executor hierarchy | generated operation override and application-part registration |
 
-Upgrade contracts, implementations, adapters and hosts together. Replace SetResponse's
-former failure overload with Reject for policies. Preserve Result Failure cases as
+Upgrade contracts, implementations, adapters and hosts together. Return declared filter failure values instead of using SetResponse/Reject. Preserve Result Failure cases as
 business data. Rebuild generated output; remove stale client files from custom build
 tooling. Existing tags/releases remain immutable; rollback restores a coherent earlier
 package/caller set.

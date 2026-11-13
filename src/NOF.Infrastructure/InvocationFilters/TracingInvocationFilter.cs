@@ -12,7 +12,7 @@ namespace NOF.Infrastructure;
 public sealed class TracingInvocationFilter(IOptions<DeploymentOptions> deployment, ILogger<TracingInvocationFilter> logger) : IInvocationFilter
 {
     /// <inheritdoc />
-    public async ValueTask InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
         using var activity = NOFInfrastructureConstants.InboundPipeline.Source.StartActivity(
             $"{context.HandlerType.FullName}.Handle: {context.OperationName}",
@@ -22,8 +22,9 @@ public sealed class TracingInvocationFilter(IOptions<DeploymentOptions> deployme
         activity?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.MessageType, context.OperationName);
         try
         {
-            await next(context, input, cancellationToken);
+            var result = await next(context, input, cancellationToken);
             activity?.SetStatus(ActivityStatusCode.Ok);
+            return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

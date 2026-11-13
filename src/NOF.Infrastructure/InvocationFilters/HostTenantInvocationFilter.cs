@@ -12,18 +12,17 @@ namespace NOF.Infrastructure;
 public sealed class HostTenantInvocationFilter : IInvocationFilter
 {
     /// <inheritdoc />
-    public async ValueTask InvokeAsync(InvocationContext context, object request,
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object request,
         InvocationDelegate next, CancellationToken cancellationToken)
     {
         if (!ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo))
         {
-            await next(context, request, cancellationToken);
-            return;
+            return await next(context, request, cancellationToken);
         }
 
         var hostContext = context.WithTenantId(NOFAbstractionConstants.Tenant.HostId);
         Activity.Current?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.TenantId, hostContext.TenantId);
         using var _ = Context.PushCurrent(hostContext.Context);
-        await next(hostContext, request, cancellationToken);
+        return await next(hostContext, request, cancellationToken);
     }
 }

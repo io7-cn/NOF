@@ -6,7 +6,7 @@ description: Add in-process event handlers and transactional outbox dispatch to 
 
 NOF has two separate mechanisms:
 
-- in-process, current-scope events through `IEventPublisher` and `InMemoryEventHandler<T>`
+- in-process, current-scope events through `IEventPublisher` and `LocalEventHandler<T>`
 - cross-boundary commands/notifications, optionally staged in the transactional outbox
 
 ## 1. Define and Handle an In-Process Event
@@ -14,7 +14,7 @@ NOF has two separate mechanisms:
 ```csharp
 public sealed record ProjectionRebuilt(string TenantId);
 
-public sealed class ProjectionRebuiltHandler : InMemoryEventHandler<ProjectionRebuilt>
+public sealed class ProjectionRebuiltHandler : LocalEventHandler<ProjectionRebuilt>
 {
     public override Task HandleAsync(
         ProjectionRebuilt @event,

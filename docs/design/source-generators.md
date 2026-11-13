@@ -9,7 +9,7 @@ The current generator inputs are:
 | Package | Generator | Stable input |
 | --- | --- | --- |
 | Abstraction | `AutoInjectGenerator` | User class and `AutoInjectAttribute` |
-| Abstraction | `EventHandlerRegistrationGenerator` | User class and `InMemoryEventHandler<T>` |
+| Abstraction | `EventHandlerRegistrationGenerator` | User class and `LocalEventHandler<T>` |
 | Contract | `FailureCaseGenerator` | User partial service interface, success signatures and FailureCase attributes |
 | Domain | `ValueObjectGenerator` | User struct, `IValueObject<T>`, and `ValueObjectLengthAttribute` |
 | Application | `HandlerRegistrationGenerator` | User class and stable command/notification handler bases |

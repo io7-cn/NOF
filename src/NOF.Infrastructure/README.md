@@ -170,8 +170,7 @@ services, inbound policies and the handler. Context items flow directly and the
 caller's identity is copied as an isolated snapshot; persistence dependencies are
 not shared. Local identity is already verified, so token authentication is skipped
 while application authorization and tenant policies still run. Authorization and tenant normalization precede
-handler resolution. Inject the invoker directly when an adapter must match the
-`ServiceCompleted`/`ServiceRejected` outcome instead of using typed `InvokeAsync`.
+handler resolution. Complete invocation returns `Task<object?>`: match a business value/union or a generated filter failure. Business handlers keep their closed typed response. Infrastructure owns filter interfaces, Global/Service/UseCase Use/Exclude rules and the effective failure catalog; InvocationContext has no mutable result slot. See [invocation extensions](../../docs/en/design/invocation-extensions.md).
 
 Plain contracts expose no HTTP routes. Native IHttpEndpointModule instances in the HTTP
 host own routing and use HttpContext.InvokeAsync with generated operation descriptors.

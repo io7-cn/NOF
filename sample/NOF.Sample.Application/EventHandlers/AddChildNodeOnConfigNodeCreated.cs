@@ -7,7 +7,7 @@ namespace NOF.Sample.Application.EventHandlers;
 /// <summary>
 /// 节点创建时添加到子节点列表
 /// </summary>
-public class AddChildNodeOnConfigNodeCreated : InMemoryEventHandler<ConfigNodeCreatedEvent>
+public class AddChildNodeOnConfigNodeCreated : LocalEventHandler<ConfigNodeCreatedEvent>
 {
     private readonly IConfigNodeHierarchyStore _hierarchy;
 

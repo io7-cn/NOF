@@ -41,10 +41,10 @@ public class ApplicationServiceGeneratorTests
         Assert.Contains("class Count : global::NOF.Application.ServiceOperation<global::App.Query, int?>", code);
         Assert.Equal(2, code.Split("public override bool AllowsNullResponse => true;").Length - 1);
         Assert.DoesNotContain("IRpcResponse", code);
-        Assert.Contains("Task<global::App.Dto?> InvokeAsync(", code);
+        Assert.Contains("Task<object?> InvokeAsync(", code);
         Assert.Contains("nameof(global::App.IOrders.Find)", code);
-        Assert.Contains("execution.Require<global::App.Dto?>(allowNull: true)", code);
-        Assert.Contains("execution.Require<global::App.Dto>(allowNull: false)", code);
+        Assert.DoesNotContain("execution.Require", code);
+        Assert.Contains("resultCases:", code);
         Assert.DoesNotContain("ServiceClient", code);
     }
 

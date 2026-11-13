@@ -59,7 +59,7 @@ public sealed class OrderEndpoints : IHttpEndpointModule
         endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
         {
             var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
-            return order is null ? Results.NotFound() : Results.Ok(order);
+            return order is IResult native ? native : order is null ? Results.NotFound() : Results.Ok(InvocationResult.Value(order));
         }).AddEndpointFilter<ServiceRejectionHttpFilter>();
     }
 }
@@ -82,10 +82,7 @@ OAuth 演示路由在另一个模块。Contract 项目不引用 Hosting，也不
 
 ## 执行与协议边界
 
-ServiceExecution 区分完成值（包括声明允许的 null）和策略拒绝，只用于调用过程，不是线上
-响应包装，也不是 Handler 返回契约。所有生成的类型化 InvokeAsync 都通过
-ServiceRejectedException 报告策略拒绝，返回 Result 的操作也一样，不再生成结果专用失败工厂。
-业务 Failure 分支仍作为普通业务值返回。
+业务 Handler 保持 Task<TBusiness>，Filter/next 返回 ValueTask<object?>，完整 InvokeAsync 返回 Task<object?>。调用方匹配返回的业务 union/值或生成的 Filter 分支。InvocationContext 不再保存可变结果，预期失败不再通过异常传播。有效计划校验所有允许的业务与 Filter 分支，详见[调用扩展](invocation-extensions.md)。
 
 旧 HTTP RPC 和 JSON-RPC 适配器已彻底删除，包括 HttpEndpoint、HttpVerb、传输注解、
 自动路由映射、传输注册、专用响应写入器及协议读取器，不保留兼容层。契约始终保持传输无关，
@@ -104,11 +101,11 @@ Result 不再定义 CreateEmptyResponse。
 | 生成客户端及 Client 标记 | 删除；显式 HTTP 集成或服务端 InvokeAsync |
 | Contract 中的 HttpEndpoint / 传输注解 | 删除；HTTP 端点模块显式声明路由 |
 | IRpcResponse / CreateEmptyResponse | 删除；业务联合类型及适配器显式转换 |
-| 策略拒绝时自动构造 Result Failure | ServiceRejectedException；HTTP 过滤器映射策略拒绝 |
+| 策略拒绝时自动构造 Result Failure | 返回 Filter 失败值；显式原生 HTTP 映射 |
 | 原生端点里的操作名字符串 | Service.Operation.Descriptor |
 | AddRequestHandler / 独立 executor 层级 | 生成的操作 override 及程序集注册 |
 
-契约、实现、适配器和宿主需一同升级。策略将旧 SetResponse(Failure) 改为 Reject，业务
+契约、实现、适配器和宿主需一同升级。策略直接返回声明的 Filter 失败值，替代 SetResponse/Reject；业务
 Result 的 Failure 仍是业务数据。重新构建生成产物，删除自定义构建工具残留的客户端文件。
 既有标签和发行版保持不可变；回滚时恢复配套的旧包与调用方代码。
 

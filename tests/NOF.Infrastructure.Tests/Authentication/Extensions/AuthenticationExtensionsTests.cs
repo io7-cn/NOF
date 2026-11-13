@@ -1804,9 +1804,8 @@ public sealed class AuthenticationExtensionsTests
 
         await using var host = builder.BuildTestHost();
         await host.Host.StartAsync();
-        Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(InvocationFilterRegistration)
-            && descriptor.ImplementationInstance is InvocationFilterRegistration registration
-            && registration.FilterType == typeof(AuthenticationInvocationFilter));
+        Assert.Single(host.Services.GetRequiredService<InvocationFilterRegistry>().Freeze(),
+            registration => registration.FilterType == typeof(AuthenticationInvocationFilter));
         Assert.Null(typeof(MessageDelivery).Assembly.GetType("NOF.Infrastructure.ICommandOutboundMiddleware"));
         Assert.Null(typeof(MessageDelivery).Assembly.GetType("NOF.Infrastructure.INotificationOutboundMiddleware"));
     }
