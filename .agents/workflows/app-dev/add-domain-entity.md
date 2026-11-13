@@ -29,7 +29,12 @@ public readonly partial struct EmailAddress : IValueObject<string>
 {
     public static string Normalize(string value) => value.Trim().ToLowerInvariant();
 
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value) && value.Contains('@');
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value) && value.Contains('@');
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 ```
 

@@ -166,7 +166,7 @@ public sealed class GeneralCodeFixProviderTests
 
     [Theory]
     [InlineData("NOF013", "From(value);")]
-    [InlineData("NOF014", "IsValid(value);")]
+    [InlineData("NOF014", "IsValid(value, out _);")]
     public async Task NormalizeFix_RemovesStandaloneInvocation(string diagnosticId, string invocation)
     {
         var source = $$"""
@@ -179,7 +179,7 @@ public sealed class GeneralCodeFixProviderTests
                 }
 
                 private static void From(string value) { }
-                private static bool IsValid(string value) => true;
+                private static bool IsValid(string value, out string? errorMessage) { errorMessage = null; return true; }
             }
             """;
 

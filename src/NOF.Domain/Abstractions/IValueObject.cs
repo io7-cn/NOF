@@ -19,7 +19,12 @@ public interface IValueObject<T> where T : notnull
 
     /// <summary>Determines whether the normalized value satisfies custom business rules.</summary>
     /// <param name="value">The normalized value, already checked against generated constraints.</param>
+    /// <param name="errorMessage">An optional explanation when invalid; null on success.</param>
     /// <returns>True if the value is valid; otherwise false.</returns>
     /// <remarks>Return false for expected invalid input. Hook exceptions are not caught by TryFrom.</remarks>
-    static virtual bool IsValid(T value) => true;
+    static virtual bool IsValid(T value, out string? errorMessage)
+    {
+        errorMessage = null;
+        return true;
+    }
 }

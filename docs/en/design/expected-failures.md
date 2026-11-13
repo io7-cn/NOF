@@ -94,8 +94,9 @@ remain invalid at the application invocation boundary.
 The attribute, generated failure types and generator belong to Contract. Domain does
 not depend on Contract. Domain rules return their own business values; Application
 maps them to the declared use-case cases. Known input failures should be checked before
-calling throwing invariant constructors. Domain exceptions remain for violated
-invariants/programmer misuse; technical exceptions and cancellation propagate normally.
+calling throwing invariant constructors. Use standard .NET exceptions for violated invariants/programmer misuse; dedicated
+DomainException/DomainValidationException are removed. Technical exceptions and cancellation
+propagate normally.
 
 The former Domain FailureAttribute, static-holder generator, failure.Throw extension
 and exception constructors accepting Failure are removed. Shared Abstraction.Failure

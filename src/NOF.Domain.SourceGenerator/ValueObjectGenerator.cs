@@ -271,46 +271,62 @@ public class ValueObjectGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        // Both factories share one validation path; TryFrom never catches hook exceptions.
-        sb.AppendLine("        /// <summary>Normalizes and constructs a valid value, throwing for invalid input.</summary>");
+        // Both factories share validation and error messages; user exceptions propagate unchanged.
+        var invalidMessage = $"Invalid value for value object '{info.TypeName}'.";
+        var tryPrimitive = info.PrimitiveFullName + (info.PrimitiveRequiresNullCheck ? "?" : "");
+        sb.AppendLine("        /// <summary>Normalizes and constructs a valid value, throwing with the validation message on failure.</summary>");
         sb.AppendLine("        /// <exception cref=\"global::System.ArgumentException\">The value is invalid.</exception>");
         sb.AppendLine($"        public static {info.TypeName} From({info.PrimitiveFullName} value)");
         sb.AppendLine("        {");
+        sb.AppendLine("            if (!TryFrom(value, out var result, out var errorMessage))");
+        sb.AppendLine("            {");
         if (info.PrimitiveRequiresNullCheck)
         {
-            sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(value);");
+            sb.AppendLine("                if (value is null)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    throw new global::System.ArgumentNullException(nameof(value), errorMessage);");
+            sb.AppendLine("                }");
         }
-        sb.AppendLine("            if (!TryFrom(value, out var result))");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                throw new global::System.ArgumentException(\"Invalid value for value object '{info.TypeName}'.\", nameof(value));");
+        sb.AppendLine("                throw new global::System.ArgumentException(errorMessage, nameof(value));");
         sb.AppendLine("            }");
         sb.AppendLine("            return result;");
         sb.AppendLine("        }");
         sb.AppendLine();
-        var tryPrimitive = info.PrimitiveFullName + (info.PrimitiveRequiresNullCheck ? "?" : "");
-        sb.AppendLine("        /// <summary>Normalizes and constructs a valid value, returning false for expected invalid input.</summary>");
-        sb.AppendLine("        /// <remarks>Exceptions thrown by Normalize or IsValid propagate unchanged.</remarks>");
-        sb.AppendLine($"        public static bool TryFrom({tryPrimitive} value, out {info.TypeName} result)");
+        sb.AppendLine("        /// <summary>Constructs a valid value without retaining the validation message.</summary>");
+        sb.AppendLine($"        public static bool TryFrom({tryPrimitive} value, out {info.TypeName} result) => TryFrom(value, out result, out _);");
+        sb.AppendLine();
+        sb.AppendLine("        /// <summary>Constructs a valid value, or returns false with a validation message and default output.</summary>");
+        sb.AppendLine("        /// <remarks>Exceptions thrown by Normalize or IsValid propagate unchanged. The message is null on success.</remarks>");
+        sb.AppendLine($"        public static bool TryFrom({tryPrimitive} value, out {info.TypeName} result, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? errorMessage)");
         sb.AppendLine("        {");
         sb.AppendLine("            result = default;");
+        sb.AppendLine("            errorMessage = null;");
         if (info.PrimitiveRequiresNullCheck)
         {
-            sb.AppendLine("            if (value is null) { return false; }");
+            EmitInvalidGuard(sb, "value is null", "Value cannot be null.");
         }
         sb.AppendLine($"            value = __CallNormalize<{info.TypeName}>(value);");
         if (info.PrimitiveRequiresNullCheck)
         {
-            sb.AppendLine("            if (value is null) { return false; }");
+            EmitInvalidGuard(sb, "value is null", $"Normalization returned null for value object '{info.TypeName}'.");
         }
         if (info.MinimumLength > 0)
         {
-            sb.AppendLine($"            if (value.Length < {info.MinimumLength}) {{ return false; }}");
+            EmitInvalidGuard(sb, $"value.Length < {info.MinimumLength}", $"Value object '{info.TypeName}' must contain at least {info.MinimumLength} characters.");
         }
         if (info.MaximumLength is { } maximumLength)
         {
-            sb.AppendLine($"            if (value.Length > {maximumLength}) {{ return false; }}");
+            EmitInvalidGuard(sb, $"value.Length > {maximumLength}", $"Value object '{info.TypeName}' cannot exceed {maximumLength} characters.");
         }
-        sb.AppendLine($"            if (!__CallIsValid<{info.TypeName}>(value)) {{ return false; }}");
+        sb.AppendLine($"            if (!__CallIsValid<{info.TypeName}>(value, out errorMessage))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (global::System.String.IsNullOrWhiteSpace(errorMessage))");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    errorMessage = \"{invalidMessage}\";");
+        sb.AppendLine("                }");
+        sb.AppendLine("                return false;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            errorMessage = null;");
         sb.AppendLine($"            result = new {info.TypeName}(value);");
         sb.AppendLine("            return true;");
         sb.AppendLine("        }");
@@ -319,9 +335,9 @@ public class ValueObjectGenerator : IIncrementalGenerator
         sb.AppendLine($"            where TSelf : global::NOF.Domain.IValueObject<{info.PrimitiveFullName}>");
         sb.AppendLine("            => TSelf.Normalize(value);");
         sb.AppendLine();
-        sb.AppendLine($"        private static bool __CallIsValid<TSelf>({info.PrimitiveFullName} value)");
+        sb.AppendLine($"        private static bool __CallIsValid<TSelf>({info.PrimitiveFullName} value, out string? errorMessage)");
         sb.AppendLine($"            where TSelf : global::NOF.Domain.IValueObject<{info.PrimitiveFullName}>");
-        sb.AppendLine("            => TSelf.IsValid(value);");
+        sb.AppendLine("            => TSelf.IsValid(value, out errorMessage);");
         sb.AppendLine();
         if (info.PrimitiveIsValueType)
         {
@@ -330,10 +346,14 @@ public class ValueObjectGenerator : IIncrementalGenerator
             sb.AppendLine("            => value.HasValue ? From(value.Value) : null;");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Returns false for an absent or invalid nullable primitive.</summary>");
-            sb.AppendLine($"        public static bool TryFrom({info.PrimitiveFullName}? value, out {info.TypeName} result)");
+            sb.AppendLine($"        public static bool TryFrom({info.PrimitiveFullName}? value, out {info.TypeName} result) => TryFrom(value, out result, out _);");
+            sb.AppendLine();
+            sb.AppendLine("        /// <summary>Returns false with a message for an absent or invalid nullable primitive.</summary>");
+            sb.AppendLine($"        public static bool TryFrom({info.PrimitiveFullName}? value, out {info.TypeName} result, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? errorMessage)");
             sb.AppendLine("        {");
             sb.AppendLine("            result = default;");
-            sb.AppendLine("            return value.HasValue && TryFrom(value.Value, out result);");
+            EmitInvalidGuard(sb, "!value.HasValue", "Value cannot be null.");
+            sb.AppendLine("            return TryFrom(value.Value, out result, out errorMessage);");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -464,6 +484,15 @@ public class ValueObjectGenerator : IIncrementalGenerator
         }
 
         return sb.ToString();
+    }
+
+    private static void EmitInvalidGuard(StringBuilder source, string condition, string message)
+    {
+        source.AppendLine($"            if ({condition})");
+        source.AppendLine("            {");
+        source.Append("                errorMessage = ").Append(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(message, true)).AppendLine(";");
+        source.AppendLine("                return false;");
+        source.AppendLine("            }");
     }
 
     private class ValueObjectResult

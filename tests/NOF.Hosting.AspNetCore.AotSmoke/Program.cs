@@ -16,7 +16,8 @@ JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(static options =>
     options.TypeInfoResolverChain.Add(SmokeJsonContext.Default));
 Expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
 Expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
-Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _), "Custom IsValid rule was skipped by TryFrom");
+Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
+    "Custom IsValid message was lost by TryFrom");
 var nameJson = JsonSerializer.Serialize(nodeName, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
 Expect((string)JsonSerializer.Deserialize(nameJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");

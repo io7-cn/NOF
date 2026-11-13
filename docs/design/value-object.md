@@ -7,7 +7,12 @@ A value object in NOF is a `readonly partial struct` that implements `IValueObje
 ```csharp
 public readonly partial struct OrderName : IValueObject<string>
 {
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 ```
 
@@ -38,7 +43,12 @@ String-backed value objects can declare their accepted `string.Length` range on 
 [ValueObjectLength(100, MinimumLength = 1)]
 public readonly partial struct OrderName : IValueObject<string>
 {
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 ```
 

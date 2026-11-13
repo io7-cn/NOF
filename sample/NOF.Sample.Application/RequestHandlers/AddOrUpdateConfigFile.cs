@@ -27,13 +27,13 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
             return new NotFound("Node not found.");
         }
 
-        if (!ConfigFileName.TryFrom(request.FileName, out var fileName))
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName, out var fileNameErrorMessage))
         {
-            return new InvalidInput("File name must contain 1–100 nonblank characters.");
+            return new InvalidInput(fileNameErrorMessage);
         }
-        if (!ConfigContent.TryFrom(request.Content, out var content))
+        if (!ConfigContent.TryFrom(request.Content, out var content, out var contentErrorMessage))
         {
-            return new InvalidInput("Configuration content must be a JSON object.");
+            return new InvalidInput(contentErrorMessage);
         }
 
         node.AddOrUpdateConfigFile(fileName, content);

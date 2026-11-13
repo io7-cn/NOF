@@ -30,9 +30,9 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
         ConfigFileName? fileName = null;
         if (!string.IsNullOrEmpty(request.FileName))
         {
-            if (!ConfigFileName.TryFrom(request.FileName, out var parsedFileName))
+            if (!ConfigFileName.TryFrom(request.FileName, out var parsedFileName, out var parsedFileNameErrorMessage))
             {
-                return new InvalidInput("File name must contain 1–100 nonblank characters.");
+                return new InvalidInput(parsedFileNameErrorMessage);
             }
             fileName = parsedFileName;
         }

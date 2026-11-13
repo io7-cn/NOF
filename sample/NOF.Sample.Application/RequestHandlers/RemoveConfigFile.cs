@@ -27,9 +27,9 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
             return new NotFound("Node not found.");
         }
 
-        if (!ConfigFileName.TryFrom(request.FileName, out var fileName))
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName, out var fileNameErrorMessage))
         {
-            return new InvalidInput("File name must contain 1–100 nonblank characters.");
+            return new InvalidInput(fileNameErrorMessage);
         }
         node.RemoveConfigFile(fileName);
         await _dbContext.SaveChangesAsync(cancellationToken);

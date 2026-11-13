@@ -28,6 +28,19 @@ public sealed class ValueObjectNormalizeAnalyzerTests
     }
 
     [Fact]
+    public async Task SingleParameterIsValid_ReportsMigrationError()
+    {
+        var diagnostics = await GetDiagnosticsAsync("""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static bool IsValid(string value) => true;
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF019" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
     public async Task LegacyValidate_ReportsMigrationError()
     {
         var diagnostics = await GetDiagnosticsAsync("""
@@ -49,7 +62,8 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             using NOF.Domain;
             public readonly partial struct Name : IValueObject<string>
             {
-                public static bool IsValid(string value) { {{call}}; return true; }
+                public static bool IsValid(string value, out string? errorMessage) {
+                    errorMessage = null; {{call}}; return true; }
             }
             """);
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF013" && diagnostic.Severity == DiagnosticSeverity.Error);
@@ -83,11 +97,11 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             {
                 public static string Normalize(string value)
                 {
-                    IsValid(value);
+                    IsValid(value, out _);
                     return value.Trim();
                 }
 
-                public static bool IsValid(string value) => true;
+                public static bool IsValid(string value, out string? errorMessage) { errorMessage = null; return true; }
             }
             """;
 

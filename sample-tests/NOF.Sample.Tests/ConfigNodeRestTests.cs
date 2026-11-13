@@ -70,6 +70,12 @@ public sealed class ConfigNodeRestTests
         Assert.Equal(HttpStatusCode.BadRequest, missingParentField.StatusCode);
         using var blank = await http.PostAsJsonAsync("/api/config-nodes", new { name = " " });
         Assert.Equal(HttpStatusCode.BadRequest, blank.StatusCode);
+        using var blankProblem = JsonDocument.Parse(await blank.Content.ReadAsStringAsync());
+        Assert.Equal("Node name cannot be blank.", blankProblem.RootElement.GetProperty("detail").GetString());
+        using var invalidJson = await http.PutAsJsonAsync($"/api/config-nodes/{id}/files/settings.json", new { content = "{" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidJson.StatusCode);
+        using var contentProblem = JsonDocument.Parse(await invalidJson.Content.ReadAsStringAsync());
+        Assert.Equal("Invalid JSON format.", contentProblem.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]

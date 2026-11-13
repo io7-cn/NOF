@@ -9,13 +9,18 @@ Implement normalization and a boolean predicate; leave construction to NOF:
 public readonly partial struct CustomerName : IValueObject<string>
 {
     public static string Normalize(string value) => value.Trim();
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 
 var trusted = CustomerName.From(" Alice ");
-if (!CustomerName.TryFrom(input, out var name))
+if (!CustomerName.TryFrom(input, out var name, out var errorMessage))
 {
-    return new InvalidInput("Invalid customer name");
+    return new InvalidInput(errorMessage);
 }
 ```
 
@@ -46,3 +51,13 @@ NOF014 warns when Normalize mixes in IsValid.
 The configuration-node sample uses TryFrom directly instead of checking IsValid and
 then constructing again. Its content predicate parses JSON once, with no duplicate
 throwing validator. Error messages belong to the application operation's failure cases.
+
+The only user validation signature is IsValid(T, out string? errorMessage). There is
+no one-parameter validation hook. A null/blank failure message is allowed: the generated
+factory supplies a useful fallback. The detailed TryFrom(value, out result, out message)
+returns a non-null message on false and clears it to null on success; a convenience
+overload discards the message. Null/normalization/length failures also produce messages.
+From uses the same message in ArgumentException (ArgumentNullException for null input).
+Both DomainException and DomainValidationException are deleted. Tracing no longer
+converts coded domain exceptions to business rejection; use returned FailureCase values.
+NOF019 rejects both legacy Validate and the old single-parameter IsValid hook.

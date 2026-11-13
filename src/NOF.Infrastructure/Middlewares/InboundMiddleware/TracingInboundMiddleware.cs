@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NOF.Contract;
-using NOF.Domain;
 using NOF.Hosting;
 using System.Diagnostics;
 
@@ -139,17 +138,6 @@ public sealed class TracingInboundMiddleware(
         var handlerName = context.HandlerType.DisplayName;
         var messageName = context.MessageType.DisplayName;
 
-        if (exception is DomainException domainException)
-        {
-            logger.LogWarning(
-                domainException,
-                "Domain exception occurred while handling {MessageType} with {HandlerType}: {Message}",
-                messageName,
-                handlerName,
-                domainException.Message);
-            return;
-        }
-
         logger.LogError(
             exception,
             "Exception occurred while handling {MessageType} with {HandlerType}: {Message}",
@@ -166,17 +154,6 @@ public sealed class TracingInboundMiddleware(
         var handlerName = context.HandlerType.DisplayName;
         var messageName = context.MessageType.DisplayName;
 
-        if (exception is DomainException domainException)
-        {
-            logger.LogWarning(
-                domainException,
-                "Domain exception occurred while handling {MessageType} with {HandlerType}: {Message}",
-                messageName,
-                handlerName,
-                domainException.Message);
-            return;
-        }
-
         logger.LogError(
             exception,
             "Exception occurred while handling {MessageType} with {HandlerType}: {Message}",
@@ -192,18 +169,6 @@ public sealed class TracingInboundMiddleware(
     {
         var handlerName = context.HandlerType.DisplayName;
         var requestName = $"{context.ServiceType.DisplayName}.{context.ServiceMethodInfo.Name}";
-
-        if (exception is DomainException domainException)
-        {
-            logger.LogWarning(
-                domainException,
-                "Domain exception occurred while handling {MessageType} with {HandlerType}: {Message}",
-                requestName,
-                handlerName,
-                domainException.Message);
-            context.Reject(new global::NOF.Abstraction.Failure(domainException.ErrorCode, domainException.Message));
-            return;
-        }
 
         logger.LogError(
             exception,

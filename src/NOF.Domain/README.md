@@ -10,7 +10,7 @@ Domain primitives package for the [NOF Framework](https://github.com/XmmShp/NOF)
 - `[NewableValueObject]` for `long`-backed ID value objects
 - `[ValueObjectLength]` for string-backed value-object length constraints shared with persistence providers
 - Domain-owned business values for predictable rule outcomes
-- `DomainException` and `DomainValidationException`
+- Standard .NET argument exceptions for invalid construction
 - `IIdGenerator` and the ambient `IdGenerator` facade
 - `IRepository<TEntity>`, `IAsyncQueryable<T>`, and provider-agnostic batch update descriptors for repository abstractions
 - `AddNOFDomain()` for package-local runtime registration
@@ -31,7 +31,7 @@ Implement `IValueObject<T>` on a `readonly partial struct` to define a value obj
 
 Always construct a value object through `From(...)` or another generated factory. Diagnostic `NOF018` rejects direct `default` and parameterless `new()` expressions. Because the CLR can still zero-initialize structs implicitly (for example in arrays, fields, and generic code), generated value objects also track validated initialization at runtime. An uninitialized sentinel never compares equal to a validated value and throws `InvalidOperationException` if it is converted, hashed, formatted, serialized, or passed through the persistence converter. Two uninitialized values compare equal to support ORM sentinel checks. A valid primitive default such as `Score.From(0)` remains valid.
 
-User code only implements static bool IsValid(T), plus optional Normalize(T). Validate is
+User code only implements static bool IsValid(T, out string? errorMessage), plus optional Normalize(T). Validate is
 removed; NOF019 reports its old hook signature. From throws ArgumentException when
 TryFrom rejects the value (ArgumentNullException for null reference input). TryFrom
 returns false for null, length violations or IsValid=false and clears its out value.
@@ -48,7 +48,12 @@ using NOF.Domain;
 
 public readonly partial struct CustomerName : IValueObject<string>
 {
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 ```
 
@@ -58,7 +63,12 @@ For a string-backed value object, declare its length range once on the value-obj
 [ValueObjectLength(100, MinimumLength = 1)]
 public readonly partial struct CustomerName : IValueObject<string>
 {
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 ```
 
@@ -105,9 +115,8 @@ return their own business values; Application maps them to the generated operati
 cases. Domain does not reference Contract. See the [expected-failure guide](../../docs/en/design/expected-failures.md).
 
 The old Domain FailureAttribute, static-holder generator and failure.Throw extension
-are removed, as are DomainException constructors accepting Failure. DomainException
-and DomainValidationException remain for broken invariants/programmer misuse; ordinary
-business rejection should be returned as a value.
+are removed. DomainException and DomainValidationException are also removed; use
+standard .NET exceptions for programmer misuse and returned cases for business rejection.
 
 ## Installation
 
@@ -120,4 +129,9 @@ dotnet add package NOF.Domain
 Apache-2.0
 
 Declared expected application outcomes belong to Contract. Shared Abstraction.Failure
-remains available to policy rejection; it is not converted into DomainException.
+remains available to policy rejection and is not propagated through custom domain exceptions.
+
+IsValid always takes out string? errorMessage; single-parameter hooks report NOF019.
+TryFrom(value, out result, out errorMessage) preserves user validation text and supplies
+messages for built-in constraints. Its message is non-null on false and null on success.
+From uses that same message in ArgumentException. The shorter TryFrom overload discards it.

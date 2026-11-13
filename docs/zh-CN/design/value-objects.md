@@ -9,13 +9,18 @@
 public readonly partial struct CustomerName : IValueObject<string>
 {
     public static string Normalize(string value) => value.Trim();
-    public static bool IsValid(string value) => !string.IsNullOrWhiteSpace(value);
+    public static bool IsValid(string value, out string? errorMessage)
+    {
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
+    }
 }
 
 var trusted = CustomerName.From(" Alice ");
-if (!CustomerName.TryFrom(input, out var name))
+if (!CustomerName.TryFrom(input, out var name, out var errorMessage))
 {
-    return new InvalidInput("客户名称不合法");
+    return new InvalidInput(errorMessage);
 }
 ```
 
@@ -39,3 +44,11 @@ NOF013 禁止在同一值对象的钩子中回调 From/TryFrom；NOF014 提醒 N
 
 配置节点示例直接使用 TryFrom，避免先 IsValid 再构造导致重复校验。配置内容的 JSON
 只解析一次，不再维护第二套抛异常的 Validate；业务错误消息由应用操作的失败分支提供。
+
+用户校验统一为 IsValid(T, out string? errorMessage)，不再提供单参数校验钩子。
+失败时允许省略消息内容（返回 null 或空白），生成的工厂会提供默认文案。
+TryFrom(value, out result, out message) 失败时给出非空消息，成功时清空为 null；
+便利重载可以忽略消息。null、规范化结果为 null、长度不符也会给出对应消息。
+From 使用相同消息构造 ArgumentException（null 输入为 ArgumentNullException）。
+DomainException 和 DomainValidationException 均已删除；Tracing 不再将带码领域异常
+自动转为业务拒绝，业务失败应返回 FailureCase。NOF019 同时拒绝旧 Validate 和单参数 IsValid。

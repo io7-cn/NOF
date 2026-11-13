@@ -20,9 +20,9 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
     public override async Task<Result> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
     {
-        if (!ConfigNodeName.TryFrom(request.AppName, out var appName))
+        if (!ConfigNodeName.TryFrom(request.AppName, out var appName, out var appNameErrorMessage))
         {
-            return new InvalidInput("Application name must contain 1–100 nonblank characters.");
+            return new InvalidInput(appNameErrorMessage);
         }
         var appNameStr = (string)appName;
         var appCacheKey = new ConfigResultCacheKey(appNameStr);

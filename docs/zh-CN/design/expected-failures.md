@@ -84,8 +84,8 @@ NOF 不再提供结果检查分析器、ExpectedOutcome 标记、丢弃结果限
 
 Attribute、生成的失败类型和生成器都位于 Contract。Domain 不依赖 Contract；
 领域规则返回自己的业务值，由 Application 映射到 UseCase 声明的分支。已知输入失败应在
-调用抛异常的不变式构造函数之前检查。不变式或编程错误仍可使用领域异常；技术异常和取消
-正常传播。
+调用抛异常的不变式构造函数之前检查。不变式或编程错误使用标准 .NET 异常，删除专用 DomainException/DomainValidationException；
+技术异常和取消正常传播。
 
 删除旧 Domain FailureAttribute、静态成员承载类生成器、failure.Throw 扩展，以及接收
 Failure 的异常构造函数。Abstraction.Failure 继续用于策略拒绝和传输和协议适配器，

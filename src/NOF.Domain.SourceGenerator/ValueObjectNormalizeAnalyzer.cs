@@ -28,14 +28,14 @@ public sealed class ValueObjectNormalizeAnalyzer : DiagnosticAnalyzer
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    /// <summary>Rejects the removed throwing validation hook to prevent silently skipped validation.</summary>
-    public static readonly DiagnosticDescriptor RemovedValidationHook = new(
-        "NOF019", "Validate is no longer a value object hook",
-        "Replace '{0}.Validate' with bool IsValid; use From or TryFrom to construct the value object",
+    /// <summary>Rejects obsolete validation signatures to prevent silently skipped validation.</summary>
+    public static readonly DiagnosticDescriptor ObsoleteValidationHook = new(
+        "NOF019", "Obsolete value object validation hook",
+        "Replace '{0}.{1}' with bool IsValid(value, out string? errorMessage); use From or TryFrom to construct the value object",
         "ValueObjectGenerator", DiagnosticSeverity.Error, true);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [HookMustNotCallFactory, NormalizeShouldNotCallIsValid, RemovedValidationHook];
+        [HookMustNotCallFactory, NormalizeShouldNotCallIsValid, ObsoleteValidationHook];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -60,9 +60,9 @@ public sealed class ValueObjectNormalizeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (methodSymbol.Name == "Validate")
+        if (methodSymbol.Name == "Validate" || methodSymbol.Name == "IsValid" && methodSymbol.Parameters.Length == 1)
         {
-            context.ReportDiagnostic(Diagnostic.Create(RemovedValidationHook, methodSyntax.Identifier.GetLocation(), containingType.Name));
+            context.ReportDiagnostic(Diagnostic.Create(ObsoleteValidationHook, methodSyntax.Identifier.GetLocation(), containingType.Name, methodSymbol.Name));
             return;
         }
 

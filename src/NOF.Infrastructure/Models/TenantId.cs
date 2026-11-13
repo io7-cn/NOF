@@ -13,16 +13,19 @@ public readonly partial struct TenantId : IValueObject<string>
         return NOFAbstractionConstants.Tenant.NormalizeTenantId(tenantId).Trim();
     }
 
-    public static bool IsValid(string value)
+    public static bool IsValid(string value, out string? errorMessage)
     {
+        errorMessage = null;
         if (string.IsNullOrWhiteSpace(value) || value[0] is < 'a' or > 'z')
         {
+            errorMessage = "TenantId must start with a lowercase letter.";
             return false;
         }
         foreach (var character in value)
         {
             if ((character < 'a' || character > 'z') && (character < '0' || character > '9'))
             {
+                errorMessage = "TenantId must contain only lowercase letters and digits.";
                 return false;
             }
         }
