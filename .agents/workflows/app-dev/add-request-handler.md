@@ -9,7 +9,7 @@ description: Add a Context-aware request/response operation with NOF application
 ```csharp
 using NOF.Contract;
 
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     GetOrderResponse GetOrder(GetOrderRequest request);

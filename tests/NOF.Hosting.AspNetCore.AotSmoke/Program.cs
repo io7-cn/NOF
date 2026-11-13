@@ -46,20 +46,20 @@ using (var scope = app.Services.CreateScope())
     Expect(decision is Failure { Code: "order.missing" }, "Business union invocation failed");
     var missing = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
-    Expect(missing is IExpectedOrderService.EvaluateOperation.Missing, "Declared expected failure was lost");
+    Expect(missing is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
     var conflict = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = 0 }, Context.Empty);
-    Expect(conflict is IExpectedOrderService.EvaluateOperation.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
+    Expect(conflict is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
         "Typed expected failure data was lost");
 }
 await app.StartAsync();
 using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 var id = Guid.NewGuid();
-Expect(typeof(ExpectedOrderService.Evaluate.Missing) == typeof(IExpectedOrderService.EvaluateOperation.Missing),
+Expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
     "Inherited failure types changed Contract identity");
-Expect(typeof(ExpectedOrderService.Evaluate.Result) == typeof(IExpectedOrderService.EvaluateOperation.Result),
-    "Inherited result type changed Contract identity");
-Expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(IExpectedOrderService.EvaluateOperation.Missing),
+Expect(typeof(ExpectedOrderService.Evaluate.Result).Assembly == typeof(ExpectedOrderService).Assembly,
+    "Generated result is not owned by Application");
+Expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(ExpectedOrderService.Evaluate.Missing),
     "Inherited constructor did not return the canonical failure type");
 var conflictData = new OrderConflict(id);
 Expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
@@ -104,19 +104,19 @@ using var expectedMissing = await http.GetAsync($"/native/expected/{id}?page=-1"
 Expect(expectedMissing.StatusCode == HttpStatusCode.NotFound, "Declared missing case did not map to 404");
 using var expectedConflict = await http.GetAsync($"/native/expected/{id}?page=0");
 Expect(expectedConflict.StatusCode == HttpStatusCode.Conflict, "Declared typed conflict did not map to 409");
-NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result deleteOutcome =
-    new NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.HasChildren(new NOF.Sample.NodeHasChildrenError(42));
+NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result deleteOutcome =
+    new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.HasChildren(new NOF.Sample.NodeHasChildrenError(42));
 var deleteJson = JsonSerializer.Serialize(deleteOutcome,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result>());
+    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredDelete = JsonSerializer.Deserialize(deleteJson,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result>());
+    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 Expect(restoredDelete.Match(_ => 0L, _ => -1L, error => error.Error.NodeId) == 42,
     "Source-generated expected-outcome metadata did not round-trip custom failure data without reflection");
-deleteOutcome = new NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.NotFound("Missing node");
+deleteOutcome = new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.NotFound("Missing node");
 var missingJson = JsonSerializer.Serialize(deleteOutcome,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result>());
+    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredMissing = JsonSerializer.Deserialize(missingJson,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result>());
+    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 Expect(restoredMissing.Match(_ => "success", error => error.Message, _ => "children") == "Missing node",
     "Source-generated expected-outcome metadata lost default Error data");
 using var openApi = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
@@ -275,7 +275,7 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 }
 
 
-[JsonSerializable(typeof(NOF.Sample.INOFSampleService.DeleteConfigNodeOperation.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
+[JsonSerializable(typeof(NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
 [JsonSerializable(typeof(Empty))]
 [JsonSerializable(typeof(NOF.Sample.ConfigNodeName))]
 [JsonSerializable(typeof(string))]
@@ -338,7 +338,7 @@ public sealed class SmokeEndpointModule : IHttpEndpointModule
 public union OrderReceipt(OrderReadReceipt, Failure);
 
 public sealed record OrderConflict(Guid Id);
-public partial interface IExpectedOrderService : IApplicationService
+public interface IExpectedOrderService : IApplicationService
 {
     [FailureCase("Missing", "404")]
     [FailureCase("Conflict", typeof(OrderConflict))]

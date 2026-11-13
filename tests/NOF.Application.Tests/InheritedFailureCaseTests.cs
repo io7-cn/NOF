@@ -14,7 +14,7 @@ public sealed class InheritedFailureCaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task InheritedTypes_ShouldPreserveContractIdentity(bool reverseOrder)
+    public async Task InheritedTypes_ShouldBelongToApplication(bool reverseOrder)
     {
         const string source = """
             using NOF.Application;
@@ -24,7 +24,7 @@ public sealed class InheritedFailureCaseTests
             using System.Threading.Tasks;
             public sealed record Query(int Mode);
             public sealed record Details(int Count);
-            public partial interface IService : IApplicationService
+            public interface IService : IApplicationService
             {
                 [FailureCase("NotFound", "404")]
                 [FailureCase("Conflict", typeof(Details))]
@@ -48,32 +48,31 @@ public sealed class InheritedFailureCaseTests
                 public static async Task<bool> Run()
                 {
                     var handler = new Handler();
-                    var context = new InvocationContext { Operation = IServiceOperations.Run, HandlerType = typeof(Handler),
+                    var context = new InvocationContext { Operation = Service.Run.Descriptor, HandlerType = typeof(Handler),
                         HandlerMethodInfo = typeof(Handler).GetMethods().First(method => method.Name == "HandleAsync" && method.GetParameters()[0].ParameterType == typeof(Query)) };
                     var constructed = await handler.HandleAsync(new Query(0), context, default);
                     var message = await handler.HandleAsync(new Query(1), context, default);
                     var typed = await handler.HandleAsync(new Query(2), context, default);
                     var conflict = await handler.HandleAsync(new Query(3), context, default);
                     var details = new Details(99);
-                    return constructed is IService.RunOperation.NotFound { Message: "constructor" }
-                        && message is IService.RunOperation.NotFound { Message: "message constructor" }
-                        && typed is IService.RunOperation.NotFound { Message: "" }
-                        && conflict is IService.RunOperation.Conflict { Error.Count: 42 }
-                        && typeof(Service.Run.NotFound) == typeof(IService.RunOperation.NotFound)
-                        && typeof(Service.Run.Result) == typeof(IService.RunOperation.Result)
+                    return constructed is Service.Run.NotFound { Message: "constructor" }
+                        && message is Service.Run.NotFound { Message: "message constructor" }
+                        && typed is Service.Run.NotFound { Message: "" }
+                        && conflict is Service.Run.Conflict { Error.Count: 42 }
+                        && typeof(Handler.NotFound) == typeof(Service.Run.NotFound)
+                        && typeof(Handler.Result) == typeof(Service.Run.Result)
                         && ReferenceEquals(new Service.Run.Conflict(details).Error, details)
                         && new Service.Run.NotFound().ErrorCode == "404"
                         && typeof(Service.Run.Conflict).GetProperty("ErrorCode") == null
                         && typeof(Service.Run).GetMethods().All(method => !method.Name.StartsWith("Create"))
-                        && new Service.Run.Conflict(details).GetType() == typeof(IService.RunOperation.Conflict);
+                        && new Service.Run.Conflict(details).GetType() == typeof(Service.Run.Conflict);
                 }
             }
             """;
         var compilation = CSharpCompilation.CreateCompilation("InheritedFailures_" + Guid.NewGuid().ToString("N"), source, true,
             typeof(ApplicationService<>), typeof(ServiceOperation<,>), typeof(FailureCaseAttribute), typeof(Context),
             typeof(ServiceProviderServiceExtensions), typeof(System.Text.Json.Serialization.JsonUnionAttribute));
-        ISourceGenerator[] generators = [new NOF.Contract.SourceGenerator.FailureCaseGenerator().AsSourceGenerator(),
-            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()];
+        ISourceGenerator[] generators = [new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()];
         if (reverseOrder)
         {
             generators = [.. generators.Reverse()];

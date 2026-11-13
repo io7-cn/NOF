@@ -3,7 +3,7 @@ using System.ComponentModel;
 
 namespace NOF.Sample;
 
-public partial interface IOAuthChainDemoService : IApplicationService
+public interface IOAuthChainDemoService : IApplicationService
 {
     [Summary("创建 OAuth 演示客户端")]
     [Description("创建一个可用于 client_credentials 和 token exchange 演示的 OAuth client，并返回一次性的 client secret；默认 client token 的 sub 形如 client:{client_id}")]

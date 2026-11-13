@@ -3,7 +3,7 @@ using System.ComponentModel;
 
 namespace NOF.Sample;
 
-public partial interface INOFSampleService : IApplicationService
+public interface INOFSampleService : IApplicationService
 {
     [Summary("创建配置节点")]
     [Description("在指定父节点下创建一个新的配置节点，若不指定父节点则创建为根节点")]

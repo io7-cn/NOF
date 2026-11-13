@@ -26,7 +26,7 @@ RPC contracts are declared on `IApplicationService` interfaces in the contract l
 using NOF.Application;
 using NOF.Contract;
 
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     OrderDto GetOrder(GetOrderRequest request);
@@ -205,3 +205,5 @@ No Create<Name> factories or custom expected-outcome analyzer are generated.
 ### Invocation extensions
 
 `IInvocationFilter` is the unified extension contract for service operations, commands and notifications. Registration through `AddInvocationFilter<T>()` declares an extension; the host chooses `IInvocationPipeline` to execute it. The optional in-memory default lives in Infrastructure. See [host-selected execution](../../docs/en/design/invocation-extensions.md).
+
+FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Contract references contain identity/input only; execution descriptors contain the complete output. See [expected failures](../../docs/en/design/expected-failures.md).

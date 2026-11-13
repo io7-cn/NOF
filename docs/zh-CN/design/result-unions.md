@@ -9,7 +9,7 @@ NOF 12 使用 .NET 11 和 C# 15 原生 Union。Contract 不再提供通用 Resul
 在 partial 服务契约上声明成功业务值及预期失败：
 
 ```csharp
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     OrderDto Get(GetOrderRequest request);

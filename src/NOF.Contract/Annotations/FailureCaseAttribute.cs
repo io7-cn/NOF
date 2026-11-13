@@ -21,7 +21,7 @@ public sealed class FailureCaseAttribute : Attribute
         ErrorType = errorType;
     }
 
-    /// <summary>Gets the required C# branch name, validated by the Contract generator.</summary>
+    /// <summary>Gets the required C# branch name, validated by the Contract analyzer.</summary>
     public string Name { get; }
 
     /// <summary>Gets the error code for a message failure, or null for custom error data.</summary>

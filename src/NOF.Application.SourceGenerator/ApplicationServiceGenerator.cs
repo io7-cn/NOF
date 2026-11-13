@@ -83,7 +83,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var requestTypeName = method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var originalReturnTypeName = ExpectedFailureModel.Declarations(method).Length > 0
-                ? ExpectedFailureModel.ResultTypeName(method)
+                ? ExpectedFailureModel.ResultTypeName(method, classSymbol)
                 : method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.ServiceOperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})),");
         }
@@ -103,12 +103,11 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var responseType = ExpectedFailureModel.ResponseTypeName(method);
+            var responseType = ExpectedFailureModel.ResponseTypeName(method, classSymbol);
             var requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             var failureDeclarations = ExpectedFailureModel.Declarations(method);
-            var operationBase = failureDeclarations.Length > 0 ? ExpectedFailureModel.OperationTypeName(method)
-                : $"global::NOF.Contract.ServiceOperation<{requestTypeName}, {responseType}>";
+            var operationBase = $"global::NOF.Contract.ServiceOperation<{requestTypeName}, {responseType}>";
             sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
             sb.AppendLine("    {");
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -117,10 +116,12 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             {
                 sb.AppendLine("        public override bool AllowsNullResponse => true;");
             }
-            var descriptorContainer = serviceInterface.ContainingNamespace.IsGlobalNamespace ? "global::" : "global::" + serviceInterface.ContainingNamespace.ToDisplayString() + ".";
-            descriptorContainer += serviceInterface.Name + "Operations";
-            sb.AppendLine("        /// <summary>Gets the canonical Contract descriptor.</summary>");
-            sb.AppendLine($"        public static global::NOF.Contract.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor => {descriptorContainer}.{method.Name};");
+            if (failureDeclarations.Length > 0)
+            {
+                FailureCaseEmitter.EmitMembers(sb, method, ExpectedFailureModel.OperationTypeName(method, classSymbol));
+            }
+            sb.AppendLine("        /// <summary>Gets this application's descriptor with its complete response type.</summary>");
+            sb.AppendLine($"        public static global::NOF.Contract.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<{responseType}> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Contract.Context context,");

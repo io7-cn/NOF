@@ -65,7 +65,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record PingRequest(string Value);
 
-            public partial interface IDemoService : IApplicationService
+            public interface IDemoService : IApplicationService
             {
                 [FailureCase("Unavailable", "monolith.unavailable")]
                 Empty Ping(PingRequest request);
@@ -105,7 +105,6 @@ public sealed class AllSourceGeneratorsMonolithTests
         [
             new AutoInjectGenerator().AsSourceGenerator(),
             new EventHandlerRegistrationGenerator().AsSourceGenerator(),
-            new FailureCaseGenerator().AsSourceGenerator(),
             new ValueObjectGenerator().AsSourceGenerator(),
             new OperationDescriptorGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
@@ -125,7 +124,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
         Assert.DoesNotContain("ServiceClient", generatedCode);
-        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.IDemoService.PingOperation.Result> InvokeAsync", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<global::Monolith.DemoServer.Ping.Result> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
     }
 }

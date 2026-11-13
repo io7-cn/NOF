@@ -98,7 +98,7 @@ public class NOFTestHostTests
         builder.Services.AddScoped<IMessageDispatcher, FakeMessageDispatcher>();
 
         await using var host = builder.BuildTestHost();
-        Func<Task> act = () => host.SendAsync(new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestMessages), nameof(ITestMessages.Send)), new TestCommand("do-it"));
+        Func<Task> act = () => host.SendAsync(new ServiceOperationReference<TestCommand>(typeof(ITestMessages), nameof(ITestMessages.Send)), new TestCommand("do-it"));
 
         Assert.Null(await Record.ExceptionAsync(act));
     }
@@ -220,9 +220,9 @@ public class NOFTestHostTests
 
     private sealed class FakeMessageDispatcher : IMessageDispatcher
     {
-        public Task SendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferSendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task DeferSendOrderedAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferSendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeferSendOrderedAsync<T>(ServiceOperationReference<T> operation, T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task PublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeferPublishAsync<T>(T message, Context context, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeferPublishOrderedAsync<T>(T message, string orderKey, Context context, bool completesOrderKey = false, CancellationToken cancellationToken = default) => Task.CompletedTask;

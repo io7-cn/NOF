@@ -20,9 +20,9 @@ builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDemoService>();
 builder.Services.AddMessageBindings(bindings =>
 {
-    bindings.Queue<SendEmail>("sample.mail.v1").To(IMessageDemoServiceOperations.SendMail);
+    bindings.Queue<SendEmail>("sample.mail.v1").To(MessageDemoService.SendMail.Descriptor);
     bindings.Subscription<OrderCreated>("sample.orders.created.v1", "sample-order-audit")
-        .To(IMessageDemoServiceOperations.RecordOrder);
+        .To(MessageDemoService.RecordOrder.Descriptor);
 });
 builder.AddApplicationService<OAuthChainDemoService>();
 builder.AddApplicationService<DemoDownstreamService>();

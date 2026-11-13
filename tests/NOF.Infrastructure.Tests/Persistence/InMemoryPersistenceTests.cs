@@ -66,7 +66,7 @@ public class SqliteInMemoryPersistenceTests
             await publisher.DeferPublishAsync(new ScopedTransactionMessage("first"), Context.Current);
             await application.SaveChangesAsync();
             concrete.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState { OrderKey = "native", Sequence = 2 });
-            await sender.DeferSendAsync(new ServiceOperationDescriptor<ScopedTransactionMessage, Empty>(typeof(IScopeMessages), nameof(IScopeMessages.Apply)), new ScopedTransactionMessage("second"), Context.Current);
+            await sender.DeferSendAsync(new ServiceOperationReference<ScopedTransactionMessage>(typeof(IScopeMessages), nameof(IScopeMessages.Apply)), new ScopedTransactionMessage("second"), Context.Current);
             await application.SaveChangesAsync();
             await application.SaveChangesAsync();
             Assert.Equal(2, await EFQuery.CountAsync(concrete.Set<NOFOutboxMessage>()));

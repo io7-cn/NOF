@@ -34,12 +34,11 @@ public sealed class OperationDescriptorGenerator : IIncrementalGenerator
                     && !method.IsStatic && !method.ReturnsVoid && method.Arity == 0 && method.Parameters.Length == 1))
                 {
                     source.AppendLine("    /// <summary>Gets the canonical typed operation reference.</summary>");
-                    source.Append("    public static global::NOF.Contract.ServiceOperationDescriptor<")
-                        .Append(method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append(", ")
-                        .Append(ExpectedFailureModel.ResponseTypeName(method)).Append("> @").Append(method.Name)
+                    source.Append("    public static global::NOF.Contract.ServiceOperationReference<")
+                        .Append(method.Parameters[0].Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append("> @").Append(method.Name)
                         .Append(" { get; } = new(typeof(").Append(contract.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
                         .Append("), ").Append(Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(method.Name, true))
-                        .Append(", allowsNullResponse: ").Append(ExpectedFailureModel.AllowsNull(method) ? "true" : "false").AppendLine(");");
+                        .AppendLine(");");
                 }
                 source.AppendLine("}");
                 output.AddSource(contract.ToDisplayString().Replace('.', '_') + ".Operations.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));

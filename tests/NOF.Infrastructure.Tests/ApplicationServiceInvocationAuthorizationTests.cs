@@ -176,7 +176,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
     }
 }
 
-public partial interface IProtectedFleetService : IApplicationService
+public interface IProtectedFleetService : IApplicationService
 {
     [RequirePermission("fleet.read")]
     NOF.Testing.TestOutcome<GetFleetOverviewResponse> GetFleetOverview(Empty request);

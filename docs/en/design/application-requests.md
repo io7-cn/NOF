@@ -7,7 +7,7 @@ generated `Service.Operation` base and override workflow. Contracts contain busi
 requests/responses and application policy metadata, with no HTTP route or binding declarations.
 
 ```csharp
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     OrderDto? Find(FindOrderRequest request);
     [FailureCase("Rejected")]

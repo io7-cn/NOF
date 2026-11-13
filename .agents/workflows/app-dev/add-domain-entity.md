@@ -45,7 +45,7 @@ Construct values through `EmailAddress.From(...)` and extract the primitive with
 ```csharp
 using NOF.Contract;
 
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404001")]
     [FailureCase("InvalidStatus", "400002")]

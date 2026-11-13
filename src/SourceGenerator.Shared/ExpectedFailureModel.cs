@@ -13,16 +13,16 @@ internal static class ExpectedFailureModel
 
     public static AttributeData[] Declarations(IMethodSymbol method) => method.GetAttributes().Where(IsDeclaration).ToArray();
 
-    public static string OperationTypeName(IMethodSymbol method)
-        => method.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + method.Name + "Operation";
+    public static string OperationTypeName(IMethodSymbol method, INamedTypeSymbol applicationService)
+        => applicationService.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "." + method.Name;
 
-    public static string ResultTypeName(IMethodSymbol method) => OperationTypeName(method) + ".Result";
+    public static string ResultTypeName(IMethodSymbol method, INamedTypeSymbol applicationService) => OperationTypeName(method, applicationService) + ".Result";
 
-    public static string CaseTypeName(IMethodSymbol method, AttributeData declaration)
-        => OperationTypeName(method) + "." + CaseName(declaration);
+    public static string CaseTypeName(IMethodSymbol method, AttributeData declaration, INamedTypeSymbol applicationService)
+        => OperationTypeName(method, applicationService) + "." + CaseName(declaration);
 
-    public static string ResponseTypeName(IMethodSymbol method)
-        => Declarations(method).Length > 0 ? ResultTypeName(method)
+    public static string ResponseTypeName(IMethodSymbol method, INamedTypeSymbol applicationService)
+        => Declarations(method).Length > 0 ? ResultTypeName(method, applicationService)
             : method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
                 SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier));
 

@@ -10,7 +10,7 @@ together; no compatibility aliases are shipped.
 Declare the successful business value and expected failures on a partial service:
 
 ```csharp
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     OrderDto Get(GetOrderRequest request);

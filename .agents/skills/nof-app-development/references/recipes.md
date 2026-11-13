@@ -35,7 +35,7 @@ Use native Build(); app.UseNOF() installs HTTP middleware, and app.MapNOFEndpoin
 using NOF.Application;
 using NOF.Contract;
 
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     GetOrderResponse GetOrder(GetOrderRequest request);

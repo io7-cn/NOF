@@ -1,138 +1,71 @@
 # Declared expected failures
 
-[简体中文](../../zh-CN/design/expected-failures.md) · [Application services](application-requests.md)
+[简体中文](../../zh-CN/design/expected-failures.md) · [Application services](application-requests.md) · [Unified operations](unified-operations.md)
 
-Declare predictable business failures on Contract methods with `FailureCase`. The
-method's return type describes success. The Contract generator emits a closed
-`IService.<Operation>Operation.Result` union, and the Application generator uses it consistently
-for the operation override, mapping, Descriptor and InvokeAsync return type.
+Contract declares every predictable business failure on its interface methods. Application generates the concrete Result union and failure branch types inside its Service.Operation. Contract interfaces do not need partial and receive no generated nested types.
 
 ```csharp
+// Contract: declarations only, including the successful output type.
 public sealed record DeleteConflict(long NodeId);
-
-public partial interface INodeService : IApplicationService
+public interface INodeService : IApplicationService
 {
     [FailureCase("NotFound", "404")]
     [FailureCase("HasChildren", typeof(DeleteConflict))]
     Empty Delete(DeleteNodeRequest request);
 }
-```
 
-The first argument is always a required C# branch name. The optional second argument
-is either an opaque nonblank error code or `typeof(CustomError)`:
-
-```csharp
-[FailureCase("NotFound")]               // ErrorCode defaults to "NotFound"
-[FailureCase("NotFound", "404")]        // Explicit ErrorCode
-[FailureCase("HasChildren", typeof(DeleteConflict))] // Custom data, no ErrorCode
-```
-
-Constructor overloads express these mutually exclusive choices because attribute
-arguments cannot themselves be C# union values. There is no generic attribute or
-settable Name. Invalid names, keywords, duplicate names and generated-member
-collisions produce NOF220 compilation errors. Numeric codes are valid, but a name
-such as "404", "not-found" or "class" is invalid. Codes need not be unique: the
-required Name identifies each branch.
-
-Message branches directly expose ErrorCode and Message and take an optional message
-in their constructor. Custom branches expose typed Error data and take that value in
-their constructor; no ErrorCode or Message is imposed on custom data. There is no
-shared Error wrapper.
-
-The generated declaration is conceptually:
-
-```csharp
-// Inside the generated partial INodeService declaration:
-public abstract class DeleteOperation : ServiceOperation<DeleteNodeRequest, DeleteOperation.Result>
-{
-    public union Result(Empty, NotFound, HasChildren);
-    // Generated NotFound and HasChildren records are nested here.
-}
-// Generated nested records carry Error data, message/code or custom Error data, plus JSON metadata.
-```
-
-Each declared name has its own case type. Two names carrying the same error-data type still
-remain distinct branches. No open shared Failure case is appended. Handlers can return
-Empty.Instance, a success DTO, or one of the declared cases; an unrelated failure cannot
-implicitly convert to the result. There is no handwritten failure-holder class.
-
-```csharp
+// Application: no extra operation declaration or failure holder is required.
 public partial class NodeService : ApplicationService<INodeService>;
-
 public sealed class DeleteNode : NodeService.Delete
 {
     public override Task<Result> HandleAsync(
-        DeleteNodeRequest request, InvocationContext context, CancellationToken ct)
-        => Task.FromResult<Result>(request.Id <= 0
-            ? new NotFound("Node not found")
-            : new HasChildren(new DeleteConflict(request.Id)));
+        DeleteNodeRequest request, InvocationContext invocation, CancellationToken ct)
+        => Task.FromResult<Result>(new NotFound("Node not found"));
 }
 ```
 
-Application's generated NodeService.Delete inherits INodeService.DeleteOperation.
-Handlers therefore use Task<Result> and directly construct new NotFound(...) or
-new HasChildren(data). No factories, duplicate or derived error types are generated.
-ServiceOperation and ServiceOperation<TRequest,TResponse> now live in NOF.Contract,
-so the Contract operation base has no Application dependency. Update explicit imports
-from NOF.Application.ServiceOperation to NOF.Contract.ServiceOperation.
+The generated NodeService.Delete owns Result, NotFound and HasChildren. It directly inherits `ServiceOperation<DeleteNodeRequest, NodeService.Delete.Result>`. Handlers inherit these types and use `Task<Result>` and new NotFound(...). A separate ApplicationService implementation generates its own concrete result types; Contract contains only the shared declarations and data types.
 
-Callers handle the generated union with an exhaustive switch expression or generated
-Match method. Match requires one success callback and one callback per declared case;
-named callback parameters use `onCase<Name>`. Adding a failure changes that signature.
-Do not widen the result to object or a shared untyped error merely to avoid handling it.
+## Names, codes and custom data
 
-Exhaustiveness checking belongs to the C# compiler: an incomplete union switch
-expression produces CS8509. NOF adds no checked-result analyzer, ExpectedOutcome
-marker, discard restriction or catch-all prohibition. Native C# still permits
-ignoring a result and using a catch-all arm. Switch statements do not provide the
-same exhaustiveness warning as switch expressions. Match also remains an optional
-convenience requiring an explicit callback for each case. Null/default union values
-remain invalid at the application invocation boundary.
+```csharp
+[FailureCase("NotFound")]               // ErrorCode defaults to NotFound.
+[FailureCase("NotFound", "000404")]     // Opaque error code, independent of the type name.
+[FailureCase("HasChildren", typeof(DeleteConflict))] // Typed Error data without an imposed code.
+```
 
-## Layer and transport boundaries
+The required Name is a unique valid C# identifier for a branch. The optional second argument is either a nonblank opaque code or typeof(CustomError). Constructor overloads keep those choices exclusive. Contract's FailureCaseAnalyzer reports NOF220 for invalid names, keywords, collisions, duplicate names and invalid declarations. Codes may be numeric or otherwise unsuitable as identifiers; different branches may share a code. Declare attributes on IApplicationService interface methods, not implementation methods.
 
-The attribute, generated failure types and generator belong to Contract. Domain does
-not depend on Contract. Domain rules return their own business values; Application
-maps them to the declared use-case cases. Known input failures should be checked before
-calling throwing invariant constructors. Use standard .NET exceptions for violated invariants/programmer misuse; dedicated
-DomainException/DomainValidationException are removed. Technical exceptions and cancellation
-propagate normally.
+Message cases expose ErrorCode and Message, with an optional message constructor argument. Custom cases expose Error and require the typed error value; they impose no ErrorCode or Message. Each declared name is a distinct sealed branch, even when multiple names share a data type. No open shared Failure branch, factory methods or empty failure-holder class is generated.
 
-The former Domain FailureAttribute, static-holder generator, failure.Throw extension
-and exception constructors accepting Failure are removed. Shared Abstraction.Failure
-still represents policy rejection for transport and protocol adapters; it is not an
-implicit escape branch in a generated checked outcome. Authentication/tenant rejection
-continues through ServiceRejectedException, independently of declared business failures.
+Return the successful value or a declared branch directly. Unrelated errors cannot implicitly convert to the closed union. Successful messages belong to business DTOs. FailureCase operations require one request and a synchronous non-nullable success type on a top-level non-generic contract; contracts without FailureCase retain nullable responses.
 
-HTTP modules explicitly translate each case to native TypedResults/ProblemDetails. The
-configuration-node sample uses Match for node CRUD, files, configuration and streams;
-the app-owned UI adapter consciously projects those cases to its simpler UI port.
+## References and execution descriptors
 
-## JSON, AOT and migration
+Contract generates `INodeServiceOperations.Delete` as `ServiceOperationReference<DeleteNodeRequest>`. It contains identity, input and method metadata, and promises no generated response type. It needs no Application reference or partial interface.
 
-Generated outcomes have reflection-free classifiers. Failure JSON carries the reserved
-`$failure` branch Name, plus `errorCode`/`message` or custom `error` data. Unknown names,
-mismatched codes and case markers are
-rejected. Success serializes its business value. This is an optional codec, not an HTTP
-response envelope. Native HTTP modules continue returning resources or ProblemDetails.
+Application generates `NodeService.Delete.Descriptor` as `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`. HTTP invocation, local invocation and operation mappings use this complete response type. NodeService.Delete.InvokeAsync returns that same Result. The typed descriptor's Reference property exposes its input-only producer reference; both forms share the same stable Id, not the same object instance.
 
-For source-generated JSON metadata, compile generated contract types in the Contract
-assembly, then register their concrete outcome types in the consumer's JsonSerializerContext.
-System.Text.Json's generator cannot consume another generator's output in the same
-compilation. Monolithic native HTTP adapters can map the in-memory outcome to existing
-DTO/ProblemDetails types without serializing the generated union itself. Tests cover both
-generator orders in a monolith and real Native AOT with a separately compiled contract.
+Message consumers still bind only complete Empty-output descriptors. Sending accepts an input-only reference but checks the Contract declaration: an Empty success with FailureCase is not a payload-free operation, and Queue/Subscription/RouteToQueue reject it. This also prevents a manually constructed success-only descriptor from discarding failures.
 
-Migrate `[FailureCase("404", Name = "NotFound")]` to
-`[FailureCase("NotFound", "404")]`; migrate generic error declarations to
-`[FailureCase("Conflict", typeof(MyError))]`. Replace default `.Error.Message` with
-`.Message` and static `.Code` with the instance `.ErrorCode`. Custom branches retain
-`.Error` and no longer provide a generated business code. The JSON discriminator now
-uses the branch Name instead of its old code; update serialized consumers together.
+## Handling and layer boundaries
 
-Update contract signatures, handler return types, callers and adapters together. Existing
-unannotated DTO/nullable/business-union methods retain their behavior. Supported declarations are
-top-level, non-generic partial service interfaces, unique non-generic operations with one
-request and a non-nullable synchronous success type. Use explicit data types for optional
-success values. Runtime speed relative to returned Result values is not assumed; avoiding
-exception-based control flow does not eliminate allocations or replace benchmarking.
+Use native C# union switch expressions for exhaustiveness checking (CS8509), or the generated Match helper. Ordinary C# discard, catch-all and switch-statement behavior remains unchanged. NOF adds no checked-result analyzer or ExpectedOutcome marker. Default/uninitialized unions are invalid at the invocation boundary.
+
+Domain returns its own business values without referencing Contract. Application maps them to the declared operation branches. Technical exceptions and cancellation propagate; standard .NET exceptions represent invariant misuse. Shared Abstraction.Failure and ServiceRejected represent execution-policy rejection separately from a completed business result.
+
+HTTP modules explicitly map application cases to TypedResults/resources/ProblemDetails. The configuration-node CRUD and OAuth sample adapters use Application-owned cases. Result is an in-process outcome, not a mandatory wire envelope.
+
+## JSON and Native AOT
+
+Generated results retain reflection-free classifiers. Optional union JSON uses the reserved $failure Name discriminator, together with errorCode/message or custom error data. Unknown branch names, mismatched markers and codes are rejected. Successful values serialize directly.
+
+When explicitly serializing generated unions, compile the owning Application assembly first and register `Service.Operation.Result` in the consuming host's JsonSerializerContext. System.Text.Json cannot rely on another generator's output being visible during the same compilation. Native endpoint modules may instead map the result to already declared DTO/ProblemDetails types. The smoke test verifies a separately compiled Application result with JSON reflection disabled.
+
+## Breaking migration
+
+Keep FailureCaseAttribute on Contract methods and remove partial from service interfaces. Replace `IService.<Operation>Operation.Result` and its branch references with `Service.Operation.Result` and Service.Operation.Case. No Contract operation base or compatibility aliases remain. Handlers that already use inherited `Task<Result>` and new Case(...) keep that source shape.
+
+Use Contract operation references for producer routing and Application descriptors for HTTP/local execution and consumer bindings. Code that previously passed an Application descriptor to Send/RouteToQueue can use its Reference property. Do not treat the method's successful return type as the complete execution output.
+
+Keep JSON branch names/codes and custom data schemas stable when migrating. The CLR type ownership changes; the optional existing JSON discriminator format does not. Upgrade application, endpoints, JSON contexts and in-process callers together. Register source-generated JSON metadata from the new owning Application assembly when used. Both monolithic generator orders and a separately compiled metadata-only Contract are covered by tests.

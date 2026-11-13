@@ -10,13 +10,13 @@ public sealed class MessageDispatcher(ICommandRider commands, INotificationRider
     IObjectSerializer serializer, OutboxOrderSequenceAllocator sequences) : IMessageDispatcher
 {
     /// <inheritdoc />
-    public Task SendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default)
+    public Task SendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default)
         => DispatchAsync(message, bindings.GetQueue(operation), false, false, null, context, false, cancellationToken);
     /// <inheritdoc />
-    public Task DeferSendAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, Context context, CancellationToken cancellationToken = default)
+    public Task DeferSendAsync<T>(ServiceOperationReference<T> operation, T message, Context context, CancellationToken cancellationToken = default)
         => DispatchAsync(message, bindings.GetQueue(operation), false, true, null, context, false, cancellationToken);
     /// <inheritdoc />
-    public Task DeferSendOrderedAsync<T>(ServiceOperationDescriptor<T, Empty> operation, T message, string orderKey, Context context,
+    public Task DeferSendOrderedAsync<T>(ServiceOperationReference<T> operation, T message, string orderKey, Context context,
         bool completesOrderKey = false, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderKey);

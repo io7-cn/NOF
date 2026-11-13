@@ -7,6 +7,19 @@ namespace NOF.Infrastructure.Tests;
 
 public sealed class MessageBindingTests
 {
+    [Fact]
+    public void EmptySuccessWithDeclaredFailures_CannotBeSubmittedOrBoundAsEmpty()
+    {
+        var registry = new MessageBindingRegistry();
+        var bindings = new MessageBindingsBuilder(registry);
+        var reference = new ServiceOperationReference<Message>(typeof(IService), nameof(IService.MayFail));
+        Assert.False(reference.CanSubmit);
+        Assert.Throws<InvalidOperationException>(() => bindings.RouteToQueue(reference, "invalid.v1"));
+        // Even a manually forged success-only descriptor must not bypass the Contract declaration.
+        var descriptor = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
+        Assert.Throws<InvalidOperationException>(() => bindings.Queue<Message>("invalid.v1").To(descriptor));
+        Assert.Throws<InvalidOperationException>(() => bindings.Subscription<Message>("facts.v1", "invalid").To(descriptor));
+    }
     private static ServiceOperationDescriptor<Message, Empty> First => new(typeof(IService), nameof(IService.First));
     private static ServiceOperationDescriptor<Message, Empty> Second => new(typeof(IService), nameof(IService.Second));
 
@@ -31,7 +44,7 @@ public sealed class MessageBindingTests
     {
         var registry = new MessageBindingRegistry();
         var bindings = new MessageBindingsBuilder(registry);
-        bindings.RouteToQueue(First, "remote.mail.v1");
+        bindings.RouteToQueue(First.Reference, "remote.mail.v1");
         bindings.Topic<Message>("facts.v1");
         Assert.Equal("remote.mail.v1", registry.GetQueue(First));
         Assert.Equal("facts.v1", registry.GetTopic(typeof(Message)));
@@ -51,8 +64,8 @@ public sealed class MessageBindingTests
     [Fact]
     public void HostRegistries_AreIsolated()
     {
-        var first = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First, "one.v1"));
-        var second = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First, "two.v1"));
+        var first = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First.Reference, "one.v1"));
+        var second = new ServiceCollection().AddMessageBindings(bindings => bindings.RouteToQueue(First.Reference, "two.v1"));
         using var one = first.BuildServiceProvider();
         using var two = second.BuildServiceProvider();
         Assert.Equal("one.v1", one.GetRequiredService<MessageBindingRegistry>().GetQueue(First));
@@ -80,7 +93,13 @@ public sealed class MessageBindingTests
         Assert.Equal(["work.send"], result.RequiredPermissions);
     }
 
-    public interface IService : IApplicationService { Empty First(Message input); Empty Second(Message input); }
+    public interface IService : IApplicationService
+    {
+        Empty First(Message input);
+        Empty Second(Message input);
+        [FailureCase("Rejected")]
+        Empty MayFail(Message input);
+    }
     public sealed record Message;
     public sealed class Reject : IInvocationFilter
     {

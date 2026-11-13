@@ -8,6 +8,6 @@ Declare one synchronous method on an IApplicationService contract. Implement its
 
 The same operation can serve HTTP, local invocation and messaging. Host AddMessageBindings configures Queue<T>(route).To(Service.Operation.Descriptor) or Subscription<T>(topic, stableSubscriptionId).To(...). Async bindings accept only Empty outputs. Producers use Contract-generated IServiceOperations.Method descriptors and IMessageDispatcher.SendAsync(descriptor, input, context, ct) or PublishAsync(input, context, ct). Configure remote producers with RouteToQueue/Topic without local consumers. CommandHandler/NotificationHandler and their generators/registries are removed.
 
-Plain service contracts need no partial; FailureCase contracts retain partial for canonical result/case types. See docs/en/design/unified-operations.md and docs/en/design/expected-failures.md.
+All service contracts need no partial, including FailureCase declarations; Result and cases belong to Application-generated operations. See docs/en/design/unified-operations.md and docs/en/design/expected-failures.md.
 
 In-memory domain events keep InMemoryEventHandler<T> with Task HandleAsync(T, Context, CancellationToken), executing in the publisher scope. Do not turn them into reliable asynchronous consumers unless crossing that boundary is intentional.

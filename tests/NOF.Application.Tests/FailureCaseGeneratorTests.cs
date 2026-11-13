@@ -1,11 +1,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using NOF.Contract.SourceGenerator;
+using Microsoft.Extensions.DependencyInjection;
+using NOF.Application;
+using NOF.Application.SourceGenerator;
+using NOF.Contract;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using Xunit;
 
-namespace NOF.Contract.Tests;
+namespace NOF.Application.Tests;
 
 public sealed class FailureCaseGeneratorTests
 {
@@ -14,7 +17,7 @@ public sealed class FailureCaseGeneratorTests
         using System.Text.Json;
         public sealed record Query(long Id);
         public sealed record ConflictDetails(long NodeId);
-        public partial interface IService : IApplicationService
+        public interface IService : IApplicationService
         {
             [FailureCase("NotFound", "404")]
             [FailureCase("CanNotDeleteNode", typeof(ConflictDetails))]
@@ -23,27 +26,28 @@ public sealed class FailureCaseGeneratorTests
         """;
 
     [Fact]
-    public void ContractOnlyGenerator_ProducesDistinctTypedCasesAndClosedUnion()
+    public void ApplicationGenerator_ProducesDistinctTypedCasesAndClosedUnion()
     {
         var output = Generate(Contract, out var run);
         Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var source = run.GeneratedTrees.Single().ToString();
-        Assert.Contains("public union Result(string, global::IService.DeleteOperation.NotFound, global::IService.DeleteOperation.CanNotDeleteNode)", source);
+        Assert.Contains("public union Result(string, global::Service.Delete.NotFound, global::Service.Delete.CanNotDeleteNode)", source);
         Assert.Contains("public global::ConflictDetails Error", source);
         Assert.Contains("public string ErrorCode", source);
         Assert.Contains("public string Message", source);
         Assert.Contains("Match<TResult>", source);
         Assert.DoesNotContain("NOF.Domain", source);
-        Assert.DoesNotContain("NOF.Application", source);
+        Assert.Contains("NOF.Application", source);
+        Assert.DoesNotContain("partial interface", source);
         Assert.DoesNotContain("NOF.Abstraction.Failure", source);
     }
 
     [Fact]
-    public void ContractOperationBase_ExposesInheritedResultAndCaseTypes()
+    public void ApplicationOperation_ExposesResultAndCaseTypes()
     {
         var output = Generate(Contract + """
 
-            public sealed class Handler : IService.DeleteOperation
+            public sealed class Handler : Service.Delete
             {
                 public override System.Threading.Tasks.Task<Result> HandleAsync(
                     Query request, InvocationContext context, System.Threading.CancellationToken ct)
@@ -67,7 +71,7 @@ public sealed class FailureCaseGeneratorTests
         var source = $$"""
             using NOF.Contract;
             public record Query;
-            public partial interface IService : IApplicationService
+            public interface IService : IApplicationService
             {
                 [FailureCase("Failed", {{Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(code, true)}})]
                 string Run(Query query);
@@ -76,8 +80,8 @@ public sealed class FailureCaseGeneratorTests
             }
             public static class Handler
             {
-                public static IService.RunOperation.Result Run() => new IService.RunOperation.Failed("missing");
-                public static IService.FindOperation.Result Find() => new IService.FindOperation.NotFound("missing");
+                public static Service.Run.Result Run() => new Service.Run.Failed("missing");
+                public static Service.Find.Result Find() => new Service.Find.NotFound("missing");
             }
             """;
         var output = Generate(source, out var run);
@@ -88,38 +92,6 @@ public sealed class FailureCaseGeneratorTests
         Assert.Contains("public sealed record NotFound", generated);
     }
 
-    [Theory]
-    [InlineData("[FailureCase(\"\")]", "string", true)]
-    [InlineData("[FailureCase(\"Same\")][FailureCase(\"Same\", \"B\")]", "string", true)]
-    [InlineData("[FailureCase(\"Match\")]", "string", true)]
-    [InlineData("[FailureCase(\"Value\")]", "string", true)]
-    [InlineData("[FailureCase(\"Descriptor\")]", "string", true)]
-    [InlineData("[FailureCase(\"Result\")]", "string", true)]
-    [InlineData("[FailureCase(\"var\")]", "string", true)]
-    [InlineData("[FailureCase(\"not-valid\")]", "string", true)]
-    [InlineData("[FailureCase(\"404\")]", "string", true)]
-    [InlineData("[FailureCase(\"class\")]", "string", true)]
-    [InlineData("[FailureCase(\"NotFound\", \" \")]", "string", true)]
-    [InlineData("[FailureCase(\"Custom\", typeof(void))]", "string", true)]
-    [InlineData("[FailureCase(\"Custom\", typeof(System.Collections.Generic.List<>))]", "string", true)]
-    [InlineData("[FailureCase(\"A\")]", "string?", true)]
-    [InlineData("[FailureCase(\"A\")]", "string", false)]
-    public void InvalidDeclarations_ReportActionableError(string attributes, string response, bool partial)
-    {
-        var source = $$"""
-            #nullable enable
-            using NOF.Contract;
-            public record Query;
-            public {{(partial ? "partial" : "")}} interface IService : IApplicationService
-            {
-                {{attributes}}
-                {{response}} Run(Query request);
-            }
-            """;
-        Generate(source, out var run);
-        Assert.Contains(run.Diagnostics, diagnostic => diagnostic.Id == "NOF220" && diagnostic.Severity == DiagnosticSeverity.Error);
-    }
-
     [Fact]
     public void UndeclaredFailures_CannotConvertToOperationOutcome()
     {
@@ -127,7 +99,7 @@ public sealed class FailureCaseGeneratorTests
 
             public static class Handler
             {
-                public static IService.DeleteOperation.Result Run() => new NOF.Abstraction.Failure("other", "undeclared");
+                public static Service.Delete.Result Run() => new NOF.Abstraction.Failure("other", "undeclared");
             }
             """, out _);
         Assert.Contains(output.GetDiagnostics(), diagnostic => diagnostic.Id == "CS0029");
@@ -143,13 +115,13 @@ public sealed class FailureCaseGeneratorTests
                 public static string Run()
                 {
                     var options = System.Text.Json.JsonSerializerOptions.NOF;
-                    IService.DeleteOperation.Result failure = new IService.DeleteOperation.CanNotDeleteNode(new ConflictDetails(42));
+                    Service.Delete.Result failure = new Service.Delete.CanNotDeleteNode(new ConflictDetails(42));
                     var json = System.Text.Json.JsonSerializer.Serialize(failure, options);
-                    var restored = System.Text.Json.JsonSerializer.Deserialize<IService.DeleteOperation.Result>(json, options);
+                    var restored = System.Text.Json.JsonSerializer.Deserialize<Service.Delete.Result>(json, options);
                     var id = restored.Match(value => -1L, error => -2L, error => error.Error.NodeId);
                     try
                     {
-                        System.Text.Json.JsonSerializer.Deserialize<IService.DeleteOperation.Result>("{\"$failure\":\"UNDECLARED\",\"error\":{}}", options);
+                        System.Text.Json.JsonSerializer.Deserialize<Service.Delete.Result>("{\"$failure\":\"UNDECLARED\",\"error\":{}}", options);
                         return "accepted undeclared error";
                     }
                     catch (System.Text.Json.JsonException) { return id.ToString(); }
@@ -171,7 +143,7 @@ public sealed class FailureCaseGeneratorTests
             using System.Text.Json;
             public sealed record Query;
             public readonly record struct Details(int Count);
-            public partial interface IService : IApplicationService
+            public interface IService : IApplicationService
             {
                 [FailureCase("Missing")]
                 [FailureCase("Denied", "404")]
@@ -184,21 +156,21 @@ public sealed class FailureCaseGeneratorTests
                 public static bool Run()
                 {
                     var options = System.Text.Json.JsonSerializerOptions.NOF;
-                    IService.RunOperation.Result missing = new IService.RunOperation.Missing("missing");
+                    Service.Run.Result missing = new Service.Run.Missing("missing");
                     var json = System.Text.Json.JsonSerializer.Serialize(missing, options);
-                    var restored = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(json, options);
-                    IService.RunOperation.Result custom = new IService.RunOperation.Conflict(new Details(42));
+                    var restored = System.Text.Json.JsonSerializer.Deserialize<Service.Run.Result>(json, options);
+                    Service.Run.Result custom = new Service.Run.Conflict(new Details(42));
                     var customJson = System.Text.Json.JsonSerializer.Serialize(custom, options);
-                    var restoredCustom = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(customJson, options);
-                    IService.RunOperation.Result hidden = new IService.RunOperation.Hidden("hidden");
-                    var restoredHidden = System.Text.Json.JsonSerializer.Deserialize<IService.RunOperation.Result>(
+                    var restoredCustom = System.Text.Json.JsonSerializer.Deserialize<Service.Run.Result>(customJson, options);
+                    Service.Run.Result hidden = new Service.Run.Hidden("hidden");
+                    var restoredHidden = System.Text.Json.JsonSerializer.Deserialize<Service.Run.Result>(
                         System.Text.Json.JsonSerializer.Serialize(hidden, options), options);
-                    return restored is IService.RunOperation.Missing { ErrorCode: "Missing", Message: "missing" }
-                        && new IService.RunOperation.Denied().ErrorCode == "404"
-                        && restoredHidden is IService.RunOperation.Hidden { ErrorCode: "404" }
-                        && restoredCustom is IService.RunOperation.Conflict { Error.Count: 42 }
-                        && typeof(IService.RunOperation.Conflict).GetProperty("ErrorCode") == null
-                        && typeof(IService.RunOperation.Missing).GetProperty("Error") == null
+                    return restored is Service.Run.Missing { ErrorCode: "Missing", Message: "missing" }
+                        && new Service.Run.Denied().ErrorCode == "404"
+                        && restoredHidden is Service.Run.Hidden { ErrorCode: "404" }
+                        && restoredCustom is Service.Run.Conflict { Error.Count: 42 }
+                        && typeof(Service.Run.Conflict).GetProperty("ErrorCode") == null
+                        && typeof(Service.Run.Missing).GetProperty("Error") == null
                         && !customJson.Contains("errorCode");
                 }
             }
@@ -217,7 +189,7 @@ public sealed class FailureCaseGeneratorTests
 
             public static class Consumer
             {
-                public static string Run(IService.DeleteOperation.Result result) => result switch
+                public static string Run(Service.Delete.Result result) => result switch
                 {
                     string value => value,
                     null => throw new System.InvalidOperationException()
@@ -234,13 +206,13 @@ public sealed class FailureCaseGeneratorTests
 
             public static class Consumer
             {
-                public static IService.DeleteOperation.Result Read() => "ok";
+                public static Service.Delete.Result Read() => "ok";
                 public static void Ignore() { Read(); _ = Read(); }
-                public static string Run(IService.DeleteOperation.Result result) => result switch
+                public static string Run(Service.Delete.Result result) => result switch
                 {
                     string value => value,
-                    IService.DeleteOperation.NotFound error => error.Message,
-                    IService.DeleteOperation.CanNotDeleteNode error => error.Error.NodeId.ToString(),
+                    Service.Delete.NotFound error => error.Message,
+                    Service.Delete.CanNotDeleteNode error => error.Error.NodeId.ToString(),
                     null => throw new System.InvalidOperationException()
                 };
             }
@@ -249,25 +221,12 @@ public sealed class FailureCaseGeneratorTests
             || diagnostic.Id is "CS8509" or "CS8655");
     }
 
-    [Fact]
-    public void ImplementationFailureDeclarations_ReportDeclarationError()
-    {
-        Generate("""
-            using NOF.Contract;
-            public sealed class Handler
-            {
-                [FailureCase("Missing")]
-                public string Run(object request) => "ok";
-            }
-            """, out var run);
-        Assert.Contains(run.Diagnostics, diagnostic => diagnostic.Id == "NOF220");
-    }
-
     private static CSharpCompilation Generate(string source, out GeneratorDriverRunResult run)
     {
+        source += "\npublic partial class Service : global::NOF.Application.ApplicationService<IService>;";
         var compilation = CSharpCompilation.CreateCompilation("ExpectedFailures_" + Guid.NewGuid().ToString("N"), source, true,
-            typeof(FailureCaseAttribute), typeof(Empty), typeof(NOF.Abstraction.Failure), typeof(JsonUnionAttribute));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new FailureCaseGenerator().AsSourceGenerator()],
+            typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions), typeof(FailureCaseAttribute), typeof(Empty), typeof(NOF.Abstraction.Failure), typeof(JsonUnionAttribute));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ApplicationServiceGenerator().AsSourceGenerator()],
             parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
         run = driver.GetRunResult();

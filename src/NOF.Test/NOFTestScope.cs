@@ -118,7 +118,7 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
         return invocation(_scope.ServiceProvider, context ?? Context, cancellationToken);
     }
 
-    public Task SendAsync<TCommand>(ServiceOperationDescriptor<TCommand, Empty> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
+    public Task SendAsync<TCommand>(ServiceOperationReference<TCommand> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
     {
         return GetRequiredService<IMessageDispatcher>().SendAsync(operation, command, context ?? Context, cancellationToken);
     }

@@ -18,14 +18,16 @@ public sealed class OperationDescriptorGeneratorTests
             {
                 Empty Send(SendMail request);
                 string? Find(SendMail request);
+                [FailureCase("Rejected")]
+                Empty Validate(SendMail request);
             }
             public static class Producer
             {
-                public static ServiceOperationDescriptor<SendMail, Empty> Target => IMailServiceOperations.Send;
+                public static ServiceOperationReference<SendMail> Target => IMailServiceOperations.Validate;
             }
             """;
         var compilation = CSharpCompilation.CreateCompilation("PlainContractDescriptors", source, true,
-            typeof(IApplicationService), typeof(ServiceOperationDescriptor<,>));
+            typeof(IApplicationService), typeof(ServiceOperationReference<>));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new OperationDescriptorGenerator().AsSourceGenerator()],
             parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
@@ -34,6 +36,7 @@ public sealed class OperationDescriptorGeneratorTests
         var code = generated.SyntaxTrees.Last().ToString();
         Assert.DoesNotContain("partial interface", code);
         Assert.DoesNotContain("NOF.Application", code);
-        Assert.Contains("allowsNullResponse: true", code);
+        Assert.DoesNotContain("ResponseType", code);
+        Assert.DoesNotContain("ServiceOperationDescriptor", code);
     }
 }

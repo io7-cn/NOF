@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract 独立生成 IMailServiceOperations.Send 描述符；Application 生成 MailService.Send，其 Descriptor 引用同一实例。生产者只需引用 Contract。普通契约和 IApplicationServiceImplementation 不需要 partial；声明 FailureCase 的契约仍用 partial 承载之前确定的规范 Result 和失败分支。操作身份是“契约＋方法”，不依赖请求/响应组合或 Handler 实现类名。
+Contract 独立生成只包含输入的 IMailServiceOperations.Send 引用；Application 生成 MailService.Send 及完整的 Descriptor，其 Reference 保留相同操作身份。生产者只需引用 Contract。所有契约接口（包括 FailureCase 声明）和 IApplicationServiceImplementation 均无需 partial；Result 与失败分支直接生成在 Application 操作中。操作身份是“契约＋方法”，不依赖请求/响应组合或 Handler 实现类名。
 
 注册应用程序集和服务容器后，操作实现自动发现，无须逐个注册：
 
@@ -118,3 +118,5 @@ Domain 生成缓存的实时 IReadOnlyCollection 视图和 CollectionBackingFiel
 首版支持顶层非泛型 partial class 中的 private readonly List<T>/HashSet<T> 字段。默认 _configFiles → ConfigFiles，可通过属性参数显式命名。NOF020 诊断不支持的字段、冲突或非法名称；NOF021 提示补充 partial 并提供代码修复。读取视图前必须初始化字段。
 
 EF Core 在应用完成关系配置后，仅为已明确声明的 OwnsMany 自动配置字段访问，验证关联，并报告显式访问模式或字段映射冲突。Attribute 不建立关系。HasMany、跳跃导航和 NHibernate 的集合实例替换不在自动约定范围。ConfigNode 示例已经落地生成视图，保留强类型 OwnsMany。通用的危险 Mut 扩展已删除，外部应调用聚合方法。
+
+[Application 结果归属及描述符迁移](expected-failures.md)。

@@ -9,7 +9,7 @@ NOF.Sample.Application，HTTP 适配器放在 NOF.Sample/Endpoints。宿主只�
 ## 契约和 Handler
 
 ```csharp
-public partial interface INOFSampleService : IApplicationService
+public interface INOFSampleService : IApplicationService
 {
     [FailureCase("NameConflict", "config_node.name_conflict")]
     [FailureCase("ParentNotFound", "config_node.parent_not_found")]

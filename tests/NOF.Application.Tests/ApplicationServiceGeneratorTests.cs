@@ -69,7 +69,7 @@ public class ApplicationServiceGeneratorTests
                 public record ArchiveRequest(int Id);
                 public record MyDto(string Value);
 
-                public partial interface IMyService : IApplicationService
+                public interface IMyService : IApplicationService
                 {
                     NOF.Testing.TestOutcome Ping(PingRequest request);
                     NOF.Testing.TestOutcome<MyDto> Get(GetRequest request);

@@ -6,7 +6,7 @@
 override 工作流。契约只包含业务请求、响应和应用策略元数据，不再声明 HTTP 路由或绑定。
 
 ```csharp
-public partial interface IOrderService : IApplicationService
+public interface IOrderService : IApplicationService
 {
     OrderDto? Find(FindOrderRequest request);
     [FailureCase("Rejected")]

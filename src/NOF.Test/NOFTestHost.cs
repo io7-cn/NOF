@@ -67,7 +67,7 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
         return await scope.CallAsync(invocation, context, cancellationToken);
     }
 
-    public async Task SendAsync<TCommand>(ServiceOperationDescriptor<TCommand, Empty> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
+    public async Task SendAsync<TCommand>(ServiceOperationReference<TCommand> operation, TCommand command, Context? context = null, CancellationToken cancellationToken = default)
     {
         using var scope = CreateScope();
         await scope.SendAsync(operation, command, context, cancellationToken);

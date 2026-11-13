@@ -10,7 +10,7 @@ modules own routes, binding, status codes and response schemas.
 ## Contract and handlers
 
 ```csharp
-public partial interface INOFSampleService : IApplicationService
+public interface INOFSampleService : IApplicationService
 {
     [FailureCase("NameConflict", "config_node.name_conflict")]
     [FailureCase("ParentNotFound", "config_node.parent_not_found")]

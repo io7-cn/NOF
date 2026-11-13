@@ -3,7 +3,7 @@ using System.ComponentModel;
 
 namespace NOF.Sample;
 
-public partial interface IDemoDownstreamService : IApplicationService
+public interface IDemoDownstreamService : IApplicationService
 {
     [Summary("消费 access token")]
     [Description("由下游服务读取 access token 中的 subject、permissions、scopes 与 proxy service name")]

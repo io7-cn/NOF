@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract generates a separate `IMailServiceOperations.Send` descriptor. Application generates `MailService.Send`, whose `Descriptor` references that same instance. Producers reference only Contract. Plain contracts and IApplicationServiceImplementation do not need partial; contracts declaring FailureCase still use partial for their canonical nested result and case types. Operation identity is contract plus method, never the input/output pair or handler implementation name.
+Contract generates the input-only IMailServiceOperations.Send reference. Application generates MailService.Send and a complete typed Descriptor; its Reference has the same stable operation identity. Producers reference only Contract. All contract interfaces, including FailureCase declarations, and IApplicationServiceImplementation need no partial. Result and failure branches are generated directly in Application operations. Operation identity is contract plus method, never the input/output pair or handler implementation name.
 
 Register the application assembly and each service container once. Individual operations continue to be discovered automatically:
 
@@ -118,3 +118,5 @@ Domain generates cached live IReadOnlyCollection views and CollectionBackingFiel
 The first version accepts private readonly List<T>/HashSet<T> fields in top-level, non-generic partial classes. `_configFiles` becomes ConfigFiles; an optional attribute argument overrides the property name. NOF020 reports unsupported fields or conflicting/invalid names; NOF021 requests partial, with a code fix. Initialize fields before accessing their views.
 
 The EF Core adapter applies field access only to relationships explicitly mapped as OwnsMany, after application model configuration. It validates the association and rejects conflicting explicit access modes/field mappings. The attribute creates no relationship. HasMany, skip navigations and NHibernate collection replacement are outside this automatic convention. The sample ConfigNode uses the generated view and existing strong-typed OwnsMany mapping. The unsafe general Mut extension is removed; use aggregate methods instead.
+
+[Application-owned failure results and descriptor migration](expected-failures.md).

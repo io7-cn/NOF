@@ -15,10 +15,14 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
     private readonly Dictionary<string, (Type Input, string Route)> _queues = new(StringComparer.Ordinal);
 
     /// <summary>Declares an outbound queue route without installing a local consumer.</summary>
-    public void AddQueueRoute(ServiceOperationDescriptor operation, string queue)
+    public void AddQueueRoute(ServiceOperationReference operation, string queue)
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentException.ThrowIfNullOrWhiteSpace(queue);
+        if (!operation.CanSubmit)
+        {
+            throw new InvalidOperationException($"Operation '{operation.Id}' declares a response or expected failures and cannot be submitted as fire-and-forget work.");
+        }
         if (Items.IsFrozen)
         {
             throw new InvalidOperationException("Message bindings are frozen.");
@@ -60,7 +64,7 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
     }
 
     /// <summary>Resolves the single configured queue for a selected target operation.</summary>
-    public string GetQueue(ServiceOperationDescriptor operation)
+    public string GetQueue(ServiceOperationReference operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
         _ = Bindings;
@@ -75,7 +79,7 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
         {
             var bindings = Freeze().ToArray();
             if (_queues.Values.Any(queue => _topics.Values.Contains(queue.Route, StringComparer.Ordinal))
-                || bindings.Any(binding => binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
+                || bindings.Any(binding => !binding.Operation.CanSubmit || binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
                 || bindings.GroupBy(binding => binding.ConsumerId, StringComparer.Ordinal).Any(group => group.Count() != 1)
                 || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Count() != 1)
                 || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Operation.Id, StringComparer.Ordinal).Any(group => group.Count() != 1))
@@ -96,7 +100,7 @@ public sealed class MessageBindingRegistry : Registry<MessageBinding>
 public sealed class MessageBindingsBuilder(MessageBindingRegistry registry)
 {
     /// <summary>Routes submitted work to a remote queue without creating a local consumer.</summary>
-    public MessageBindingsBuilder RouteToQueue<T>(ServiceOperationDescriptor<T, Empty> operation, string queue)
+    public MessageBindingsBuilder RouteToQueue<T>(ServiceOperationReference<T> operation, string queue)
     {
         registry.AddQueueRoute(operation, queue);
         return this;
@@ -129,6 +133,10 @@ public sealed class MessageBindingTarget<T>(MessageBindingRegistry registry, str
     public void To(ServiceOperationDescriptor<T, Empty> operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
+        if (!operation.CanSubmit)
+        {
+            throw new InvalidOperationException($"Operation '{operation.Id}' declares a response or expected failures and cannot discard its output.");
+        }
         if (!isSubscription)
         {
             registry.AddQueueRoute(operation, route);

@@ -15,23 +15,23 @@ public sealed class NOFSampleHarnessTests
     public async Task ExpectedFailures_ShouldReturnDeclaredCasesAndTypedData_WithoutDomainExceptions()
     {
         await using var host = await CreateHostAsync();
-        var invalid = await host.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+        var invalid = await host.CallAsync<NOFSampleService.CreateConfigNode.Result>(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = " " }, context, ct));
-        Assert.NotEmpty(Assert.IsType<INOFSampleService.CreateConfigNodeOperation.InvalidInput>(invalid.Value).Message);
+        Assert.NotEmpty(Assert.IsType<NOFSampleService.CreateConfigNode.InvalidInput>(invalid.Value).Message);
 
-        var parent = await host.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+        var parent = await host.CallAsync<NOFSampleService.CreateConfigNode.Result>(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "checked-parent" }, context, ct));
         var id = Assert.IsType<CreatedConfigNode>(parent.Value).Id;
-        var child = await host.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+        var child = await host.CallAsync<NOFSampleService.CreateConfigNode.Result>(
             (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "checked-child", ParentId = id }, context, ct));
         Assert.IsType<CreatedConfigNode>(child.Value);
-        var deleted = await host.CallAsync<INOFSampleService.DeleteConfigNodeOperation.Result>(
+        var deleted = await host.CallAsync<NOFSampleService.DeleteConfigNode.Result>(
             (services, context, ct) => NOFSampleService.DeleteConfigNode.InvokeAsync(services,
                 new DeleteConfigNodeRequest { Id = id }, context, ct));
-        Assert.Equal(id, Assert.IsType<INOFSampleService.DeleteConfigNodeOperation.HasChildren>(deleted.Value).Error.NodeId);
+        Assert.Equal(id, Assert.IsType<NOFSampleService.DeleteConfigNode.HasChildren>(deleted.Value).Error.NodeId);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class NOFSampleHarnessTests
     {
         await using var host = await CreateHostAsync();
 
-        var createResult = await host.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+        var createResult = await host.CallAsync<NOFSampleService.CreateConfigNode.Result>(
             static (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "root-a" },
                 context,
@@ -75,7 +75,7 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var createParent = await scope.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+            var createParent = await scope.CallAsync<NOFSampleService.CreateConfigNode.Result>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
@@ -89,7 +89,7 @@ public sealed class NOFSampleHarnessTests
                     cancellationToken));
             var root = Assert.Single(roots.Nodes);
 
-            var createChild = await scope.CallAsync<INOFSampleService.CreateConfigNodeOperation.Result>(
+            var createChild = await scope.CallAsync<NOFSampleService.CreateConfigNode.Result>(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,
@@ -104,7 +104,7 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var parent = await scope.CallAsync<INOFSampleService.GetConfigNodeByIdOperation.Result>(
+            var parent = await scope.CallAsync<NOFSampleService.GetConfigNodeById.Result>(
                 (services, context, cancellationToken) => NOFSampleService.GetConfigNodeById.InvokeAsync(services,
                     new GetConfigNodeByIdRequest { Id = parentId },
                     context,
