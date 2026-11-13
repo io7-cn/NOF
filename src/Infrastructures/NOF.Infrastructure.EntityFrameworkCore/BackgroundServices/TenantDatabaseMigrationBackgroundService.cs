@@ -9,11 +9,11 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 
 /// <summary>
 /// Migrates tenant databases in the background after application startup.
-/// Host database migration is completed separately during initialization.
+/// Host database migration is completed separately before hosted services start.
 /// </summary>
 public sealed class TenantDatabaseMigrationBackgroundService(
     IServiceProvider services,
-    IEnumerable<IApplicationInitializationStep> initializationSteps,
+    IEnumerable<DbContextMigration> migrations,
     ITenantProvider tenantProvider,
     IOptions<DbContextConfigurationOptions> options,
     IHostApplicationLifetime applicationLifetime,
@@ -43,7 +43,7 @@ public sealed class TenantDatabaseMigrationBackgroundService(
 
             stoppingToken.ThrowIfCancellationRequested();
             using var hostContext = Context.PushCurrent(Context.Empty.WithTenantId(NOFAbstractionConstants.Tenant.HostId));
-            var steps = initializationSteps.OfType<DbContextMigrationInitializationStep>().ToArray();
+            var steps = migrations.ToArray();
             var seen = new HashSet<string>(StringComparer.Ordinal) { NOFAbstractionConstants.Tenant.HostId };
             await foreach (var tenantId in tenantProvider.GetTenantIdsAsync(stoppingToken).WithCancellation(stoppingToken))
             {

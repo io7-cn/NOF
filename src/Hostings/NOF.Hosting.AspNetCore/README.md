@@ -7,9 +7,9 @@ Native ASP.NET Core hosting, OpenAPI integration and HTTP adapters for NOF servi
 Organize feature routes in `IHttpEndpointModule.Map(IEndpointRouteBuilder)`. Use native
 MapGet/MapPost, binding, TypedResults, filters and OpenAPI. Mark modules with
 `[AutoInject(ServiceLifetime.Singleton)]` and add their assembly as an application part.
-The host maps registered modules during initialization. A NOF host already adds its
-calling assembly; service-operation implementations register through the Application
-assembly. No per-operation host registration is needed.
+Call app.MapNOFEndpoints() after native Build and app.UseNOF() to map modules before startup.
+Add every owning assembly explicitly with AddApplicationPart, including host assemblies
+containing modules. No per-operation host registration is needed.
 
 ```csharp
 [AutoInject(ServiceLifetime.Singleton)]

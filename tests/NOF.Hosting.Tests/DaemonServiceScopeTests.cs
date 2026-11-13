@@ -45,14 +45,16 @@ public class DaemonServiceScopeTests
     }
 
     [Fact]
-    public void AddNOFHosting_OnBuilder_ShouldRegisterEnvironmentAndRemainIdempotent()
+    public void AddNOFHosting_OnBuilder_ShouldPreserveEnvironmentAndRemainIdempotent()
     {
         var builder = new TestAppBuilder();
+        var environment = ServiceDescriptor.Singleton<IHostEnvironment>(builder.Environment);
+        builder.Services.Add(environment);
 
         builder.AddNOFHosting();
         builder.AddNOFHosting();
 
-        _ = Assert.Single(builder.Services, service => service.ServiceType == typeof(IHostEnvironment));
+        Assert.Same(environment, Assert.Single(builder.Services, service => service.ServiceType == typeof(IHostEnvironment)));
         _ = Assert.Single(builder.Services, service => service.ServiceType == typeof(IUserContext));
         _ = Assert.Single(builder.Services, service => service.ServiceType == typeof(IEventPublisher));
         _ = Assert.Single(builder.Services, service =>

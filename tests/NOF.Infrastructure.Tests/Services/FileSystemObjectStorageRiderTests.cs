@@ -116,14 +116,14 @@ public sealed class FileSystemObjectStorageRiderTests : IDisposable
     [Fact]
     public async Task TestHosts_ShouldUseIsolatedMemoryAndShareStateBetweenScopes()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         using var provider = builder.Services.BuildServiceProvider();
         using var first = provider.CreateScope();
         using var second = provider.CreateScope();
         var rider = Assert.IsType<MemoryObjectStorageRider>(first.ServiceProvider.GetRequiredService<IObjectStorageRider>());
         await Put(rider, "bucket", "key", "value");
         Assert.True(await second.ServiceProvider.GetRequiredService<IObjectStorageRider>().ExistsAsync("bucket", "key"));
-        using var other = NOFTestAppBuilder.Create().Services.BuildServiceProvider();
+        using var other = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest().Services.BuildServiceProvider();
         using var otherScope = other.CreateScope();
         Assert.False(await otherScope.ServiceProvider.GetRequiredService<IObjectStorageRider>().ExistsAsync("bucket", "key"));
         var services = new ServiceCollection();

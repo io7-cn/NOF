@@ -3,11 +3,11 @@
 Test hosting helpers for NOF application services, messaging and in-memory persistence.
 
 ```csharp
-await using var host = await NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<OrderService>()
-    .AddApplicationService<OrderService>()
-    .AddInMemoryPersistence()
-    .BuildTestHostAsync();
+var builder = Host.CreateApplicationBuilder().AddNOFTest();
+builder.AddApplicationPartOf<OrderService>();
+builder.AddApplicationService<OrderService>();
+await using var host = builder.BuildTestHost();
+// await host.Host.StartAsync(); // when the test needs migration, bootstrap or workers
 
 var result = await host.CallAsync<IOrderService.GetOperation.Result>(
     (services, context, ct) => OrderService.Get.InvokeAsync(
@@ -40,3 +40,5 @@ dotnet add package NOF.Test
 ## License
 
 Apache-2.0
+
+BuildTestHost only builds the native host. Startup and its cancellation/failures follow the native lifecycle. See [native hosting](../../docs/en/design/native-hosting.md).

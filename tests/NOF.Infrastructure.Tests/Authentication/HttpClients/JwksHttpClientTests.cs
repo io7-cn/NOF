@@ -25,7 +25,7 @@ public sealed class JwtJwksHttpClientTests
             BaseAddress = new Uri("https://auth.local")
         };
 
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local/oauth2";

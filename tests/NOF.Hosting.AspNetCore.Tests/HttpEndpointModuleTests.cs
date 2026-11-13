@@ -18,8 +18,8 @@ public sealed class HttpEndpointModuleTests
     [InlineData(true)]
     public async Task OnlyExplicitModule_ShouldExposeHttpRoutes(bool registerModule)
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
-        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.WebHost.UseTestServer();
         builder.AddApplicationService<EchoService>();
         builder.Services.AddApplicationService<EchoService>();
         builder.Services.AddScoped<EchoHandler>();
@@ -27,7 +27,9 @@ public sealed class HttpEndpointModuleTests
         {
             builder.Services.AddSingleton<IHttpEndpointModule, EchoEndpoints>();
         }
-        await using var app = await builder.BuildAsync();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapNOFEndpoints();
         await app.StartAsync();
         using var client = app.GetTestClient();
         foreach (var path in new[] { "/Echo", "/rpc", "/rpc/Echo" })

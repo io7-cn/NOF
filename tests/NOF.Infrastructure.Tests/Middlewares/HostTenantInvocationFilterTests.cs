@@ -71,7 +71,7 @@ public sealed class HostTenantInvocationFilterTests
 
     private static ServiceProvider CreateProvider(bool authenticated)
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         var user = new UserContext();
         if (authenticated)
         {

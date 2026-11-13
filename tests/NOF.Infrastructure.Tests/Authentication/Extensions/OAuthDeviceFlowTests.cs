@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using NOF.Contract;
 using NOF.Hosting;
@@ -19,14 +20,15 @@ public sealed class OAuthDeviceFlowTests
     [Fact]
     public async Task AddDeviceClient_ShouldBootstrapDeviceOnlyPublicClient()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(ConfigureOptions)
             .AddDeviceClient(
                 "living-room-tv",
                 [OAuthScope.OpenId, OAuthScope.Profile, OAuthScope.OfflineAccess],
                 displayName: "Living Room TV");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -48,7 +50,8 @@ public sealed class OAuthDeviceFlowTests
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
         var builder = CreateDeviceFlowBuilder(timeProvider);
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var deviceEndpoint = scope.GetRequiredService<IOAuthDeviceAuthorizationEndpoint>();
         var deviceGrantService = scope.GetRequiredService<IOAuthDeviceGrantService>();
@@ -132,7 +135,8 @@ public sealed class OAuthDeviceFlowTests
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
         var builder = CreateDeviceFlowBuilder(timeProvider);
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var service = scope.GetRequiredService<IOAuthDeviceGrantService>();
         var created = await service.CreateAsync(new CreateOAuthDeviceGrantRequest
@@ -158,7 +162,8 @@ public sealed class OAuthDeviceFlowTests
         var timeProvider = new MutableTimeProvider(DateTimeOffset.UtcNow);
         var builder = CreateDeviceFlowBuilder(timeProvider, options => options.DeviceCodeExpiration = TimeSpan.FromMinutes(1));
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var service = scope.GetRequiredService<IOAuthDeviceGrantService>();
         var created = await service.CreateAsync(new CreateOAuthDeviceGrantRequest
@@ -180,10 +185,11 @@ public sealed class OAuthDeviceFlowTests
     [Fact]
     public async Task Metadata_ShouldAdvertiseDeviceAuthorizationGrant()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(ConfigureOptions);
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var endpoint = scope.GetRequiredService<IOAuthMetadataEndpoint>();
         var context = new DefaultHttpContext { RequestServices = scope.Services };
@@ -199,7 +205,8 @@ public sealed class OAuthDeviceFlowTests
     {
         var builder = CreateDeviceFlowBuilder(new MutableTimeProvider(DateTimeOffset.UtcNow));
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var endpoint = scope.GetRequiredService<IOAuthDeviceAuthorizationEndpoint>();
         var context = new DefaultHttpContext { RequestServices = scope.Services };
@@ -221,10 +228,11 @@ public sealed class OAuthDeviceFlowTests
     [Fact]
     public async Task DynamicRegistration_ShouldAllowDeviceOnlyClientWithoutRedirectOrResponseType()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(ConfigureOptions);
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var endpoint = new DefaultOAuthClientRegistrationEndpoint(
             new AnonymousInitialAccessTokenHandler(),
@@ -250,11 +258,11 @@ public sealed class OAuthDeviceFlowTests
         Assert.Contains(OAuthGrantTypes.DeviceCode, registration.GrantTypes);
     }
 
-    private static NOFTestAppBuilder CreateDeviceFlowBuilder(
+    private static HostApplicationBuilder CreateDeviceFlowBuilder(
         MutableTimeProvider timeProvider,
         Action<OAuthAuthorizationServerOptions>? configure = null)
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
             {
                 ConfigureOptions(options);

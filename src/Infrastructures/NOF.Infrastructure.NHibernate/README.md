@@ -31,7 +31,7 @@ using NHibernate.Dialect;
 using NHibernate.Driver;
 using NOF.Infrastructure.NHibernate;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.UseNHibernate()
     .WithConnectionString("Data Source=nof-{tenantId}.db")

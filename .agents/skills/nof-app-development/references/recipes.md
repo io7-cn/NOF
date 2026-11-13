@@ -8,7 +8,7 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(OrderService).Assembly);
 builder.AddApplicationService<OrderService>();
@@ -18,14 +18,16 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
-`BuildAsync()` runs initialization steps and maps registered IHttpEndpointModule instances using native ASP.NET Core routing.
+Use native Build(); app.UseNOF() installs HTTP middleware, and app.MapNOFEndpoints() explicitly maps registered IHttpEndpointModule instances. Startup I/O uses native hosted services.
 
 ## Application Service Contract + Handler
 

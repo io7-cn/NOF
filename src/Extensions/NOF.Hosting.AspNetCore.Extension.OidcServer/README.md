@@ -24,7 +24,7 @@ database used by the authority rather than from the requesting tenant's database
 using NOF.Hosting.AspNetCore;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddOidcServer(options =>
 {
@@ -37,7 +37,9 @@ builder.Services.AddScoped<IOAuthAuthorizeEndpoint, YourAuthorizeEndpoint>();
 builder.Services.AddScoped<IOAuthSubjectService, YourSubjectService>();
 builder.Services.AddScoped<IOAuthTokenExchangeHandler, YourTokenExchangeHandler>();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.MapOidcServer();
 await app.RunAsync();
 ```

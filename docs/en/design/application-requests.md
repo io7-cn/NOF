@@ -38,8 +38,8 @@ var order = await OrderService.Find.InvokeAsync(services, request, context, ct);
 ```
 
 Application-part initialization registers operation implementations as scoped services.
-Register the service container once, not individual operations. NOF hosts already add
-the calling assembly; add a separate Application assembly once. Operation identity is
+Register the service container once, not individual operations. Add each owning assembly
+explicitly, including the host assembly when it contains endpoint modules. Operation identity is
 contract plus operation name, so operations may share request/response models.
 
 Local invocation creates a fresh scope, transfers Context items and clones the caller's

@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
+using NOF.Hosting;
 using Xunit;
 
 [assembly: AssemblyInitialize<NOF.Hosting.AspNetCore.Tests.__TypeResolverSynchronizationAssemblyInitializer>]
@@ -11,7 +13,8 @@ public sealed class TypeResolverSynchronizationTests
     [Fact]
     public void Create_ShouldRunAssemblyInitializerThatRegistersGeneratedServicesIntoServiceCollection()
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.AddApplicationPart(typeof(__TypeResolverSynchronizationProbe).Assembly);
 
         Assert.Contains(
             builder.Services,

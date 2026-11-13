@@ -11,6 +11,7 @@ public static partial class NOFHostingExtensions
         public IServiceCollection AddNOFHosting()
         {
             services.AddNOFAbstraction();
+            services.AddOptions<DeploymentOptions>().Validate(static options => !string.IsNullOrWhiteSpace(options.ServiceName), "ServiceName must not be blank.");
             services.TryAddTransient(typeof(Lazy<>), typeof(NOFLazy<>));
             return services;
         }

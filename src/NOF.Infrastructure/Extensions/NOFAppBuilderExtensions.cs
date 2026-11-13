@@ -14,6 +14,7 @@ namespace NOF.Hosting;
 
 public static partial class NOFInfrastructureExtensions
 {
+    private static readonly object InfrastructureConfiguredKey = new();
     extension(IHostApplicationBuilder builder)
     {
         public IHostApplicationBuilder AddApplicationService<
@@ -32,9 +33,15 @@ public static partial class NOFInfrastructureExtensions
             "Trimming",
             "IL2026:RequiresUnreferencedCode",
             Justification = "NOF defaults to in-memory persistence for host-only scenarios until an explicit persistence provider is registered.")]
-        public IHostApplicationBuilder AddNOFInfrastructure()
+        /// <summary>Registers default server infrastructure on a native host builder without building or starting it.</summary>
+        public IHostApplicationBuilder AddNOF()
         {
-            builder.ConfigureNOFHostEnvironment();
+            if (builder.Properties.ContainsKey(InfrastructureConfiguredKey))
+            {
+                return builder;
+            }
+            builder.Properties[InfrastructureConfiguredKey] = true;
+            builder.AddNOFHosting();
             builder.Services.AddNOFApplication();
             builder.Services.AddInMemoryPersistence();
             AddOpenTelemetry(builder);
@@ -45,8 +52,8 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.AddHttpClient<HttpAuthorizationServerService>();
             builder.Services.Replace(ServiceDescriptor.Singleton<IIdGenerator>(sp => new SnowflakeIdGenerator(
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SnowflakeIdGeneratorOptions>>().Value,
-                builder.Environment.ServiceId,
-                builder.Environment.InstanceId)));
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value.ServiceId,
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value.InstanceId)));
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
             builder.Services.TryAddScoped<ApplicationServiceInvocationResolver>();
             builder.Services.TryAddScoped<IApplicationServiceInvoker, ApplicationServiceInvocation>();
@@ -159,8 +166,7 @@ public static partial class NOFInfrastructureExtensions
             {
                 tracing.AddSource(NOFInfrastructureConstants.InboundPipeline.ActivitySourceName);
                 tracing.AddSource(NOFInfrastructureConstants.OutboundPipeline.ActivitySourceName);
-                tracing.AddSource(builder.Environment.ServiceName)
-                    .AddHttpClientInstrumentation();
+                tracing.AddHttpClientInstrumentation();
             });
 
         const string otelExporterOtlpEndpoint = "OTEL_EXPORTER_OTLP_ENDPOINT";

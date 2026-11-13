@@ -15,7 +15,7 @@ Application operations use generated ApplicationService<TService> containers ind
 ## Notes
 
 - HTTP exposure for RPC services is registered through `builder.AddApplicationService<TApplicationService>()` or `builder.Services.AddApplicationService<TApplicationService>()` and mapped automatically during application initialization.
-- OpenAPI registration is always enabled by `NOFWebApplicationBuilder.Create(args)`, but `app.MapOpenApi()` remains an explicit host decision.
+- OpenAPI registration is always enabled by `WebApplication.CreateBuilder(args)`, but `app.MapOpenApi().AddNOF()` remains an explicit host decision.
 - Application service operations directly implement business logic; native HTTP adapters call generated server operation entries and use ASP.NET Core response types.
 - No client interfaces, HTTP Clients or Local Clients are generated. Remote integrations are maintained by their calling applications.
 - ASP.NET Core hosting maps streaming RPC HTTP endpoints to .NET 11 server-sent events.

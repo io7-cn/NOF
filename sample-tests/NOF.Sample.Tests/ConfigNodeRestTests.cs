@@ -186,8 +186,8 @@ public sealed class ConfigNodeRestTests
 
     private static async Task<WebApplication> CreateAppAsync(bool relational = false)
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
-        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.WebHost.UseTestServer();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
         builder.AddApplicationService<NOFSampleService>();
@@ -202,7 +202,9 @@ public sealed class ConfigNodeRestTests
                 .WithConnectionString($"Data Source=rest-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
                 .WithOptions(static (options, connection) => options.UseSqlite(connection));
         }
-        var app = await builder.BuildAsync();
+        var app = builder.Build();
+        app.UseNOF();
+        app.MapNOFEndpoints();
         app.UseStatusCodePages();
         app.MapOpenApi();
         await app.StartAsync();

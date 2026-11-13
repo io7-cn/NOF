@@ -19,18 +19,18 @@ public sealed class SigningKeyRotationBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly OAuthAuthorizationServerOptions _options;
     private readonly ILogger<SigningKeyRotationBackgroundService> _logger;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
 
     public SigningKeyRotationBackgroundService(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<OAuthAuthorizationServerOptions> options,
         ILogger<SigningKeyRotationBackgroundService> logger,
-        IHostEnvironment hostEnvironment)
+        IOptions<DeploymentOptions> deployment)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options.Value;
         _logger = logger;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,11 +43,11 @@ public sealed class SigningKeyRotationBackgroundService : BackgroundService
         {
             try
             {
-                if (!_hostEnvironment.IsPrimaryNodeEnvironment)
+                if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
                         "Skipping JWT key rotation on non-primary node {InstanceId}",
-                        _hostEnvironment.InstanceId);
+                        _deployment.Value.InstanceId);
                     await Task.Delay(_options.KeyRotationInterval, stoppingToken);
                     continue;
                 }
@@ -60,11 +60,11 @@ public sealed class SigningKeyRotationBackgroundService : BackgroundService
 
                 using var scope = _serviceScopeFactory.CreateScope();
                 scope.ServiceProvider.ResolveDaemonServices();
-                if (!_hostEnvironment.IsPrimaryNodeEnvironment)
+                if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
                         "Skipping JWT key rotation on non-primary node {InstanceId}",
-                        _hostEnvironment.InstanceId);
+                        _deployment.Value.InstanceId);
                     continue;
                 }
 

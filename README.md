@@ -42,13 +42,12 @@ Application services keep generated Service.Operation overrides and support ordi
 | [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, failures, domain exceptions, and ID generation                                       |
 | [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - RPC contracts, request/response models, `Result<T>`, `Result<IAsyncEnumerable<T>>`, `Optional<T>` |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - RPC servers, handlers, state machines, mapping, caching, and object-storage contracts              |
-| [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Hosting abstractions - builder contracts, step contracts, dependency ordering, and JWT outbound propagation             |
+| [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Native host integration - application-part registration, deployment options, and JWT identity primitives             |
 | [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - runtime defaults, object storage, transactional messaging, OpenTelemetry, auth resource server, and service wiring |
 | [`NOF.Infrastructure.AmazonS3`](https://www.nuget.org/packages/NOF.Infrastructure.AmazonS3)                                       | AWS S3 and S3-compatible object-storage rider                                                                           |
 | [`NOF.UI`](https://www.nuget.org/packages/NOF.UI)                                                                                 | Reusable UI primitives - authorization components, browser storage, browser info, and Blazor client helpers             |
 | [`NOF.Hosting.AspNetCore`](https://www.nuget.org/packages/NOF.Hosting.AspNetCore)                                                 | ASP.NET Core hosting - middleware, OpenAPI registration, service endpoint mapping, JSON configuration, and SSE streaming |
 | [`NOF.Hosting.BlazorWebAssembly`](https://www.nuget.org/packages/NOF.Hosting.BlazorWebAssembly)                                   | Blazor WebAssembly hosting - host builder integration for browser apps                                                  |
-| [`NOF.Hosting.Console`](https://www.nuget.org/packages/NOF.Hosting.Console)                                                       | Console hosting - Microsoft.Extensions.Hosting integration with the NOF pipeline                                        |
 | [`NOF.Hosting.Maui`](https://www.nuget.org/packages/NOF.Hosting.Maui)                                                             | .NET MAUI hosting - MAUI app builder integration for cross-platform applications                                        |
 | [`NOF.Hosting.AspNetCore.Extension.OidcServer`](https://www.nuget.org/packages/NOF.Hosting.AspNetCore.Extension.OidcServer) | OIDC service definitions and ASP.NET Core endpoints for the authentication authority                                   |
 | [`NOF.Infrastructure.RabbitMQ`](https://www.nuget.org/packages/NOF.Infrastructure.RabbitMQ)                                       | RabbitMQ transport for NOF command and notification dispatch                                                            |
@@ -64,7 +63,7 @@ using NOF.Infrastructure;
 using NOF.Infrastructure.RabbitMQ;
 using NOF.Infrastructure.StackExchangeRedis;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(MyAppService).Assembly);
 
@@ -80,12 +79,14 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
 // Modules with only IServiceCollection can use services.AddApplicationService<MyAppService>().
 builder.AddApplicationService<MyAppService>();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 
 app.MapOpenApi();
 
@@ -138,7 +139,6 @@ NOF.UI                         <- Shared UI components and browser client primit
 NOF.Test                       <- Test host helpers for application and integration testing
 NOF.Hosting.AspNetCore         <- ASP.NET Core host integration
 NOF.Hosting.BlazorWebAssembly  <- Blazor WebAssembly host integration
-NOF.Hosting.Console            <- Console host integration
 NOF.Hosting.Maui               <- .NET MAUI host integration
 NOF.Infrastructure.*           <- Messaging and caching providers
 ```

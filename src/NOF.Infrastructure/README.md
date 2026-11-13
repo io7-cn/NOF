@@ -54,7 +54,7 @@ The default backplane implementation is also host-local:
 
 The default object storage implementation persists content and metadata locally under `AppContext.BaseDirectory/App_Data/objects`. Configure a writable, persistent directory through `builder.Services.AddFileSystemObjectStorage(options => options.RootPath = "/data/objects")`. Relative paths resolve against the working directory. The directory is provider-owned: object names are hashed, and files contain both metadata and content; do not modify its files or add symbolic links. Writes replace complete objects atomically, and reads retain a snapshot across replacement or deletion. Listing uses ordinal key order and prefix matching; it scans the bucket's metadata files.
 
-For isolated tests, use `builder.Services.AddMemoryObjectStorage()`. `NOFTestAppBuilder` selects this automatically; state is shared between scopes within one host and discarded when that host is disposed. Replace `IObjectStorageRider` in a provider package to connect another backend while keeping application code unchanged. For AWS S3 and S3-compatible services, reference `NOF.Infrastructure.AmazonS3`:
+For isolated tests, use `builder.Services.AddMemoryObjectStorage()`. `Host.CreateApplicationBuilder().AddNOFTest()` selects this automatically; state is shared between scopes within one host and discarded when that host is disposed. Replace `IObjectStorageRider` in a provider package to connect another backend while keeping application code unchanged. For AWS S3 and S3-compatible services, reference `NOF.Infrastructure.AmazonS3`:
 
 ```csharp
 builder.Services.AddAmazonS3ObjectStorage(options =>
@@ -189,14 +189,14 @@ After adding the EF Core package, persistence is configured through `UseDbContex
 using Microsoft.EntityFrameworkCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
 Available configuration methods:
@@ -205,11 +205,11 @@ Available configuration methods:
 - `WithConnectionString(...)`
 - `WithConnectionStringResolver(...)`
 - `WithOptions(...)`
-- `MigrateOnInitialize()`
+- `MigrateOnStart()`
 
 The resolver receives the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and scoped services. Use it for tenant catalogs, secret stores, or shard maps; the template remains the convenient static default.
 
-`MigrateOnInitialize()` waits for host database migration during initialization. In
+`MigrateOnStart()` waits for host database migration before hosted services start. In
 `DatabasePerTenant` mode, it then migrates tenants from `ITenantProvider` sequentially in the
 background after the application starts. Each migration uses an isolated scope and the tenant's
 resolved connection string; one tenant failure is logged without stopping the remaining migrations.
@@ -245,7 +245,7 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("sqlite")
         ?? throw new InvalidOperationException("Connection string 'sqlite' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
 ## In-Memory SQLite

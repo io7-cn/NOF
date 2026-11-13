@@ -14,7 +14,7 @@ dotnet add package NOF.Infrastructure.RabbitMQ
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.RabbitMQ;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.Services.AddRabbitMQ(options =>
 {

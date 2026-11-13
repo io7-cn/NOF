@@ -16,13 +16,13 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task DeferPublishOrderedAsync_ShouldQualifyKeyAndAllocateContiguousSequences()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
         var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
         var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
-        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var environment = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value;
 
         await publisher.DeferPublishOrderedAsync(
             new ConcreteNotification("first"),
@@ -72,7 +72,7 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task ConcurrentOrderedAllocations_ShouldConflictAndRetryWithNextSequence()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var host = builder.Build();
         using var firstScope = host.Services.CreateScope();
@@ -115,7 +115,7 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task PublishAsync_ShouldDispatchConcreteNotificationToEveryConcreteHandler_EndToEnd()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -181,7 +181,7 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task PublishAsync_WhenHandlerThrows_ShouldRetryAndMarkInboxAsFailed()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -232,7 +232,7 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task DeferPublishAsync_WhenDeliveryFails_ShouldUseAllRetriesAndReportFailedBatch()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -284,7 +284,7 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task OrderedNotification_ShouldWaitForMissingPredecessorAndThenProcessContiguously()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);

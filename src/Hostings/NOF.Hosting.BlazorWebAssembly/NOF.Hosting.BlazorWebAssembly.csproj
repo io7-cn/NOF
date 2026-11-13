@@ -9,7 +9,7 @@
 
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Hosting.BlazorWebAssembly</PackageId>
-    <Description>Blazor WebAssembly hosting for the NOF Framework — adapts WebAssemblyHostBuilder to the NOF application builder pipeline.</Description>
+    <Description>NOF client registration extensions for native Blazor WebAssembly builders.</Description>
   </PropertyGroup>
 
   <ItemGroup>

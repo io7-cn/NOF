@@ -14,7 +14,7 @@
   href: source-generators.md
 - name: Repository & Unit of Work
   href: repository-uow.md
-- name: Step Pipeline
+- name: Native host lifecycle
   href: step.md
 - name: Value Object
   href: value-object.md
@@ -35,3 +35,7 @@
   href: ../en/design/invocation-extensions.md
 - name: 统一调用扩展
   href: ../zh-CN/design/invocation-extensions.md
+- name: Native hosting migration
+  href: ../en/design/native-hosting.md
+- name: 原生宿主迁移
+  href: ../zh-CN/design/native-hosting.md

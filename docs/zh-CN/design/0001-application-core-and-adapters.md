@@ -134,3 +134,5 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 更新：通用 Contract Result/Result<T> 及消息头、字典便利扩展已删除。请使用当前[操作结果迁移指南](result-unions.md)。
 
 更新：共享[调用扩展](invocation-extensions.md)已下沉到 Application，由宿主选择执行方式，Infrastructure 提供可选的内存默认实现。HTTP 呈现继续使用原生能力，出站元数据由投递组件直接准备。
+
+更新：宿主包装及初始化拓扑已由原生 Builder 和生命周期服务替代，见[原生宿主集成](native-hosting.md)。

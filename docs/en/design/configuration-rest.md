@@ -102,10 +102,12 @@ Content-Type: application/problem+json
 ```csharp
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
-// NOF hosts already add their calling assembly, including AutoInject endpoint modules.
+builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly); // explicit endpoint modules
 builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 builder.Services.AddProblemDetails();
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.UseStatusCodePages();
 app.MapOpenApi();
 ```

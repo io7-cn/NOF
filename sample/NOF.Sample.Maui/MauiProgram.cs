@@ -9,9 +9,9 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
-        var builder = NOFMauiAppBuilder.Create();
+        var builder = MauiApp.CreateBuilder().AddNOF();
 
-        builder.MauiAppBuilder
+        builder
             .UseMauiApp<App>()
             .ConfigureFonts(fonts =>
             {
@@ -31,7 +31,6 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        var app = builder.BuildAsync().GetAwaiter().GetResult();
-        return app.MauiApp;
+        return builder.Build();
     }
 }

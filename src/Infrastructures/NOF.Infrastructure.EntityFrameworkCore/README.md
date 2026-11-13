@@ -26,17 +26,17 @@ using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
-`MigrateOnInitialize()` awaits migration of the **host** database during initialization. A host
+`MigrateOnStart()` awaits migration of the **host** database before hosted services start. A host
 migration failure prevents initialization from completing. In `DatabasePerTenant` mode, after
 `ApplicationStarted`, NOF enumerates `ITenantProvider` and migrates the other tenant databases
 sequentially in the background, using a fresh scope and tenant context for each database.
@@ -105,7 +105,7 @@ builder.UseDbContext<AppDbContext>()
         return catalog.GetConnectionString(context.DbContextType, context.TenantId);
     })
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
 The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because NOF's `IDbContextFactory` creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.

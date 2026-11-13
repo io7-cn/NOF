@@ -1,5 +1,6 @@
 using NOF.Application;
 using NOF.Contract;
+using NOF.Hosting;
 using NOF.Infrastructure;
 using NOF.Sample.Application;
 using NOF.Sample.Application.Entities;
@@ -121,15 +122,14 @@ public sealed class NOFSampleHarnessTests
         });
     }
 
-    private static async Task<NOFTestHost> CreateHostAsync()
+    private static Task<NOFTestHost> CreateHostAsync()
     {
-        var builder = NOFTestAppBuilder.Create()
-            .AddApplicationPartOf<NOFSampleService>()
-            .AddApplicationPart(typeof(SampleHarnessMappings).Assembly)
-            .AddApplicationService<NOFSampleService>()
-            .AddInMemoryPersistence();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddApplicationPartOf<NOFSampleService>();
+        builder.AddApplicationPart(typeof(SampleHarnessMappings).Assembly);
+        builder.AddApplicationService<NOFSampleService>();
 
-        return await builder.BuildTestHostAsync();
+        return Task.FromResult(builder.BuildTestHost());
     }
 }
 

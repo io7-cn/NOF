@@ -44,3 +44,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [值对象构造](design/value-objects.md)
 
 - [统一调用扩展](design/invocation-extensions.md)
+
+- [原生宿主集成](design/native-hosting.md)

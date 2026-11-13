@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using NOF.Contract;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
@@ -21,7 +22,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -89,7 +90,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -117,7 +118,7 @@ public sealed class TokenAuthorityServiceTests
         var builder = CreateOidcServerBuilder();
         const string issuedAt = "1710000000";
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -148,7 +149,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -181,7 +182,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -215,7 +216,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -241,7 +242,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -279,7 +280,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -321,7 +322,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -364,7 +365,7 @@ public sealed class TokenAuthorityServiceTests
     {
         var builder = CreateOidcServerBuilder();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
         var tokenService = scope.GetRequiredService<ITokenService>();
 
@@ -430,9 +431,9 @@ public sealed class TokenAuthorityServiceTests
         return Convert.FromBase64String(padded);
     }
 
-    private static NOFTestAppBuilder CreateOidcServerBuilder()
+    private static HostApplicationBuilder CreateOidcServerBuilder()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local";

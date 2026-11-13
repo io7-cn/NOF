@@ -10,7 +10,6 @@ using NOF.Contract.SourceGenerator;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using NOF.Hosting.AspNetCore;
-using NOF.Hosting.SourceGenerator;
 using NOF.Infrastructure;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;

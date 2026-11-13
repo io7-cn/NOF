@@ -268,60 +268,6 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task NativeBuildFix_UsesAwaitedNofPipeline()
-    {
-        const string source = """
-            namespace Test;
-            public static class Program
-            {
-                public static async System.Threading.Tasks.Task Run(dynamic builder)
-                {
-                    var app = builder.NativeBuilder.Build();
-                }
-            }
-            """;
-        var properties = ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync");
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF401",
-            "Build",
-            new NativeHostBuilderBuildCodeFixProvider(),
-            properties);
-
-        Assert.Contains("await builder.BuildAsync()", changed);
-        Assert.DoesNotContain("NativeBuilder.Build", changed);
-    }
-
-    [Fact]
-    public async Task NativeBuildFix_InNonAsyncLocalFunction_IsNotOffered()
-    {
-        const string source = """
-            namespace Test;
-            public static class Program
-            {
-                public static async System.Threading.Tasks.Task Run(dynamic builder)
-                {
-                    void BuildLocal()
-                    {
-                        var app = builder.NativeBuilder.Build();
-                    }
-                }
-            }
-            """;
-        var properties = ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync");
-
-        var (_, actions) = await GetCodeActionsAsync(
-            source,
-            "NOF401",
-            "Build();",
-            new NativeHostBuilderBuildCodeFixProvider(),
-            properties);
-
-        Assert.Empty(actions);
-    }
-
-    [Fact]
     public async Task BatchFixProviders_SupportFixAllInSolution()
     {
         var cases = new[]
@@ -407,25 +353,6 @@ public sealed class GeneralCodeFixProviderTests
                 new DaemonServiceResolutionCodeFixProvider(),
                 "ResolveDaemonServices",
                 static text => text.Contains("scope.ServiceProvider.ResolveDaemonServices();", StringComparison.Ordinal)),
-            new SolutionFixAllCase(
-                "native host build",
-                "NOF401",
-                """
-                    namespace Test;
-                    public static class Program
-                    {
-                        public static async System.Threading.Tasks.Task Run(dynamic builder)
-                        {
-                            var app = builder.NativeBuilder.Build();
-                        }
-                    }
-                    """,
-                "Build",
-                new NativeHostBuilderBuildCodeFixProvider(),
-                "UseNofBuildAsync",
-                static text => text.Contains("await builder.BuildAsync()", StringComparison.Ordinal)
-                    && !text.Contains("NativeBuilder.Build", StringComparison.Ordinal),
-                ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync")),
             new SolutionFixAllCase(
                 "value object length configuration",
                 "NOF306",

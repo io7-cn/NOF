@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using NOF.Abstraction;
@@ -21,12 +22,15 @@ Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && name
 var nameJson = JsonSerializer.Serialize(nodeName, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
 Expect((string)JsonSerializer.Deserialize(nameJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
 builder.Services.AddInvocationFilter<ValidateReadOrder>();
-await using var app = await builder.BuildAsync();
+await using var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.MapOpenApi();
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())

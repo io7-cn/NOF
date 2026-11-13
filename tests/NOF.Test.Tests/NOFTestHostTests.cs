@@ -12,11 +12,39 @@ namespace NOF.Test.Tests;
 public class NOFTestHostTests
 {
     [Fact]
-    public async Task BuildTestHostAsync_ShouldBuildHostWithDefaultContexts()
+    public async Task TestHost_DisposalStopsNativeServicesBeforeDisposingThem()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        var probe = new LifecycleProbe();
+        builder.Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(_ => probe);
+        var host = new NOFTestHost(builder.Build());
+        await host.Host.StartAsync();
+        await host.DisposeAsync();
+        Assert.Equal(["start", "stop", "dispose"], probe.Calls);
+    }
 
-        await using var host = await builder.BuildTestHostAsync();
+    public sealed class LifecycleProbe : Microsoft.Extensions.Hosting.IHostedService, IDisposable
+    {
+        public List<string> Calls { get; } = [];
+        public Task StartAsync(CancellationToken ct)
+        {
+            Calls.Add("start");
+            return Task.CompletedTask;
+        }
+        public Task StopAsync(CancellationToken ct)
+        {
+            Calls.Add("stop");
+            return Task.CompletedTask;
+        }
+        public void Dispose() => Calls.Add("dispose");
+    }
+
+    [Fact]
+    public async Task BuildTestHost_ShouldBuildHostWithDefaultContexts()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+
+        await using var host = builder.BuildTestHost();
 
         using var scope = host.CreateScope();
         Assert.NotNull(scope.GetRequiredService<IUserContext>());
@@ -26,11 +54,11 @@ public class NOFTestHostTests
     [Fact]
     public async Task Scope_ShouldAllowSettingTenantAndUser()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         const string traceId = "0123456789abcdef0123456789abcdef";
         const string spanId = "0123456789abcdef";
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         scope.SetTenant("tenanta")
@@ -49,9 +77,9 @@ public class NOFTestHostTests
     [Fact]
     public async Task Scope_ShouldAllowSettingContextItems()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         scope.SetContextItem("case", "scope")
@@ -66,10 +94,10 @@ public class NOFTestHostTests
     [Fact]
     public async Task SendAsync_Command_ShouldResolveCommandSenderFromScope()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddScoped<ICommandSender, FakeCommandSender>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         Func<Task> act = () => host.SendAsync(new TestCommand("do-it"));
 
         await Record.ExceptionAsync(act);
@@ -78,10 +106,10 @@ public class NOFTestHostTests
     [Fact]
     public async Task PublishAsync_ShouldResolveNotificationPublisherFromScope()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddScoped<INotificationPublisher, FakeNotificationPublisher>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         Func<Task> act = () => host.PublishAsync(new TestNotification("evt"));
 
         await Record.ExceptionAsync(act);
@@ -90,9 +118,9 @@ public class NOFTestHostTests
     [Fact]
     public async Task ExecuteAsync_ShouldCreateScopeAndRunScenario()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         var result = await host.ExecuteAsync(scope =>
         {
             scope.SetTenant("tenant-b")
@@ -108,10 +136,10 @@ public class NOFTestHostTests
     [Fact]
     public async Task CallAsync_ShouldUseScopeContextAndServiceProvider()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddScoped<ITestClient, TestClient>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         var result = await host.CallAsync<string>(
             (services, context, cancellationToken) => services.GetRequiredService<ITestClient>().EchoAsync(context, cancellationToken),
             configure: scope => scope.SetContextItem("case", "host-call"));
@@ -122,10 +150,10 @@ public class NOFTestHostTests
     [Fact]
     public async Task AddInMemoryPersistence_ShouldAllowPersistingAcrossScopes()
     {
-        var builder = NOFTestAppBuilder.Create()
-            .AddInMemoryPersistence();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.Services.AddInMemoryPersistence();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
 
         await host.ExecuteAsync(async scope =>
         {
@@ -149,10 +177,10 @@ public class NOFTestHostTests
     public async Task CreateScope_ShouldResolveLazyServiceFromHostingDefaults()
     {
         LazyProbe.Reset();
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddScoped<LazyProbe>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         var lazy = scope.GetRequiredService<Lazy<LazyProbe>>();

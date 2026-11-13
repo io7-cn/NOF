@@ -86,7 +86,7 @@ the existing protocol response; the union itself is not sent over the wire.
 | `Optional<T>` | Keep the current representation | Absent and explicitly present null are distinct, including for partial-update requests; `Value` and `HasValue` also define the JSON shape. |
 | Streaming and paging results | Use typed success payloads | `Result<IAsyncEnumerable<T>>` and `Result<Page<T>>` replace the old result subclasses. |
 | Cache and object-storage payloads | Keep generic contracts | Payloads form an open set; a closed union would restrict application types. |
-| `TopologyComparison` and other enums | Keep enums | Cases carry no separate payloads, so a union adds storage overhead without improving the model. |
+| Payload-free enums | Keep enums | Cases carry no separate payloads. The former topology enum and initialization engine are removed. |
 
 The Result migration uses tagged JSON, required case fields, source-generated
 System.Text.Json metadata and explicit streaming-message transport. Its guide

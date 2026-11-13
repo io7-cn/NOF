@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Hosting;
 using System.Diagnostics;
 
 namespace NOF.Infrastructure;
@@ -14,7 +15,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly CommandHandlerRegistry _commandHandlerRegistry;
     private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
     private readonly TransactionalMessageProcessorOptions _options;
     private readonly ILogger<InboxMessageBackgroundService> _logger;
     private readonly IObjectSerializer _objectSerializer;
@@ -24,7 +25,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         IServiceProvider serviceProvider,
         CommandHandlerRegistry commandHandlerRegistry,
         NotificationHandlerRegistry notificationHandlerRegistry,
-        IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         IOptions<TransactionalMessageOptions> options,
         ILogger<InboxMessageBackgroundService> logger,
         IObjectSerializer objectSerializer,
@@ -33,7 +34,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         _serviceProvider = serviceProvider;
         _commandHandlerRegistry = commandHandlerRegistry;
         _notificationHandlerRegistry = notificationHandlerRegistry;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
         _options = options.Value.Inbox;
         _logger = logger;
         _objectSerializer = objectSerializer;
@@ -767,7 +768,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
         foreach (var notificationGroup in _notificationHandlerRegistry.Freeze().GroupBy(static registration => registration.HandlerType))
         {
-            var handlerRoute = BuildNotificationRoute(_hostEnvironment.ServiceName, notificationGroup.Key.DisplayName);
+            var handlerRoute = BuildNotificationRoute(_deployment.Value.ServiceName, notificationGroup.Key.DisplayName);
 
             if (string.Equals(handlerRoute, route, StringComparison.Ordinal))
             {

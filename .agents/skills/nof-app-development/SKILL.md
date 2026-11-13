@@ -85,7 +85,7 @@ Save the same `IDbContext` after a deferred dispatch to commit the application c
 ## Conventions
 
 - Add assemblies containing handlers, mappings, or `[AutoInject]` services through `AddApplicationPart(...)`.
-- Register each service container through AddApplicationService<TServer>(); endpoint modules map at BuildAsync(). Do not register individual operations.
+- Register each service container through AddApplicationService<TServer>(); endpoint modules map explicitly through app.MapNOFEndpoints() after native Build(). Do not register individual operations.
 - Build request contracts with one reference-type request and its declared non-task business return, including a DTO, nullable value or union.
 - Keep persistence-provider APIs out of the application layer.
 - Apply filtering, ordering, and paging before `ProjectTo<TDestination>()`.

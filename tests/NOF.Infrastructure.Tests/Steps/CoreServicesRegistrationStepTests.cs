@@ -19,13 +19,13 @@ namespace NOF.Infrastructure.Tests.Steps;
 public class NOFInfrastructureTests
 {
     [Fact]
-    public void AddNOFInfrastructure_ShouldRegisterInMemoryPersistenceByDefault()
+    public void AddNOF_ShouldRegisterInMemoryPersistenceByDefault()
     {
         var builder = new TestServiceRegistrationContext();
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
         using var scope = provider.CreateScope();
@@ -38,10 +38,10 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOFInfrastructure_ShouldRegisterCoreServicesAndOutboxOptions()
+    public void AddNOF_ShouldRegisterCoreServicesAndOutboxOptions()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
 
@@ -65,11 +65,11 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOFInfrastructure_ShouldRegisterSupportedAmbientDaemons()
+    public void AddNOF_ShouldRegisterSupportedAmbientDaemons()
     {
         var builder = new TestServiceRegistrationContext();
 
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         Assert.Contains(builder.Services, service =>
             service.ServiceType == typeof(IDaemonService) &&
@@ -97,7 +97,7 @@ public class NOFInfrastructureTests
     public void UseDbContext_WithTenantMode_ShouldSwitchTenantMode()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.UseDbContext<NOFDbContext>().WithTenantMode(TenantMode.SharedDatabase);
 
         using var provider = BuildServiceProvider(builder);
@@ -106,10 +106,10 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOFInfrastructure_ShouldUseDatabasePerTenantByDefault()
+    public void AddNOF_ShouldUseDatabasePerTenantByDefault()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
         var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
@@ -117,10 +117,10 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOFInfrastructure_ShouldDisableSoftDeleteByDefault()
+    public void AddNOF_ShouldDisableSoftDeleteByDefault()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
         var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
@@ -131,7 +131,7 @@ public class NOFInfrastructureTests
     public void UseDbContext_WithSoftDelete_ShouldEnableSoftDelete()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.UseDbContext<NOFDbContext>().WithSoftDelete(true);
 
         using var provider = BuildServiceProvider(builder);
@@ -140,23 +140,23 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void UseDbContext_MigrateOnInitialize_ShouldRegisterDatabaseMigrationStep()
+    public void UseDbContext_MigrateOnStart_ShouldRegisterDatabaseMigrationStep()
     {
         var builder = new TestServiceRegistrationContext();
 
-        builder.UseDbContext<NOFDbContext>().MigrateOnInitialize();
+        builder.UseDbContext<NOFDbContext>().MigrateOnStart();
 
         Assert.Contains(
             builder.Services,
-            descriptor => descriptor.ServiceType == typeof(IApplicationInitializationStep)
-                && descriptor.ImplementationInstance is DbContextMigrationInitializationStep);
+            descriptor => descriptor.ServiceType == typeof(DbContextMigration)
+                && descriptor.ImplementationInstance is DbContextMigration);
     }
 
     [Fact]
     public void UseDbContext_ShouldRegisterTenantAwareTypedFactory()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.UseDbContext<NOFDbContext>();
 
         using var provider = BuildServiceProvider(builder);
@@ -172,7 +172,7 @@ public class NOFInfrastructureTests
     public void UseDbContext_WithCustomFactory_ShouldDispatchThroughOverriddenFactory()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.UseDbContext<NOFDbContext, OverriddenDbContextFactory>();
 
         using var provider = BuildServiceProvider(builder);
@@ -194,11 +194,11 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddNOFInfrastructure_ShouldValidateSnowflakeOptions()
+    public void AddNOF_ShouldValidateSnowflakeOptions()
     {
         var builder = new TestServiceRegistrationContext();
         builder.Services.Configure<SnowflakeIdGeneratorOptions>(options => options.ApplicationIdBits = 0);
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
         var act = () => _ = provider.GetRequiredService<IOptions<SnowflakeIdGeneratorOptions>>().Value;
@@ -206,68 +206,27 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void HostEnvironmentExtensions_ShouldUseApplicationNameAsDefaultServiceName()
-    {
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ApplicationName = "Orders.Api"
-        };
-
-        Assert.Equal(0u, hostEnvironment.ServiceId);
-        Assert.Equal("Orders.Api", hostEnvironment.ServiceName);
-        Assert.Equal(1u, hostEnvironment.InstanceId);
-        Assert.True(hostEnvironment.IsPrimaryNodeEnvironment);
-    }
-
-    [Fact]
-    public void EnvironmentBindConfiguration_ShouldPreferConfiguredValues()
-    {
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ApplicationName = "fallback-name",
-            ServiceId = 1,
-            InstanceId = 7
-        };
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [NOFHostingConstants.Deployment.ConfigurationKeys.ServiceId] = "42",
-                [NOFHostingConstants.Deployment.ConfigurationKeys.InstanceId] = "24"
-            })
-            .Build();
-
-        hostEnvironment.BindConfiguration(configuration);
-
-        Assert.Equal(42u, hostEnvironment.ServiceId);
-        Assert.Equal("fallback-name", hostEnvironment.ServiceName);
-        Assert.Equal(24u, hostEnvironment.InstanceId);
-        Assert.False(hostEnvironment.IsPrimaryNodeEnvironment);
-    }
-
-    [Fact]
-    public void AddNOFInfrastructure_ShouldBindHostEnvironmentFromConfiguration()
+    public void AddNOF_ShouldConfigureDeploymentWithoutReplacingEnvironment()
     {
         var builder = new TestServiceRegistrationContext();
+        var environment = builder.Environment;
         builder.Configuration[NOFHostingConstants.Deployment.ConfigurationKeys.ServiceName] = "Orders.Api";
         builder.Configuration[NOFHostingConstants.Deployment.ConfigurationKeys.ServiceId] = "42";
         builder.Configuration[NOFHostingConstants.Deployment.ConfigurationKeys.InstanceId] = "24";
-
-        builder.AddNOFInfrastructure();
-
-        Assert.Equal("Orders.Api", builder.Environment.ServiceName);
-        Assert.Equal(42u, builder.Environment.ServiceId);
-        Assert.Equal(24u, builder.Environment.InstanceId);
-        Assert.False(builder.Environment.IsPrimaryNodeEnvironment);
+        builder.AddNOF();
+        using var provider = BuildServiceProvider(builder);
+        var deployment = provider.GetRequiredService<IOptions<DeploymentOptions>>().Value;
+        Assert.Same(environment, builder.Environment);
+        Assert.Equal("Orders.Api", deployment.ServiceName);
+        Assert.Equal(42u, deployment.ServiceId);
+        Assert.Equal(24u, deployment.InstanceId);
+        Assert.False(deployment.IsPrimaryNode);
     }
 
     [Fact]
     public void SetCurrentServiceDeploymentTags_ShouldAttachDeploymentInfoToActivity()
     {
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ApplicationName = "orders-api"
-        };
+        var hostEnvironment = new DeploymentOptions();
         hostEnvironment.ServiceId = 42;
         hostEnvironment.ServiceName = "orders-api";
         hostEnvironment.InstanceId = 24;

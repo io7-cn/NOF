@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting;
@@ -7,7 +8,7 @@ using System.Diagnostics;
 namespace NOF.Infrastructure;
 
 /// <summary>Prepares reliable-delivery metadata and a native producer Activity around dispatch.</summary>
-public sealed class MessageDelivery(IHostEnvironment hostEnvironment)
+public sealed class MessageDelivery(IOptions<DeploymentOptions> deployment)
 {
     /// <summary>Creates one message identity, tenant and trace envelope for sending or staging an outbox message.</summary>
     public async ValueTask ExecuteAsync(object message, Context context,
@@ -15,7 +16,7 @@ public sealed class MessageDelivery(IHostEnvironment hostEnvironment)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var activity = NOFHostingConstants.Outbound.Source.StartActivity($"Outbound: {message.GetType().DisplayName}", ActivityKind.Producer);
-        activity?.SetServiceDeploymentTags(hostEnvironment);
+        activity?.SetServiceDeploymentTags(deployment.Value);
         var tenant = context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out var value) && value is string supplied
             ? supplied : Context.Current.TenantId;
         var headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)

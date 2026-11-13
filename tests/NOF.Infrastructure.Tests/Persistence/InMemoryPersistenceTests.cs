@@ -32,7 +32,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         var selector = useCustomContext
             ? builder.UseDbContext<TestDbContext>()
             : builder.UseDbContext<NOFDbContext>();
@@ -120,7 +120,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -160,7 +160,7 @@ public class SqliteInMemoryPersistenceTests
     ]);
 
             builder.AddNOFHosting();
-            builder.AddNOFInfrastructure();
+            builder.AddNOF();
             builder.UseDbContext<TestDbContext>()
             .WithTenantMode(TenantMode.DatabasePerTenant)
                 .WithConnectionString(builder.Configuration.GetConnectionString("sqlite")
@@ -200,7 +200,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddScoped(_ => new ConnectionStringResolverProbe(databaseName));
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.UseDbContext<TestDbContext>()
             .WithTenantMode(TenantMode.DatabasePerTenant)
             .WithConnectionString("fallback-{tenantId}")
@@ -238,7 +238,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<TestDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -266,7 +266,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<TestDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -289,7 +289,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -321,7 +321,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -408,7 +408,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IDbContextModelCreatingContributor, DynamicAuditEntryModelCreatingContributor>();
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -461,7 +461,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.SharedDatabase),
@@ -489,7 +489,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         builder.Services.AddSingleton<IDbContextModelCreatingContributor, DynamicAuditEntryModelCreatingContributor>();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
@@ -638,7 +638,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<TestDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -1938,7 +1938,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton(contributor);
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -2063,7 +2063,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<TestEventPublisher>();
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
         if (messageTenantProvider is not null)
         {
             builder.Services.ReplaceOrAddSingleton<ITenantProvider>(_ => messageTenantProvider);
@@ -2100,7 +2100,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<TestEventPublisher>();
 
         builder.AddNOFHosting();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
 
         var databaseName = $"nof-tests-shared-{Guid.NewGuid():N}";
         builder.UseDbContext<TestDbContext>()

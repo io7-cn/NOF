@@ -18,17 +18,20 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
     private readonly IDbContext _dbContext;
     private readonly ILogger<PersistenceSigningKeyService> _logger;
     private readonly IHostEnvironment _hostEnvironment;
+    private readonly DeploymentOptions _deployment;
     private byte[]? _encryptionKey;
 
     public PersistenceSigningKeyService(
         IOptions<OAuthAuthorizationServerOptions> options,
         IDbContext dbContext,
         IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         ILogger<PersistenceSigningKeyService> logger)
     {
         _options = options.Value;
         _dbContext = dbContext;
         _hostEnvironment = hostEnvironment;
+        _deployment = deployment.Value;
         _logger = logger;
     }
 
@@ -362,8 +365,8 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
     private string ResolveLocalEncryptionKeyPath()
     {
         var appName = SanitizePathSegment(
-            !string.IsNullOrWhiteSpace(_hostEnvironment.ServiceName)
-                ? _hostEnvironment.ServiceName
+            !string.IsNullOrWhiteSpace(_deployment.ServiceName)
+                ? _deployment.ServiceName
                 : "nof-app");
         var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(basePath))

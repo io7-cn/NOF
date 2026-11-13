@@ -13,7 +13,7 @@ NOF keeps its runtime surface small by moving repetitive framework work into sou
 - [Repository and unit of work](repository-uow.md) — persistence boundaries and transaction flow.
 - [Value objects](value-object.md) — strongly typed domain values with generated support.
 - [Mapping](mapper.md) — mapping conventions and generated implementations.
-- [Steps](step.md) — composable application pipelines.
+- [Native hosting](../en/design/native-hosting.md) ([简体中文](../zh-CN/design/native-hosting.md)) — native builders, explicit HTTP composition and lifecycle startup.
 - [Public API](public-api.md) — compatibility and surface-area rules.
 
 For types and members, continue to the [API reference](~/api/index.md).

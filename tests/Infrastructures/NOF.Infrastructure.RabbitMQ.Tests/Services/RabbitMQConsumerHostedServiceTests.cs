@@ -118,7 +118,7 @@ public class RabbitMQConsumerHostedServiceTests
             Options.Create(new RabbitMQOptions()),
             commandHandlerRegistry,
             new NotificationHandlerRegistry(),
-            new TestHostEnvironment(),
+            Options.Create(new NOF.Hosting.DeploymentOptions()),
             null!,
             new JsonObjectSerializer(),
             NullLogger<RabbitMQConsumerHostedService>.Instance);
@@ -202,20 +202,4 @@ public class RabbitMQConsumerHostedServiceTests
 
     private sealed class SecondTestNotificationHandler;
 
-    private sealed class TestHostEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Development;
-
-        public string ApplicationName { get; set; } = "NOF.Infrastructure.RabbitMQ.Tests";
-
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-
-        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
-            new Microsoft.Extensions.FileProviders.NullFileProvider();
-
-        public TestHostEnvironment()
-        {
-            this.ServiceName = ApplicationName;
-        }
-    }
 }

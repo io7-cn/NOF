@@ -1,43 +1,37 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
 using System.Reflection;
 
 namespace NOF.Hosting;
 
+/// <summary>Records an assembly whose generated registrations have been applied to this service collection.</summary>
+public sealed record ApplicationPartRegistration(Assembly Assembly);
+
 public static partial class NOFHostingExtensions
 {
-    private static readonly object ApplicationPartsKey = new();
-
-    extension(IHostApplicationBuilder builder)
+    /// <summary>Applies an application assembly's generated registrations once to a native host builder.</summary>
+    public static IHostApplicationBuilder AddApplicationPart(this IHostApplicationBuilder builder, Assembly assembly)
     {
-        public IHostApplicationBuilder AddApplicationPart(Assembly assembly)
-        {
-            ArgumentNullException.ThrowIfNull(assembly);
-
-            var loadedAssemblies = GetOrAddApplicationParts(builder);
-            if (!loadedAssemblies.Add(assembly))
-            {
-                return builder;
-            }
-
-            foreach (var attribute in assembly.GetCustomAttributes<AssemblyInitializeAttribute>())
-            {
-                attribute.Initialize(builder.Services);
-            }
-
-            return builder;
-        }
+        builder.Services.AddApplicationPart(assembly);
+        return builder;
     }
 
-    private static HashSet<Assembly> GetOrAddApplicationParts(IHostApplicationBuilder builder)
+    /// <summary>Applies generated registrations once; usable by native web, worker and client builders.</summary>
+    public static IServiceCollection AddApplicationPart(this IServiceCollection services, Assembly assembly)
     {
-        if (builder.Properties.TryGetValue(ApplicationPartsKey, out var existing) && existing is HashSet<Assembly> assemblies)
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(assembly);
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ApplicationPartRegistration)
+            && descriptor.ImplementationInstance is ApplicationPartRegistration part && part.Assembly == assembly))
         {
-            return assemblies;
+            return services;
         }
-
-        assemblies = [];
-        builder.Properties[ApplicationPartsKey] = assemblies;
-        return assemblies;
+        services.AddSingleton(new ApplicationPartRegistration(assembly));
+        foreach (var attribute in assembly.GetCustomAttributes<AssemblyInitializeAttribute>())
+        {
+            attribute.Initialize(services);
+        }
+        return services;
     }
 }

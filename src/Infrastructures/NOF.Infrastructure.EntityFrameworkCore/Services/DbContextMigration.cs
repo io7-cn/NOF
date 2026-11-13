@@ -6,17 +6,11 @@ using NOF.Contract;
 using NOF.Hosting;
 
 namespace NOF.Infrastructure.EntityFrameworkCore;
-/// <summary>Migrates the host database during application initialization.</summary>
+/// <summary>Migrates the host database before application startup.</summary>
 
-public sealed class DbContextMigrationInitializationStep(Type dbContextType) : IApplicationInitializationStep
+public sealed class DbContextMigration(Type dbContextType)
 {
     internal Type DbContextType { get; } = dbContextType;
-
-    public TopologyComparison Compare(IApplicationInitializationStep other) => TopologyComparison.DoesNotMatter;
-
-    public Task ExecuteAsync(IHost app)
-        => MigrateTenantAsync(app.Services, NOFAbstractionConstants.Tenant.HostId,
-            app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
 
     internal async Task MigrateTenantAsync(IServiceProvider services, string tenantId, CancellationToken cancellationToken)
     {

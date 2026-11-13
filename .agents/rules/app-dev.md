@@ -41,7 +41,7 @@ All five inbound/outbound middleware families, delegates, outbound contexts and 
 - A contract method takes exactly one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Do not put `CancellationToken` on the contract method or suffix it with `Async`.
 - IHttpEndpointModule owns HTTP routing/binding/results; HttpContext.InvokeAsync uses the generated Descriptor and the HTTP application-policy boundary.
 - A generated server container is a `partial` class inheriting `ApplicationService<TService>`.
-- Register each server with `builder.AddApplicationService<TServer>()`; native HTTP modules are registered through AutoInject(Singleton) and mapped at BuildAsync().
+- Register each server with `builder.AddApplicationService<TServer>()`; native HTTP modules are registered through AutoInject(Singleton) and mapped explicitly by app.MapNOFEndpoints() after native Build().
 - Generated server invocation and handler methods are asynchronous and receive `Context` explicitly.
 
 ## Program.cs Baseline
@@ -52,7 +52,7 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(OrderService).Assembly);
 builder.AddApplicationService<OrderService>();
@@ -62,14 +62,16 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
-Add Redis and RabbitMQ through `builder.Services.AddRedisCache(...)` and `builder.Services.AddRabbitMQ(...)`. `NOFWebApplicationBuilder.Create(args)` already registers the default in-memory persistence, cache, command rider, and notification rider; explicit providers replace those defaults.
+Add Redis and RabbitMQ through `builder.Services.AddRedisCache(...)` and `builder.Services.AddRabbitMQ(...)`. `WebApplication.CreateBuilder(args).AddNOF()` already registers the default in-memory persistence, cache, command rider, and notification rider; explicit providers replace those defaults.
 
 ## Persistence Convention
 

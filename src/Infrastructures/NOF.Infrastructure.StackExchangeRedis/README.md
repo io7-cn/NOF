@@ -9,7 +9,7 @@ Provides Redis-backed infrastructure for NOF using StackExchange.Redis, includin
 ## Usage
 
 ```csharp
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));

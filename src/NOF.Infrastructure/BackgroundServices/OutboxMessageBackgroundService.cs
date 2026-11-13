@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Hosting;
 using System.Diagnostics;
 
 namespace NOF.Infrastructure;
@@ -15,7 +16,7 @@ public sealed class OutboxMessageBackgroundService : BackgroundService
     private readonly TransactionalMessageProcessorOptions _options;
     private readonly ILogger<OutboxMessageBackgroundService> _logger;
     private readonly IObjectSerializer _objectSerializer;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
     private readonly ITenantProvider _tenantProvider;
 
     public OutboxMessageBackgroundService(
@@ -23,14 +24,14 @@ public sealed class OutboxMessageBackgroundService : BackgroundService
         IOptions<TransactionalMessageOptions> options,
         ILogger<OutboxMessageBackgroundService> logger,
         IObjectSerializer objectSerializer,
-        IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         ITenantProvider tenantProvider)
     {
         _serviceProvider = serviceProvider;
         _options = options.Value.Outbox;
         _logger = logger;
         _objectSerializer = objectSerializer;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
         _tenantProvider = tenantProvider;
     }
 
@@ -228,7 +229,7 @@ public sealed class OutboxMessageBackgroundService : BackgroundService
             $"{NOFInfrastructureConstants.OutboundPipeline.ActivityNames.MessageSending}: {dispatchRoutes[0]}",
             ActivityKind.Producer,
             message.TraceParent,
-            _hostEnvironment);
+            _deployment.Value);
     }
 
     private string[] ResolveDispatchRoutes(NOFOutboxMessage message)

@@ -29,8 +29,8 @@ CommandHandlerRegistry, NotificationHandlerRegistry, EventHandlerRegistry,
 MappingRegistry and ApplicationServiceRegistry are DI-owned singleton instances and
 freeze on first read. Register application parts before execution/transport initialization.
 If handlers or mappings are missing, add the assembly containing their generated
-initializers, including test-local mappings. NOF hosts already add the calling assembly;
-add a separate Application assembly explicitly. Concrete messaging adapters consume
-their applicable frozen registries during initialization.
+initializers, including test-local mappings. Add each owning assembly explicitly;
+there is no caller-assembly discovery. Concrete messaging adapters consume
+their applicable frozen registries before hosted services start.
 
 See the [application service migration guide](../en/design/application-requests.md).

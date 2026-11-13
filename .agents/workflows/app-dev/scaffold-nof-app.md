@@ -120,7 +120,7 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(AppService).Assembly);
 builder.AddApplicationService<AppService>();
@@ -130,9 +130,11 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
@@ -166,8 +168,8 @@ Keep HTTP namespaces and module types in the host project; the Contract project 
 
 ## Notes
 
-- `NOFWebApplicationBuilder.Create(args)` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
+- `WebApplication.CreateBuilder(args).AddNOF()` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
 - `AddApplicationPart(...)` executes generated assembly initializers; `AddApplicationService<T>()` explicitly registers the RPC server.
-- Registered IHttpEndpointModule instances map explicit HTTP endpoints during `BuildAsync()`.
+- Call app.UseNOF() and app.MapNOFEndpoints() after native Build() to install HTTP behavior and map endpoint modules.
 - Add RabbitMQ, Redis, or OIDC packages only when the application needs those providers.
 - Application handlers should inject `IDbContext` / `IRepository<T>`; keep EF Core types in the host.

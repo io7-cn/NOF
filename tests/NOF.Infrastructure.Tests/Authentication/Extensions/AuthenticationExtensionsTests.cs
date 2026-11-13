@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -37,7 +38,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-jwt-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         Assert.NotNull(scope.GetRequiredService<ITokenService>());
         Assert.NotNull(scope.GetRequiredService<IJwksService>());
@@ -62,7 +64,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-jwt-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         var repository = scope.GetRequiredService<IRevokedRefreshTokenRepository>();
@@ -75,14 +78,15 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddOidcServer_ShouldRegisterProtocolServicesOnly()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
             options.AccessTokenAudience = "nof-tests";
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         Assert.Equal("https://issuer.local/oauth2", scope.GetRequiredService<IOptions<OAuthAuthorizationServerOptions>>().Value.Issuer);
@@ -92,13 +96,15 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddOidcServer_ShouldMapOidcEndpointsAutomatically()
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
         });
 
-        await using var app = await builder.BuildAsync();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapNOFEndpoints();
 
         var routes = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)
@@ -179,7 +185,8 @@ public sealed class AuthenticationExtensionsTests
         var builder = CreateAuthorityBuilder($"Data Source=nof-dcr-handler-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
         builder.Services.AddScoped<IOAuthInitialAccessTokenHandler, AnonymousInitialAccessTokenHandler>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         Assert.IsType<AnonymousInitialAccessTokenHandler>(scope.GetRequiredService<IOAuthInitialAccessTokenHandler>());
@@ -229,7 +236,7 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddOidcServer_AddPublicClient_ShouldEnsureClientExistsOnInitialize()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -244,9 +251,10 @@ public sealed class AuthenticationExtensionsTests
             .WithTenantMode(TenantMode.DatabasePerTenant)
             .WithConnectionString($"Data Source=nof-bootstrap-public-client-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-            .MigrateOnInitialize();
+            .MigrateOnStart();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -267,8 +275,9 @@ public sealed class AuthenticationExtensionsTests
 
         try
         {
-            await using (var firstHost = await CreateAuthorityBuilder(connectionString).BuildTestHostAsync())
+            await using (var firstHost = CreateAuthorityBuilder(connectionString).BuildTestHost())
             {
+                await firstHost.Host.StartAsync();
                 using var scope = firstHost.CreateScope();
                 var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -285,7 +294,7 @@ public sealed class AuthenticationExtensionsTests
                 Assert.NotNull(createResult.ExpectSuccess());
             }
 
-            var secondBuilder = NOFTestAppBuilder.Create();
+            var secondBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
             secondBuilder.AddOidcServer(options =>
             {
                 options.Issuer = "https://issuer.local";
@@ -300,7 +309,8 @@ public sealed class AuthenticationExtensionsTests
                 .WithConnectionString(connectionString)
                 .WithOptions(static (optionsBuilder, databaseConnectionString) => optionsBuilder.UseSqlite(databaseConnectionString));
 
-            await using var secondHost = await secondBuilder.BuildTestHostAsync();
+            await using var secondHost = secondBuilder.BuildTestHost();
+            await secondHost.Host.StartAsync();
             using var secondScope = secondHost.CreateScope();
             var secondClientRepository = secondScope.GetRequiredService<IOAuthClientRepository>();
 
@@ -330,7 +340,7 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddOidcServer_AddConfidentialClient_ShouldEnsureClientExistsOnInitialize()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -346,9 +356,10 @@ public sealed class AuthenticationExtensionsTests
             .WithTenantMode(TenantMode.DatabasePerTenant)
             .WithConnectionString($"Data Source=nof-bootstrap-confidential-client-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-            .MigrateOnInitialize();
+            .MigrateOnStart();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -378,7 +389,7 @@ public sealed class AuthenticationExtensionsTests
         var audience = $"{issuer}/token";
         using var rsa = RSA.Create(2048);
         var jsonWebKeySet = CreateJsonWebKeySet(rsa, keyId);
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = issuer;
@@ -393,9 +404,10 @@ public sealed class AuthenticationExtensionsTests
             .WithTenantMode(TenantMode.DatabasePerTenant)
             .WithConnectionString($"Data Source=nof-client-assertion-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-            .MigrateOnInitialize();
+            .MigrateOnStart();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var repository = scope.GetRequiredService<IOAuthClientRepository>();
         var client = await repository.GetAsync(clientId);
@@ -448,7 +460,8 @@ public sealed class AuthenticationExtensionsTests
         using var rsa = RSA.Create(2048);
         var builder = CreateAuthorityBuilder($"Data Source=nof-wrong-audience-assertion-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var repository = scope.GetRequiredService<IOAuthClientRepository>();
         var createResult = await repository.CreateAsync(new CreateOAuthClientRequest
@@ -954,7 +967,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-oauth-client-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var service = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -981,7 +995,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-oauth-client-confidential-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var service = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -1012,7 +1027,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-dcr-lifecycle-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var registrationRepository = scope.GetRequiredService<IOAuthClientRegistrationRepository>();
         var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
@@ -1097,7 +1113,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-dcr-secret-rotation-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var registrationRepository = scope.GetRequiredService<IOAuthClientRegistrationRepository>();
         var clientRepository = scope.GetRequiredService<IOAuthClientRepository>();
@@ -1149,7 +1166,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-oauth-client-redirect-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var service = scope.GetRequiredService<IOAuthClientRepository>();
 
@@ -1172,7 +1190,8 @@ public sealed class AuthenticationExtensionsTests
     {
         var builder = CreateAuthorityBuilder($"Data Source=nof-oauth-client-blank-redirect-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared");
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var dbContext = scope.GetRequiredService<NOFDbContext>();
         var service = scope.GetRequiredService<IOAuthClientRepository>();
@@ -1543,8 +1562,9 @@ public sealed class AuthenticationExtensionsTests
         string firstKid;
         string rotatedKid;
 
-        await using (var firstHost = await CreateAuthorityBuilder(connectionString).BuildTestHostAsync())
+        await using (var firstHost = CreateAuthorityBuilder(connectionString).BuildTestHost())
         {
+            await firstHost.Host.StartAsync();
             using var scope = firstHost.CreateScope();
             var signingKeyService = scope.GetRequiredService<ISigningKeyService>();
             var dbContext = scope.GetRequiredService<NOFDbContext>();
@@ -1566,8 +1586,9 @@ public sealed class AuthenticationExtensionsTests
             Assert.Contains(rotatedKeys, key => key.Status == PersistedSigningKeyStatus.Retired && key.Kid == firstKid);
         }
 
-        await using (var secondHost = await CreateAuthorityBuilder(connectionString).BuildTestHostAsync())
+        await using (var secondHost = CreateAuthorityBuilder(connectionString).BuildTestHost())
         {
+            await secondHost.Host.StartAsync();
             using var scope = secondHost.CreateScope();
             var signingKeyService = scope.GetRequiredService<ISigningKeyService>();
             var dbContext = scope.GetRequiredService<NOFDbContext>();
@@ -1597,7 +1618,7 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddOidcServer_WithoutEncryptionKey_ShouldGenerateLocalFallbackSecret()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local";
@@ -1606,7 +1627,8 @@ public sealed class AuthenticationExtensionsTests
             .WithConnectionString($"Data Source=nof-jwt-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, databaseConnectionString) => optionsBuilder.UseSqlite(databaseConnectionString));
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         var signingKey = await scope.GetRequiredService<ISigningKeyService>().GetCurrentSigningKeyAsync();
@@ -1619,7 +1641,7 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddAuthenticationResourceServer_ShouldRegisterSeparately()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
@@ -1631,7 +1653,8 @@ public sealed class AuthenticationExtensionsTests
             });
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         var resourceOptions = scope.GetRequiredService<IOptions<AuthenticationResourceServerOptions>>().Value;
@@ -1662,7 +1685,8 @@ public sealed class AuthenticationExtensionsTests
             options.ExpectedIssuer = "https://issuer.local";
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         var cache = host.Services.GetRequiredService<ResourceServerJwksCacheService>();
         using var scope = host.CreateScope();
 
@@ -1683,7 +1707,8 @@ public sealed class AuthenticationExtensionsTests
             options.AuthorizationServerIssuer = "https://issuer.local";
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
         var signingKeyService = scope.GetRequiredService<ISigningKeyService>();
         var hostKey = await signingKeyService.GetCurrentSigningKeyAsync();
@@ -1733,7 +1758,7 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddResourceServer_ThenOidcServer_ShouldResolveIssuerAndKeysLocally()
     {
         const string issuer = "http://localhost:5080/oauth2";
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = issuer;
@@ -1748,7 +1773,8 @@ public sealed class AuthenticationExtensionsTests
             .WithConnectionString($"Data Source=nof-local-resource-tests-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, databaseConnectionString) => optionsBuilder.UseSqlite(databaseConnectionString));
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         var cache = host.Services.GetRequiredService<ResourceServerJwksCacheService>();
         using var scope = host.CreateScope();
 
@@ -1765,7 +1791,7 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddAuthenticationResourceServer_Only_ShouldRegisterInboundResourceServer()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
@@ -1776,7 +1802,8 @@ public sealed class AuthenticationExtensionsTests
             });
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(InvocationFilterRegistration)
             && descriptor.ImplementationInstance is InvocationFilterRegistration registration
             && registration.FilterType == typeof(AuthenticationInvocationFilter));
@@ -1787,13 +1814,14 @@ public sealed class AuthenticationExtensionsTests
     [Fact]
     public async Task AddAuthenticationResourceServer_Only_ShouldNotRegisterAuthorityServicesExplicitly()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
         });
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
+        await host.Host.StartAsync();
         using var scope = host.CreateScope();
 
         Assert.Null(scope.Services.GetService<ITokenService>());
@@ -1849,9 +1877,11 @@ public sealed class AuthenticationExtensionsTests
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private static NOFTestAppBuilder CreateAuthorityBuilder(string connectionString)
+    private static HostApplicationBuilder CreateAuthorityBuilder(string connectionString)
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        // Repository tests control key rotation explicitly rather than racing a maintenance worker.
+        builder.Services.Configure<DeploymentOptions>(options => options.PrimaryNode = false);
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local";

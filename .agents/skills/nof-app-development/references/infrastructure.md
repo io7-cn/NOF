@@ -23,10 +23,10 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
-`MigrateOnInitialize()` migrates the context resolved during host initialization. It does not
+`MigrateOnStart()` migrates the context resolved during host initialization. It does not
 enumerate application-defined tenant databases in `DatabasePerTenant` mode.
 
 `DatabasePerTenant` deliberately uses the same model and migration chain for the host and every
@@ -53,7 +53,7 @@ only tenant database routing differs.
 
 ## Default In-Memory Infrastructure
 
-`NOFWebApplicationBuilder.Create(args)` calls `AddNOFInfrastructure()`, which registers in-memory persistence, cache, command, notification, and backplane defaults. Use those defaults for lightweight development/tests; selecting a provider replaces the corresponding abstractions.
+`WebApplication.CreateBuilder(args).AddNOF()` calls `AddNOF()`, which registers in-memory persistence, cache, command, notification, and backplane defaults. Use those defaults for lightweight development/tests; selecting a provider replaces the corresponding abstractions.
 
 `builder.AddNOFEntityFrameworkCore()` is a separate EF Core SQLite in-memory option. It is useful when code needs EF-specific behavior rather than the provider-neutral in-memory store.
 

@@ -97,10 +97,12 @@ Content-Type: application/problem+json
 ```csharp
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
-// NOF 宿主已添加调用程序集，其中包含 AutoInject 端点模块。
+builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly); // 显式加入端点模块所在程序集
 builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 builder.Services.AddProblemDetails();
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 app.UseStatusCodePages();
 app.MapOpenApi();
 ```

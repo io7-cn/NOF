@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
@@ -9,7 +10,8 @@ using NOF.Sample.Application;
 using NOF.Sample.Services;
 using NOF.Sample.UI.Services;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.AddApplicationPart(typeof(NOF.Sample.Endpoints.ConfigNodeEndpoints).Assembly);
 var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
@@ -55,7 +57,7 @@ builder.UseDbContext<ConfigurationDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
 builder.Services.ReplaceOrAddScoped<ISampleApi, ServerSampleApi>();
 builder.Services.ReplaceOrAddScoped<IOAuthDemoApi, ServerOAuthDemoApi>();
@@ -72,7 +74,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 
 app.UseStatusCodePages();
 app.MapOpenApi();

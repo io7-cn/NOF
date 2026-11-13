@@ -54,10 +54,12 @@ public sealed class GetOrder : OrderService.GetOrder
 builder.AddApplicationPart(typeof(OrderService).Assembly);
 builder.AddApplicationService<OrderService>();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapNOFEndpoints();
 ```
 
-`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. During BuildAsync(), registered IHttpEndpointModule instances map native endpoints. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
+`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. After native Build(), app.MapNOFEndpoints() explicitly maps registered IHttpEndpointModule instances. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
 
 ## 5. Invoke the Server Operation
 

@@ -39,8 +39,8 @@ public sealed class TenantRequestAuthorizationTests
     {
         using var rsa = RSA.Create(2048);
         var key = new RsaSecurityKey(rsa) { KeyId = "test-key" };
-        var builder = NOFWebApplicationBuilder.Create([]);
-        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.WebHost.UseTestServer();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://identity.local";
@@ -64,7 +64,9 @@ public sealed class TenantRequestAuthorizationTests
         });
         builder.Services.AddTransient<StreamHandler>();
         builder.AddApplicationService<TenantServer>();
-        await using var app = await builder.BuildAsync();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapNOFEndpoints();
         app.MapPost("/tenant", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
             TypedResults.Ok((await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)), request, ct)).ExpectSuccess()))
             .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);

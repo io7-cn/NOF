@@ -36,7 +36,7 @@ var order = await OrderService.Find.InvokeAsync(services, request, context, ct);
 ```
 
 应用程序集初始化器将各操作实现注册为 Scoped 服务，宿主只注册一次服务容器，不逐操作注册。
-NOF 宿主已添加调用程序集，独立的 Application 程序集再添加一次即可。操作身份为
+显式添加各类型所在程序集，包括包含端点模块的宿主程序集。操作身份为
 “服务契约 + 操作名”，不同操作可以共用请求/响应模型。
 
 本地调用创建独立作用域，直接传递 Context，复制调用方作用域里的身份快照。授权和租户策略
@@ -47,7 +47,7 @@ NOF 宿主已添加调用程序集，独立的 Application 程序集再添加一
 
 `IHttpEndpointModule` 按 API 功能组织路由，内部使用原生 MapGet/MapPost、路径/请求体/查询
 绑定、TypedResults、端点过滤器和 OpenAPI。模块标注 `[AutoInject(ServiceLifetime.Singleton)]`，
-添加其程序集为 ApplicationPart 后自动注册，宿主初始化时统一调用 Map。
+添加其程序集为 ApplicationPart 后自动注册，Build 后显式调用 app.MapNOFEndpoints() 映射。
 宿主不用逐操作注册，也不用集中维护所有路径、绑定和状态码映射。
 
 ```csharp

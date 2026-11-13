@@ -11,18 +11,18 @@ public sealed class RevokedRefreshTokenCleanupBackgroundService : BackgroundServ
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly OAuthAuthorizationServerOptions _options;
     private readonly ILogger<RevokedRefreshTokenCleanupBackgroundService> _logger;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
 
     public RevokedRefreshTokenCleanupBackgroundService(
         IServiceScopeFactory serviceScopeFactory,
         IOptions<OAuthAuthorizationServerOptions> options,
         ILogger<RevokedRefreshTokenCleanupBackgroundService> logger,
-        IHostEnvironment hostEnvironment)
+        IOptions<DeploymentOptions> deployment)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _options = options.Value;
         _logger = logger;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,11 +36,11 @@ public sealed class RevokedRefreshTokenCleanupBackgroundService : BackgroundServ
             try
             {
                 await Task.Delay(_options.RevokedRefreshTokenCleanupInterval, stoppingToken);
-                if (!_hostEnvironment.IsPrimaryNodeEnvironment)
+                if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
                         "Skipping revoked refresh token cleanup on non-primary node {InstanceId}",
-                        _hostEnvironment.InstanceId);
+                        _deployment.Value.InstanceId);
                     continue;
                 }
 

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Hosting;
 using System.ComponentModel;
 
 namespace NOF.Infrastructure;
@@ -7,7 +9,7 @@ namespace NOF.Infrastructure;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class OutboxOrderSequenceAllocator(
     IDbContext dbContext,
-    IHostEnvironment hostEnvironment)
+    IOptions<DeploymentOptions> deployment)
 {
     internal const int MaxOrderKeyLength = 512;
 
@@ -20,7 +22,7 @@ public sealed class OutboxOrderSequenceAllocator(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderKey);
 
-        var qualifiedOrderKey = Qualify(hostEnvironment.ServiceName, orderKey);
+        var qualifiedOrderKey = Qualify(deployment.Value.ServiceName, orderKey);
         if (!_localStates.TryGetValue(qualifiedOrderKey, out var localState))
         {
             var latest = await dbContext.Set<NOFOutboxOrderState>()

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -17,7 +18,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
     private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
     private readonly IObjectSerializer _objectSerializer;
     private readonly List<IChannel> _channels = [];
     private readonly Dictionary<string, string> _commandHandlerTypes = new(StringComparer.Ordinal);
@@ -29,7 +30,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
         IOptions<RabbitMQOptions> options,
         CommandHandlerRegistry commandHandlerRegistry,
         NotificationHandlerRegistry notificationHandlerRegistry,
-        IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         IServiceProvider serviceProvider,
         IObjectSerializer objectSerializer,
         ILogger<RabbitMQConsumerHostedService> logger)
@@ -38,7 +39,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
         _options = options;
         _commandHandlerRegistry = commandHandlerRegistry;
         _notificationHandlerRegistry = notificationHandlerRegistry;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
         _serviceProvider = serviceProvider;
         _objectSerializer = objectSerializer;
         _logger = logger;
@@ -76,7 +77,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
 
         var notificationRegistrations = BuildNotificationConsumerRegistrations(
             _notificationHandlerRegistry.Freeze(),
-            _hostEnvironment.ServiceName);
+            _deployment.Value.ServiceName);
 
         foreach (var registration in notificationRegistrations)
         {

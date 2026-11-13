@@ -26,7 +26,7 @@
     <IsPackable Condition="'$(_HasMauiWorkload)' == 'true'">true</IsPackable>
     <IsPackable Condition="'$(_HasMauiWorkload)' != 'true'">false</IsPackable>
     <PackageId>NOF.Hosting.Maui</PackageId>
-    <Description>.NET MAUI hosting for the NOF Framework — integrates the NOF step pipeline with the MAUI application lifecycle.</Description>
+    <Description>NOF client registration extensions for native .NET MAUI builders.</Description>
   </PropertyGroup>
 
   <!-- On Linux (no MAUI workload), exclude all source files to produce an empty assembly -->
@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\NOF.Hosting\NOF.Hosting.csproj" />
+    <ProjectReference Include="..\..\NOF.UI\NOF.UI.csproj" />
   </ItemGroup>
 
 </Project>

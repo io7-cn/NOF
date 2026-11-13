@@ -3,7 +3,6 @@ using NOF.Application.SourceGenerator;
 using NOF.Contract;
 using NOF.Contract.SourceGenerator;
 using NOF.Hosting.AspNetCore;
-using NOF.Hosting.SourceGenerator;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;
 
@@ -14,7 +13,7 @@ public class ClientGenerationRemovalTests
     [Fact]
     public void HostingAnalyzerAssembly_ShouldContainNoHttpRouteGeneratorsOrTransportDiagnostics()
     {
-        var types = typeof(NativeHostBuilderBuildAnalyzer).Assembly.GetTypes();
+        var types = typeof(ValueObjectLengthConfigurationAnalyzer).Assembly.GetTypes();
         Assert.DoesNotContain(types, type => typeof(IIncrementalGenerator).IsAssignableFrom(type));
         Assert.DoesNotContain(types, type => type.Name == "HttpApplicationServiceAnalyzer");
         Assert.DoesNotContain(new NOF.CodeFixes.AttributeRemovalCodeFixProvider().FixableDiagnosticIds,
@@ -29,7 +28,7 @@ public class ClientGenerationRemovalTests
         var assemblies = new[]
         {
             typeof(ApplicationServiceGenerator).Assembly,
-            typeof(NativeHostBuilderBuildAnalyzer).Assembly,
+            typeof(ValueObjectLengthConfigurationAnalyzer).Assembly,
             typeof(ValueObjectLengthConfigurationAnalyzer).Assembly
         };
         foreach (var assembly in assemblies.Distinct())

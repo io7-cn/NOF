@@ -56,7 +56,7 @@ Use `ReplaceOrAdd*` when the provider intentionally replaces a NOF default. Use 
 
 ## 3. Add Initialization Only When Necessary
 
-If the provider must act after host construction, implement `IApplicationInitializationStep`, define ordering with `Compare(...)`, and register it through `services.AddInitializationStep(...)` or `TryAddInitializationStep(...)`. Do not recreate `IServiceRegistrationStep`, `IAfter<T>`, or `IBefore<T>`.
+Use native IHostedService/IHostedLifecycleService for startup work. Database migration uses StartingAsync before consumers and HTTP start. HTTP composition is explicit after Build(). Do not reintroduce initialization steps or topology APIs; see docs/en/design/native-hosting.md.
 
 ## 4. Wire Repository Metadata
 

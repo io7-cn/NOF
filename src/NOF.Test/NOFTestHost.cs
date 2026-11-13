@@ -81,17 +81,32 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
 
     public void Dispose()
     {
-        Host.Dispose();
+        try
+        {
+            Host.StopAsync().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            Host.Dispose();
+        }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        if (Host is IAsyncDisposable asyncDisposable)
+        try
         {
-            return asyncDisposable.DisposeAsync();
+            await Host.StopAsync().ConfigureAwait(false);
         }
-
-        Host.Dispose();
-        return ValueTask.CompletedTask;
+        finally
+        {
+            if (Host is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                Host.Dispose();
+            }
+        }
     }
 }

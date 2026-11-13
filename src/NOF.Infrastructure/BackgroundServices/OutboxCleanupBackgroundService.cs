@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Hosting;
 namespace NOF.Infrastructure;
 
 /// <summary>
@@ -13,20 +14,20 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxCleanupBackgroundService> _logger;
     private readonly TransactionalMessageProcessorOptions _options;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
     private readonly ITenantProvider _tenantProvider;
 
     public OutboxCleanupBackgroundService(
         IServiceProvider serviceProvider,
         IOptions<TransactionalMessageOptions> options,
         ILogger<OutboxCleanupBackgroundService> logger,
-        IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         ITenantProvider tenantProvider)
     {
         _serviceProvider = serviceProvider;
         _options = options.Value.Outbox;
         _logger = logger;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
         _tenantProvider = tenantProvider;
     }
 
@@ -41,11 +42,11 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
             try
             {
                 await Task.Delay(_options.CleanupInterval, stoppingToken);
-                if (!_hostEnvironment.IsPrimaryNodeEnvironment)
+                if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
                         "Skipping outbox cleanup on non-primary node {InstanceId}",
-                        _hostEnvironment.InstanceId);
+                        _deployment.Value.InstanceId);
                     continue;
                 }
 
