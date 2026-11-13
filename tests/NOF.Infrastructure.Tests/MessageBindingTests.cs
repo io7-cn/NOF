@@ -90,7 +90,7 @@ public sealed class MessageBindingTests
         });
         var executor = new OperationExecutor(provider, new ApplicationServiceInvocationResolver(provider, registry));
         var result = await executor.ExecuteAsync(First, new Message(), Context.Empty, origin);
-        Assert.Equal("403", Assert.IsType<Denied>(result).ErrorCode);
+        Assert.Equal("403", Assert.IsType<Denied>(result).Title);
     }
 
     public interface IService : IApplicationService
@@ -101,7 +101,7 @@ public sealed class MessageBindingTests
         Empty MayFail(Message input);
     }
     public sealed record Message;
-    public sealed record Denied(string ErrorCode) : IInvocationFailure;
+    public sealed record Denied(string Title) : IFailure { public string Detail => "Denied"; }
     public sealed class Reject : IInvocationFilter
     {
         public static IReadOnlyList<InvocationFailureCase> FailureCases => [new("deny", typeof(Denied), typeof(Denied), "403", value => value, _ => "Denied")];

@@ -107,7 +107,7 @@ public sealed class CacheOAuthDeviceGrantService(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Code, sessionLookupFailure.Message);
+            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
         }
 
         var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;
@@ -303,7 +303,7 @@ public sealed class CacheOAuthDeviceGrantService(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Code, sessionLookupFailure.Message);
+            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
         }
 
         var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;

@@ -234,7 +234,7 @@ public sealed class TokenAuthorityServiceTests
             CancellationToken.None);
 
         Assert.NotNull(generateResult.ExpectFailure());
-        Assert.Equal("400", generateResult.ExpectFailure().Code);
+        Assert.Equal("400", generateResult.ExpectFailure().Title);
     }
 
     [Fact]

@@ -29,7 +29,7 @@ public sealed class InheritedFailureCaseTests
             public interface IService : IApplicationService
             {
                 [FailureCase("NotFound", "404")]
-                [FailureCase("Conflict", typeof(Details))]
+                [FailureCase("Conflict", "Conflict", typeof(Details))]
                 string Run(Query request);
             }
             public partial class Service : ApplicationService<IService>;
@@ -57,15 +57,15 @@ public sealed class InheritedFailureCaseTests
                     var typed = await handler.HandleAsync(new Query(2), context, default);
                     var conflict = await handler.HandleAsync(new Query(3), context, default);
                     var details = new Details(99);
-                    return constructed is Service.Run.NotFound { Message: "constructor" }
-                        && message is Service.Run.NotFound { Message: "message constructor" }
-                        && typed is Service.Run.NotFound { Message: "" }
+                    return constructed is Service.Run.NotFound { Detail: "constructor" }
+                        && message is Service.Run.NotFound { Detail: "message constructor" }
+                        && typed is Service.Run.NotFound { Detail: "" }
                         && conflict is Service.Run.Conflict { Error.Count: 42 }
                         && typeof(Handler.NotFound) == typeof(Service.Run.NotFound)
                         && typeof(Handler.Result) == typeof(Service.Run.Result)
                         && ReferenceEquals(new Service.Run.Conflict(details).Error, details)
-                        && new Service.Run.NotFound().ErrorCode == "404"
-                        && typeof(Service.Run.Conflict).GetProperty("ErrorCode") == null
+                        && new Service.Run.NotFound().Title == "404"
+                        && typeof(Service.Run.Conflict).GetProperty("Title") != null
                         && typeof(Service.Run).GetMethods().All(method => !method.Name.StartsWith("Create"))
                         && new Service.Run.Conflict(details).GetType() == typeof(Service.Run.Conflict);
                 }

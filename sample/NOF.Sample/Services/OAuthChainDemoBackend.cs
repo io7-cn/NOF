@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
+using NOF.Sample.UI.Services;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -16,8 +17,8 @@ public sealed class OAuthChainDemoBackend(
     IOAuthClientRepository clientRepository,
     IOptions<OAuthAuthorizationServerOptions> authorizationServerOptions)
 {
-    public union ClientReply(CreateDemoOAuthClientResponse, Failure);
-    public union TokenReply(DemoTokenResponse, Failure);
+    public union ClientReply(CreateDemoOAuthClientResponse, HttpTransportFailure);
+    public union TokenReply(DemoTokenResponse, HttpTransportFailure);
 
     private static readonly string[] AllowedScopes = ["sample.read", "sample.write"];
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -45,16 +46,13 @@ public sealed class OAuthChainDemoBackend(
 
         if (createResult is not OAuthClientSecretDescriptor success)
         {
-            return createResult switch
-            {
-                NOF.Abstraction.Failure failure => failure,
-                _ => throw new InvalidOperationException("The response contains no outcome case.")
-            };
+            var failure = createResult.Value as IFailure ?? throw new InvalidOperationException("The response contains no failure case.");
+            return new HttpTransportFailure(failure is OAuthClientConflict ? HttpStatusCode.Conflict : HttpStatusCode.BadRequest, failure.Title, failure.Detail);
         }
 
         if (string.IsNullOrWhiteSpace(success.ClientSecret))
         {
-            return new global::NOF.Abstraction.Failure("500", "Created OAuth client did not return a client secret.");
+            return new HttpTransportFailure(HttpStatusCode.InternalServerError, "Invalid OAuth response", "Created OAuth client did not return a client secret.");
         }
 
         return new CreateDemoOAuthClientResponse
@@ -110,13 +108,13 @@ public sealed class OAuthChainDemoBackend(
         if (authorizeResponse.StatusCode != HttpStatusCode.Redirect
             && authorizeResponse.StatusCode != HttpStatusCode.Found)
         {
-            return await CreateFailureAsync<DemoTokenResponse>(authorizeResponse, cancellationToken).ConfigureAwait(false);
+            return await CreateFailureAsync(authorizeResponse, cancellationToken).ConfigureAwait(false);
         }
 
         var redirectLocation = authorizeResponse.Headers.Location?.ToString();
         if (string.IsNullOrWhiteSpace(redirectLocation))
         {
-            return new global::NOF.Abstraction.Failure("500", "Authorization response did not contain redirect location.");
+            return new HttpTransportFailure(HttpStatusCode.InternalServerError, "Invalid OAuth response", "Authorization response did not contain redirect location.");
         }
 
         var code = GetRequiredQueryValue(redirectLocation, "code");
@@ -164,14 +162,14 @@ public sealed class OAuthChainDemoBackend(
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            return await CreateFailureAsync<DemoTokenResponse>(response, cancellationToken).ConfigureAwait(false);
+            return await CreateFailureAsync(response, cancellationToken).ConfigureAwait(false);
         }
 
         var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         var token = JsonSerializer.Deserialize<OAuthTokenResponseDocument>(payload, JsonOptions);
         if (token?.AccessToken is null)
         {
-            return new global::NOF.Abstraction.Failure("500", "Token response payload is invalid.");
+            return new HttpTransportFailure(HttpStatusCode.InternalServerError, "Invalid OAuth response", "Token response payload is invalid.");
         }
 
         return new DemoTokenResponse
@@ -184,12 +182,12 @@ public sealed class OAuthChainDemoBackend(
         };
     }
 
-    private static async Task<Failure> CreateFailureAsync<T>(
+    private static async Task<HttpTransportFailure> CreateFailureAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
         var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return new global::NOF.Abstraction.Failure(((int)response.StatusCode).ToString(), string.IsNullOrWhiteSpace(payload) ? response.ReasonPhrase ?? "Request failed." : payload);
+        return new HttpTransportFailure(response.StatusCode, response.ReasonPhrase ?? "OAuth request failed", string.IsNullOrWhiteSpace(payload) ? response.ReasonPhrase ?? "Request failed." : payload);
     }
 
     private static AuthenticationHeaderValue CreateBasicAuthorizationHeader(string clientId, string clientSecret)

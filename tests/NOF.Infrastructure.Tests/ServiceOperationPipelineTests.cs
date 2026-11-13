@@ -17,7 +17,7 @@ public class ServiceOperationPipelineTests
         services.AddInvocationFilter<Deny>();
         using var provider = services.BuildServiceProvider();
         var result = await Execute(provider);
-        Assert.Equal("403", Assert.IsType<Denied>(result).ErrorCode);
+        Assert.Equal("403", Assert.IsType<Denied>(result).Title);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class ServiceOperationPipelineTests
             => Task.FromResult<Reply?>(null);
     }
 
-    public sealed record Denied(string ErrorCode) : IInvocationFailure;
+    public sealed record Denied(string Title) : IFailure { public string Detail => "Denied"; }
     public sealed class Deny : IInvocationFilter
     {
         public static IReadOnlyList<InvocationFailureCase> FailureCases => [new("deny", typeof(Denied), typeof(Denied), "403", value => value, _ => "Forbidden")];

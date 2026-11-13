@@ -100,7 +100,7 @@ The first option requires authentication for every application request, includin
 marked `AllowAnonymous`. Ordinary operations additionally require a non-host identity
 tenant. The second rejects conflicting non-host request and identity tenants. Missing
 or `host` headers allow selection from the verified identity. Rejection occurs before
-handler dependency resolution, with HTTP 401 or 403 through ServiceRejectionHttpFilter. Both options
+handler dependency resolution, with HTTP 401 or 403 through the typed HTTP operation binding. Both options
 default to false for compatibility. Custom endpoints that bypass the NOF invocation bridge are unaffected.
 
 `[UseHostTenant]` deliberately changes execution tenancy after authorization. It is

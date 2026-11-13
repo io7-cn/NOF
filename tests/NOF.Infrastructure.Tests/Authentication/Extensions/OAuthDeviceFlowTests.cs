@@ -81,7 +81,7 @@ public sealed class OAuthDeviceFlowTests
 
         var wrongClient = await deviceGrantService.RedeemAsync(authorization.DeviceCode, "different-client");
         Assert.NotNull(wrongClient.ExpectFailure());
-        Assert.Equal("invalid_grant", wrongClient.ExpectFailure().Code);
+        Assert.Equal("invalid_grant", wrongClient.ExpectFailure().Title);
 
         timeProvider.Advance(TimeSpan.FromSeconds(5));
         var tokenContext = CreateHttpsContext(scope.Services);
@@ -105,9 +105,9 @@ public sealed class OAuthDeviceFlowTests
             CancellationToken.None);
 
         Assert.NotNull(pending.ExpectFailure());
-        Assert.Equal("authorization_pending", pending.ExpectFailure().Code);
+        Assert.Equal("authorization_pending", pending.ExpectFailure().Title);
         Assert.NotNull(tooFast.ExpectFailure());
-        Assert.Equal("slow_down", tooFast.ExpectFailure().Code);
+        Assert.Equal("slow_down", tooFast.ExpectFailure().Title);
 
         var approval = await deviceGrantService.ApproveAsync(authorization.UserCode, "user-42");
         var responses = await Task.WhenAll(
@@ -126,7 +126,7 @@ public sealed class OAuthDeviceFlowTests
 
         var noLongerPending = await deviceGrantService.GetPendingAsync(authorization.UserCode);
         Assert.NotNull(noLongerPending.ExpectFailure());
-        Assert.Equal("invalid_user_code", noLongerPending.ExpectFailure().Code);
+        Assert.Equal("invalid_user_code", noLongerPending.ExpectFailure().Title);
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class OAuthDeviceFlowTests
         Assert.NotNull(created.ExpectSuccess());
         Assert.NotNull(denied.ExpectSuccess());
         Assert.NotNull(redeemed.ExpectFailure());
-        Assert.Equal("access_denied", redeemed.ExpectFailure().Code);
+        Assert.Equal("access_denied", redeemed.ExpectFailure().Title);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public sealed class OAuthDeviceFlowTests
 
         Assert.NotNull(created.ExpectSuccess());
         Assert.NotNull(redeemed.ExpectFailure());
-        Assert.Equal("expired_token", redeemed.ExpectFailure().Code);
+        Assert.Equal("expired_token", redeemed.ExpectFailure().Title);
     }
 
     [Fact]
@@ -329,10 +329,10 @@ public sealed class OAuthDeviceFlowTests
 
     private sealed class AnonymousInitialAccessTokenHandler : IOAuthInitialAccessTokenHandler
     {
-        public Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+        public Task<OAuthInitialAccessAuthorization> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<OAuthMutation>(Empty.Instance);
+            return Task.FromResult<OAuthInitialAccessAuthorization>(Empty.Instance);
         }
     }
 }

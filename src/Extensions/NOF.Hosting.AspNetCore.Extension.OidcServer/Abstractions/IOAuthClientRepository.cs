@@ -25,5 +25,5 @@ public interface IOAuthClientRepository
         string clientId,
         CancellationToken cancellationToken = default);
 
-    Task<OAuthMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default);
+    Task<OAuthClientMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default);
 }

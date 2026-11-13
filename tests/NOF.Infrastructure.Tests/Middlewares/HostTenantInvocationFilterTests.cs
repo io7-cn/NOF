@@ -40,7 +40,7 @@ public sealed class HostTenantInvocationFilterTests
         var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
             .ExecuteAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(), Context.Empty, InvocationOrigin.Http);
 
-        Assert.Equal("401", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).ErrorCode);
+        Assert.Equal("Authentication required", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).Title);
         Assert.Null(provider.GetRequiredService<TenantProbe>().DependencyTenant);
     }
 

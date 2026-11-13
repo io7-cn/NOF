@@ -29,15 +29,12 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             .ConfigureAwait(false);
         if (authorization is not Empty)
         {
-            var authorizationFailure = authorization switch
+            return authorization switch
             {
-                Failure responseFailure => responseFailure,
+                OAuthInitialAccessTokenInvalid failure => CreateError(httpRequest, "invalid_token", failure.Detail, StatusCodes.Status401Unauthorized),
+                OAuthInitialAccessScopeMissing failure => CreateError(httpRequest, "insufficient_scope", failure.Detail, StatusCodes.Status403Forbidden),
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            var statusCode = string.Equals(authorizationFailure.Code, "insufficient_scope", StringComparison.Ordinal)
-                ? StatusCodes.Status403Forbidden
-                : StatusCodes.Status401Unauthorized;
-            return CreateError(httpRequest, authorizationFailure.Code, authorizationFailure.Message, statusCode);
         }
 
         var normalized = Normalize(request);
@@ -48,7 +45,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return CreateError(httpRequest, normalizedFailure.Code, normalizedFailure.Message);
+            return CreateError(httpRequest, normalizedFailure.Title, normalizedFailure.Detail);
         }
 
         var result = await registrationRepository
@@ -56,12 +53,8 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             .ConfigureAwait(false);
         if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            var resultFailure = result switch
-            {
-                Failure responseFailure => responseFailure,
-                _ => throw new InvalidOperationException("The response contains no outcome case.")
-            };
-            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
+            var resultFailure = result.Value as IFailure ?? throw new InvalidOperationException("The response contains no failure case.");
+            return CreateRepositoryError(httpRequest, resultFailure);
         }
 
         SetNoStore(httpRequest);
@@ -90,12 +83,8 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             .ConfigureAwait(false);
         if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            var resultFailure = result switch
-            {
-                Failure responseFailure => responseFailure,
-                _ => throw new InvalidOperationException("The response contains no outcome case.")
-            };
-            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
+            var resultFailure = result.Value as IFailure ?? throw new InvalidOperationException("The response contains no failure case.");
+            return CreateRepositoryError(httpRequest, resultFailure);
         }
 
         SetNoStore(httpRequest);
@@ -131,7 +120,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return CreateError(httpRequest, normalizedFailure.Code, normalizedFailure.Message);
+            return CreateError(httpRequest, normalizedFailure.Title, normalizedFailure.Detail);
         }
 
         var createRequest = normalizedSuccess;
@@ -166,12 +155,8 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             cancellationToken).ConfigureAwait(false);
         if (result is not OAuthClientRegistrationSecretDescriptor resultSuccess)
         {
-            var resultFailure = result switch
-            {
-                Failure responseFailure => responseFailure,
-                _ => throw new InvalidOperationException("The response contains no outcome case.")
-            };
-            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
+            var resultFailure = result.Value as IFailure ?? throw new InvalidOperationException("The response contains no failure case.");
+            return CreateRepositoryError(httpRequest, resultFailure);
         }
 
         SetNoStore(httpRequest);
@@ -198,12 +183,8 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             .ConfigureAwait(false);
         if (result is not Empty)
         {
-            var resultFailure = result switch
-            {
-                Failure responseFailure => responseFailure,
-                _ => throw new InvalidOperationException("The response contains no outcome case.")
-            };
-            return CreateRepositoryError(httpRequest, resultFailure.Code, resultFailure.Message);
+            var resultFailure = result.Value as IFailure ?? throw new InvalidOperationException("The response contains no failure case.");
+            return CreateRepositoryError(httpRequest, resultFailure);
         }
 
         SetNoStore(httpRequest);
@@ -465,21 +446,14 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
     private bool IsTransportAllowed(HttpRequest request)
         => !_options.RequireHttpsForClientRegistration || request.IsHttps;
 
-    private static AspNetResult CreateRepositoryError(HttpRequest request, string errorCode, string message)
-    {
-        if (string.Equals(errorCode, "invalid_token", StringComparison.Ordinal))
+    private static AspNetResult CreateRepositoryError(HttpRequest request, IFailure failure)
+        => failure switch
         {
-            return CreateError(request, errorCode, message, StatusCodes.Status401Unauthorized);
-        }
-
-        if (string.Equals(errorCode, "invalid_redirect_uri", StringComparison.Ordinal)
-            || string.Equals(errorCode, "invalid_client_metadata", StringComparison.Ordinal))
-        {
-            return CreateError(request, errorCode, message);
-        }
-
-        return CreateError(request, "server_error", message, StatusCodes.Status500InternalServerError);
-    }
+            OAuthClientRegistrationTokenInvalid => CreateError(request, "invalid_token", failure.Detail, StatusCodes.Status401Unauthorized),
+            OAuthClientRedirectUriInvalid => CreateError(request, "invalid_redirect_uri", failure.Detail),
+            OAuthClientMetadataInvalid => CreateError(request, "invalid_client_metadata", failure.Detail),
+            _ => CreateError(request, "server_error", failure.Detail, StatusCodes.Status500InternalServerError)
+        };
 
     private static AspNetResult CreateError(HttpRequest request, string error, string description, int statusCode = StatusCodes.Status400BadRequest)
     {

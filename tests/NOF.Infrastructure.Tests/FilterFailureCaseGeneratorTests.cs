@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Contract.SourceGenerator;
 using NOF.Infrastructure.SourceGenerator;
@@ -26,7 +27,7 @@ public sealed class FilterFailureCaseGeneratorTests
             using System.Threading.Tasks;
             public sealed record Details(int Count);
             {{declaration}}
-            [FailureCase("Custom", typeof(Details))]
+            [FailureCase("Custom", "Custom", typeof(Details))]
             public sealed partial class Policy : IInvocationFilter
             {
                 public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
@@ -38,7 +39,7 @@ public sealed class FilterFailureCaseGeneratorTests
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics()), item => item.Severity == DiagnosticSeverity.Error);
         var codeText = driver.GetRunResult().GeneratedTrees.Single().ToString();
-        Assert.DoesNotContain("union", codeText);
+        Assert.DoesNotContain("public union Result", codeText);
         Assert.DoesNotContain("CreateDenied", codeText);
         using var assemblyStream = new MemoryStream();
         var emitted = output.Emit(assemblyStream);
@@ -47,10 +48,10 @@ public sealed class FilterFailureCaseGeneratorTests
         var policy = assembly.GetType("Policy")!;
         var catalog = (IReadOnlyList<InvocationFailureCase>)policy.GetProperty("FailureCases")!.GetValue(null)!;
         var entry = catalog.Single(item => item.CaseType.Name == "Denied");
-        Assert.Equal(code ?? name, entry.ErrorCode);
+        Assert.Equal(code ?? name, entry.Title);
         var branch = Activator.CreateInstance(entry.CaseType, "message")!;
-        Assert.IsAssignableFrom<IInvocationFailure>(branch);
-        Assert.Equal("message", entry.ReadMessage(branch));
+        Assert.IsAssignableFrom<IFailure>(branch);
+        Assert.Equal("message", entry.ReadDetail(branch));
         var consumer = CSharpCompilation.CreateCompilation("Consumer_" + Guid.NewGuid().ToString("N"), """
             public static class Consumer
             {
@@ -86,7 +87,7 @@ public sealed class FilterFailureCaseGeneratorTests
             using NOF.Contract;
             using NOF.Infrastructure;
             [FailureCase("Denied", "000403")]
-            [FailureCase("Conflict", typeof(string))]
+            [FailureCase("Conflict", "Conflict", typeof(string))]
             public abstract partial class Policy : IInvocationFilter;
             """).WithAnalyzers([new FailureCaseAnalyzer()]).GetAnalyzerDiagnosticsAsync();
         Assert.Empty(diagnostics);

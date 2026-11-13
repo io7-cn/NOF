@@ -16,7 +16,7 @@ public sealed class MessageOperationExecutor(MessageBindingRegistry bindings, IO
             ?? throw new InvalidOperationException($"Cannot deserialize message for '{consumerId}'.");
         var context = Context.Empty.WithItems(InboundContextReflection.ReadHeaderItems(headers));
         var invocation = await executor.ExecuteAsync(binding.Operation, input, context, InvocationOrigin.Message, cancellationToken).ConfigureAwait(false);
-        if (invocation is not IInvocationFailure && InvocationResult.Value(invocation) is not Empty)
+        if (invocation is not IFailure && InvocationResult.Value(invocation) is not Empty)
         {
             throw new InvalidOperationException("The message operation did not return Empty or a declared filter failure.");
         }

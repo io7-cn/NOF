@@ -49,48 +49,9 @@ Do not directly resolve and invoke HandleAsync, which bypasses these policies.
 
 ## Native HTTP endpoint modules
 
-`IHttpEndpointModule` groups routes in the HTTP adapter. Use native MapGet/MapPost,
-route/body/query binding, TypedResults, endpoint filters and OpenAPI metadata.
-`[AutoInject(ServiceLifetime.Singleton)]` registers a module when its assembly is added
-as an application part; host initialization calls Map once. A host needs no per-operation
-registration or centralized collection of paths, bindings and status mappings.
+Use ordinary MapFeatureEndpoints extensions returning native RouteGroupBuilder. Map operations as `group.MapGet<OrderService.Find>("/{id}")`; configure Request member/full construction and Response<TCase> independently. Application operations implement IServiceOperationDefinition with static Descriptor/Describe, preserving type safety and AOT metadata. A small Hosting generator supplies the concrete request lambda type without inspecting functions or consuming generated output. The host calls feature mapping explicitly; no endpoint-module DI registration or central handler list is needed.
 
-```csharp
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class OrderEndpoints : IHttpEndpointModule
-{
-    public void Map(IEndpointRouteBuilder endpoints)
-    {
-        endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
-        {
-            var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
-            return order is IResult native ? native : order is null ? Results.NotFound() : Results.Ok(InvocationResult.Value(order));
-        }).AddEndpointFilter<ServiceRejectionHttpFilter>();
-    }
-}
-```
-
-Each generated operation exposes a typed `Descriptor` containing contract identity,
-operation name and nullability, with no HTTP dependency. `HttpContext.InvokeAsync`
-uses it to run HTTP authentication and the application inbound pipeline. It preserves
-policy response headers and returns the business value or mapped built-in native Problem result. The descriptor avoids
-string operation names or repeated request/response generic arguments at the endpoint.
-
-`ServiceRejectionHttpFilter` maps execution rejection to native ProblemDetails, honoring
-authorization status/challenge headers. Completed business failures remain business
-values and are mapped by the feature module. Use ASP.NET Core AddProblemDetails and
-status-code/exception middleware according to the host's error policy. HTTP authorization,
-files, content negotiation and other web facilities remain native ASP.NET Core concerns.
-
-For Native AOT, use endpoint methods with explicit response signatures when the service
-container is generated in the same compilation. ASP.NET Core's request-delegate generator
-cannot infer a lambda return type from another generator's not-yet-visible output.
-
-The sample implements configuration CRUD, files, active-file selection, configuration
-queries and SSE in ConfigNodeEndpoints. OAuth demo routes live in a separate module.
-Its Contract project references no Hosting package and contains no HTTP annotations.
-See the [complete REST example](configuration-rest.md) for requests, handlers, routes,
-host registration and verification.
+Default DTO/Empty/null/failure responses are 200 JSON/204/200 JSON null/422 ProblemDetails. Configure specific failures by type for 404/409 etc. Context transfers only explicit semantic inputs and does not flow back from business. Runtime OpenAPI uses the final immutable binding, without executing user functions. Native middleware, exception handling and protocols remain ASP.NET Core responsibilities. See [HTTP adaptation](http-adaptation.md) and the [complete CRUD slice](configuration-rest.md).
 
 ## Execution and transport boundaries
 

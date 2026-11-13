@@ -108,7 +108,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
 
             var failureDeclarations = ExpectedFailureModel.Declarations(method);
             var operationBase = $"global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>";
-            sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
+            sb.AppendLine($"    public abstract class {method.Name} : {operationBase}, global::NOF.Application.IServiceOperationDefinition");
             sb.AppendLine("    {");
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var allowNull = ExpectedFailureModel.AllowsNull(method);
@@ -122,7 +122,18 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             }
             sb.AppendLine("        /// <summary>Gets this application's descriptor with its complete response type.</summary>");
             var caseCatalog = new StringBuilder();
-            caseCatalog.Append("[new(typeof(").Append(method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append("))");
+            caseCatalog.Append('[');
+            var businessCases = BusinessCaseTypes(method.ReturnType);
+            foreach (var businessCase in businessCases)
+            {
+                if (caseCatalog.Length > 1)
+                { caseCatalog.Append(", "); }
+                var isFailure = businessCase.AllInterfaces.Any(type => type.ToDisplayString() == "NOF.Abstraction.IFailure");
+                caseCatalog.Append("new(typeof(").Append(businessCase.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append(')');
+                if (isFailure)
+                { caseCatalog.Append(", true"); }
+                caseCatalog.Append(')');
+            }
             foreach (var failure in failureDeclarations)
             {
                 var caseName = ExpectedFailureModel.CaseName(failure);
@@ -130,6 +141,9 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             }
             caseCatalog.Append(']');
             sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")}, resultCases: {caseCatalog});");
+            sb.AppendLine("        static global::NOF.Application.ServiceOperationDescriptor global::NOF.Application.IServiceOperationDefinition.Descriptor => Descriptor;");
+            sb.AppendLine("        /// <summary>Provides this operation's static type arguments to an adapter.</summary>");
+            sb.AppendLine("        public static TResult Describe<TResult>(global::NOF.Application.IServiceOperationDescriptorVisitor<TResult> visitor) => visitor.Visit(Descriptor);");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<object?> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Abstraction.Context context,");
@@ -152,6 +166,21 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
         }
 
         context.AddSource($"{classSymbol.ToDisplayString().Replace('.', '_')}.ApplicationService.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
+    }
+
+    private static ITypeSymbol[] BusinessCaseTypes(ITypeSymbol type)
+    {
+        var union = type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.UnionAttribute")
+            || type.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax().Kind().ToString() == "UnionDeclaration");
+        if (union)
+        {
+            var cases = type.GetMembers().OfType<IMethodSymbol>().Where(method => method.Parameters.Length == 1
+                && (method.MethodKind == MethodKind.Constructor || method.MethodKind == MethodKind.Conversion && SymbolEqualityComparer.Default.Equals(method.ReturnType, type)))
+                .Select(method => method.Parameters[0].Type).Distinct(SymbolEqualityComparer.Default).OfType<ITypeSymbol>().ToArray();
+            if (cases.Length > 0)
+            { return cases; }
+        }
+        return [type];
     }
 
 }

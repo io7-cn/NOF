@@ -69,7 +69,7 @@ public sealed class DefaultOAuthDeviceAuthorizationEndpoint(
         return createResult switch
         {
             OAuthDeviceAuthorizationResponse success => Results.Json(success),
-            Failure failure => CreateError(httpRequest, failure.Code, failure.Message),
+            Failure failure => CreateError(httpRequest, failure.Title, failure.Detail),
             _ => throw new InvalidOperationException("The response contains no outcome case.")
         };
     }

@@ -1,81 +1,87 @@
-# 配置节点 REST 实现
+# 配置节点 REST 完整实现
 
-[English](../../en/design/configuration-rest.md) · [应用服务](application-requests.md)
+[English](../../en/design/configuration-rest.md) · [HTTP 绑定规则](http-adaptation.md)
 
-实际示例将业务声明放在 NOF.Sample.Contract，现有生成操作的 override 放在
-NOF.Sample.Application，HTTP 适配器放在 NOF.Sample/Endpoints。宿主只配置服务容器和
-基础设施，功能模块负责路由、绑定、状态码和响应类型。
+Contract 声明成功值与 FailureCase，Application 实现生成的操作 Override。HTTP 适配器是一个普通静态功能扩展；宿主只注册一次 Application 程序集/服务容器，再调用 MapConfigNodeEndpoints。不注册端点模块服务，不在宿主逐 UseCase 注册 Handler。
 
-## 契约和 Handler
+## 完整端点适配器
 
 ```csharp
-public interface INOFSampleService : IApplicationService
+public static class ConfigNodeEndpoints
 {
-    [FailureCase("NameConflict", "config_node.name_conflict")]
-    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
-    [FailureCase("InvalidInput", "config_node.invalid_input")]
-    CreatedConfigNode CreateConfigNode(CreateConfigNodeRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    GetConfigNodeByIdResponse GetConfigNodeById(GetConfigNodeByIdRequest request);
-    GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    [FailureCase("ParentCycle", "config_node.parent_cycle")]
-    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
-    Empty UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    [FailureCase("HasChildren", typeof(NodeHasChildrenError))]
-    Empty DeleteConfigNode(DeleteConfigNodeRequest request);
-    // 文件、子节点、配置查询和流式操作也是普通业务声明。
+    public const string GetNodeRoute = "GetConfigNode";
+    public static RouteGroupBuilder MapConfigNodeEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var api = endpoints.MapGroup("/api").Context(context => context.TenantFromHeader(NOFAbstractionConstants.Transport.Headers.TenantId));
+        var nodes = api.MapGroup("/config-nodes").WithTags("Configuration nodes")
+            .Response<GetRootConfigNodesResponse>(output => output.Body(value => value.Nodes));
+        nodes.MapPost<NOFSampleService.CreateConfigNode>("")
+            .WithSummary("Create a configuration node")
+            .Response<CreatedConfigNode>(output => output.StatusCode(201)
+                .Header("Location", (value, context) => context.LinkTo(GetNodeRoute, new { id = value.Id })))
+            .Response<NOFSampleService.CreateConfigNode.NameConflict>(output => output.StatusCode(409))
+            .Response<NOFSampleService.CreateConfigNode.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapGet<NOFSampleService.GetRootConfigNodes>("");
+        nodes.MapGet<NOFSampleService.GetConfigNodeById>("/{id:long}")
+            .WithName(GetNodeRoute)
+            .Response<GetConfigNodeByIdResponse>(output => output.Body(value => value.Node))
+            .Response<NOFSampleService.GetConfigNodeById.NotFound>(output => output.StatusCode(404));
+        nodes.MapGet<NOFSampleService.GetConfigNodeChildren>("/{id:long}/children")
+            .Response<NOFSampleService.GetConfigNodeChildren.NotFound>(output => output.StatusCode(404));
+        nodes.MapPatch<NOFSampleService.UpdateConfigNodeParent>("/{id:long}/parent")
+            .Request(request => request.Route<long>("id").Body<MoveConfigNodeBody>().Map((id, body) => new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }))
+            .Response<NOFSampleService.UpdateConfigNodeParent.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.UpdateConfigNodeParent.ParentCycle>(output => output.StatusCode(409));
+        nodes.MapDelete<NOFSampleService.DeleteConfigNode>("/{id:long}")
+            .Response<NOFSampleService.DeleteConfigNode.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.DeleteConfigNode.HasChildren>(output => output.StatusCode(409));
+        nodes.MapPut<NOFSampleService.AddOrUpdateConfigFile>("/{id:long}/files/{fileName}")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.AddOrUpdateConfigFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.AddOrUpdateConfigFile.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapDelete<NOFSampleService.RemoveConfigFile>("/{id:long}/files/{fileName}")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.RemoveConfigFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.RemoveConfigFile.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapPut<NOFSampleService.SetActiveFile>("/{id:long}/active-file")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.SetActiveFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.SetActiveFile.InvalidInput>(output => output.StatusCode(400));
+        api.MapGet<NOFSampleService.GetConfiguration>("/configuration").WithTags("Configuration")
+            .Response<NOFSampleService.GetConfiguration.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.GetConfiguration.InvalidInput>(output => output.StatusCode(400));
+        api.MapGet<NOFSampleService.WatchSampleStream>("/sample-events").WithTags("Streaming")
+            .Response<IAsyncEnumerable<SampleStreamEvent>>(output => output.Result((events, _) => TypedResults.ServerSentEvents(events), new(typeof(SampleStreamEvent), "text/event-stream")))
+            .Response<NOFSampleService.WatchSampleStream.StreamUnavailable>(output => output.StatusCode(400));
+        return nodes;
+    }
 }
-public sealed record CreatedConfigNode(long Id);
-public partial class NOFSampleService : ApplicationService<INOFSampleService>;
+
+public sealed record MoveConfigNodeBody
+{
+    public required long? ParentId { get; init; }
+}
 ```
 
-创建 Handler 校验名称和父节点、保存聚合、更新缓存并返回实际保存的节点 ID。
-移动拒绝不存在的父节点、自身作为父节点及后代循环，删除拒绝仍有子节点的节点。
-原有领域事件和投影 Handler 继续运行，业务 Handler 不引用 ASP.NET Core。
+## 契约、Handler 与宿主
 
-## HTTP 模块
+INOFSampleService 声明 CreateConfigNode、GetConfigNodeById、GetRootConfigNodes、UpdateConfigNodeParent、DeleteConfigNode，以及文件/配置/SSE 操作。Create 返回 CreatedConfigNode；FailureCase 区分 NameConflict、ParentNotFound、InvalidInput、NotFound、ParentCycle、HasChildren，后者携带 NodeHasChildrenError。全部分支通过 IFailure 提供 Title/Detail，HTTP 状态按生成的具体类型选择。
 
-ConfigNodeEndpoints 实现 IHttpEndpointModule，沿用 AutoInject 程序集初始化器注册：
-
-| HTTP | 路径 | 输入绑定 | 成功响应 |
-| --- | --- | --- | --- |
-| POST | /api/config-nodes | body: name、可选 parentId | 201 CreatedConfigNode，Location 指向 GET |
-| GET | /api/config-nodes | 无 | 200 根节点 ConfigNodeDto 数组 |
-| GET | /api/config-nodes/{id} | path id | 200 ConfigNodeDto |
-| GET | /api/config-nodes/{id}/children | path id | 200 子节点投影 |
-| PATCH | /api/config-nodes/{id}/parent | path id；body parentId，允许显式 null | 204 |
-| DELETE | /api/config-nodes/{id} | path id | 204 |
-| PUT | /api/config-nodes/{id}/files/{fileName} | path 身份；body content | 204 |
-| DELETE | /api/config-nodes/{id}/files/{fileName} | path 身份 | 204 |
-| PUT | /api/config-nodes/{id}/active-file | path id；body fileName，允许显式 null | 204 |
-| GET | /api/configuration | query appName | 200 配置内容 |
-| GET | /api/sample-events | query topic/count/intervalMilliseconds/forceFailure | SSE |
-
-HTTP Body 类型属于适配器，与业务请求分开。例如 MoveConfigNodeBody 只包含 parentId，
-端点使用 path id 和 body parentId 构建业务请求；伪造 body nodeId 不能修改操作目标。
-省略 parentId 属于非法输入，显式 null 表示移动到根节点。
-
-移动端点实际使用原生绑定和结果类型：
+NOFSampleService 继承 ApplicationService<INOFSampleService>。Create 校验值对象/父级、保存聚合并返回持久化 ID；Move 拒绝缺失父级和循环；Delete 拒绝有子节点的删除。领域事件、缓存和读取投影仍在 Application/Domain，Handler 不引用 ASP.NET Core。
 
 ```csharp
-nodes.MapPatch("/{id:long}/parent", MoveAsync);
-
-public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(
-    long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-    => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct))
-        .Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 409),
-            error => ToProblem(error.ErrorCode, error.Message, 422));
+builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
+builder.AddApplicationService<NOFSampleService>();
+var app = builder.Build();
+app.UseNOF();
+app.MapConfigNodeEndpoints();
+app.MapOAuthDemoEndpoints();
+app.MapOidcServer();
+app.MapHealthChecks("/health");
+app.MapOpenApi();
 ```
 
-业务失败返回 application/problem+json，包含 detail 和 code：节点不存在为 404，父节点不存在为
-422，名称冲突、循环父子关系、删除仍有子节点的节点为 409，输入校验为 400。
-ServiceRejectionHttpFilter 单独处理策略拒绝，保留 401/403 及 challenge 信息。
+PostgreSQL/Redis/RabbitMQ 由宿主独立选择。租户意图只从显式配置的 Header 读取，再由调用边界验证；缓存前缀隔离租户。Move 的 parentId 为必需可空字段：缺失无效，null 表示移到根，路由 id 不从 Body 读取。Empty 默认 204，Create 返回 201 和 Location；具体未找到/冲突/无效输入分支对应 404/409/400，其他声明失败默认 422。SSE 使用原生 Writer 和显式事件契约。
 
 ```http
 HTTP/1.1 201 Created
@@ -89,45 +95,17 @@ Content-Type: application/json
 HTTP/1.1 409 Conflict
 Content-Type: application/problem+json
 
-{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"Conflict","status":409,"detail":"Node with same name already exists.","code":"config_node.name_conflict"}
+{"type":"about:blank","title":"config_node.name_conflict","status":409,"detail":"Node with same name already exists."}
 ```
 
-## 宿主和调用方
+Title 是展示值，不作判别。不输出 code/message 别名，不自动铺开 Error，不套 Result 信封。UI 消费原生 HTTP 状态和 Problem title/detail；本地 ServerSampleApi 将 IFailure 转为 UI 自有端口结果，需要按状态决策的远程适配器保存真实 HttpStatusCode。
 
-```csharp
-builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
-builder.AddApplicationService<NOFSampleService>();
-builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly); // 显式加入端点模块所在程序集
-builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
-builder.Services.AddProblemDetails();
-var app = builder.Build();
-app.UseNOF();
-app.MapNOFEndpoints();
-app.UseStatusCodePages();
-app.MapOpenApi();
-```
+## 可执行源码
 
-现有宿主继续配置 PostgreSQL 每租户数据库、Redis 和 RabbitMQ，不逐项注册 CRUD 操作。
-独立 HTTP 程序集只需添加一次 ApplicationPart。缓存前缀包含 tenantId，避免缓存的资源跨越
-数据库租户边界。
+- [Contract](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Contract/INOFSampleService.cs)
+- [Application Handler](https://github.com/io7-cn/NOF/tree/main/sample/NOF.Sample.Application/RequestHandlers)
+- [完整端点适配器](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.cs)
+- [宿主](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Program.cs)
+- [集成测试](https://github.com/io7-cn/NOF/blob/main/sample-tests/NOF.Sample.Tests/ConfigNodeRestTests.cs)
 
-共享 UI 接口由应用自行维护。ServerSampleApi 调用本地操作，HttpSampleApi 显式消费原生
-资源响应、201/204 和 ProblemDetails，WASM/MAUI 不再调用旧 /rpc/NOFSample 路径。
-OAuth 演示使用 /api/oauth-demo，Downstream 检查使用
-/api/downstream/access-token-inspections，返回普通资源或 ProblemDetails。旧 RPC URL
-和协议读取器已删除；原生 SSE 调用方使用 System.Net.ServerSentEvents.SseParser。
-
-## 实际源码和验证
-
-- [服务契约](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Contract/INOFSampleService.cs)
-- [创建 Handler](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Application/RequestHandlers/CreateConfigNode.cs)
-- [完整端点模块及 HTTP Body](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.cs)
-- [宿主注册](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Program.cs)
-- [UI HTTP 适配器](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.UI/Services/HttpSampleApi.cs)
-- [HTTP 集成测试](https://github.com/io7-cn/NOF/blob/main/sample-tests/NOF.Sample.Tests/ConfigNodeRestTests.cs)
-
-测试覆盖真实 Handler 和持久化、Location 跟随、层级投影、文件 CRUD、冲突和循环、非法 Body、
-SQLite 跨租户读取、实际 UI 适配器、Handler 构建前的策略拒绝、OpenAPI，以及旧隐式 RPC 路由
-不再暴露。修改 HTTP 桥接时运行示例测试项目和框架 Native AOT 冒烟。
-
-[当前统一操作与消息绑定 API](unified-operations.md)。
+测试覆盖真实 CRUD/持久化、Location 回读、投影、循环、文件、无效输入、租户隔离、UI、策略拒绝、OpenAPI 以及旧 RPC 路由不可用。关闭反射的 HTTP 冒烟测试也覆盖泛型操作 API。

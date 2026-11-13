@@ -54,3 +54,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [Contract 声明与执行边界](design/contract-boundaries.md)
 
 - [通用事务性发件箱](design/transactional-outbox.md)
+
+- [HTTP 适配](design/http-adaptation.md)

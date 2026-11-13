@@ -18,20 +18,14 @@ public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
     /// <inheritdoc />
     public override void Add(InvocationFilterRule item)
     {
-        var existing = Items.FirstOrDefault(rule => rule.Scope == item.Scope && rule.ServiceType == item.ServiceType
+        var existing = Items.ToList().FindIndex(rule => rule.Scope == item.Scope && rule.ServiceType == item.ServiceType
             && rule.OperationId == item.OperationId && rule.FilterType == item.FilterType);
-        if (existing is not null)
+        if (Items.IsFrozen)
+        { throw new InvalidOperationException("Invocation rules are frozen."); }
+        if (existing >= 0)
         {
-            if (Items.IsFrozen || existing.Excluded != item.Excluded
-                || existing.Order.HasValue && item.Order.HasValue && existing.Order != item.Order)
-            {
-                throw new InvalidOperationException($"Conflicting invocation rules for '{item.FilterType}' in the same scope.");
-            }
-            if (!existing.Order.HasValue && item.Order.HasValue)
-            {
-                var index = Items.IndexOf(existing);
-                Items[index] = existing with { Order = item.Order };
-            }
+            var previous = Items[existing];
+            Items[existing] = item with { Order = item.Order ?? previous.Order };
             return;
         }
         base.Add(item);
@@ -58,10 +52,7 @@ public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
                 }
                 else if (active.TryGetValue(rule.FilterType, out var inherited))
                 {
-                    if (rule.Order.HasValue && rule.Order.Value != inherited.Order)
-                    {
-                        throw new InvalidOperationException($"Filter '{rule.FilterType}' cannot change its inherited order. Exclude it before re-enabling it in a more specific scope.");
-                    }
+                    active[rule.FilterType] = inherited with { Order = rule.Order ?? inherited.Order };
                 }
                 else
                 {

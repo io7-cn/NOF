@@ -71,7 +71,7 @@ public sealed class DefaultOAuthTokenEndpoint(
         return result switch
         {
             OAuthTokenEndpointResponse success => Results.Json(success),
-            Failure failure => OidcRoutes.CreateOAuthErrorResult(failure.Code, failure.Message),
+            Failure failure => OidcRoutes.CreateOAuthErrorResult(failure.Title, failure.Detail),
             _ => throw new InvalidOperationException("The response contains no outcome case.")
         };
     }

@@ -8,13 +8,6 @@ using System.Runtime.CompilerServices;
 
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
-/// <summary>Maps the protocol endpoints during HTTP application composition.</summary>
-public sealed class OidcServerEndpointModule : IHttpEndpointModule
-{
-    /// <inheritdoc />
-    public void Map(IEndpointRouteBuilder endpoints) => endpoints.MapOidcServer();
-}
-
 /// <summary>Seeds configured clients during native host startup, after migration StartingAsync completes.</summary>
 public sealed class OidcServerBootstrapService(IServiceProvider services) : IHostedService
 {
@@ -46,7 +39,7 @@ public sealed class OidcServerBootstrapService(IServiceProvider services) : IHos
                 continue;
             }
 
-            if (existing is not Failure { Code: "not_found" })
+            if (existing is not OAuthClientNotFound)
             {
                 EnsureSucceeded(
                     existing,
@@ -64,14 +57,14 @@ public sealed class OidcServerBootstrapService(IServiceProvider services) : IHos
 
     private static void EnsureSucceeded(IUnion result, string clientId, string clientType)
     {
-        if (result.Value is not null and not Failure)
+        if (result.Value is not null and not IFailure)
         {
             return;
         }
 
-        var failure = result.Value as Failure
+        var failure = result.Value as IFailure
             ?? throw new InvalidOperationException("The response contains no outcome case.");
         throw new InvalidOperationException(
-            $"Failed to bootstrap OIDC {clientType} client '{clientId}': [{failure.Code}] {failure.Message}");
+            $"Failed to bootstrap OIDC {clientType} client '{clientId}': [{failure.Title}] {failure.Detail}");
     }
 }

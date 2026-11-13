@@ -26,6 +26,16 @@ public abstract class SampleHttpApi(HttpClient httpClient)
                 ? (UiResponse<TPayload>)await ReadResourceAsync<TPayload>(response, token)
                 : (UiResponse<TPayload>)await ReadProblemAsync(response, token), ct);
 
+    protected Task<HttpTransportResponse<TPayload>> SendTransportResourceAsync<TRequest, TPayload>(HttpMethod method, string uri,
+        TRequest request, Context context, CancellationToken ct)
+        => SendAsync(method, uri, request, context, static async (response, token) =>
+        {
+            if (response.IsSuccessStatusCode)
+            { return (HttpTransportResponse<TPayload>)await ReadResourceAsync<TPayload>(response, token); }
+            var problem = await ReadProblemAsync(response, token);
+            return new HttpTransportFailure(response.StatusCode, problem.Title, problem.Detail);
+        }, ct);
+
     protected Task<TResponse> SendValueAsync<TRequest, TResponse>(
         HttpMethod method, string uri, TRequest request, Context context, CancellationToken ct)
         => SendAsync(method, uri, request, context,
@@ -52,7 +62,7 @@ public abstract class SampleHttpApi(HttpClient httpClient)
         if (!response.IsSuccessStatusCode)
         {
             var failure = await ReadProblemAsync(response, ct);
-            throw new HttpRequestException(failure.Message, null, response.StatusCode);
+            throw new HttpRequestException(failure.Detail, null, response.StatusCode);
         }
         return await response.Content.ReadFromJsonAsync(JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), ct)
             ?? throw new InvalidOperationException("The resource response was empty.");
@@ -70,12 +80,12 @@ public abstract class SampleHttpApi(HttpClient httpClient)
         {
             using var problem = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
             var root = problem.RootElement;
-            var code = root.TryGetProperty("code", out var value) && value.ValueKind == JsonValueKind.String
-                ? value.GetString() : fallback.Code;
+            var code = root.TryGetProperty("title", out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() : fallback.Title;
             var detail = root.TryGetProperty("detail", out value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString() : root.TryGetProperty("title", out value) && value.ValueKind == JsonValueKind.String
-                    ? value.GetString() : fallback.Message;
-            return new Failure(string.IsNullOrWhiteSpace(code) ? fallback.Code : code, detail ?? fallback.Message);
+                    ? value.GetString() : fallback.Detail;
+            return new Failure(string.IsNullOrWhiteSpace(code) ? fallback.Title : code, detail ?? fallback.Detail);
         }
         catch (JsonException)
         {

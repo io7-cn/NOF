@@ -94,10 +94,10 @@ public sealed class InvocationPlanTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void SameScope_UseAndExcludeAlwaysConflict(bool excludeFirst)
+    public void SameScope_UseAndExcludeUseTheLastDeclaration(bool excludeFirst)
     {
-        var services = new ServiceCollection();
-        Assert.Throws<InvalidOperationException>(() => services.AddInvocationFilters(filters =>
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        services.AddInvocationFilters(filters =>
         {
             if (excludeFirst)
             {
@@ -109,11 +109,14 @@ public sealed class InvocationPlanTests
                 filters.Global.Use<First>();
                 filters.Global.Exclude<First>();
             }
-        }));
+        });
+        using var provider = services.BuildServiceProvider();
+        var filters = provider.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)).Filters;
+        Assert.Equal(excludeFirst ? 1 : 0, filters.Count);
     }
 
     [Fact]
-    public void ConflictingExplicitOrders_FailBeforeResolvingFilters()
+    public void MoreSpecificOrder_OverridesWithoutConstructingFilters()
     {
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddInvocationFilters(filters =>
@@ -122,8 +125,11 @@ public sealed class InvocationPlanTests
             filters.Service<IService>().Use<CatalogFilter>(20);
         });
         using var provider = services.BuildServiceProvider();
-        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)));
-        Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddInvocationFilters(filters => filters.Global.Use<First>(1).Use<First>(2)));
+        var plan = provider.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read));
+        Assert.Equal(20, Assert.Single(plan.Filters).Order);
+        using var sameScope = new ServiceCollection().UseInMemoryInvocationPipeline()
+            .AddInvocationFilters(filters => filters.Global.Use<First>(1).Use<First>(2)).BuildServiceProvider();
+        Assert.Equal(2, Assert.Single(sameScope.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)).Filters).Order);
     }
 
     [Fact]
@@ -175,13 +181,13 @@ public sealed class InvocationPlanTests
     {
         var denied = new CatalogFilter.Denied("denied");
         var entry = CatalogFilter.FailureCases.Single(item => item.CaseType == typeof(CatalogFilter.Denied));
-        Assert.Equal("000403", entry.ErrorCode);
-        Assert.Equal("000403", denied.ErrorCode);
-        Assert.Equal("denied", entry.ReadMessage(denied));
+        Assert.Equal("000403", entry.Title);
+        Assert.Equal("000403", denied.Title);
+        Assert.Equal("denied", entry.ReadDetail(denied));
         var details = new ConflictDetails(42);
         var custom = CatalogFilter.FailureCases.Single(item => item.CaseType == typeof(CatalogFilter.Conflict));
         Assert.Equal(typeof(ConflictDetails), custom.ErrorType);
-        Assert.Null(custom.ErrorCode);
+        Assert.Equal("Conflict", custom.Title);
         Assert.Same(details, custom.ReadError(new CatalogFilter.Conflict(details)));
         Assert.Null(typeof(CatalogFilter).GetNestedType("Result"));
         Assert.DoesNotContain(typeof(CatalogFilter).GetMethods(), method => method.Name.StartsWith("Create", StringComparison.Ordinal));
@@ -252,7 +258,7 @@ public sealed class InvocationPlanTests
 public sealed record ConflictDetails(int Id);
 
 [FailureCase("Denied", "000403")]
-[FailureCase("Conflict", typeof(ConflictDetails))]
+[FailureCase("Conflict", "Conflict", typeof(ConflictDetails))]
 public sealed partial class CatalogFilter : IInvocationFilter
 {
     public CatalogFilter() => throw new InvalidOperationException("Catalog metadata must not construct a filter");

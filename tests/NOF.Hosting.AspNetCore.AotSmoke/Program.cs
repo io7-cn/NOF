@@ -38,7 +38,7 @@ builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredServ
 builder.Services.AddOutbox(outbox => outbox.Add<SmokeIntent, SmokeIntentHandler>("smoke.intent", 1));
 await using var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+SmokeEndpointModule.Map(app);
 app.MapOpenApi();
 using (var scope = app.Services.CreateScope())
 {
@@ -66,7 +66,7 @@ using (var scope = app.Services.CreateScope())
         .Describe(OrderServer.Read.Descriptor, InvocationOrigin.Http);
     Expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
         "Generated filter catalog was not captured without reflection");
-    Expect(ValidateReadOrder.FailureCases.Single().ErrorCode == "order.page", "Filter error code was lost");
+    Expect(ValidateReadOrder.FailureCases.Single().Title == "order.page", "Filter error code was lost");
     var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
     Expect(preview is OrderDto { Label: "preview" }, "Operations sharing request/response types lost their identity");
     var plain = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
@@ -74,7 +74,7 @@ using (var scope = app.Services.CreateScope())
     Expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
         "Nullable local response was rejected");
     var decision = await PlainOrderService.Decide.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(InvocationResult.Value(decision) is Failure { Code: "order.missing" }, "Business union invocation failed");
+    Expect(InvocationResult.Value(decision) is Failure { Title: "order.missing" }, "Business union invocation failed");
     var missing = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
     Expect(InvocationResult.Value(missing) is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
@@ -95,7 +95,7 @@ Expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(
 var conflictData = new OrderConflict(id);
 Expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
     "Inherited constructor replaced error data");
-Expect(new ExpectedOrderService.Evaluate.Missing().ErrorCode == "404", "Inherited failure lost its declared ErrorCode");
+Expect(new ExpectedOrderService.Evaluate.Missing().Title == "404", "Inherited failure lost its declared Title");
 var savedJson = JsonSerializer.Serialize(Empty.Instance, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>());
 Expect(savedJson == "{}", "Payload-free success serialized metadata");
 Expect(JsonSerializer.Deserialize(savedJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>()) is Empty,
@@ -108,7 +108,7 @@ Expect(updated == new OrderDto(id, "shipped", "default"), "Path identity/body bi
 var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
 Expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
 using var nullable = await http.GetAsync($"/native/nullable/{id}");
-Expect(nullable.StatusCode == HttpStatusCode.NoContent, "Nullable resource did not map to 204");
+Expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
 using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
 Expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
 var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderReadReceipt>());
@@ -119,7 +119,7 @@ Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAut
 using var invalid = await http.GetAsync($"/native/orders/{id}?page=-1");
 Expect(invalid.StatusCode == HttpStatusCode.BadRequest, "Inbound policy rejection was lost");
 using var problem = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
-Expect(problem.RootElement.GetProperty("code").GetString() == "order.page", "Policy rejection details were lost");
+Expect(problem.RootElement.GetProperty("title").GetString() == "order.page", "Policy rejection details were lost");
 using var failure = await http.PutAsJsonAsync($"/native/orders/{id}", new UpdateBody { State = "fail" }, JsonSerializerOptions.NOF.GetRequiredTypeInfo<UpdateBody>());
 Expect(failure.StatusCode == HttpStatusCode.BadRequest, "Business failure was not mapped");
 using var badBody = await http.PutAsync($"/native/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
@@ -148,7 +148,7 @@ var missingJson = JsonSerializer.Serialize(deleteOutcome,
     JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredMissing = JsonSerializer.Deserialize(missingJson,
     JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
-Expect(restoredMissing.Match(_ => "success", error => error.Message, _ => "children") == "Missing node",
+Expect(restoredMissing.Match(_ => "success", error => error.Detail, _ => "children") == "Missing node",
     "Source-generated expected-outcome metadata lost default Error data");
 using var openApi = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
 var put = openApi.RootElement.GetProperty("paths").GetProperty("/native/orders/{id}").GetProperty("put");
@@ -313,6 +313,8 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(OrderDto))]
 [JsonSerializable(typeof(UpdateBody))]
+[JsonSerializable(typeof(UpdateOrderRequest))]
+[JsonSerializable(typeof(ReadOrderRequest))]
 [JsonSerializable(typeof(OrderReadReceipt))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 public partial class SmokeJsonContext : JsonSerializerContext;
@@ -349,66 +351,25 @@ public sealed class SmokeOutboxStore : IOutboxStore
         => Task.FromResult((0, 0, 0));
 }
 
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class SmokeEndpointModule : IHttpEndpointModule
+public static class SmokeEndpointModule
 {
-    public void Map(IEndpointRouteBuilder endpoints)
+    public static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/native").AddEndpointFilter<ServiceRejectionHttpFilter>();
-        group.MapGet("/orders/{id:guid}", ReadAsync);
-        group.MapPut("/orders/{id:guid}", UpdateAsync);
-        group.MapGet("/protected/{id:guid}", ReadProtectedAsync);
-        group.MapGet("/nullable/{id:guid}", FindAsync);
-        group.MapGet("/decisions/{id:guid}", DecideAsync);
-        group.MapGet("/messages/{id:guid}", MessageAsync);
-        group.MapGet("/expected/{id:guid}", ExpectedAsync);
+        var group = endpoints.MapGroup("/native");
+        group.Filter<ValidateReadOrder>().Response<ValidateReadOrder.InvalidPage>(output => output.StatusCode(400));
+        group.MapGet<OrderServer.ReadValue>("/orders/{id:guid}");
+        group.MapPut<OrderServer.Update>("/orders/{id:guid}")
+            .Response<Failure>(output => output.StatusCode(400));
+        group.MapGet<OrderServer.ReadProtected>("/protected/{id:guid}");
+        group.MapGet<PlainOrderService.Find>("/nullable/{id:guid}");
+        group.MapGet<PlainOrderService.Decide>("/decisions/{id:guid}")
+            .Response<Failure>(output => output.StatusCode(404));
+        group.MapGet<OrderServer.ReadWithMessage>("/messages/{id:guid}");
+        group.MapGet<ExpectedOrderService.Evaluate>("/expected/{id:guid}")
+            .Response<ExpectedOrderService.Evaluate.Missing>(output => output.StatusCode(404))
+            .Response<ExpectedOrderService.Evaluate.Conflict>(output => output.StatusCode(409)
+                .ConfigureProblem(problem => problem.Detail(value => $"Conflict for {value.Error.Id}")));
     }
-    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ExpectedAsync(
-        Guid id, int? page, HttpContext http, CancellationToken ct)
-        => InvocationResult.Value(await http.InvokeAsync(ExpectedOrderService.Evaluate.Descriptor,
-            new ReadOrderRequest { Id = id, Page = page }, ct)) switch
-        {
-            OrderDto order => TypedResults.Ok(order),
-            ExpectedOrderService.Evaluate.Missing error => TypedResults.Problem(statusCode: 404, detail: error.Message),
-            ExpectedOrderService.Evaluate.Conflict error => TypedResults.Problem(statusCode: 409, detail: $"Conflict for {error.Error.Id}"),
-            ProblemHttpResult problem => problem,
-            _ => throw new InvalidOperationException("Unexpected outcome")
-        };
-
-    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ReadProtectedAsync(Guid id, HttpContext http, CancellationToken ct)
-        => PresentOrder(await http.InvokeAsync(OrderServer.ReadProtected.Descriptor, new ReadOrderRequest { Id = id }, ct));
-    public static async Task<Results<Ok<OrderDto>, NoContent, ProblemHttpResult>> FindAsync(Guid id, HttpContext http, CancellationToken ct)
-        => InvocationResult.Value(await http.InvokeAsync(PlainOrderService.Find.Descriptor, new ReadOrderRequest { Id = id }, ct)) switch
-        {
-            OrderDto order => TypedResults.Ok(order),
-            null => TypedResults.NoContent(),
-            ProblemHttpResult problem => problem,
-            _ => throw new InvalidOperationException("Unexpected outcome")
-        };
-    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> DecideAsync(Guid id, HttpContext http, CancellationToken ct)
-        => PresentOrder(await http.InvokeAsync(PlainOrderService.Decide.Descriptor, new ReadOrderRequest { Id = id }, ct), 404);
-    public static async Task<Results<Ok<OrderReadReceipt>, ProblemHttpResult>> MessageAsync(Guid id, HttpContext http, CancellationToken ct)
-        => InvocationResult.Value(await http.InvokeAsync(OrderServer.ReadWithMessage.Descriptor, new ReadOrderRequest { Id = id }, ct)) switch
-        {
-            OrderReadReceipt receipt => TypedResults.Ok(receipt),
-            ProblemHttpResult problem => problem,
-            _ => throw new InvalidOperationException("Unexpected outcome")
-        };
-    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> UpdateAsync(Guid id, UpdateBody body, HttpContext http, CancellationToken ct)
-        => PresentOrder(await http.InvokeAsync(OrderServer.Update.Descriptor,
-            new UpdateOrderRequest { Id = id, Status = body.State }, ct));
-    public static async Task<Results<Ok<OrderDto>, ProblemHttpResult>> ReadAsync(Guid id, int? page, HttpContext http, CancellationToken ct)
-        => PresentOrder(await http.InvokeAsync(OrderServer.ReadValue.Descriptor, new ReadOrderRequest { Id = id, Page = page }, ct));
-    private static Results<Ok<OrderDto>, ProblemHttpResult> PresentOrder(object? result, int failureStatus = 400)
-        => InvocationResult.Value(result) switch
-        {
-            OrderDto order => TypedResults.Ok(order),
-            Failure failure => TypedResults.Problem(statusCode: failureStatus, detail: failure.Message),
-            ValidateReadOrder.InvalidPage failure => TypedResults.Problem(statusCode: 400, detail: failure.Message,
-                extensions: new Dictionary<string, object?> { ["code"] = failure.ErrorCode }),
-            ProblemHttpResult problem => problem,
-            _ => throw new InvalidOperationException("Unexpected outcome")
-        };
 }
 
 public union OrderReceipt(OrderReadReceipt, Failure);
@@ -417,7 +378,7 @@ public sealed record OrderConflict(Guid Id);
 public interface IExpectedOrderService : IApplicationService
 {
     [FailureCase("Missing", "404")]
-    [FailureCase("Conflict", typeof(OrderConflict))]
+    [FailureCase("Conflict", "Conflict", typeof(OrderConflict))]
     OrderDto Evaluate(ReadOrderRequest request);
 }
 public partial class ExpectedOrderService : ApplicationService<IExpectedOrderService>;

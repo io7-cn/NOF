@@ -134,23 +134,24 @@ builder.UseDbContext<AppDbContext>()
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapOrderEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
 ## 8. Map native HTTP endpoints
 
-Place a module in the host project. Application parts register it automatically:
+Place an ordinary feature extension in the host project and call it after Build:
 
 ```csharp
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class HealthEndpoints : IHttpEndpointModule
+public static class OrderEndpoints
 {
-    public void Map(IEndpointRouteBuilder endpoints)
-        => endpoints.MapGet("/api/health", async (HttpContext http, CancellationToken ct)
-            => TypedResults.Ok(await http.InvokeAsync(AppService.Health.Descriptor, new Empty(), ct)))
-            .AddEndpointFilter<ServiceRejectionHttpFilter>();
+    public static RouteGroupBuilder MapOrderEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api");
+        group.MapGet<AppService.Health>("/health");
+        return group;
+    }
 }
 ```
 
@@ -170,6 +171,6 @@ Keep HTTP namespaces and module types in the host project; the Contract project 
 
 - `WebApplication.CreateBuilder(args).AddNOF()` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
 - `AddApplicationPart(...)` executes generated assembly initializers; `AddApplicationService<T>()` explicitly registers the RPC server.
-- Call app.UseNOF() and app.MapNOFEndpoints() after native Build() to install HTTP behavior and map endpoint modules.
+- Call app.UseNOF() and ordinary feature extensions after native Build(); map native health checks/OIDC explicitly.
 - Add RabbitMQ, Redis, or OIDC packages only when the application needs those providers.
 - Application handlers should inject `IDbContext` / `IRepository<T>`; keep EF Core types in the host.

@@ -66,16 +66,12 @@ public sealed class TenantRequestAuthorizationTests
         builder.AddApplicationService<TenantServer>();
         await using var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
-        app.MapPost("/tenant", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
-            Present(await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)), request, ct)))
-            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
-        app.MapPost("/host", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
-            Present(await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)), request, ct)))
-            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
-        app.MapPost("/stream", async (Empty request, Microsoft.AspNetCore.Http.HttpContext http, CancellationToken ct) =>
-            await http.InvokeAsync(new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)), request, ct))
-            .AddEndpointFilter<ServiceRejectionHttpFilter>().ProducesProblem(401).ProducesProblem(403);
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
+        var routes = app.MapGroup("").Context(context => context.TenantFromHeader(NOFAbstractionConstants.Transport.Headers.TenantId));
+        routes.MapPost("/tenant", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)));
+        routes.MapPost("/host", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)));
+        routes.MapPost("/stream", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)));
         app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();

@@ -436,7 +436,7 @@ public static partial class NOFOidcServerExtensions
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return Fail("invalid_grant", validateResultFailure.Message);
+            return Fail("invalid_grant", validateResultFailure.Detail);
         }
 
         var claims = validateResultSuccess.Claims
@@ -475,7 +475,7 @@ public static partial class NOFOidcServerExtensions
         switch (revokeResult)
         {
             case Failure failure:
-                return Fail("invalid_grant", failure.Message);
+                return Fail("invalid_grant", failure.Detail);
             case Empty:
                 break;
             default:
@@ -786,7 +786,7 @@ public static partial class NOFOidcServerExtensions
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return Fail(issueResultFailure.Code, issueResultFailure.Message);
+            return Fail(issueResultFailure.Title, issueResultFailure.Detail);
         }
 
         return new OAuthTokenEndpointResponse

@@ -45,7 +45,7 @@ must identify that prerequisite and must not bypass protected-main review gates.
 Client generation is completely removed: retain proto-style contracts and generated
 server operations, including static InvokeAsync entries. No interface/HTTP/Local Client
 is emitted. HTTP routes are explicit native endpoint modules. Consumers own remote HTTP
-integrations; the sample has explicit UI ports/adapters. Native IHttpEndpointModule, generated operation descriptors and an HTTP policy bridge
+integrations; the sample has explicit UI ports/adapters. Native feature mapping extensions, generic operation bindings and an HTTP policy bridge
 are implemented with the configuration CRUD slice. Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint and HTTP route generators are deleted; IRpcResponse and generated response-specific rejection factories are removed.
 
 Choose option 3. A use case accepts a typed request and execution context and returns
@@ -177,4 +177,4 @@ Update: native builders and lifecycle services now replace NOF host wrappers and
 
 Update: the [persistence boundary](persistence-boundaries.md) now uses aggregate repositories, DTO query ports and IUnitOfWork. The generic ORM facade is absent from core.
 
-Update: execution-policy failures now return generated filter-owned cases through the same open invocation result path as business values. Handlers retain closed typed returns. Infrastructure owns three-scope filter plans, Use/Exclude and static FailureCases/Describe; mutable context outcomes and rejection exceptions are removed. This supersedes the separate execution-outcome model above. See [current invocation extensions](invocation-extensions.md). HTTP Fluent binding/response/OpenAPI work remains deferred.
+Update: execution-policy failures now return generated filter-owned cases through the same open invocation result path as business values. Handlers retain closed typed returns. Infrastructure owns three-scope filter plans, Use/Exclude and static FailureCases/Describe; mutable context outcomes and rejection exceptions are removed. This supersedes the separate execution-outcome model above. See [current invocation extensions](invocation-extensions.md). HTTP binding/response/runtime OpenAPI is implemented in [HTTP adaptation](http-adaptation.md).

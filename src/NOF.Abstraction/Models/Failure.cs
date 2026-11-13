@@ -3,45 +3,47 @@ using System.Text.Json.Serialization;
 
 namespace NOF.Abstraction;
 
-/// <summary>A shared business failure for domain rules and operation outcomes.</summary>
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record Failure
+/// <summary>A transport-independent predictable failure.</summary>
+public interface IFailure
 {
-    /// <summary>Creates a failure with a stable code and user-facing message.</summary>
-    [JsonConstructor]
-    public Failure(string code, string message)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(code);
-        ArgumentNullException.ThrowIfNull(message);
-        Code = code;
-        Message = message;
-    }
+    /// <summary>Gets the failure summary.</summary>
+    string Title { get; }
+    /// <summary>Gets occurrence-specific details.</summary>
+    string Detail { get; }
+}
 
-    /// <summary>Gets the reserved JSON discriminator identifying a failure case.</summary>
+/// <summary>A predictable failure carrying typed business data.</summary>
+public interface IFailure<out TError> : IFailure
+{
+    /// <summary>Gets the failure data.</summary>
+    TError Error { get; }
+}
+
+/// <summary>A shared failure with a summary and occurrence-specific detail.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record Failure : IFailure
+{
+    /// <summary>Creates a predictable failure.</summary>
+    [JsonConstructor]
+    public Failure(string title, string detail)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentNullException.ThrowIfNull(detail);
+        Title = title;
+        Detail = detail;
+    }
+    /// <summary>Gets the optional union JSON discriminator.</summary>
     [JsonPropertyName("$kind")]
     [JsonRequired]
     public string Kind
     {
         get => "failure";
-        init
-        {
-            if (value != "failure")
-            {
-                throw new JsonException("A failure must have $kind 'failure'.");
-            }
-        }
+        init { if (value != "failure") { throw new JsonException("A failure must have $kind 'failure'."); } }
     }
-
-    /// <summary>Gets the application-specific failure code.</summary>
-    public string Code { get; }
-
-    /// <summary>Gets the user-facing failure message.</summary>
-    public string Message { get; }
-
-    /// <summary>Extracts the failure code and message.</summary>
-    public void Deconstruct(out string code, out string message)
-    {
-        code = Code;
-        message = Message;
-    }
+    /// <inheritdoc />
+    public string Title { get; }
+    /// <inheritdoc />
+    public string Detail { get; }
+    /// <summary>Extracts the summary and detail.</summary>
+    public void Deconstruct(out string title, out string detail) { title = Title; detail = Detail; }
 }

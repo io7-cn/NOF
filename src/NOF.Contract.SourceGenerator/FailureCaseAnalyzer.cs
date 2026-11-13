@@ -85,17 +85,17 @@ public sealed class FailureCaseAnalyzer : DiagnosticAnalyzer
         {
             var name = ExpectedFailureModel.CaseName(declaration);
             if (!ExpectedFailureModel.ValidName(name)
-                || !ExpectedFailureModel.HasCustomError(declaration) && string.IsNullOrWhiteSpace(ExpectedFailureModel.Code(declaration))
+                || string.IsNullOrWhiteSpace(ExpectedFailureModel.Title(declaration))
                 || ExpectedFailureModel.HasCustomError(declaration) && (ExpectedFailureModel.ErrorType(declaration) is not { } errorType
                     || errorType.TypeKind == TypeKind.Error || errorType.SpecialType == SpecialType.System_Void
                     || errorType is INamedTypeSymbol { IsUnboundGenericType: true }
                     || errorType.IsRefLikeType || errorType.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
-                || name == ownerName || name is "FailureCases" or "Describe" or "InvokeAsync" or "Result" or "RequestType" or "ResponseType" or "AllowsNullResponse" or "HandleAsync" or "Descriptor" or "Match" or "JsonClassifier" or "ErrorCode" or "Message" or "Error" or "Kind"
+                || name == ownerName || name is "FailureCases" or "Describe" or "InvokeAsync" or "Result" or "RequestType" or "ResponseType" or "AllowsNullResponse" or "HandleAsync" or "Descriptor" or "Match" or "JsonClassifier" or "Title" or "Detail" or "Error" or "Kind"
                     or "Value" or "Equals" or "GetHashCode" or "ToString" or "GetType" or "Deconstruct" or "EqualityContract" or "PrintMembers"
                 || !names.Add(name)
                 || declaration.AttributeClass?.TypeArguments.Any(type => type.TypeKind == TypeKind.Error) == true)
             {
-                Report(output, owner, "Each FailureCase requires a unique valid C# name that does not collide with operation members. The optional second argument is either a nonblank error code or a closed usable error data type; omitting it defaults the error code to the name.");
+                Report(output, owner, "Each FailureCase requires a unique valid C# name, a nonblank title, and an optional closed usable error type. Omitting the title defaults it to the branch name.");
             }
         }
     }

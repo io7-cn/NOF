@@ -20,7 +20,7 @@ public static class NOFSampleWebUIExtensions
                     }
                     break;
                 case Failure failure:
-                    messageService.Error(failure.Message);
+                    messageService.Error(failure.Detail);
                     break;
                 case null:
                     throw new InvalidOperationException("The response contains no outcome case.");
@@ -33,7 +33,7 @@ public static class NOFSampleWebUIExtensions
             switch (result)
             {
                 case Failure failure:
-                    messageService.Error(failure.Message);
+                    messageService.Error(failure.Detail);
                     return default;
                 case T value:
                     if (showSuccess && successMessage is not null)

@@ -21,7 +21,7 @@ public sealed class FailureCaseGeneratorTests
         public interface IService : IApplicationService
         {
             [FailureCase("NotFound", "404")]
-            [FailureCase("CanNotDeleteNode", typeof(ConflictDetails))]
+            [FailureCase("CanNotDeleteNode", "CanNotDeleteNode", typeof(ConflictDetails))]
             string Delete(Query request);
         }
         """;
@@ -34,8 +34,8 @@ public sealed class FailureCaseGeneratorTests
         var source = run.GeneratedTrees.Single().ToString();
         Assert.Contains("public union Result(string, global::Service.Delete.NotFound, global::Service.Delete.CanNotDeleteNode)", source);
         Assert.Contains("public global::ConflictDetails Error", source);
-        Assert.Contains("public string ErrorCode", source);
-        Assert.Contains("public string Message", source);
+        Assert.Contains("public string Title", source);
+        Assert.Contains("public string Detail", source);
         Assert.Contains("Match<TResult>", source);
         Assert.DoesNotContain("NOF.Domain", source);
         Assert.Contains("NOF.Application", source);
@@ -67,7 +67,7 @@ public sealed class FailureCaseGeneratorTests
     [InlineData("error/\"quoted\"\ncode")]
     [InlineData("error/code?query=1")]
     [InlineData("错误代码")]
-    public void ErrorCodes_AreOpaqueValues_IndependentOfCaseNames(string code)
+    public void Titles_AreOpaqueValues_IndependentOfCaseNames(string code)
     {
         var source = $$"""
             using NOF.Contract;
@@ -151,7 +151,7 @@ public sealed class FailureCaseGeneratorTests
                 [FailureCase("Missing")]
                 [FailureCase("Denied", "404")]
                 [FailureCase("Hidden", "404")]
-                [FailureCase("Conflict", typeof(Details))]
+                [FailureCase("Conflict", "Conflict", typeof(Details))]
                 string Run(Query request);
             }
             public static class Probe
@@ -168,13 +168,13 @@ public sealed class FailureCaseGeneratorTests
                     Service.Run.Result hidden = new Service.Run.Hidden("hidden");
                     var restoredHidden = System.Text.Json.JsonSerializer.Deserialize<Service.Run.Result>(
                         System.Text.Json.JsonSerializer.Serialize(hidden, options), options);
-                    return restored is Service.Run.Missing { ErrorCode: "Missing", Message: "missing" }
-                        && new Service.Run.Denied().ErrorCode == "404"
-                        && restoredHidden is Service.Run.Hidden { ErrorCode: "404" }
+                    return restored is Service.Run.Missing { Title: "Missing", Detail: "missing" }
+                        && new Service.Run.Denied().Title == "404"
+                        && restoredHidden is Service.Run.Hidden { Title: "404" }
                         && restoredCustom is Service.Run.Conflict { Error.Count: 42 }
-                        && typeof(Service.Run.Conflict).GetProperty("ErrorCode") == null
+                        && typeof(Service.Run.Conflict).GetProperty("Title") != null
                         && typeof(Service.Run.Missing).GetProperty("Error") == null
-                        && !customJson.Contains("errorCode");
+                        && customJson.Contains("title");
                 }
             }
             """, out _);
@@ -214,7 +214,7 @@ public sealed class FailureCaseGeneratorTests
                 public static string Run(Service.Delete.Result result) => result switch
                 {
                     string value => value,
-                    Service.Delete.NotFound error => error.Message,
+                    Service.Delete.NotFound error => error.Detail,
                     Service.Delete.CanNotDeleteNode error => error.Error.NodeId.ToString(),
                     null => throw new System.InvalidOperationException()
                 };

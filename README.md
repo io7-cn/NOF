@@ -88,7 +88,8 @@ builder.AddApplicationService<MyAppService>();
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapConfigNodeEndpoints();
+app.MapHealthChecks("/health");
 
 app.MapOpenApi();
 
@@ -190,4 +191,4 @@ This repository uses Central Package Management via `Directory.Packages.props`.
 
 This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
-Expected use-case failures are declared on non-partial Contract interfaces with FailureCase; concrete Result and branch types are generated in Application operations. Error codes remain opaque values; generated case names are independent. See the [guide](docs/en/design/expected-failures.md) ([简体中文](docs/zh-CN/design/expected-failures.md)).
+Expected use-case failures are declared on non-partial Contract interfaces with FailureCase; concrete Result and branch types are generated in Application operations. Every case implements IFailure with Title/Detail, optionally typed Error; dispatch uses the concrete type. Generic HTTP maps use MapGet<Service.Operation>, native groups and explicit feature mapping. See the [guide](docs/en/design/expected-failures.md) ([简体中文](docs/zh-CN/design/expected-failures.md)).

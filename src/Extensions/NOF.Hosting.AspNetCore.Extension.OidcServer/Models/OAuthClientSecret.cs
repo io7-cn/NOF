@@ -1,6 +1,4 @@
-using NOF.Abstraction;
-
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
-/// <summary>Contains the OAuthClientSecretDescriptor value or an OAuth failure.</summary>
-public union OAuthClientSecret(OAuthClientSecretDescriptor, Failure);
+/// <summary>Contains the client value or one explicitly declared administration failure.</summary>
+public union OAuthClientSecret(OAuthClientSecretDescriptor, OAuthClientNotFound, OAuthClientConflict, OAuthClientInvalidRequest, OAuthClientInvalidOperation, OAuthClientRegistrationTokenInvalid, OAuthClientMetadataInvalid, OAuthClientRedirectUriInvalid, OAuthClientStorageFailure);

@@ -9,5 +9,5 @@ internal static class ResultAssertions
 {
     public static T ExpectSuccess<T>(this NOF.Testing.TestOutcome<T> result) => Assert.IsAssignableFrom<T>(result.Value);
     public static Empty ExpectSuccess(this NOF.Testing.TestOutcome result) => Assert.IsType<Empty>(result.Value);
-    public static Failure ExpectFailure(this IUnion result) => Assert.IsType<Failure>(result.Value);
+    public static IFailure ExpectFailure(this IUnion result) => Assert.IsAssignableFrom<IFailure>(result.Value);
 }

@@ -18,7 +18,7 @@ public sealed class NOFSampleHarnessTests
         var invalid = await host.CallAsync<object?>(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = " " }, context, ct));
-        Assert.NotEmpty(Assert.IsType<NOFSampleService.CreateConfigNode.InvalidInput>(InvocationResult.Value(invalid)).Message);
+        Assert.NotEmpty(Assert.IsType<NOFSampleService.CreateConfigNode.InvalidInput>(InvocationResult.Value(invalid)).Detail);
 
         var parent = await host.CallAsync<object?>(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,

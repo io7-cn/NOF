@@ -9,6 +9,7 @@ using NOF.Contract;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using NOF.Hosting.AspNetCore;
+using NOF.Hosting.AspNetCore.SourceGenerator;
 using NOF.Infrastructure;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;
@@ -17,6 +18,23 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class AllSourceGeneratorsMonolithTests
 {
+    [Fact]
+    public void GenericHttpMap_RejectsAnUnrelatedOperationTypeAtCompilation()
+    {
+        var compilation = CSharpCompilation.CreateCompilation("InvalidHttpOperation", """
+            using NOF.Hosting.AspNetCore;
+            public static class Routes
+            {
+                public static void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
+                    => endpoints.MapGet<object>("/invalid");
+            }
+            """, isDll: true, typeof(HttpEndpointExtensions),
+            typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
+            typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),
+            typeof(IServiceOperationDefinition));
+        Assert.Contains(compilation.GetDiagnostics(), diagnostic => diagnostic.Id == "CS0311");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -59,6 +77,13 @@ public sealed class AllSourceGeneratorsMonolithTests
             {
                 public override Task HandleAsync(AppEvent @event, Context context, CancellationToken cancellationToken)
                     => Task.CompletedTask;
+            }
+
+            public static class Routes
+            {
+                public static void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
+                    => endpoints.MapPost<DemoServer.Ping>("/ping")
+                        .Request(request => request.Member(value => value.Value).FromBody("payload"));
             }
 
             public sealed record AppCommand(string Value);
@@ -108,7 +133,10 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(IValueObject<>),
             typeof(FailureCaseAttribute),
             typeof(OperationInvoker),
-            typeof(System.Text.Json.NOFAbstractionExtensions));
+            typeof(System.Text.Json.NOFAbstractionExtensions),
+            typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
+            typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),
+            typeof(HttpEndpointExtensions));
         ISourceGenerator[] generators =
         [
             new AutoInjectGenerator().AsSourceGenerator(),
@@ -117,7 +145,8 @@ public sealed class AllSourceGeneratorsMonolithTests
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
             new ApplicationServiceGenerator().AsSourceGenerator(),
-            new FilterFailureCaseGenerator().AsSourceGenerator()
+            new FilterFailureCaseGenerator().AsSourceGenerator(),
+            new OperationRequestBindingGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {
@@ -131,6 +160,7 @@ public sealed class AllSourceGeneratorsMonolithTests
         Assert.Empty(outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
+        Assert.Contains("HttpRequestBuilder<global::Monolith.PingRequest>", generatedCode);
         Assert.DoesNotContain("ServiceClient", generatedCode);
         Assert.Contains("public static async global::System.Threading.Tasks.Task<object?> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);

@@ -20,7 +20,7 @@ services.UseInMemoryInvocationPipeline();
 
 `AddInvocationFilter<T>(order)` is the global shorthand. Registration declares filters; the host chooses whether/how to run them. NOF hosts select the optional in-memory engine. A custom `IInvocationPipeline` must also implement `IInvocationPlanProvider.Describe` and describe its actual execution, rather than every registered filter. Direct DI registration as `IInvocationFilter` does not enable a stage; register a concrete filter/factory and use the configuration API.
 
-The default engine nests Global → Service → UseCase. Service identifies a Contract interface; UseCase identifies a full operation descriptor. Within each scope, ascending numeric order is followed by registration sequence. Duplicate active types execute once at their outer position. Conflicting explicit orders are errors; to reposition an inherited filter, exclude at one scope and re-enable at a deeper scope. Re-enabled filters take the new scope/order. Use and Exclude for the same type in the same scope conflict in either declaration order. A scope cannot silently override that conflict.
+The default engine nests Global → Service → UseCase. Service identifies a Contract interface; UseCase identifies a complete descriptor. Each scope orders by numeric order then registration sequence. Repeated same-scope Use/Exclude uses the last declaration, and later explicit order writes replace earlier ones. Deeper scopes override outer rules regardless of registration timing. Duplicate active types run once at their outer position with the effective order; exclude then re-enable at a deeper scope moves the stage into that scope.
 
 Excluded filters contribute no runtime stages or failure descriptions. Rules do not leak to sibling services/operations or other hosts. Rules freeze on plan resolution; late mutation fails. Generated operation mappings and captured implementation types allow startup validation and description without constructing handlers or filters.
 
@@ -30,7 +30,7 @@ Filters resolve lazily in the current scope under the normalized semantic contex
 
 ```csharp
 [FailureCase("Exceeded", "000429")]
-[FailureCase("Unavailable", typeof(LimitDetails))]
+[FailureCase("Unavailable", "Limit service unavailable", typeof(LimitDetails))]
 public sealed partial class RateLimitFilter : IInvocationFilter
 {
     public async ValueTask<object?> InvokeAsync(InvocationContext context, object input,
@@ -45,7 +45,7 @@ public sealed partial class RateLimitFilter : IInvocationFilter
 }
 ```
 
-`FailureCaseAttribute` remains declared in Contract and may also annotate a top-level nongeneric partial filter class. Infrastructure.SourceGenerator generates nested sealed branches and a static, read-only `RateLimitFilter.FailureCases` catalog. It generates no Filter.Result union or factories. Default branches have ErrorCode/Message; custom-data branches have Error only. Name is a C# identifier; opaque codes need not be identifiers. Contract.SourceGenerator reports NOF220 for invalid declarations and still generates no Contract code.
+`FailureCaseAttribute` remains declared in Contract and may also annotate a top-level nongeneric partial filter class. Infrastructure.SourceGenerator generates nested sealed branches and a static, read-only `RateLimitFilter.FailureCases` catalog. It generates no Filter.Result union or factories. All branches implement IFailure with Title/Detail; custom branches also implement IFailure<TError> and expose Error. Name is a C# identifier; Title is a nonblank summary, never a status discriminator. Contract.SourceGenerator reports NOF220 for invalid declarations and still generates no Contract code.
 
 `IInvocationFilter.FailureCases` defaults to empty. Its static virtual `Describe(InvocationDescriptionContext)` defaults to IncludeAll. A custom static description can select its own subset:
 
@@ -63,7 +63,7 @@ public static void Describe(InvocationDescriptionContext description)
 
 The effective `InvocationPlan` contains the selected filters, their selected FailureCases and operation BusinessCases. Runtime rejects failures omitted from that effective catalog and unknown result values, including uninitialized native unions. `InvocationResult.Value(value)` unwraps a boxed business union for an adapter's native switch; the execution path preserves the original business value.
 
-HTTP modules retain explicit ASP.NET Core binding and TypedResults. Built-in authorization values retain native ProblemDetails/challenge behavior; feature modules map custom filter/business cases explicitly. HTTP Fluent binding, response conventions and generated OpenAPI optimizations are deferred. Message consumption uses the same result path: expected filter failures roll back business work and mark the inbox record failed without a technical retry. Immediate/outbox message sending has no outbound middleware chain.
+Native HTTP feature extensions use generic operation maps, declarative Request/Response rules and runtime OpenAPI from immutable bindings. Filter views consume effective failure catalogs; mappings use concrete types and preserve native challenge behavior. See [HTTP adaptation](http-adaptation.md). Message consumption uses the same result path: expected filter failures roll back business work and mark the inbox record failed without a technical retry. Immediate/outbox message sending has no outbound middleware chain.
 
 ## Breaking migration
 

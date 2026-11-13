@@ -51,7 +51,7 @@ public sealed class ContractFailureOwnershipTests
             public interface IService : IApplicationService
             {
                 [FailureCase("NotFound", "404")]
-                [FailureCase("Conflict", typeof(Details))]
+                [FailureCase("Conflict", "Conflict", typeof(Details))]
                 Empty Run(Query request);
             }
             """, true, typeof(IApplicationService));

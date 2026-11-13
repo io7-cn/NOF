@@ -11,6 +11,33 @@ namespace NOF.SourceGenerator.Tests;
 
 public class ApplicationServiceGeneratorTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NativeUnionCases_AreDescribedWithoutControlFlowAnalysis(bool metadataOnly)
+    {
+        const string contract = """
+            using NOF.Contract;
+            using NOF.Abstraction;
+            namespace HttpUnion;
+            public sealed record Query;
+            public sealed record Reply(string Value);
+            public union Decision(Reply, Failure);
+            public interface IService : IApplicationService { Decision Read(Query input); }
+            """;
+        var declarations = CSharpCompilation.CreateCompilation("UnionContract", contract, true, typeof(IApplicationService), typeof(Failure));
+        var source = "public partial class Service : global::NOF.Application.ApplicationService<global::HttpUnion.IService>;";
+        var compilation = metadataOnly
+            ? CSharpCompilation.CreateCompilation("UnionApplication", source, true, declarations.CreateMetadataReference())
+            : CSharpCompilation.CreateCompilation("UnionApplication", contract + "\n" + source, true, typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ApplicationServiceGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+        Assert.DoesNotContain(output.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var generated = driver.GetRunResult().GeneratedTrees.Single().ToString();
+        Assert.Contains("new(typeof(global::HttpUnion.Reply))", generated);
+        Assert.Contains("new(typeof(global::NOF.Abstraction.Failure), true)", generated);
+    }
+
     [Fact]
     public void GeneratedOperations_PreservePlainAndNullableResponseTypes_WithSharedModels()
     {

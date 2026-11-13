@@ -35,4 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Contract.SourceGenerator\NOF.Contract.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore.SourceGenerator\NOF.Hosting.AspNetCore.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 </Project>

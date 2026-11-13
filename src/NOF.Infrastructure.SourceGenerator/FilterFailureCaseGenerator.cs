@@ -36,7 +36,7 @@ public sealed class FilterFailureCaseGenerator : IIncrementalGenerator
                     source.Append("namespace ").Append(type.ContainingNamespace.ToDisplayString()).AppendLine(";");
                 }
                 source.Append("partial class ").Append("@" + type.Name).AppendLine("\n{");
-                FailureBranchEmitter.Emit(source, declarations, "global::NOF.Infrastructure.IInvocationFailure");
+                FailureBranchEmitter.Emit(source, declarations);
                 source.AppendLine("    /// <summary>Gets the declared failure catalog without constructing the filter.</summary>");
                 source.AppendLine("    public static global::System.Collections.Generic.IReadOnlyList<global::NOF.Infrastructure.InvocationFailureCase> FailureCases { get; } =");
                 source.AppendLine("        global::System.Array.AsReadOnly(new global::NOF.Infrastructure.InvocationFailureCase[]\n        {");
@@ -46,11 +46,11 @@ public sealed class FilterFailureCaseGenerator : IIncrementalGenerator
                     var custom = ExpectedFailureModel.HasCustomError(item);
                     var payloadType = custom ? ExpectedFailureModel.ErrorTypeName(item) : name;
                     var id = SymbolDisplay.FormatLiteral(type.ToDisplayString() + "/" + name, true);
-                    var code = custom ? "null" : SymbolDisplay.FormatLiteral(ExpectedFailureModel.Code(item), true);
+                    var code = SymbolDisplay.FormatLiteral(ExpectedFailureModel.Title(item), true);
                     source.Append("            new(").Append(id).Append(", typeof(").Append(name).Append("), typeof(")
                         .Append(payloadType).Append("), ").Append(code).Append(", static value => ")
                         .Append(custom ? "((" + name + ")value).Error" : "value")
-                        .Append(", static value => ").Append(custom ? "null" : "((" + name + ")value).Message").AppendLine("),");
+                        .Append(", static value => ").Append("((" + name + ")value).Detail").AppendLine("),");
                 }
                 source.AppendLine("        });\n}");
                 output.AddSource(type.ToDisplayString().Replace('.', '_') + ".FilterFailures.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));

@@ -9,5 +9,5 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 /// </summary>
 public interface IOAuthInitialAccessTokenHandler
 {
-    Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken);
+    Task<OAuthInitialAccessAuthorization> HandleAsync(HttpRequest request, CancellationToken cancellationToken);
 }

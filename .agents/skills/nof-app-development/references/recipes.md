@@ -22,12 +22,12 @@ builder.UseDbContext<AppDbContext>()
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapOrderEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
-Use native Build(); app.UseNOF() installs HTTP middleware, and app.MapNOFEndpoints() explicitly maps registered IHttpEndpointModule instances. Startup I/O uses native hosted services.
+Use native Build(); app.UseNOF() installs scoped ambient activation, and ordinary app.MapOrderEndpoints() explicitly maps feature routes. Startup I/O uses native hosted services.
 
 ## Application Service Contract + Handler
 
@@ -119,10 +119,12 @@ This generated server entry runs authorization, tenant and invocation-scope poli
 No client interface or HTTP/Local Client is generated. Remote callers maintain their
 own HTTP integration, as demonstrated by the sample UI API ports/adapters.
 
-## HTTP endpoint module
+## HTTP endpoint feature
 
-Use IHttpEndpointModule with AutoInject(ServiceLifetime.Singleton). Map native ASP.NET
-Core endpoints, construct business requests from HTTP inputs and call
-http.InvokeAsync(Service.Operation.Descriptor, request, ct). Use
-ServiceRejectionHttpFilter for policy rejection and feature-owned TypedResults for
-business failures. Legacy HttpEndpoint/transport annotations and RPC adapters are deleted.
+Use an ordinary MapOrderEndpoints extension returning RouteGroupBuilder. Map with
+`group.MapGet<OrderService.GetOrder>("/{id}")` and typed Request/Response rules.
+Configure `.Response<OrderService.GetOrder.NotFound>(output => output.StatusCode(404))`.
+Call the feature extension after Build. No AutoInject module, discovery or mandatory
+endpoint filter is needed. Context values are explicit; business context never flows back.
+Runtime OpenAPI uses the same final binding; source generation only retains request types.
+See docs/en/design/http-adaptation.md and configuration-rest.md.

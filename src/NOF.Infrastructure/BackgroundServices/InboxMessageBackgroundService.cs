@@ -221,7 +221,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             var outcome = await services.GetRequiredService<MessageOperationExecutor>().ExecuteAsync(
                 pendingMessage.Payload, pendingMessage.Route, processingHeaders, cancellationToken);
 
-            if (outcome is IInvocationFailure)
+            if (outcome is IFailure)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 await MarkFailedAsync(message, outcome.ToString() ?? "Invocation declined", cancellationToken);

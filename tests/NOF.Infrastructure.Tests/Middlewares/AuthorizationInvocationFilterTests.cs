@@ -41,13 +41,13 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [Theory]
-    [InlineData(null, "forged", "403")]
-    [InlineData("host", "forged", "403")]
-    [InlineData("tenantb", "tenanta", "403")]
+    [InlineData(null, "forged", "Permission denied")]
+    [InlineData("host", "forged", "Permission denied")]
+    [InlineData("tenantb", "tenanta", "Permission denied")]
     [InlineData("tenantb", "tenantb", null)]
     [InlineData("tenantb", "host", null)]
     public async Task InvokeAsync_StrictTenantPolicy_ShouldValidateBeforeHandlerResolution(
-        string? identityTenant, string requestTenant, string? errorCode)
+        string? identityTenant, string requestTenant, string? title)
     {
         var userContext = new UserContext();
         var identity = CreateAuthenticatedIdentity();
@@ -71,10 +71,10 @@ public sealed class AuthorizationInvocationFilterTests
             return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
 
-        if (errorCode is not null)
+        if (title is not null)
         {
             Assert.Null(forwardedTenant);
-            Assert.Equal(errorCode, AsFailure(outcome).Code);
+            Assert.Equal(title, AsFailure(outcome).Title);
         }
         else
         {
@@ -98,7 +98,7 @@ public sealed class AuthorizationInvocationFilterTests
         }, default);
 
         Assert.False(nextCalled);
-        Assert.Equal("401", AsFailure(outcome).Code);
+        Assert.Equal("Authentication required", AsFailure(outcome).Title);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class AuthorizationInvocationFilterTests
         var deniedContext = CreateRequestContext(nameof(TestService.HostMethod));
         var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) =>
             throw new InvalidOperationException("An unauthorized host handler must not run"), default);
-        Assert.Equal("403", AsFailure(deniedOutcome).Code);
+        Assert.Equal("Permission denied", AsFailure(deniedOutcome).Title);
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage"));
@@ -144,7 +144,7 @@ public sealed class AuthorizationInvocationFilterTests
             return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
         Assert.Null(forwardedTenant);
-        Assert.Equal("401", AsFailure(outcome).Code);
+        Assert.Equal("Authentication required", AsFailure(outcome).Title);
     }
 
     [Fact]
@@ -195,8 +195,8 @@ public sealed class AuthorizationInvocationFilterTests
 
         var response = AsFailure(outcome);
         Assert.NotNull(response);
-        Assert.Equal("401", response.Code);
-        Assert.Equal("Please login first", response.Message);
+        Assert.Equal("Authentication required", response.Title);
+        Assert.Equal("Please login first", response.Detail);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class AuthorizationInvocationFilterTests
         var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         var denied = AsFailure(deniedOutcome);
-        Assert.Equal("403", denied.Code);
+        Assert.Equal("Permission denied", denied.Title);
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-method"));
@@ -236,7 +236,7 @@ public sealed class AuthorizationInvocationFilterTests
         var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         var denied = AsFailure(deniedOutcome);
-        Assert.Equal("403", denied.Code);
+        Assert.Equal("Permission denied", denied.Title);
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(
@@ -268,7 +268,7 @@ public sealed class AuthorizationInvocationFilterTests
             default);
 
         var denied = AsFailure(outcome);
-        Assert.Equal("403", denied.Code);
+        Assert.Equal("Permission denied", denied.Title);
     }
 
     [Fact]
@@ -377,9 +377,9 @@ public sealed class AuthorizationInvocationFilterTests
 
     private static Failure AsFailure(object? value) => value switch
     {
-        AuthorizationInvocationFilter.AuthenticationRequired failure => new(failure.ErrorCode, failure.Message),
-        AuthorizationInvocationFilter.PermissionDenied failure => new(failure.Error.ErrorCode, failure.Error.Message),
-        AuthorizationInvocationFilter.PolicyDenied failure => new(failure.Error.ErrorCode, failure.Error.Message),
+        AuthorizationInvocationFilter.AuthenticationRequired failure => new(failure.Title, failure.Detail),
+        AuthorizationInvocationFilter.PermissionDenied failure => new(failure.Title, failure.Detail),
+        AuthorizationInvocationFilter.PolicyDenied failure => new(failure.Title, failure.Detail),
         _ => throw new InvalidOperationException("Expected an authorization failure.")
     };
 

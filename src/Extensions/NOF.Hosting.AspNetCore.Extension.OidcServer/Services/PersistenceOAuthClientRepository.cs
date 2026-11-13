@@ -110,12 +110,12 @@ public sealed class PersistenceOAuthClientRepository(
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "client_id is required.");
+            return new OAuthClientInvalidRequest("client_id is required.");
         }
 
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         return client is null
-            ? new global::NOF.Abstraction.Failure("not_found", "OAuth client was not found.")
+            ? new OAuthClientNotFound()
             : ToDescriptor(client);
     }
 
@@ -131,28 +131,28 @@ public sealed class PersistenceOAuthClientRepository(
     {
         if (string.IsNullOrWhiteSpace(request.ClientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "client_id is required.");
+            return new OAuthClientInvalidRequest("client_id is required.");
         }
 
         if (await FindClientAsync(request.ClientId, cancellationToken).ConfigureAwait(false) is not null)
         {
-            return new global::NOF.Abstraction.Failure("conflict", "OAuth client already exists.");
+            return new OAuthClientConflict();
         }
 
         var redirectUris = NormalizeRedirectUris(request.RedirectUris);
         if (redirectUris is null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "redirect_uris must contain only absolute URIs.");
+            return new OAuthClientInvalidRequest("redirect_uris must contain only absolute URIs.");
         }
 
         if (!TryNormalizeJsonWebKeySet(request.JsonWebKeySet, out var jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "json_web_key_set must contain valid public RSA signing keys.");
+            return new OAuthClientInvalidRequest("json_web_key_set must contain valid public RSA signing keys.");
         }
 
         if (request.ClientType == OAuthClientType.Public && !string.IsNullOrEmpty(jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "public clients must not register client assertion keys.");
+            return new OAuthClientInvalidRequest("public clients must not register client assertion keys.");
         }
 
         var authenticationMethod = NormalizeAuthenticationMethod(
@@ -165,26 +165,26 @@ public sealed class PersistenceOAuthClientRepository(
             jsonWebKeySet);
         if (authenticationError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", authenticationError);
+            return new OAuthClientInvalidRequest(authenticationError);
         }
 
         var grantTypes = NormalizeGrantTypes(request.AllowedGrantTypes, request.ClientType);
         var responseTypes = NormalizeResponseTypes(request.AllowedResponseTypes, grantTypes);
         if (request.ClientType == OAuthClientType.Public && grantTypes.Contains(OAuthGrantTypes.ClientCredentials))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "public clients must not use the client_credentials grant type.");
+            return new OAuthClientInvalidRequest("public clients must not use the client_credentials grant type.");
         }
         var protocolError = request.AllowedGrantTypes.Count > 0 || request.AllowedResponseTypes.Count > 0
             ? ValidateProtocolMetadata(grantTypes, responseTypes, redirectUris)
             : null;
         if (protocolError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", protocolError);
+            return new OAuthClientInvalidRequest(protocolError);
         }
 
         if (!IsSupportedApplicationType(request.ApplicationType))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "application_type is not supported.");
+            return new OAuthClientInvalidRequest("application_type is not supported.");
         }
 
         var (secret, salt, hash) = request.ClientType == OAuthClientType.Public
@@ -234,31 +234,31 @@ public sealed class PersistenceOAuthClientRepository(
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "client_id is required.");
+            return new OAuthClientInvalidRequest("client_id is required.");
         }
 
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return new global::NOF.Abstraction.Failure("not_found", "OAuth client was not found.");
+            return new OAuthClientNotFound();
         }
 
         var redirectUris = NormalizeRedirectUris(request.RedirectUris);
         if (redirectUris is null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "redirect_uris must contain only absolute URIs.");
+            return new OAuthClientInvalidRequest("redirect_uris must contain only absolute URIs.");
         }
 
         var jsonWebKeySet = client.JsonWebKeySet;
         if (request.JsonWebKeySet is not null
             && !TryNormalizeJsonWebKeySet(request.JsonWebKeySet, out jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "json_web_key_set must contain valid public RSA signing keys.");
+            return new OAuthClientInvalidRequest("json_web_key_set must contain valid public RSA signing keys.");
         }
 
         if (request.ClientType == OAuthClientType.Public && !string.IsNullOrEmpty(jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "public clients must not register client assertion keys.");
+            return new OAuthClientInvalidRequest("public clients must not register client assertion keys.");
         }
 
         var authenticationMethod = NormalizeAuthenticationMethod(
@@ -271,33 +271,33 @@ public sealed class PersistenceOAuthClientRepository(
             jsonWebKeySet);
         if (authenticationError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", authenticationError);
+            return new OAuthClientInvalidRequest(authenticationError);
         }
 
         if (request.ClientType == OAuthClientType.Confidential
             && IsClientSecretAuthenticationMethod(authenticationMethod)
             && string.IsNullOrWhiteSpace(client.SecretHash))
         {
-            return new global::NOF.Abstraction.Failure("invalid_operation", "rotate the client secret before selecting a client secret authentication method.");
+            return new OAuthClientInvalidOperation("rotate the client secret before selecting a client secret authentication method.");
         }
 
         var grantTypes = NormalizeGrantTypes(request.AllowedGrantTypes, request.ClientType);
         var responseTypes = NormalizeResponseTypes(request.AllowedResponseTypes, grantTypes);
         if (request.ClientType == OAuthClientType.Public && grantTypes.Contains(OAuthGrantTypes.ClientCredentials))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "public clients must not use the client_credentials grant type.");
+            return new OAuthClientInvalidRequest("public clients must not use the client_credentials grant type.");
         }
         var protocolError = request.AllowedGrantTypes.Count > 0 || request.AllowedResponseTypes.Count > 0
             ? ValidateProtocolMetadata(grantTypes, responseTypes, redirectUris)
             : null;
         if (protocolError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", protocolError);
+            return new OAuthClientInvalidRequest(protocolError);
         }
 
         if (!IsSupportedApplicationType(request.ApplicationType))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "application_type is not supported.");
+            return new OAuthClientInvalidRequest("application_type is not supported.");
         }
 
         client.DisplayName = NormalizeDisplayName(request.DisplayName, client.ClientId);
@@ -353,18 +353,26 @@ public sealed class PersistenceOAuthClientRepository(
                 };
             }
 
-            var failure = createResult switch
+            if (createResult is OAuthClientConflict)
             {
-                Failure value => value,
+                continue;
+            }
+            OAuthClientRegistration failure = createResult switch
+            {
+                OAuthClientNotFound value => value,
+                OAuthClientConflict value => value,
+                OAuthClientInvalidRequest value => value,
+                OAuthClientInvalidOperation value => value,
+                OAuthClientRegistrationTokenInvalid value => value,
+                OAuthClientMetadataInvalid value => value,
+                OAuthClientRedirectUriInvalid value => value,
+                OAuthClientStorageFailure value => value,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            if (!string.Equals(failure.Code, "conflict", StringComparison.Ordinal))
-            {
-                return failure;
-            }
+            return failure;
         }
 
-        return new global::NOF.Abstraction.Failure("server_error", "unable to allocate a unique client_id.");
+        return new OAuthClientStorageFailure("unable to allocate a unique client_id.");
     }
 
     public async Task<OAuthClientRegistration> GetAsync(
@@ -379,7 +387,7 @@ public sealed class PersistenceOAuthClientRepository(
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null || !ValidateRegistrationAccessToken(client, registrationAccessToken))
         {
-            return new global::NOF.Abstraction.Failure("invalid_token", "registration access token is invalid.");
+            return new OAuthClientRegistrationTokenInvalid("registration access token is invalid.");
         }
 
         var (rotatedToken, salt, hash) = CreateRegistrationAccessTokenMaterial();
@@ -419,30 +427,30 @@ public sealed class PersistenceOAuthClientRepository(
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null || !ValidateRegistrationAccessToken(client, registrationAccessToken))
         {
-            return new global::NOF.Abstraction.Failure("invalid_token", "registration access token is invalid.");
+            return new OAuthClientRegistrationTokenInvalid("registration access token is invalid.");
         }
 
         if (!string.IsNullOrWhiteSpace(currentClientSecret)
             && (string.IsNullOrWhiteSpace(client.SecretHash)
                 || !VerifySecret(currentClientSecret, client.SecretSalt, client.SecretHash)))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "client_secret does not match the currently issued secret.");
+            return new OAuthClientMetadataInvalid("client_secret does not match the currently issued secret.");
         }
 
         var redirectUris = NormalizeRedirectUris(request.RedirectUris);
         if (redirectUris is null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_redirect_uri", "redirect_uris must contain only valid absolute URIs.");
+            return new OAuthClientRedirectUriInvalid("redirect_uris must contain only valid absolute URIs.");
         }
 
         if (!TryNormalizeJsonWebKeySet(request.JsonWebKeySet, out var jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "jwks must contain valid public RSA signing keys.");
+            return new OAuthClientMetadataInvalid("jwks must contain valid public RSA signing keys.");
         }
 
         if (request.ClientType == OAuthClientType.Public && !string.IsNullOrEmpty(jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "public clients must not register client assertion keys.");
+            return new OAuthClientMetadataInvalid("public clients must not register client assertion keys.");
         }
 
         var authenticationMethod = NormalizeAuthenticationMethod(
@@ -455,24 +463,24 @@ public sealed class PersistenceOAuthClientRepository(
             jsonWebKeySet);
         if (authenticationError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", authenticationError);
+            return new OAuthClientMetadataInvalid(authenticationError);
         }
 
         var grantTypes = NormalizeGrantTypes(request.AllowedGrantTypes, request.ClientType);
         var responseTypes = NormalizeResponseTypes(request.AllowedResponseTypes, grantTypes);
         if (request.ClientType == OAuthClientType.Public && grantTypes.Contains(OAuthGrantTypes.ClientCredentials))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "public clients must not use the client_credentials grant type.");
+            return new OAuthClientMetadataInvalid("public clients must not use the client_credentials grant type.");
         }
         var protocolError = ValidateProtocolMetadata(grantTypes, responseTypes, redirectUris);
         if (protocolError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", protocolError);
+            return new OAuthClientMetadataInvalid(protocolError);
         }
 
         if (!IsSupportedApplicationType(request.ApplicationType))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "application_type is not supported.");
+            return new OAuthClientMetadataInvalid("application_type is not supported.");
         }
 
         string? newClientSecret = null;
@@ -517,7 +525,7 @@ public sealed class PersistenceOAuthClientRepository(
         };
     }
 
-    public async Task<OAuthMutation> DeleteAsync(
+    public async Task<OAuthClientMutation> DeleteAsync(
         string clientId,
         string registrationAccessToken,
         CancellationToken cancellationToken = default)
@@ -529,7 +537,7 @@ public sealed class PersistenceOAuthClientRepository(
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null || !ValidateRegistrationAccessToken(client, registrationAccessToken))
         {
-            return new global::NOF.Abstraction.Failure("invalid_token", "registration access token is invalid.");
+            return new OAuthClientRegistrationTokenInvalid("registration access token is invalid.");
         }
 
         dbContext.Set<OAuthClient>().Remove(client);
@@ -543,18 +551,18 @@ public sealed class PersistenceOAuthClientRepository(
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "client_id is required.");
+            return new OAuthClientInvalidRequest("client_id is required.");
         }
 
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return new global::NOF.Abstraction.Failure("not_found", "OAuth client was not found.");
+            return new OAuthClientNotFound();
         }
 
         if (client.ClientType == OAuthClientType.Public)
         {
-            return new global::NOF.Abstraction.Failure("invalid_operation", "public clients do not use client secrets.");
+            return new OAuthClientInvalidOperation("public clients do not use client secrets.");
         }
 
         var (secret, salt, hash) = CreateSecretMaterial();
@@ -570,17 +578,17 @@ public sealed class PersistenceOAuthClientRepository(
         };
     }
 
-    public async Task<OAuthMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
+    public async Task<OAuthClientMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "client_id is required.");
+            return new OAuthClientInvalidRequest("client_id is required.");
         }
 
         var client = await FindClientAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return new global::NOF.Abstraction.Failure("not_found", "OAuth client was not found.");
+            return new OAuthClientNotFound();
         }
 
         dbContext.Set<OAuthClient>().Remove(client);

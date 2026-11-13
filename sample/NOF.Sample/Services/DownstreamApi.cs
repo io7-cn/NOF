@@ -1,6 +1,7 @@
 using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Sample.UI.Services;
+using System.Net;
 
 namespace NOF.Sample.Services;
 
@@ -17,14 +18,14 @@ public sealed class DownstreamApi(HttpClient httpClient)
 {
     public async Task<DemoDownstreamService.InspectAccessToken.Result> InspectAccessTokenAsync(
         Empty request, Context context, CancellationToken cancellationToken = default)
-        => (await SendResourceAsync<Empty, ConsumeDemoAccessTokenResponse>(HttpMethod.Post,
+        => (await SendTransportResourceAsync<Empty, ConsumeDemoAccessTokenResponse>(HttpMethod.Post,
             "./api/downstream/access-token-inspections", request, context, cancellationToken)).Value switch
         {
             ConsumeDemoAccessTokenResponse value => value,
-            NOF.Abstraction.Failure { Code: "401" } failure => new DemoDownstreamService.InspectAccessToken.Unauthorized(failure.Message),
-            NOF.Abstraction.Failure { Code: "403" } failure => new DemoDownstreamService.InspectAccessToken.Forbidden(failure.Message),
-            NOF.Abstraction.Failure { Code: "500" } failure => new DemoDownstreamService.InspectAccessToken.ServerError(failure.Message),
-            NOF.Abstraction.Failure failure => new DemoDownstreamService.InspectAccessToken.Rejected(failure.Message),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new DemoDownstreamService.InspectAccessToken.Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new DemoDownstreamService.InspectAccessToken.Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new DemoDownstreamService.InspectAccessToken.ServerError(failure.Detail),
+            HttpTransportFailure failure => new DemoDownstreamService.InspectAccessToken.Rejected(failure.Detail),
             _ => throw new InvalidOperationException("No downstream response.")
         };
 }

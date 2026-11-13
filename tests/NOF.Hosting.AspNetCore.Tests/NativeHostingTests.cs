@@ -50,23 +50,23 @@ public sealed class NativeHostingTests
     }
 
     [Fact]
-    public async Task HttpComposition_IsExplicitAndMapsModulesOnce()
+    public async Task HttpComposition_UsesExplicitNativeMapping()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
         var module = new CountingModule();
-        builder.Services.AddSingleton<IHttpEndpointModule>(module);
+
         await using var app = builder.Build();
         Assert.Equal(0, module.Calls);
         app.UseNOF().UseNOF();
-        app.MapNOFEndpoints().MapNOFEndpoints();
+        module.Map(app);
         Assert.Equal(1, module.Calls);
         await app.StartAsync();
         using var client = app.GetTestClient();
         Assert.Equal("ready", await client.GetStringAsync("/native"));
     }
 
-    public sealed class CountingModule : IHttpEndpointModule
+    public sealed class CountingModule
     {
         public int Calls { get; private set; }
         public void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)

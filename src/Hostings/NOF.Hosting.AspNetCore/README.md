@@ -1,51 +1,27 @@
 # NOF.Hosting.AspNetCore
 
-Native ASP.NET Core hosting, OpenAPI integration and HTTP adapters for NOF services.
-
-## Endpoint modules
-
-Organize feature routes in `IHttpEndpointModule.Map(IEndpointRouteBuilder)`. Use native
-MapGet/MapPost, binding, TypedResults, filters and OpenAPI. Mark modules with
-`[AutoInject(ServiceLifetime.Singleton)]` and add their assembly as an application part.
-Call app.MapNOFEndpoints() after native Build and app.UseNOF() to map modules before startup.
-Add every owning assembly explicitly with AddApplicationPart, including host assemblies
-containing modules. No per-operation host registration is needed.
+Native ASP.NET Core operation binding, explicit feature mapping and runtime OpenAPI.
 
 ```csharp
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class OrderEndpoints : IHttpEndpointModule
-{
-    public void Map(IEndpointRouteBuilder endpoints)
-    {
-        endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
-        {
-            var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
-            return order is null ? Results.NotFound() : Results.Ok(order);
-        }).AddEndpointFilter<ServiceRejectionHttpFilter>();
-    }
-}
+var orders = app.MapGroup("/orders");
+orders.MapGet<OrderService.Find>("/{id}")
+    .Response<OrderService.Find.NotFound>(output => output.StatusCode(404));
 ```
 
-Generated operation descriptors contain identity and nullability only. HttpContext
-InvokeAsync executes HTTP authentication and application authorization/tenant policies
-before resolving the handler. It does not call the local identity-copy path or bypass
-the application pipeline. ServiceRejectionHttpFilter maps rejected execution to
-ProblemDetails and preserves status/challenge headers. Feature modules map business
-Failure cases to their chosen HTTP response.
+Operation bases implement static IServiceOperationDefinition. Typed Request/Response
+rules merge per target on native groups/endpoints; no endpoint-module registration or
+client generation is required. AddNOF registers JSON, ProblemDetails and OpenAPI services.
+Call UseNOF, ordinary feature extensions, native health checks, MapOidcServer (when used)
+and MapOpenApi explicitly. Native middleware and protocols remain host responsibilities.
 
-Call app.MapOpenApi explicitly. Use native AddProblemDetails and error middleware in
-the host. HttpRequestHeaderOptions selects headers admitted into the application context.
+Failure cases implement IFailure with Title/Detail, optionally typed Error. Map concrete
+case types to HTTP statuses; never inspect display text. Context transfers explicit semantic
+inputs only and does not flow back from business execution. Runtime execution and OpenAPI
+read the same immutable binding without inspecting or executing user callbacks.
 
-## Breaking migration
-
-Legacy HTTP RPC/JSON-RPC adapters, HttpEndpoint/transport annotations, automatic route
-mapping and protocol readers are deleted without a compatibility layer. Declare every
-HTTP route in an endpoint module. Use native TypedResults for resources and SSE,
-ProblemDetails for failures, and platform SseParser in application-owned integrations.
-There are no generated clients or required RPC outcome interfaces.
-
-See the [complete configuration REST example](../../../docs/en/design/configuration-rest.md)
-and [migration guide](../../../docs/en/design/application-requests.md).
+See the [English guide](../../../docs/en/design/http-adaptation.md),
+[简体中文](../../../docs/zh-CN/design/http-adaptation.md) and
+[complete CRUD example](../../../docs/en/design/configuration-rest.md).
 
 ## License
 

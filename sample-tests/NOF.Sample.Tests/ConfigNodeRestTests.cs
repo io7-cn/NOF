@@ -97,7 +97,7 @@ public sealed class ConfigNodeRestTests
         { NodeId = root.Id, FileName = "settings.json" }, Context.Empty)).Value);
         Assert.IsType<Empty>((await api.DeleteConfigNodeAsync(new() { Id = root.Id }, Context.Empty)).Value);
         Assert.Equal("config_node.not_found",
-            (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectFailure().Code);
+            (await api.GetConfigNodeByIdAsync(new() { Id = root.Id }, Context.Empty)).ExpectFailure().Title);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class ConfigNodeRestTests
         await using var app = await CreateAppAsync();
         using var http = app.GetTestClient();
         var api = new HttpSampleApi(http);
-        var result = await api.WatchSampleStreamAsync(new() { Topic = "配置更新", Count = 2, IntervalMilliseconds = 1 }, Context.Empty);
+        var result = await api.WatchSampleStreamAsync(new() { Topic = "閰嶇疆鏇存柊", Count = 2, IntervalMilliseconds = 1 }, Context.Empty);
         var items = new List<SampleStreamEvent>();
         await foreach (var item in result.ExpectSuccess())
         {
@@ -160,9 +160,9 @@ public sealed class ConfigNodeRestTests
         }
         Assert.Equal(4, items.Count);
         Assert.Equal([0, 1, 2, 3], items.Select(item => item.Index));
-        Assert.All(items, item => Assert.Equal("配置更新", item.Topic));
+        Assert.All(items, item => Assert.Equal("閰嶇疆鏇存柊", item.Topic));
         var failure = await api.WatchSampleStreamAsync(new() { ForceFailure = true }, Context.Empty);
-        Assert.NotEmpty(failure.ExpectFailure().Message);
+        Assert.NotEmpty(failure.ExpectFailure().Detail);
     }
 
     private static async Task<long> CreateAsync(HttpClient http, string name, long? parentId = null)
@@ -181,7 +181,7 @@ public sealed class ConfigNodeRestTests
         Assert.Equal(status, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(code, problem.RootElement.GetProperty("code").GetString());
+        Assert.Equal(code, problem.RootElement.GetProperty("title").GetString());
     }
 
     private static async Task<WebApplication> CreateAppAsync(bool relational = false)
@@ -205,7 +205,8 @@ public sealed class ConfigNodeRestTests
         }
         var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
+        app.MapConfigNodeEndpoints();
+        app.MapGet("/policy-probe", PolicyProbeService.Read.Descriptor);
         app.UseStatusCodePages();
         app.MapOpenApi();
         await app.StartAsync();
@@ -246,13 +247,4 @@ public sealed class PolicyProbeHandler : PolicyProbeService.Read
     public PolicyProbeHandler(PolicyProbe probe) => probe.Constructed++;
     public override Task<string> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult("secret");
-}
-
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class PolicyProbeEndpoints : IHttpEndpointModule
-{
-    public void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
-        => endpoints.MapGet("/policy-probe", async (HttpContext http, CancellationToken ct)
-            => await http.InvokeAsync(PolicyProbeService.Read.Descriptor, new Empty(), ct))
-            .AddEndpointFilter<ServiceRejectionHttpFilter>();
 }

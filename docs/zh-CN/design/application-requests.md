@@ -45,40 +45,9 @@ var order = await OrderService.Find.InvokeAsync(services, request, context, ct);
 
 ## 原生 HTTP 端点模块
 
-`IHttpEndpointModule` 按 API 功能组织路由，内部使用原生 MapGet/MapPost、路径/请求体/查询
-绑定、TypedResults、端点过滤器和 OpenAPI。模块标注 `[AutoInject(ServiceLifetime.Singleton)]`，
-添加其程序集为 ApplicationPart 后自动注册，Build 后显式调用 app.MapNOFEndpoints() 映射。
-宿主不用逐操作注册，也不用集中维护所有路径、绑定和状态码映射。
+使用返回原生 RouteGroupBuilder 的普通 MapFeatureEndpoints 扩展，以 `group.MapGet<OrderService.Find>("/{id}")` 映射操作，独立配置 Request 成员/完整构造和 Response<TCase>。Application 操作通过静态 Descriptor/Describe 实现 IServiceOperationDefinition，保持类型安全及 AOT 元数据；轻量 Hosting 生成器提供具体请求 lambda 类型，不分析函数、不依赖生成输出。宿主显式调用功能映射，不注册端点模块 DI，不集中列举 Handler。
 
-```csharp
-[AutoInject(ServiceLifetime.Singleton)]
-public sealed class OrderEndpoints : IHttpEndpointModule
-{
-    public void Map(IEndpointRouteBuilder endpoints)
-    {
-        endpoints.MapGet("/orders/{id}", async (string id, HttpContext http, CancellationToken ct) =>
-        {
-            var order = await http.InvokeAsync(OrderService.Find.Descriptor, new FindOrderRequest(id), ct);
-            return order is IResult native ? native : order is null ? Results.NotFound() : Results.Ok(InvocationResult.Value(order));
-        }).AddEndpointFilter<ServiceRejectionHttpFilter>();
-    }
-}
-```
-
-生成的 `Descriptor` 只携带契约、操作名和可空性，没有 HTTP 依赖。
-`HttpContext.InvokeAsync` 使用它执行 HTTP 身份认证和应用入站策略，保留策略响应头，返回
-声明的业务值。端点不用填写操作名字字符串，也不用重复填写请求/响应泛型参数。
-
-`ServiceRejectionHttpFilter` 将策略拒绝转换为原生 ProblemDetails，保留授权状态码和 challenge。
-Handler 返回的业务 Failure 由功能模块自行映射。宿主按需要配置 ASP.NET Core 的
-AddProblemDetails、状态码页和异常处理。端点授权、文件、内容协商等 Web 能力继续使用原生框架。
-
-同一编译中生成服务容器时，Native AOT 端点应使用显式返回类型的方法。ASP.NET Core 的
-请求委托生成器无法从另一个生成器尚不可见的产物推断 lambda 返回类型。
-
-示例 ConfigNodeEndpoints 已落地节点 CRUD、文件管理、活跃文件、配置查询和 SSE。
-OAuth 演示路由在另一个模块。Contract 项目不引用 Hosting，也不包含 HTTP 注解。
-[完整 REST 示例](configuration-rest.md)包含实际请求、Handler、路由、宿主注册和验证方式。
+默认 DTO/Empty/null/失败分别为 200 JSON/204/200 JSON null/422 ProblemDetails，404/409 等按具体失败类型配置。Context 只传入显式语义值，不从业务回流。运行时 OpenAPI 读取最终不可变绑定，不执行用户函数。中间件、异常处理及协议仍由 ASP.NET Core 负责。参见 [HTTP 适配](http-adaptation.md) 和[完整 CRUD](configuration-rest.md)。
 
 ## 执行与协议边界
 

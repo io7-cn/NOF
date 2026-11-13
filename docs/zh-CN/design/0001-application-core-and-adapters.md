@@ -36,7 +36,7 @@ Native AOT。已发布版本及标签不可变；依赖未合并变更时须记�
 
 完全移除 Client 生成：保留 proto 风格契约及生成的服务端操作（包括静态 InvokeAsync），
 不生成接口、HTTP 或 Local Client。HTTP 路由由原生端点模块显式声明，远程 HTTP 集成由
-调用方维护，示例使用显式 UI 接口及适配器。已实现原生 IHttpEndpointModule、生成的操作描述符及 HTTP 策略桥接，配置 CRUD 已落地。
+调用方维护，示例使用显式 UI 接口及适配器。已实现原生功能映射扩展、泛型操作绑定及 HTTP 策略桥接，配置 CRUD 已落地。
 旧 HTTP RPC/JSON-RPC 适配器、HttpEndpoint 和 HTTP 路由生成器已删除；IRpcResponse 及生成的结果专用拒绝工厂已移除。
 
 选择方案 3。用例接收类型明确的请求和执行上下文，返回声明的业务结果。
@@ -139,4 +139,4 @@ HTTP 响应 DSL 扩张不是主线。端点可直接用 TypedResults 映射已�
 
 更新：[持久化边界](persistence-boundaries.md)已改用聚合仓储、DTO 读取接口和 IUnitOfWork，核心不再提供通用 ORM 外观。
 
-更新：执行策略失败现在返回 Filter 自有生成分支，与业务值共用开放调用结果路径，Handler 保持闭合强类型返回。Infrastructure 拥有三层 Filter 计划、Use/Exclude 与静态 FailureCases/Describe；可变上下文结果与拒绝异常已移除，替代上述独立执行结果模型。详见[当前调用扩展](invocation-extensions.md)。HTTP Fluent 绑定、响应及 OpenAPI 优化继续暂缓。
+更新：执行策略失败现在返回 Filter 自有生成分支，与业务值共用开放调用结果路径，Handler 保持闭合强类型返回。Infrastructure 拥有三层 Filter 计划、Use/Exclude 与静态 FailureCases/Describe；可变上下文结果与拒绝异常已移除，替代上述独立执行结果模型。详见[当前调用扩展](invocation-extensions.md)。HTTP 绑定、响应及运行时 OpenAPI 已落地，参见 [HTTP 适配](http-adaptation.md)。

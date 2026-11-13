@@ -42,11 +42,12 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
         {
             return await next(context, input, cancellationToken);
         }
-        var authenticated = await AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
+        var authenticated = context.WithContext(await AuthenticateContextAsync(context.Context, cancellationToken).ConfigureAwait(false));
         return await next(authenticated, input, cancellationToken);
     }
 
-    private async ValueTask<InvocationContext> AuthenticateAsync(InvocationContext context, CancellationToken cancellationToken)
+    /// <summary>Validates explicit credential inputs for a host boundary; credentials are not semantic output.</summary>
+    public async ValueTask<Context> AuthenticateContextAsync(Context context, CancellationToken cancellationToken)
     {
         var tokenSources = GetTokenSources();
         var executionContext = context;
@@ -59,7 +60,7 @@ public sealed class AuthenticationInvocationFilter : IInvocationFilter
         {
             foreach (var source in tokenSources)
             {
-                if (!TryGetToken(executionContext.Context, source, out var token))
+                if (!TryGetToken(executionContext, source, out var token))
                 {
                     continue;
                 }

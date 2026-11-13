@@ -1,86 +1,87 @@
 # Configuration node REST implementation
 
-[简体中文](../../zh-CN/design/configuration-rest.md) · [Application services](application-requests.md)
+[简体中文](../../zh-CN/design/configuration-rest.md) · [HTTP binding rules](http-adaptation.md)
 
-The runnable sample keeps business declarations in NOF.Sample.Contract, existing
-generated operation overrides in NOF.Sample.Application, and HTTP adapters in
-NOF.Sample/Endpoints. The host contains service-container/provider setup; feature
-modules own routes, binding, status codes and response schemas.
+Contract declares successful values and FailureCase branches; Application implements generated operation overrides. The HTTP adapter is one ordinary static feature extension. Host composition registers the Application assembly/container once and calls MapConfigNodeEndpoints. There is no endpoint-module service registration or per-use-case handler registration in the host.
 
-## Contract and handlers
+## Complete endpoint adapter
 
 ```csharp
-public interface INOFSampleService : IApplicationService
+public static class ConfigNodeEndpoints
 {
-    [FailureCase("NameConflict", "config_node.name_conflict")]
-    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
-    [FailureCase("InvalidInput", "config_node.invalid_input")]
-    CreatedConfigNode CreateConfigNode(CreateConfigNodeRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    GetConfigNodeByIdResponse GetConfigNodeById(GetConfigNodeByIdRequest request);
-    GetRootConfigNodesResponse GetRootConfigNodes(GetRootConfigNodesRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    [FailureCase("ParentCycle", "config_node.parent_cycle")]
-    [FailureCase("ParentNotFound", "config_node.parent_not_found")]
-    Empty UpdateConfigNodeParent(UpdateConfigNodeParentRequest request);
-    [FailureCase("NotFound", "config_node.not_found")]
-    [FailureCase("HasChildren", typeof(NodeHasChildrenError))]
-    Empty DeleteConfigNode(DeleteConfigNodeRequest request);
-    // File, children, configuration and stream operations remain ordinary business declarations.
+    public const string GetNodeRoute = "GetConfigNode";
+    public static RouteGroupBuilder MapConfigNodeEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var api = endpoints.MapGroup("/api").Context(context => context.TenantFromHeader(NOFAbstractionConstants.Transport.Headers.TenantId));
+        var nodes = api.MapGroup("/config-nodes").WithTags("Configuration nodes")
+            .Response<GetRootConfigNodesResponse>(output => output.Body(value => value.Nodes));
+        nodes.MapPost<NOFSampleService.CreateConfigNode>("")
+            .WithSummary("Create a configuration node")
+            .Response<CreatedConfigNode>(output => output.StatusCode(201)
+                .Header("Location", (value, context) => context.LinkTo(GetNodeRoute, new { id = value.Id })))
+            .Response<NOFSampleService.CreateConfigNode.NameConflict>(output => output.StatusCode(409))
+            .Response<NOFSampleService.CreateConfigNode.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapGet<NOFSampleService.GetRootConfigNodes>("");
+        nodes.MapGet<NOFSampleService.GetConfigNodeById>("/{id:long}")
+            .WithName(GetNodeRoute)
+            .Response<GetConfigNodeByIdResponse>(output => output.Body(value => value.Node))
+            .Response<NOFSampleService.GetConfigNodeById.NotFound>(output => output.StatusCode(404));
+        nodes.MapGet<NOFSampleService.GetConfigNodeChildren>("/{id:long}/children")
+            .Response<NOFSampleService.GetConfigNodeChildren.NotFound>(output => output.StatusCode(404));
+        nodes.MapPatch<NOFSampleService.UpdateConfigNodeParent>("/{id:long}/parent")
+            .Request(request => request.Route<long>("id").Body<MoveConfigNodeBody>().Map((id, body) => new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }))
+            .Response<NOFSampleService.UpdateConfigNodeParent.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.UpdateConfigNodeParent.ParentCycle>(output => output.StatusCode(409));
+        nodes.MapDelete<NOFSampleService.DeleteConfigNode>("/{id:long}")
+            .Response<NOFSampleService.DeleteConfigNode.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.DeleteConfigNode.HasChildren>(output => output.StatusCode(409));
+        nodes.MapPut<NOFSampleService.AddOrUpdateConfigFile>("/{id:long}/files/{fileName}")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.AddOrUpdateConfigFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.AddOrUpdateConfigFile.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapDelete<NOFSampleService.RemoveConfigFile>("/{id:long}/files/{fileName}")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.RemoveConfigFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.RemoveConfigFile.InvalidInput>(output => output.StatusCode(400));
+        nodes.MapPut<NOFSampleService.SetActiveFile>("/{id:long}/active-file")
+            .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
+            .Response<NOFSampleService.SetActiveFile.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.SetActiveFile.InvalidInput>(output => output.StatusCode(400));
+        api.MapGet<NOFSampleService.GetConfiguration>("/configuration").WithTags("Configuration")
+            .Response<NOFSampleService.GetConfiguration.NotFound>(output => output.StatusCode(404))
+            .Response<NOFSampleService.GetConfiguration.InvalidInput>(output => output.StatusCode(400));
+        api.MapGet<NOFSampleService.WatchSampleStream>("/sample-events").WithTags("Streaming")
+            .Response<IAsyncEnumerable<SampleStreamEvent>>(output => output.Result((events, _) => TypedResults.ServerSentEvents(events), new(typeof(SampleStreamEvent), "text/event-stream")))
+            .Response<NOFSampleService.WatchSampleStream.StreamUnavailable>(output => output.StatusCode(400));
+        return nodes;
+    }
 }
-public sealed record CreatedConfigNode(long Id);
-public partial class NOFSampleService : ApplicationService<INOFSampleService>;
+
+public sealed record MoveConfigNodeBody
+{
+    public required long? ParentId { get; init; }
+}
 ```
 
-Create validates name/parent, saves the aggregate, updates cache state and returns
-CreatedConfigNode with the persisted ID. Move rejects a missing parent, self-parenting
-and descendant cycles. Delete rejects a node with children. Existing domain events and
-projection handlers remain active. None of these handlers references ASP.NET Core.
+## Contract, handlers and host
 
-## HTTP module
+INOFSampleService declares CreateConfigNode, GetConfigNodeById, GetRootConfigNodes, UpdateConfigNodeParent and DeleteConfigNode, alongside file/configuration/SSE operations. Create returns CreatedConfigNode. FailureCase names distinguish NameConflict, ParentNotFound, InvalidInput, NotFound, ParentCycle and HasChildren; HasChildren carries NodeHasChildrenError. Every branch supplies Title/Detail through IFailure. HTTP status selection always uses the concrete generated type.
 
-ConfigNodeEndpoints implements IHttpEndpointModule and uses the existing AutoInject
-assembly-initializer mechanism. Its route table is:
-
-| HTTP | Path | Bound input | Successful response |
-| --- | --- | --- | --- |
-| POST | /api/config-nodes | body: name, optional parentId | 201 CreatedConfigNode; Location points to GET |
-| GET | /api/config-nodes | none | 200 array of root ConfigNodeDto |
-| GET | /api/config-nodes/{id} | path id | 200 ConfigNodeDto |
-| GET | /api/config-nodes/{id}/children | path id | 200 children projection |
-| PATCH | /api/config-nodes/{id}/parent | path id; body parentId, explicitly nullable | 204 |
-| DELETE | /api/config-nodes/{id} | path id | 204 |
-| PUT | /api/config-nodes/{id}/files/{fileName} | path identity; body content | 204 |
-| DELETE | /api/config-nodes/{id}/files/{fileName} | path identity | 204 |
-| PUT | /api/config-nodes/{id}/active-file | path id; body fileName, explicitly nullable | 204 |
-| GET | /api/configuration | query appName | 200 configuration |
-| GET | /api/sample-events | query topic/count/intervalMilliseconds/forceFailure | SSE |
-
-HTTP body types are adapter-owned and distinct from business requests. For example,
-MoveConfigNodeBody contains only parentId. The endpoint constructs the business request
-from path id plus body parentId, so a supplied nodeId body property cannot change the
-target. Omitting parentId is invalid; explicitly passing null moves the node to root.
-
-The actual move entry uses native ASP.NET Core binding and results:
+NOFSampleService derives from ApplicationService<INOFSampleService>. CreateConfigNode validates the value object/parent, saves its aggregate and returns the persisted ID. UpdateConfigNodeParent rejects missing parents and cycles. DeleteConfigNode rejects children. Domain events, caching and read projections remain in Application/Domain; none of these handlers references ASP.NET Core.
 
 ```csharp
-nodes.MapPatch("/{id:long}/parent", MoveAsync);
-
-public static async Task<Results<NoContent, ProblemHttpResult>> MoveAsync(
-    long id, [FromBody] MoveConfigNodeBody body, HttpContext http, CancellationToken ct)
-    => (await http.InvokeAsync(NOFSampleService.UpdateConfigNodeParent.Descriptor,
-        new UpdateConfigNodeParentRequest { NodeId = id, NewParentId = body.ParentId }, ct))
-        .Match<Results<NoContent, ProblemHttpResult>>(
-            _ => TypedResults.NoContent(),
-            error => ToProblem(error.ErrorCode, error.Message, 404),
-            error => ToProblem(error.ErrorCode, error.Message, 409),
-            error => ToProblem(error.ErrorCode, error.Message, 422));
+builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
+builder.AddApplicationService<NOFSampleService>();
+var app = builder.Build();
+app.UseNOF();
+app.MapConfigNodeEndpoints();
+app.MapOAuthDemoEndpoints();
+app.MapOidcServer();
+app.MapHealthChecks("/health");
+app.MapOpenApi();
 ```
 
-Business errors become application/problem+json with detail and code: missing node is
-404; missing parent is 422; name conflicts, cycles and deleting a parent with children
-are 409. Input validation is 400. Policy rejection uses ServiceRejectionHttpFilter and
-retains 401/403 challenge information separately from business errors.
+The sample host chooses PostgreSQL/Redis/RabbitMQ providers separately. Tenant intent is explicitly read from the configured header and validated by the invocation boundary. Tenant cache prefixes preserve isolation. The Move body requires nullable parentId: omitted is invalid, null moves to root; route id is never taken from body. Default Empty writes 204, Create writes 201 and Location, typed missing/conflict/input cases select 404/409/400, other declared failures default to 422. SSE uses the native writer with an explicit event contract.
 
 ```http
 HTTP/1.1 201 Created
@@ -94,49 +95,17 @@ Content-Type: application/json
 HTTP/1.1 409 Conflict
 Content-Type: application/problem+json
 
-{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"Conflict","status":409,"detail":"Node with same name already exists.","code":"config_node.name_conflict"}
+{"type":"about:blank","title":"config_node.name_conflict","status":409,"detail":"Node with same name already exists."}
 ```
 
-## Host and consumers
+Title is a display value, never a discriminator. No code/message aliases, automatic Error flattening or mandatory Result envelope are emitted. UI consumers read native HTTP status and Problem title/detail. Local ServerSampleApi maps IFailure to its application-owned UI port; remote adapters keep actual HttpStatusCode where status-specific behavior is required.
 
-```csharp
-builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
-builder.AddApplicationService<NOFSampleService>();
-builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly); // explicit endpoint modules
-builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
-builder.Services.AddProblemDetails();
-var app = builder.Build();
-app.UseNOF();
-app.MapNOFEndpoints();
-app.UseStatusCodePages();
-app.MapOpenApi();
-```
-
-The existing host selects PostgreSQL database-per-tenant, Redis and RabbitMQ. No CRUD
-operation is registered separately. A module in a separate HTTP assembly needs one
-AddApplicationPart for that assembly. Tenant-specific cache prefixes prevent a cached
-resource from crossing database-per-tenant boundaries.
-
-The shared UI port remains application-owned. ServerSampleApi calls local operations;
-HttpSampleApi explicitly consumes native resource bodies, 201/204 and ProblemDetails.
-WASM/MAUI no longer call the former /rpc/NOFSample paths. OAuth demo endpoints use their
-own module at /api/oauth-demo; downstream inspection uses /api/downstream/access-token-inspections.
-These return plain resources or ProblemDetails. Legacy RPC URLs and protocol readers
-are deleted. Native SSE consumers use System.Net.ServerSentEvents.SseParser.
-
-## Executable sources and verification
+## Executable sources
 
 - [Contract](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Contract/INOFSampleService.cs)
-- [Create handler](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.Application/RequestHandlers/CreateConfigNode.cs)
-- [Complete endpoint module and HTTP bodies](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.cs)
-- [Host registration](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Program.cs)
-- [UI HTTP adapter](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample.UI/Services/HttpSampleApi.cs)
-- [HTTP integration tests](https://github.com/io7-cn/NOF/blob/main/sample-tests/NOF.Sample.Tests/ConfigNodeRestTests.cs)
+- [Application handlers](https://github.com/io7-cn/NOF/tree/main/sample/NOF.Sample.Application/RequestHandlers)
+- [Complete endpoint adapter](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.cs)
+- [Host](https://github.com/io7-cn/NOF/blob/main/sample/NOF.Sample/Program.cs)
+- [Integration tests](https://github.com/io7-cn/NOF/blob/main/sample-tests/NOF.Sample.Tests/ConfigNodeRestTests.cs)
 
-Tests exercise real handlers and persistence, Location follow-up, hierarchy projections,
-file CRUD, conflicts/cycles, malformed body binding, cross-tenant reads with SQLite,
-the actual UI adapter, policy rejection before handler construction, OpenAPI and absence
-of old implicit RPC routes. Run the sample test project and the framework's Native AOT
-smoke when changing the HTTP bridge.
-
-[Current unified operation and message binding API](unified-operations.md).
+Tests cover actual CRUD/persistence, Location follow-up, projections, cycles, files, malformed inputs, tenant isolation, UI integration, policy rejection, OpenAPI and absence of legacy RPC routes. The reflection-disabled HTTP smoke also exercises the generic operation API.

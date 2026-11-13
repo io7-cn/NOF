@@ -17,7 +17,8 @@ public sealed class HostEnvironmentRegistrationTests
 
         await using var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
 
         var resolvedEnvironment = app.Services.GetRequiredService<IHostEnvironment>();
 
@@ -34,7 +35,8 @@ public sealed class HostEnvironmentRegistrationTests
 
         await using var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
 
         Assert.NotNull(app.Services.GetRequiredService<Application.IUnitOfWork>());
     }

@@ -25,8 +25,8 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
         Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result);
-        Assert.Equal("401", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).ErrorCode);
-        Assert.Equal("Please login first", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).Message);
+        Assert.Equal("Authentication required", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).Title);
+        Assert.Equal("Please login first", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).Detail);
         Assert.Equal(0, recorder.Count);
     }
 
@@ -94,7 +94,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         }
         else
         {
-            Assert.Equal("401", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(execution).ErrorCode);
+            Assert.Equal("Authentication required", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(execution).Title);
         }
         authorityScopes.VerifyNoOtherCalls();
     }

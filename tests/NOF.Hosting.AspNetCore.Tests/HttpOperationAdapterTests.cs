@@ -11,7 +11,7 @@ using Xunit;
 
 namespace NOF.Hosting.AspNetCore.Tests;
 
-public sealed class HttpEndpointModuleTests
+public sealed class HttpOperationAdapterTests
 {
     [Theory]
     [InlineData(false)]
@@ -23,13 +23,12 @@ public sealed class HttpEndpointModuleTests
         builder.AddApplicationService<EchoService>();
         builder.Services.AddApplicationService<EchoService>();
         builder.Services.AddScoped<EchoHandler>();
-        if (registerModule)
-        {
-            builder.Services.AddSingleton<IHttpEndpointModule, EchoEndpoints>();
-        }
         await using var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
+        if (registerModule)
+        { new EchoEndpoints().Map(app); }
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
         await app.StartAsync();
         using var client = app.GetTestClient();
         foreach (var path in new[] { "/Echo", "/rpc", "/rpc/Echo" })
@@ -56,7 +55,7 @@ public sealed class HttpEndpointModuleTests
             "RpcHttpResult", "RpcStreamingHttpResult`1", "JsonRpcStreamingHttpResult`1", "NofRpcHttpEndpointMetadata",
             "HttpRpcTransportResultReader", "JsonRpcHttpClient", "RpcResponse", "SseResponseReader",
             "StreamingResponseMetadata", "IApplicationServiceTransport", "ApplicationServiceTransportInitializationStep" };
-        foreach (var assembly in new[] { typeof(IHttpEndpointModule).Assembly, typeof(IApplicationService).Assembly,
+        foreach (var assembly in new[] { typeof(WebApplicationExtensions).Assembly, typeof(IApplicationService).Assembly,
             typeof(NOF.Infrastructure.NOFInfrastructureConstants).Assembly })
         {
             Assert.DoesNotContain(assembly.GetTypes(), type => removed.Contains(type.Name));
@@ -83,12 +82,12 @@ public sealed class HttpEndpointModuleTests
         public override Task<EchoResponse> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(new EchoResponse(request.Value));
     }
-    public sealed class EchoEndpoints : IHttpEndpointModule
+    public sealed class EchoEndpoints
     {
         public void Map(IEndpointRouteBuilder endpoints)
             => endpoints.MapPost("/api/echoes", async (EchoRequest request, HttpContext http, CancellationToken ct)
                 => TypedResults.Ok(await http.InvokeAsync(new ServiceOperationDescriptor<EchoRequest, EchoResponse>(
                     typeof(IEchoService), nameof(IEchoService.Echo)), request, ct)))
-                .AddEndpointFilter<ServiceRejectionHttpFilter>();
+                ;
     }
 }

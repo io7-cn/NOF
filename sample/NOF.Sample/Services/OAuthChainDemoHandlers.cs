@@ -3,6 +3,8 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
+using NOF.Sample.UI.Services;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -24,10 +26,10 @@ public sealed class CreateClientHandler(OAuthChainDemoBackend backend) : OAuthCh
         return (await backend.CreateClientAsync(request, cancellationToken)).Value switch
         {
             CreateDemoOAuthClientResponse value => value,
-            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
-            Failure { Code: "403" } failure => new Forbidden(failure.Message),
-            Failure { Code: "500" } failure => new ServerError(failure.Message),
-            Failure failure => new Rejected(failure.Message),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
             _ => throw new InvalidOperationException("No OAuth response.")
         };
     }
@@ -44,10 +46,10 @@ public sealed class GetClientTokenHandler(OAuthChainDemoBackend backend) : OAuth
         return (await backend.GetClientTokenAsync(request, cancellationToken)).Value switch
         {
             DemoTokenResponse value => value,
-            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
-            Failure { Code: "403" } failure => new Forbidden(failure.Message),
-            Failure { Code: "500" } failure => new ServerError(failure.Message),
-            Failure failure => new Rejected(failure.Message),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
             _ => throw new InvalidOperationException("No OAuth response.")
         };
     }
@@ -65,10 +67,10 @@ public sealed class GetUserTokenHandler(OAuthChainDemoBackend backend) : OAuthCh
         return (await backend.GetUserTokenAsync(cancellationToken)).Value switch
         {
             DemoTokenResponse value => value,
-            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
-            Failure { Code: "403" } failure => new Forbidden(failure.Message),
-            Failure { Code: "500" } failure => new ServerError(failure.Message),
-            Failure failure => new Rejected(failure.Message),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
             _ => throw new InvalidOperationException("No OAuth response.")
         };
     }
@@ -85,10 +87,10 @@ public sealed class ExchangeTokenHandler(OAuthChainDemoBackend backend) : OAuthC
         return (await backend.ExchangeTokenAsync(request, cancellationToken)).Value switch
         {
             DemoTokenResponse value => value,
-            Failure { Code: "401" } failure => new Unauthorized(failure.Message),
-            Failure { Code: "403" } failure => new Forbidden(failure.Message),
-            Failure { Code: "500" } failure => new ServerError(failure.Message),
-            Failure failure => new Rejected(failure.Message),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
             _ => throw new InvalidOperationException("No OAuth response.")
         };
     }
@@ -104,9 +106,9 @@ public sealed class CallDownstreamHandler(IDemoDownstreamApi downstreamClient) :
         _ = context;
         var downstreamContext = Context.Empty.WithItem(OAuthChainDemoContextKeys.AccessToken, request.AccessToken);
         return (await downstreamClient.InspectAccessTokenAsync(Empty.Instance, downstreamContext, cancellationToken))
-            .Match<Result>(value => value, rejected => new Rejected(rejected.Message),
-                unauthorized => new Unauthorized(unauthorized.Message), forbidden => new Forbidden(forbidden.Message),
-                serverError => new ServerError(serverError.Message));
+            .Match<Result>(value => value, rejected => new Rejected(rejected.Detail),
+                unauthorized => new Unauthorized(unauthorized.Detail), forbidden => new Forbidden(forbidden.Detail),
+                serverError => new ServerError(serverError.Detail));
     }
 }
 

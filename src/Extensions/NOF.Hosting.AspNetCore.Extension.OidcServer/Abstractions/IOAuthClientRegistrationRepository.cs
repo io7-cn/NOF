@@ -20,7 +20,7 @@ public interface IOAuthClientRegistrationRepository
         UpdateOAuthClientRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<OAuthMutation> DeleteAsync(
+    Task<OAuthClientMutation> DeleteAsync(
         string clientId,
         string registrationAccessToken,
         CancellationToken cancellationToken = default);

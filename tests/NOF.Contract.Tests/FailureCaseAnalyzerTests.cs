@@ -60,7 +60,7 @@ public sealed class FailureCaseAnalyzerTests
             public interface IService : IApplicationService
             {
                 [FailureCase("Missing", "000404")]
-                [FailureCase("Invalid", typeof(string))]
+                [FailureCase("Invalid", "Invalid", typeof(string))]
                 Empty Run(object request);
             }
             """;

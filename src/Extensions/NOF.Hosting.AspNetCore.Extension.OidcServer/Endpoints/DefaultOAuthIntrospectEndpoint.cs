@@ -49,8 +49,8 @@ public sealed class DefaultOAuthIntrospectEndpoint(
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
             return OidcRoutes.CreateOAuthErrorResult(
-                resultFailure.Code,
-                resultFailure.Message,
+                resultFailure.Title,
+                resultFailure.Detail,
                 StatusCodes.Status500InternalServerError);
         }
 

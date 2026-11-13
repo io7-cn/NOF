@@ -21,7 +21,7 @@ public sealed record GetOrderResponse(string Id, string Name);
 
 An application service contract is local by default and may opt into one transport adapter. Every method takes one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
 
-Keep HTTP routing in an IHttpEndpointModule, outside Contract. See docs/en/design/configuration-rest.md for the complete CRUD slice.
+Keep HTTP routing in an ordinary feature mapping extension, outside Contract. See docs/en/design/configuration-rest.md for the complete CRUD slice.
 
 ## 2. Define the Application Service Container
 
@@ -56,10 +56,10 @@ builder.AddApplicationService<OrderService>();
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapOrderEndpoints();
 ```
 
-`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. After native Build(), app.MapNOFEndpoints() explicitly maps registered IHttpEndpointModule instances. Use HttpContext.InvokeAsync(Service.Operation.Descriptor, request, ct) at the HTTP boundary.
+`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. After native Build(), app.MapOrderEndpoints() explicitly maps ordinary feature routes. Use group.MapGet<OrderService.GetOrder>("/{id}") with typed Request/Response rules at the HTTP boundary.
 
 ## 5. Invoke the Server Operation
 

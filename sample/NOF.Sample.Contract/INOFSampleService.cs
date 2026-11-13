@@ -17,7 +17,7 @@ public interface INOFSampleService : IApplicationService
     [Description("根据节点 ID 删除指定的配置节点")]
     [Category("配置节点")]
     [FailureCase("NotFound", "config_node.not_found")]
-    [FailureCase("HasChildren", typeof(NodeHasChildrenError))]
+    [FailureCase("HasChildren", "HasChildren", typeof(NodeHasChildrenError))]
     Empty DeleteConfigNode(DeleteConfigNodeRequest request);
 
     [Summary("新增或更新配置文件")]

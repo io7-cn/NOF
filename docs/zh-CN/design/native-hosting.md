@@ -10,12 +10,12 @@ Build 只同步组装应用，启动、停止由平台生命周期负责；注�
 var builder = WebApplication.CreateBuilder(args);
 builder.AddNOF();
 builder.AddApplicationPart(typeof(NodeService).Assembly);
-builder.AddApplicationPart(typeof(NodeEndpoints).Assembly);
 builder.AddApplicationService<NodeService>();
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapNodeEndpoints();
+app.MapHealthChecks("/health");
 app.MapOpenApi();
 await app.RunAsync();
 ```
@@ -23,12 +23,9 @@ await app.RunAsync();
 Web Builder 的 AddNOF 注册默认服务端基础设施及 HTTP 适配器；Worker Builder 的 AddNOF
 注册服务端基础设施。重复注册幂等。ApplicationPart 显式声明，不再从调用栈推断程序集。
 builder.AddApplicationPart 与 services.AddApplicationPart 在同一容器中共享去重记录。
-分别加入操作及端点模块所在程序集；宿主包含模块时，也显式加入宿主程序集。
+加入操作实现及生成注册所在程序集；普通 HTTP 映射扩展不需要 ApplicationPart 注册。
 
-UseNOF 安装 HTTP 作用域的环境服务激活；MapNOFEndpoints 映射已注册的 IHttpEndpointModule、
-/health 与 /alive，重复调用不会重复映射。这些是 Build 后、启动前的 HTTP 组装操作。
-OpenAPI 默认注册，MapOpenApi 仍由宿主选择。异常处理中间件、认证、防伪等使用原生机制。
-OIDC 注册端点模块，也通过显式 MapNOFEndpoints 映射协议路由。
+UseNOF 安装 HTTP 作用域环境服务激活。显式调用普通 MapFeatureEndpoints 扩展、原生 MapHealthChecks 和 MapOidcServer，不再发现或注册 DI 端点模块。AddNOF 注册 ProblemDetails、JSON 和 OpenAPI，MapOpenApi 由宿主选择。认证、异常处理、防伪和协议仍由原生宿主负责。参见 [HTTP 适配](http-adaptation.md)。
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);

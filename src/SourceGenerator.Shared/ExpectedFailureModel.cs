@@ -33,20 +33,10 @@ internal static class ExpectedFailureModel
     public static string CaseName(AttributeData attribute)
         => attribute.ConstructorArguments.FirstOrDefault().Value as string ?? "";
 
-    public static bool HasCustomError(AttributeData attribute)
-        => attribute.AttributeConstructor?.Parameters.Length == 2
-            && attribute.AttributeConstructor.Parameters[1].Type.ToDisplayString() == "System.Type";
-
-    public static ITypeSymbol? ErrorType(AttributeData attribute)
-        => HasCustomError(attribute) && attribute.ConstructorArguments.Length == 2
-            ? attribute.ConstructorArguments[1].Value as ITypeSymbol : null;
-
-    public static string ErrorTypeName(AttributeData attribute)
-        => ErrorType(attribute)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "";
-
-    public static string Code(AttributeData attribute)
-        => attribute.ConstructorArguments.Length == 1 ? CaseName(attribute)
-            : attribute.ConstructorArguments[1].Value as string ?? "";
+    public static bool HasCustomError(AttributeData attribute) => attribute.ConstructorArguments.Length == 3;
+    public static ITypeSymbol? ErrorType(AttributeData attribute) => HasCustomError(attribute) ? attribute.ConstructorArguments[2].Value as ITypeSymbol : null;
+    public static string ErrorTypeName(AttributeData attribute) => ErrorType(attribute)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "";
+    public static string Title(AttributeData attribute) => attribute.ConstructorArguments.Length == 1 ? CaseName(attribute) : attribute.ConstructorArguments[1].Value as string ?? "";
 
     public static bool ValidName(string name) => SyntaxFacts.IsValidIdentifier(name)
         && SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None

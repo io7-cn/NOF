@@ -10,9 +10,9 @@ using System.Security.Claims;
 namespace NOF.Infrastructure;
 
 /// <summary>Applies shared authorization and adapter-specific tenant rejection.</summary>
-[FailureCase("AuthenticationRequired", "401")]
-[FailureCase("PermissionDenied", typeof(PermissionDeniedDetails))]
-[FailureCase("PolicyDenied", typeof(PolicyDeniedDetails))]
+[FailureCase("AuthenticationRequired", "Authentication required")]
+[FailureCase("PermissionDenied", "Permission denied", typeof(PermissionDeniedDetails))]
+[FailureCase("PolicyDenied", "Policy denied", typeof(PolicyDeniedDetails))]
 public sealed partial class AuthorizationInvocationFilter(
     IUserContext userContext,
     IInboundAuthorizationHandler authorizationHandler,
@@ -47,9 +47,9 @@ public sealed partial class AuthorizationInvocationFilter(
         {
             return denial.Reason switch
             {
-                AuthorizationFailureReason.Authentication => new AuthenticationRequired(denial.Result.Message),
-                AuthorizationFailureReason.Authorization => new PermissionDenied(new(denial.Result.Message, denial.ChallengePermissions, denial.Result.Code)),
-                _ => new PolicyDenied(new(denial.Result.Message, denial.Result.Code))
+                AuthorizationFailureReason.Authentication => new AuthenticationRequired(denial.Result.Detail),
+                AuthorizationFailureReason.Authorization => new PermissionDenied(new(denial.ChallengePermissions), denial.Result.Detail),
+                _ => new PolicyDenied(new(denial.Result.Title), denial.Result.Detail)
             };
         }
         return await next(WithTrustedTenant(context), input, cancellationToken);
@@ -132,6 +132,6 @@ public sealed partial class AuthorizationInvocationFilter(
 }
 
 /// <summary>Authorization failure data, independent of HTTP status and header presentation.</summary>
-public sealed record PermissionDeniedDetails(string Message, IReadOnlyList<string> RequiredPermissions, string ErrorCode = "403");
+public sealed record PermissionDeniedDetails(IReadOnlyList<string> RequiredPermissions);
 /// <summary>Custom authorization provider denial data.</summary>
-public sealed record PolicyDeniedDetails(string Message, string ErrorCode);
+public sealed record PolicyDeniedDetails(string Reason);

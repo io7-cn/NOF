@@ -94,7 +94,7 @@ public sealed class AuthenticationExtensionsTests
     }
 
     [Fact]
-    public async Task AddOidcServer_ShouldMapOidcEndpointsAutomatically()
+    public async Task AddOidcServer_MapsProtocolEndpointsExplicitly()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.AddOidcServer(options =>
@@ -104,7 +104,9 @@ public sealed class AuthenticationExtensionsTests
 
         await using var app = builder.Build();
         app.UseNOF();
-        app.MapNOFEndpoints();
+        app.MapOidcServer();
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
 
         var routes = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(static dataSource => dataSource.Endpoints)
@@ -173,10 +175,10 @@ public sealed class AuthenticationExtensionsTests
         var accepted = await handler.HandleAsync(httpContext.Request, CancellationToken.None);
 
         Assert.NotNull(missing.ExpectFailure());
-        Assert.Equal("invalid_token", missing.ExpectFailure().Code);
+        Assert.IsType<OAuthInitialAccessTokenInvalid>(missing.Value);
         Assert.NotNull(rejected.ExpectFailure());
-        Assert.Equal("insufficient_scope", rejected.ExpectFailure().Code);
-        Assert.NotNull(accepted.ExpectSuccess());
+        Assert.IsType<OAuthInitialAccessScopeMissing>(rejected.Value);
+        Assert.IsType<Empty>(accepted.Value);
     }
 
     [Fact]
@@ -447,8 +449,8 @@ public sealed class AuthenticationExtensionsTests
         Assert.Equal("access-token", result.ExpectSuccess().AccessToken);
         Assert.Equal(clientId, tokenService.LastRequest?.ClientId);
         Assert.NotNull(replayResult.ExpectFailure());
-        Assert.Equal("invalid_client", replayResult.ExpectFailure().Code);
-        Assert.Equal("client assertion has already been used.", replayResult.ExpectFailure().Message);
+        Assert.Equal("invalid_client", replayResult.ExpectFailure().Title);
+        Assert.Equal("client assertion has already been used.", replayResult.ExpectFailure().Detail);
     }
 
     [Fact]
@@ -502,8 +504,8 @@ public sealed class AuthenticationExtensionsTests
         Assert.NotNull(createResult.ExpectSuccess());
         Assert.Null(createResult.ExpectSuccess().ClientSecret);
         Assert.NotNull(result.ExpectFailure());
-        Assert.Equal("invalid_client", result.ExpectFailure().Code);
-        Assert.Equal("client assertion is invalid.", result.ExpectFailure().Message);
+        Assert.Equal("invalid_client", result.ExpectFailure().Title);
+        Assert.Equal("client assertion is invalid.", result.ExpectFailure().Detail);
     }
 
     [Fact]
@@ -769,8 +771,8 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectFailure());
-        Assert.Equal("invalid_grant", result.ExpectFailure().Code);
-        Assert.Equal("refresh token client does not match.", result.ExpectFailure().Message);
+        Assert.Equal("invalid_grant", result.ExpectFailure().Title);
+        Assert.Equal("refresh token client does not match.", result.ExpectFailure().Detail);
     }
 
     [Fact]
@@ -987,7 +989,7 @@ public sealed class AuthenticationExtensionsTests
 
         var rotateResult = await service.RotateSecretAsync("public-app");
         Assert.NotNull(rotateResult.ExpectFailure());
-        Assert.Equal("invalid_operation", rotateResult.ExpectFailure().Code);
+        Assert.IsType<OAuthClientInvalidOperation>(rotateResult.Value);
     }
 
     [Fact]
@@ -1071,7 +1073,7 @@ public sealed class AuthenticationExtensionsTests
             registration.ExpectSuccess().Client.ClientId,
             registration.ExpectSuccess().RegistrationAccessToken);
         Assert.NotNull(staleRead.ExpectFailure());
-        Assert.Equal("invalid_token", staleRead.ExpectFailure().Code);
+        Assert.IsType<OAuthClientRegistrationTokenInvalid>(staleRead.Value);
 
         var update = await registrationRepository.UpdateAsync(
             registration.ExpectSuccess().Client.ClientId,
@@ -1103,9 +1105,9 @@ public sealed class AuthenticationExtensionsTests
             update.ExpectSuccess().RegistrationAccessToken);
         var deletedClient = await clientRepository.GetAsync(registration.ExpectSuccess().Client.ClientId);
 
-        Assert.NotNull(deletion.ExpectSuccess());
+        Assert.IsType<Empty>(deletion.Value);
         Assert.NotNull(deletedClient.ExpectFailure());
-        Assert.Equal("not_found", deletedClient.ExpectFailure().Code);
+        Assert.IsType<OAuthClientNotFound>(deletedClient.Value);
     }
 
     [Fact]
@@ -1427,8 +1429,8 @@ public sealed class AuthenticationExtensionsTests
             CancellationToken.None);
 
         Assert.NotNull(result.ExpectFailure());
-        Assert.Equal("invalid_client", result.ExpectFailure().Code);
-        Assert.Equal("client_id is required.", result.ExpectFailure().Message);
+        Assert.Equal("invalid_client", result.ExpectFailure().Title);
+        Assert.Equal("client_id is required.", result.ExpectFailure().Detail);
     }
 
     [Fact]
@@ -1895,11 +1897,11 @@ public sealed class AuthenticationExtensionsTests
 
     private sealed class AnonymousInitialAccessTokenHandler : IOAuthInitialAccessTokenHandler
     {
-        public Task<OAuthMutation> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
+        public Task<OAuthInitialAccessAuthorization> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
         {
             _ = request;
             _ = cancellationToken;
-            return Task.FromResult<OAuthMutation>(Empty.Instance);
+            return Task.FromResult<OAuthInitialAccessAuthorization>(Empty.Instance);
         }
     }
 
@@ -1975,7 +1977,7 @@ public sealed class AuthenticationExtensionsTests
                 });
             }
 
-            return Task.FromResult<OAuthClientLookup>(NOF.Testing.TestOutcome.Fail("not_found", "OAuth client was not found."));
+            return Task.FromResult<OAuthClientLookup>(new OAuthClientNotFound());
         }
 
         public Task<OAuthClientSecret> CreateAsync(CreateOAuthClientRequest request, CancellationToken cancellationToken = default)
@@ -1987,7 +1989,7 @@ public sealed class AuthenticationExtensionsTests
         public Task<OAuthClientSecret> RotateSecretAsync(string clientId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<OAuthMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
+        public Task<OAuthClientMutation> DeleteAsync(string clientId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 

@@ -11,14 +11,12 @@ public static class NOFSampleResultExtensions
 
             var failure = result.Value as Failure
                 ?? throw new InvalidOperationException("Expected a failure outcome.");
-            if (!string.IsNullOrWhiteSpace(failure.Message))
+            if (!string.IsNullOrWhiteSpace(failure.Detail))
             {
-                return failure.Message;
+                return failure.Detail;
             }
 
-            return int.TryParse(failure.Code, out var statusCode)
-                ? $"请求失败，状态码: {statusCode}"
-                : "请求失败";
+            return failure.Title;
         }
     }
 }

@@ -58,3 +58,8 @@
   href: ../en/design/transactional-outbox.md
 - name: 通用事务性发件箱
   href: ../zh-CN/design/transactional-outbox.md
+
+- name: HTTP adaptation
+  href: ../en/design/http-adaptation.md
+- name: HTTP 适配
+  href: ../zh-CN/design/http-adaptation.md

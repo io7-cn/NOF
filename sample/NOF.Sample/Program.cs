@@ -7,6 +7,7 @@ using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
+using NOF.Sample.Endpoints;
 using NOF.Sample.Services;
 using NOF.Sample.UI.Services;
 
@@ -88,7 +89,11 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapConfigNodeEndpoints();
+app.MapOAuthDemoEndpoints();
+app.MapOidcServer();
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/alive");
 
 app.UseStatusCodePages();
 app.MapOpenApi();

@@ -72,7 +72,6 @@ public static partial class NOFOidcServerExtensions
                         || Uri.TryCreate(options.DeviceVerificationUri, UriKind.Absolute, out _),
                     "DeviceVerificationUri must be an absolute URI when configured.");
             builder.Services.TryAddSingleton<OidcServerEndpointMappingState>();
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHttpEndpointModule, OidcServerEndpointModule>());
             builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OidcServerBootstrapService>());
             return new OidcServerSelector(builder);
         }

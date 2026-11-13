@@ -1,3 +1,4 @@
+using NOF.Abstraction;
 using NOF.Application;
 using System.Runtime.CompilerServices;
 
@@ -14,7 +15,7 @@ public sealed class InvocationPlan
         Origin = origin;
         Filters = Array.AsReadOnly(filters.ToArray());
         var entries = failures.ToArray();
-        if (entries.GroupBy(item => item.Id, StringComparer.Ordinal).Any(group => group.Select(item => (item.CaseType, item.ErrorType, item.ErrorCode)).Distinct().Count() != 1))
+        if (entries.GroupBy(item => item.Id, StringComparer.Ordinal).Any(group => group.Select(item => (item.CaseType, item.ErrorType, item.Title)).Distinct().Count() != 1))
         {
             throw new InvalidOperationException("One invocation failure identity cannot describe different payloads.");
         }
@@ -35,7 +36,8 @@ public sealed class InvocationPlan
     {
         InvocationResult.ValidateInitialization(result);
         var branch = InvocationResult.Value(result);
-        if (branch is IInvocationFailure)
+        if (branch is IFailure && !BusinessCases.Any(item => item.CaseType == branch.GetType())
+            && !(typeof(IUnion).IsAssignableFrom(Operation.ResponseType) && Operation.ResponseType.IsInstanceOfType(result)))
         {
             return FailureCases.Any(item => item.CaseType.IsInstanceOfType(branch)) ? result
                 : throw new InvalidOperationException($"Filter failure '{branch.GetType()}' was not declared by the effective invocation plan.");

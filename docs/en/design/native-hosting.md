@@ -11,12 +11,12 @@ Registration never starts background services or performs database I/O.
 var builder = WebApplication.CreateBuilder(args);
 builder.AddNOF();
 builder.AddApplicationPart(typeof(NodeService).Assembly);
-builder.AddApplicationPart(typeof(NodeEndpoints).Assembly);
 builder.AddApplicationService<NodeService>();
 
 var app = builder.Build();
 app.UseNOF();
-app.MapNOFEndpoints();
+app.MapNodeEndpoints();
+app.MapHealthChecks("/health");
 app.MapOpenApi();
 await app.RunAsync();
 ```
@@ -25,15 +25,9 @@ AddNOF on a web builder registers default server infrastructure and HTTP adapter
 native worker builder it registers server infrastructure. Registration is idempotent.
 Application parts are explicit; both builder.AddApplicationPart and
 services.AddApplicationPart apply an assembly's generated registrations once per collection.
-There is no caller-assembly discovery. Register endpoint modules and operations from their
-owning assemblies, including the host assembly when it contains modules.
+There is no caller-assembly discovery. Add the assemblies that own operation implementations and generated registrations. Ordinary HTTP mapping extensions do not require application-part registration.
 
-UseNOF installs scoped ambient-service activation in the native HTTP pipeline.
-MapNOFEndpoints maps registered IHttpEndpointModule implementations, /health and /alive;
-repeated calls do not duplicate routes. Both are explicit host composition after Build and
-before startup. OpenAPI registration is included, while MapOpenApi remains a host choice.
-The host controls exception middleware, authentication, antiforgery and all other native HTTP behavior.
-OIDC registers a native endpoint module, so its routes use the same explicit mapping call.
+UseNOF activates scoped ambient services in the native HTTP pipeline. Call ordinary MapFeatureEndpoints extensions, native MapHealthChecks and MapOidcServer explicitly; no endpoint discovery or DI module registration remains. AddNOF includes ProblemDetails, JSON and OpenAPI services, while MapOpenApi is a host choice. Native authentication, exception handling, antiforgery and protocols remain host responsibilities. See [HTTP adaptation](http-adaptation.md).
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);

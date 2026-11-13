@@ -44,38 +44,16 @@ public static class WebApplicationExtensions
         builder.Services.AddHealthChecks().AddCheck("self", static () => HealthCheckResult.Healthy(), ["live"]);
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<HttpRequestInboundAdapter>();
-        builder.Services.AddOptions<HttpRequestHeaderOptions>();
+        builder.Services.AddProblemDetails();
+        builder.Services.AddEndpointsApiExplorer();
         builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddAspNetCoreInstrumentation());
         builder.Services.ConfigureOpenTelemetryTracerProvider(tracing =>
             tracing.AddAspNetCoreInstrumentation(options =>
                 options.Filter = context =>
                     !context.Request.Path.StartsWithSegments("/health")
                     && !context.Request.Path.StartsWithSegments("/alive")));
-        builder.Services.AddOpenApi(options =>
-        {
-            options.AddDocumentTransformer(static (document, _, _) =>
-            {
-                const string scheme = NOFAbstractionConstants.Transport.Headers.Authorization;
-
-                document.Components ??= new OpenApiComponents();
-                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-                document.Components.SecuritySchemes[scheme] = new OpenApiSecurityScheme
-                {
-                    Type = SecuritySchemeType.ApiKey,
-                    In = ParameterLocation.Header,
-                    Name = scheme
-                };
-
-                document.Security ??= [];
-                var requirement = new OpenApiSecurityRequirement
-                {
-                    [new OpenApiSecuritySchemeReference(scheme, document, string.Empty)] = []
-                };
-                document.Security.Add(requirement);
-
-                return Task.CompletedTask;
-            });
-        });
+        builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFHttpJsonContext.Default));
+        builder.Services.AddOpenApi(options => options.AddOperationTransformer<HttpBindingOpenApiTransformer>());
         return builder;
     }
 
@@ -90,22 +68,4 @@ public static class WebApplicationExtensions
         return app;
     }
 
-    /// <summary>Maps registered endpoint modules and health checks once, before the host starts.</summary>
-    public static WebApplication MapNOFEndpoints(this WebApplication app)
-    {
-        if (!((IApplicationBuilder)app).Properties.TryAdd("NOF.HttpEndpoints", true))
-        {
-            return app;
-        }
-        foreach (var module in app.Services.GetServices<IHttpEndpointModule>())
-        {
-            module.Map(app);
-        }
-        app.MapHealthChecks("/health");
-        app.MapHealthChecks("/alive", new HealthCheckOptions
-        {
-            Predicate = static registration => registration.Tags.Contains("live")
-        });
-        return app;
-    }
 }
