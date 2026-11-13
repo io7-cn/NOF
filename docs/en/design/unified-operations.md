@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract generates the input-only IMailServiceOperations.Send reference. Application generates MailService.Send and a complete typed Descriptor; its Reference has the same stable operation identity. Producers reference only Contract. All contract interfaces, including FailureCase declarations, and IApplicationServiceImplementation need no partial. Result and failure branches are generated directly in Application operations. Operation identity is contract plus method, never the input/output pair or handler implementation name.
+Contract generates no code; NOF.Contract.SourceGenerator keeps its name and declaration analyzers only. Application owns ServiceOperationReference and generates MailService.Send with a complete typed Descriptor. Its Reference preserves the stable operation identity. Remote producers reference the shared business Contract plus framework Application and explicitly construct a reference, without the receiving implementation. All contract interfaces, including FailureCase declarations, and IApplicationServiceImplementation need no partial. Result and failure branches are generated directly in Application operations. Operation identity is contract plus method, never the input/output pair or handler implementation name.
 
 Register the application assembly and each service container once. Individual operations continue to be discovered automatically:
 
@@ -52,11 +52,11 @@ Queue/Subscription.To accepts only `ServiceOperationDescriptor<T, Empty>`. An op
 await MailService.Send.InvokeAsync(services, mail, context, ct);
 
 // IMessageDispatcher: wait for transport acceptance, not business execution.
-await messages.SendAsync(IMailServiceOperations.Send, mail, context, ct);
+await messages.SendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
 await messages.PublishAsync(new OrderCreated(orderId), context, ct);
 
 // Stage in the current transaction; save business changes and delivery intent together.
-await messages.DeferSendAsync(IMailServiceOperations.Send, mail, context, ct);
+await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
 await messages.DeferPublishAsync(new OrderCreated(orderId), context, ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
@@ -66,9 +66,12 @@ Ordered variants take the operation (for sending), payload, order key, Context, 
 A producer with no local consumer configures outbound routes only:
 
 ```csharp
+// Shared business Contract + framework Application; no receiver implementation.
+var sendMail = new ServiceOperationReference<SendMail>(
+    typeof(IMailService), nameof(IMailService.Send));
 services.AddMessageBindings(bindings =>
 {
-    bindings.RouteToQueue(IMailServiceOperations.Send, "mail.send.v1");
+    bindings.RouteToQueue(sendMail, "mail.send.v1");
     bindings.Topic<OrderCreated>("orders.created.v1");
 });
 ```

@@ -28,6 +28,7 @@ public class ClientGenerationRemovalTests
         var assemblies = new[]
         {
             typeof(ApplicationServiceGenerator).Assembly,
+            typeof(NOF.Contract.SourceGenerator.ApplicationServiceAnalyzer).Assembly,
             typeof(ValueObjectLengthConfigurationAnalyzer).Assembly,
             typeof(ValueObjectLengthConfigurationAnalyzer).Assembly
         };

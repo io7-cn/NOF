@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract 独立生成只包含输入的 IMailServiceOperations.Send 引用；Application 生成 MailService.Send 及完整的 Descriptor，其 Reference 保留相同操作身份。生产者只需引用 Contract。所有契约接口（包括 FailureCase 声明）和 IApplicationServiceImplementation 均无需 partial；Result 与失败分支直接生成在 Application 操作中。操作身份是“契约＋方法”，不依赖请求/响应组合或 Handler 实现类名。
+Contract 不再生成代码；NOF.Contract.SourceGenerator 保留原名，只承载声明分析器。ServiceOperationReference 归 Application，由 Application 生成 MailService.Send 及完整 Descriptor，其 Reference 保留稳定操作身份。远端生产者只引用共享业务 Contract 和框架 Application，显式构造操作引用，无需依赖接收方实现。所有契约接口（包括 FailureCase 声明）和 IApplicationServiceImplementation 均无需 partial；Result 与失败分支直接生成在 Application 操作中。操作身份是“契约＋方法”，不依赖请求/响应组合或 Handler 实现类名。
 
 注册应用程序集和服务容器后，操作实现自动发现，无须逐个注册：
 
@@ -52,11 +52,11 @@ Queue/Subscription.To 只接受 ServiceOperationDescriptor<T, Empty>，不能静
 await MailService.Send.InvokeAsync(services, mail, context, ct);
 
 // IMessageDispatcher：等待接受投递，不代表业务已经执行。
-await messages.SendAsync(IMailServiceOperations.Send, mail, context, ct);
+await messages.SendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
 await messages.PublishAsync(new OrderCreated(orderId), context, ct);
 
 // 暂存到当前事务，随后与业务修改一同提交。
-await messages.DeferSendAsync(IMailServiceOperations.Send, mail, context, ct);
+await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, context, ct);
 await messages.DeferPublishAsync(new OrderCreated(orderId), context, ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
@@ -68,7 +68,8 @@ await unitOfWork.SaveChangesAsync(ct);
 ```csharp
 services.AddMessageBindings(bindings =>
 {
-    bindings.RouteToQueue(IMailServiceOperations.Send, "mail.send.v1");
+    bindings.RouteToQueue(new ServiceOperationReference<SendMail>(
+        typeof(IMailService), nameof(IMailService.Send)), "mail.send.v1");
     bindings.Topic<OrderCreated>("orders.created.v1");
 });
 ```

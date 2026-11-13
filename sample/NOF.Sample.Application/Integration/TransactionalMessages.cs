@@ -18,7 +18,7 @@ public static class TransactionalMessages
     {
         // Persist business changes using this same unitOfWork before saving.
         await messages.DeferPublishAsync(new OrderCreated(orderId), context, cancellationToken);
-        await messages.DeferSendAsync(IMessageDemoServiceOperations.SendMail, new SendEmail(email, "Created", "Order created."), context, cancellationToken);
+        await messages.DeferSendAsync(MessageDemoService.SendMail.Descriptor.Reference, new SendEmail(email, "Created", "Order created."), context, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

@@ -107,7 +107,7 @@ public class ApplicationServiceGeneratorTests
     {
         var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.CreateCompilation("ApplicationOperations", source, true, references);
         GeneratorDriver driver = Microsoft.CodeAnalysis.CSharp.CSharpGeneratorDriver.Create(
-            [new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()],
+            [new ApplicationServiceGenerator().AsSourceGenerator()],
             parseOptions: (Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         Assert.Empty(diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error));

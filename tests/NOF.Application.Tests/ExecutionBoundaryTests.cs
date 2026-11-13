@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Contract;
+using System.Reflection;
 using Xunit;
 
 namespace NOF.Application.Tests;
@@ -9,13 +10,27 @@ public sealed class ExecutionBoundaryTests
     [Fact]
     public void ExecutionModels_BelongToApplication_AndSemanticContextToAbstraction()
     {
-        foreach (var type in new[] { typeof(ServiceOperation), typeof(ServiceOperation<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(ServiceOperationDescriptor), typeof(ServiceOperationDescriptor<,>), typeof(ServiceExecution), typeof(ServiceCompleted), typeof(ServiceRejected), typeof(RejectionReason), typeof(ServiceRejectedException) })
+        foreach (var type in new[] { typeof(ServiceOperationReference), typeof(ServiceOperationReference<>), typeof(ServiceOperation), typeof(ServiceOperation<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(ServiceOperationDescriptor), typeof(ServiceOperationDescriptor<,>), typeof(ServiceExecution), typeof(ServiceCompleted), typeof(ServiceRejected), typeof(RejectionReason), typeof(ServiceRejectedException) })
         {
             Assert.Equal(typeof(ApplicationService).Assembly, type.Assembly);
             Assert.Equal("NOF.Application", type.Namespace);
         }
         Assert.Equal(typeof(Failure).Assembly, typeof(Context).Assembly);
         Assert.Equal("NOF.Abstraction", typeof(Context).Namespace);
+    }
+
+    [Fact]
+    public void Reference_ContainsIdentityAndInput_WithoutResolvingTheReceiver()
+    {
+        var reference = new ServiceOperationReference<Query>(typeof(IService), "Missing");
+        Assert.Equal(typeof(IService), reference.ServiceType);
+        Assert.Equal("Missing", reference.OperationName);
+        Assert.Equal(typeof(Query), reference.RequestType);
+        Assert.EndsWith("/Missing", reference.Id);
+        Assert.Null(typeof(ServiceOperationReference).GetProperty("MethodInfo"));
+        Assert.Null(typeof(ServiceOperationReference).GetProperty("CanSubmit"));
+        Assert.DoesNotContain(typeof(ServiceOperationReference).GetProperties(), property => typeof(MemberInfo).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(Type));
+        Assert.Null(typeof(UseHostTenantAttribute).GetMethod("IsRequired"));
     }
 
     [Fact]

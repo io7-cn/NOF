@@ -42,7 +42,7 @@ public sealed class DeleteNode : NodeService.Delete
 
 ## 操作引用与完整执行描述符
 
-Contract 生成 `INodeServiceOperations.Delete`，类型为 `ServiceOperationReference<DeleteNodeRequest>`，只提供身份和输入数据，不承诺 Application 生成的返回类型，也不依赖 Application 或 partial 接口。
+Contract 不再生成代码。NOF.Contract.SourceGenerator 保留原名和声明分析器。ServiceOperationReference<TRequest> 归 Application；使用 Service.Operation.Descriptor.Reference，或为远端生产者显式构造引用，无需引入接收方实现。
 
 Application 生成 `NodeService.Delete.Descriptor`，类型为 `ServiceOperationDescriptor<DeleteNodeRequest, NodeService.Delete.Result>`。HTTP、本地调用及操作映射使用这个完整返回类型；NodeService.Delete.InvokeAsync 返回相同 Result。完整描述符的 Reference 属性可用于只需要输入的生产者路由。两者拥有相同稳定 Id，不再要求是同一对象实例。
 
@@ -66,7 +66,7 @@ HTTP 模块显式把 Application 分支映射成 TypedResults、资源或 Proble
 
 FailureCaseAttribute 继续放在 Contract 方法上，移除接口的 partial。将 `IService.<Operation>Operation.Result` 及其分支引用改为 `Service.Operation.Result` 和 Service.Operation.Case。旧 Contract 操作基类和兼容别名不保留。已经使用继承的 `Task<Result>`、new Case(...) 的 Handler 无需改变这部分写法。
 
-生产者路由使用 Contract 操作引用；HTTP、本地执行和消费者绑定使用 Application 完整描述符。此前向 Send/RouteToQueue 传入 Application 描述符的代码可以改传其 Reference。不能把接口声明的成功类型当作完整执行返回类型。
+生产者路由使用 Application 操作引用；HTTP、本地执行和消费者绑定使用 Application 完整描述符。此前向 Send/RouteToQueue 传入 Application 描述符的代码可以改传其 Reference。不能把接口声明的成功类型当作完整执行返回类型。
 
 迁移时保持 JSON 分支名称、错误码与自定义数据结构稳定；此次改变 CLR 类型归属，不改变既有可选 JSON 判别格式。同步升级 Application、端点、JSON 上下文和进程内调用方。测试覆盖单体项目中两种生成器顺序，以及从独立编译 Contract 元数据生成 Application 结果。
 

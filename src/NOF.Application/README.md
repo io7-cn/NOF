@@ -88,7 +88,7 @@ Use ordinary ApplicationService operations for consumers and IMessageDispatcher 
 ```csharp
 services.AddMessageBindings(bindings =>
     bindings.Queue<SendMail>("mail.send.v1").To(MailService.Send.Descriptor));
-await messages.DeferSendAsync(IMailServiceOperations.Send, mail, invocation.Context, cancellationToken);
+await messages.DeferSendAsync(MailService.Send.Descriptor.Reference, mail, invocation.Context, cancellationToken);
 await messages.DeferPublishAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
@@ -202,6 +202,6 @@ Apache-2.0
 
 `IInvocationFilter` is the unified extension contract for service operations, commands and notifications. Registration through `AddInvocationFilter<T>()` declares an extension; the host chooses `IInvocationPipeline` to execute it. The optional in-memory default lives in Infrastructure. See [host-selected execution](../../docs/en/design/invocation-extensions.md).
 
-FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Contract references contain identity/input only; execution descriptors contain the complete output. See [expected failures](../../docs/en/design/expected-failures.md).
+FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Application operation references contain identity/input only; execution descriptors contain the complete output. See [expected failures](../../docs/en/design/expected-failures.md).
 
-Execution models, descriptors and policy interpretation belong to this package. Contract holds declarations and input-only references; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).
+Execution models, descriptors and policy interpretation belong to this package. Application also owns input-only ServiceOperationReference; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).

@@ -6,7 +6,6 @@ using NOF.Abstraction.SourceGenerator;
 using NOF.Application;
 using NOF.Application.SourceGenerator;
 using NOF.Contract;
-using NOF.Contract.SourceGenerator;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using NOF.Hosting.AspNetCore;
@@ -106,7 +105,6 @@ public sealed class AllSourceGeneratorsMonolithTests
             new AutoInjectGenerator().AsSourceGenerator(),
             new EventHandlerRegistrationGenerator().AsSourceGenerator(),
             new ValueObjectGenerator().AsSourceGenerator(),
-            new OperationDescriptorGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
             new ApplicationServiceGenerator().AsSourceGenerator()

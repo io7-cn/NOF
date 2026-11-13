@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace NOF.Contract;
+namespace NOF.Application;
 
 /// <summary>Identifies a declared operation without promising an application-generated response type.</summary>
 public abstract class ServiceOperationReference
@@ -25,7 +25,7 @@ public abstract class ServiceOperationReference
     public abstract Type RequestType { get; }
 }
 
-/// <summary>A Contract-owned typed input reference usable without an Application assembly.</summary>
+/// <summary>A typed producer reference usable without the receiving application implementation.</summary>
 public sealed class ServiceOperationReference<TRequest> : ServiceOperationReference
 {
     /// <summary>Creates an operation identity with its declared input type.</summary>

@@ -53,7 +53,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(InitializedTypes));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
-            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator(),
+            new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
         ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
@@ -112,7 +112,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             typeof(InitializedTypes));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create([
-            new NOF.Contract.SourceGenerator.OperationDescriptorGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator(),
+            new ApplicationServiceGenerator().AsSourceGenerator(),
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator()
         ], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
 
