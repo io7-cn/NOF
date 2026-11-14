@@ -39,7 +39,6 @@ public static partial class NOFApplicationExtensions
             ArgumentNullException.ThrowIfNull(services);
 
             services.AddNOFAbstraction();
-            services.AddPermissions();
             services.GetOrAddSingleton<MappingRegistry>();
             services.GetOrAddSingleton<ApplicationServiceRegistry>();
             services.TryAddSingleton<IMapper, ExpressionMapper>();

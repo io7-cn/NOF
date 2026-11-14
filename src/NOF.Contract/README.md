@@ -18,7 +18,7 @@ This package retains IApplicationService, declaration attributes, Empty/Optional
 
 See [layer boundaries](../../docs/en/design/contract-boundaries.md) and [expected failures](../../docs/en/design/expected-failures.md), each with a Chinese edition.
 
-Permissions belong exclusively to Contract interfaces and operation methods: RequireAuthenticated, nonempty RequirePermission groups with PermissionMatch.All/Any, and AllowAnonymous. NOF240/241/242 validate built-in declarations. MetadataAttribute is removed; SummaryAttribute directly inherits Attribute. Application resolves Contract policies; Abstraction supplies shared permission models, checks and catalogs; handlers and UI pages are not permission declaration sources. See [authorization](../../docs/en/design/authorization.md) ([简体中文](../../docs/zh-CN/design/authorization.md)).
+Permissions belong exclusively to Contract interfaces and operation methods: RequireAuthenticated, nonempty RequirePermission groups with PermissionMatch.All/Any, and AllowAnonymous. NOF240/241/242 validate built-in declarations. MetadataAttribute is removed; SummaryAttribute directly inherits Attribute. Application resolves Contract policies; Abstraction supplies shared permission models and checks; handlers and UI pages are not permission declaration sources. See [authorization](../../docs/en/design/authorization.md) ([简体中文](../../docs/zh-CN/design/authorization.md)).
 
 ## Installation
 

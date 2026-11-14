@@ -5,7 +5,7 @@ namespace NOF.Abstraction;
 /// <summary>Supplies grants for an authenticated identity in an explicit semantic context.</summary>
 public interface IPermissionGrantProvider
 {
-    /// <summary>Checks one defined permission. Implementations may query application-owned roles or other grant data.</summary>
+    /// <summary>Checks one permission identifier against the current grants. Implementations may query application-owned roles or other grant data.</summary>
     ValueTask<bool> IsGrantedAsync(ClaimsPrincipal user, string permission, Context context, CancellationToken cancellationToken);
 }
 
@@ -46,7 +46,7 @@ public sealed class ClaimsPermissionGrantProvider : IPermissionGrantProvider
 }
 
 /// <summary>Provides the default policy semantics while allowing the grant source to be replaced independently.</summary>
-public sealed class PermissionChecker(IUserContext userContext, Func<IPermissionGrantProvider> grants, PermissionCatalog catalog) : IPermissionChecker
+public sealed class PermissionChecker(IUserContext userContext, Func<IPermissionGrantProvider> grants) : IPermissionChecker
 {
     /// <inheritdoc />
     public async ValueTask<bool> IsGrantedAsync(string permission, CancellationToken cancellationToken = default)
@@ -61,7 +61,6 @@ public sealed class PermissionChecker(IUserContext userContext, Func<IPermission
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
-        catalog.Validate(policy);
         if (policy.RequiresAuthentication && !user.IsAuthenticated)
         {
             return new PermissionCheckResult.AuthenticationRequired();

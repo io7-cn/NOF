@@ -1,16 +1,16 @@
 @page "/permissions-demo"
 @using NOF.Abstraction
 @using NOF.UI.Components
-@inject PermissionCatalog Catalog
 
 <PageTitle>权限目录</PageTitle>
 <div class="sample-page">
     <h1>权限目录</h1>
+    <p>这是示例自己的权限描述数据，不是框架白名单；实际授予由权限服务判断。</p>
     <section class="sample-card">
         <table>
             <thead><tr><th>权限</th><th>标识</th><th>分组</th></tr></thead>
             <tbody>
-                @foreach (var permission in Catalog.GetAll())
+                @foreach (var permission in SamplePermissions.Definitions)
                 {
                     <tr><td>@permission.Name</td><td>@permission.Id</td><td>@permission.Group</td></tr>
                 }

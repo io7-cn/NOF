@@ -13,6 +13,9 @@ public static partial class NOFAbstractionExtensions
 
             services.GetOrAddSingleton<EventHandlerRegistry>();
             services.TryAddScoped<IUserContext, UserContext>();
+            services.TryAddScoped<IPermissionGrantProvider, ClaimsPermissionGrantProvider>();
+            services.TryAddScoped<IPermissionChecker>(provider => new PermissionChecker(
+                provider.GetRequiredService<IUserContext>(), () => provider.GetRequiredService<IPermissionGrantProvider>()));
             services.TryAddScoped<IEventPublisher, InMemoryEventPublisher>();
             return services;
         }

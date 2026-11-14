@@ -190,7 +190,7 @@ Apache-2.0
 
 ## Invocation execution
 
-NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. See [execution and migration](../../docs/en/design/invocation-extensions.md).
+NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. AddNOF/AddOutbox/AddMemoryMessaging register it automatically as scoped; hosts do not register the helper separately. See [execution and migration](../../docs/en/design/invocation-extensions.md).
 
 Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. Native DbContext/ISession and query/model APIs remain in host/provider implementations. The generic session/query/update/model facade and general memory ORM are removed. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).
 

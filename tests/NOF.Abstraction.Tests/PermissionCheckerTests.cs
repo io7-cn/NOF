@@ -9,8 +9,8 @@ public sealed class PermissionCheckerTests
     [Fact]
     public void SharedRuntime_DoesNotDependOnApplicationDomainInfrastructureOrAspNetCore()
     {
-        foreach (var type in new[] { typeof(PermissionDefinition), typeof(PermissionMatch), typeof(IPermissionMetadata),
-            typeof(AuthorizationPolicy), typeof(PermissionCatalog), typeof(IPermissionChecker) })
+        foreach (var type in new[] { typeof(PermissionMatch), typeof(IPermissionMetadata),
+            typeof(AuthorizationPolicy), typeof(IPermissionChecker) })
         {
             Assert.Equal(typeof(Context).Assembly, type.Assembly);
         }
@@ -38,7 +38,7 @@ public sealed class PermissionCheckerTests
     [InlineData(PermissionMatch.Any, "other", false)]
     public async Task Checker_UsesAnyAllAndWildcardGrants(PermissionMatch match, string grant, bool allowed)
     {
-        using var provider = new ServiceCollection().AddPermissions(new PermissionDefinition("read", "Read"), new("write", "Write")).BuildServiceProvider();
+        using var provider = new ServiceCollection().AddNOFAbstraction().BuildServiceProvider();
         using var scope = provider.CreateScope();
         var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Permission, grant)], "test"));
         var decision = await scope.ServiceProvider.GetRequiredService<IPermissionChecker>()
@@ -49,7 +49,7 @@ public sealed class PermissionCheckerTests
     [Fact]
     public async Task Checker_RejectsAnonymousAndUnauthenticatedSupplementalClaims_AndRequiresEveryGroup()
     {
-        using var provider = new ServiceCollection().AddPermissions(new PermissionDefinition("read", "Read"), new("write", "Write")).BuildServiceProvider();
+        using var provider = new ServiceCollection().AddNOFAbstraction().BuildServiceProvider();
         using var scope = provider.CreateScope();
         var checks = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
         var user = scope.ServiceProvider.GetRequiredService<IUserContext>();
@@ -69,9 +69,9 @@ public sealed class PermissionCheckerTests
     public async Task CustomGrantSource_ReceivesExplicitTenant_WhileDefaultSemanticsStayInFramework()
     {
         var grants = new GrantProbe();
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().AddNOFAbstraction();
         services.AddScoped<IPermissionGrantProvider>(_ => grants);
-        services.AddPermissions(new PermissionDefinition("read", "Read"));
+        services.AddNOFAbstraction();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var checks = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
@@ -88,24 +88,10 @@ public sealed class PermissionCheckerTests
     }
 
     [Fact]
-    public void Catalog_IsHostLocalFrozenAndStrict_ForEveryAlternative()
-    {
-        var first = new ServiceCollection().AddPermissions(new PermissionDefinition("read", "Read", "Configuration"));
-        Assert.Throws<InvalidOperationException>(() => first.AddPermissions(new PermissionDefinition("READ", "Duplicate")));
-        using var one = first.BuildServiceProvider();
-        using var two = new ServiceCollection().AddPermissions().BuildServiceProvider();
-        var catalog = one.GetRequiredService<PermissionCatalog>();
-        Assert.Equal("Configuration", Assert.Single(catalog.GetAll()).Group);
-        Assert.Empty(two.GetRequiredService<PermissionCatalog>().GetAll());
-        Assert.Throws<InvalidOperationException>(() => catalog.Validate(new(true, [new(["read", "typo"], PermissionMatch.Any)])));
-        Assert.Throws<InvalidOperationException>(() => catalog.Add(new("write", "Write")));
-    }
-
-    [Fact]
     public async Task GrantProvider_IsConstructedLazilyUnderTheExplicitTenant_AndAmbientStateIsRestored()
     {
         var constructed = new List<string>();
-        var services = new ServiceCollection().AddPermissions(new PermissionDefinition("read", "Read"));
+        var services = new ServiceCollection().AddNOFAbstraction();
         services.AddScoped<IPermissionGrantProvider>(_ =>
         {
             constructed.Add(Context.Current.TenantId);
@@ -124,6 +110,42 @@ public sealed class PermissionCheckerTests
         Assert.True(await checks.CheckAsync(policy, user.User, Context.Empty.WithTenantId("trusted")) is PermissionCheckResult.Granted);
         Assert.Equal(["trusted"], constructed);
         Assert.Equal("outside", Context.Current.TenantId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DynamicGrants_AreReadOnEachCheck_WithoutDefinitionsOrRebuildingServices(bool registerBeforeDefaults)
+    {
+        var grants = new DynamicGrants();
+        var services = new ServiceCollection();
+        if (registerBeforeDefaults)
+        {
+            services.AddScoped<IPermissionGrantProvider>(_ => grants);
+        }
+        services.AddNOFAbstraction();
+        if (!registerBeforeDefaults)
+        {
+            services.AddScoped<IPermissionGrantProvider>(_ => grants);
+        }
+        services.AddNOFAbstraction();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity("test"));
+        var checks = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
+        const string permission = "created.at.runtime";
+        Assert.False(await checks.IsGrantedAsync(permission));
+        grants.Permissions.Add(permission);
+        Assert.True(await checks.IsGrantedAsync(permission));
+        grants.Permissions.Clear();
+        Assert.False(await checks.IsGrantedAsync(permission));
+    }
+
+    public sealed class DynamicGrants : IPermissionGrantProvider
+    {
+        public HashSet<string> Permissions { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ValueTask<bool> IsGrantedAsync(ClaimsPrincipal user, string permission, Context context, CancellationToken cancellationToken)
+            => ValueTask.FromResult(Permissions.Contains(permission));
     }
 
     public sealed class GrantProbe : IPermissionGrantProvider

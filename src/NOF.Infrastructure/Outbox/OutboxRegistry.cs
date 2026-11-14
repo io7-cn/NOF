@@ -74,6 +74,7 @@ public static class OutboxServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         services.GetOrAddSingleton<OutboxRegistry>();
         services.TryAddScoped<IOutbox, TransactionalOutbox>();
+        services.TryAddScoped<MessageDelivery>();
         services.AddLogging();
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
         services.AddNOFJson();

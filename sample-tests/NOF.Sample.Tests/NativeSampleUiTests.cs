@@ -22,7 +22,6 @@ public class NativeSampleUiTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddNOFUI();
-        services.AddPermissions(SamplePermissions.Definitions);
         services.AddScoped<SampleMessageService>();
         services.AddSingleton<NavigationManager, SampleNavigationManager>();
         services.AddScoped(_ => new HttpClient(new RootNodesHandler()) { BaseAddress = new Uri("http://localhost/") });

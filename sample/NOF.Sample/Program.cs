@@ -19,6 +19,10 @@ using OpenTelemetry.Trace;
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly);
+builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
+builder.AddApplicationService<NOFSampleService>();
+builder.AddApplicationService<MessageDispatchService>();
+builder.AddApplicationService<PermissionDemoService>();
 
 builder.Services.AddIdGenerator()
     .AddSnowflakeIdGenerator();
@@ -42,14 +46,8 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
-builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
-builder.AddApplicationService<NOFSampleService>();
-builder.AddApplicationService<MessageDispatchService>();
-builder.AddApplicationService<PermissionDemoService>();
-builder.Services.AddPermissions(SamplePermissions.Definitions);
 builder.Services.AddNOFUI();
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-builder.Services.AddScoped<MessageDelivery>();
 builder.Services.AddOutbox();
 // Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
 builder.Services.AddInbox();

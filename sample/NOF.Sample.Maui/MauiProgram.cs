@@ -10,7 +10,6 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder().AddNOF();
-        builder.Services.AddPermissions(SamplePermissions.Definitions);
 
         builder
             .UseMauiApp<App>()

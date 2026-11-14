@@ -189,7 +189,6 @@ public sealed class ConfigNodeRestTests
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
         builder.Services.AddCacheService().AddMemoryCacheService();
-        builder.Services.AddPermissions(new PermissionDefinition("config.read", "Read configuration"));
         builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);

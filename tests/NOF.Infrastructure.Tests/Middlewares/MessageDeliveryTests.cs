@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
 using NOF.Contract;
@@ -9,6 +10,49 @@ namespace NOF.Infrastructure.Tests.Middlewares;
 
 public sealed class MessageDeliveryTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task FrameworkComposition_RegistersScopedDeliveryWithoutHostBoilerplate(int composition)
+    {
+        IServiceCollection services;
+        if (composition == 0)
+        {
+            var builder = Host.CreateApplicationBuilder();
+            builder.AddNOF();
+            builder.AddNOF();
+            services = builder.Services;
+            Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IHostedService)
+                && descriptor.ImplementationType == typeof(OutboxMessageBackgroundService));
+        }
+        else
+        {
+            services = new ServiceCollection();
+            if (composition == 1)
+            {
+                services.AddOutbox().AddOutbox();
+            }
+            else
+            {
+                services.AddMemoryMessaging(_ => { }).AddMemoryMessaging(_ => { });
+            }
+        }
+        var registration = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(MessageDelivery));
+        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var delivery = first.ServiceProvider.GetRequiredService<MessageDelivery>();
+        Assert.Same(delivery, first.ServiceProvider.GetRequiredService<MessageDelivery>());
+        Assert.NotSame(delivery, second.ServiceProvider.GetRequiredService<MessageDelivery>());
+        await delivery.ExecuteAsync(new object(), Context.Empty, (headers, cancellationToken) =>
+        {
+            Assert.True(Guid.TryParse(headers[NOFAbstractionConstants.Transport.Headers.MessageId], out _));
+            return ValueTask.CompletedTask;
+        }, default);
+    }
+
     [Theory]
     [InlineData(true, "explicit")]
     [InlineData(false, "ambient")]

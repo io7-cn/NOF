@@ -83,7 +83,7 @@ public sealed class AuthGuardTests
     }
 
     private static IServiceCollection Services()
-        => new ServiceCollection().AddLogging().AddNOFUI().AddPermissions(new PermissionDefinition("read", "Read"), new("write", "Write"));
+        => new ServiceCollection().AddLogging().AddNOFUI();
 
     private static ParameterView Parameters(AuthorizationPolicy policy) => ParameterView.FromDictionary(new Dictionary<string, object?>
     {

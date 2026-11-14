@@ -8,7 +8,7 @@ NOF.Contract contains declarations and data models only. Its runtime assembly re
 |---|---|
 | Contract | IApplicationService, FailureCase/policy metadata attributes, requests, successful DTOs, custom error data, Empty/Optional/Page |
 | Application | ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata, invocation interfaces and Contract authorization resolution |
-| Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure, permission models/policies/checks/catalog and other foundation services |
+| Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure, permission models/policies/checks and other foundation services |
 | Host/infrastructure | IInvocationFilter/InvocationDelegate/IInvocationPipeline, effective plans/catalogs, transport adaptation, identity establishment, selected invocation engine, HTTP presentation, queue routing and durable receipt/retry behavior |
 
 ## Declaring versus executing

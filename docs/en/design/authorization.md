@@ -1,10 +1,10 @@
-# Contract authorization and permission catalogs
+# Contract authorization and dynamic permissions
 
 [简体中文](../../zh-CN/design/authorization.md) · [Host composition](host-composition.md)
 
-NOF owns permission declarations, checking semantics and execution enforcement. Native authentication validates credentials and creates the trusted ClaimsPrincipal. NOF.Abstraction provides shared permission models, immutable policies, catalogs and default checking without referencing Contract, Application, Domain or ASP.NET Core. Contract references Abstraction only for these shared models and retains declaration attributes; Application owns AuthorizationPolicyResolver. UI references Abstraction directly and has no Contract or UseCase dependency. There is no standalone authorization package.
+NOF owns permission declarations, authentication requirements and All/Any checking semantics. Native authentication establishes the trusted ClaimsPrincipal. Abstraction owns immutable policies and the default checker/grant provider; Contract owns declaration attributes and Application owns AuthorizationPolicyResolver. UI uses Abstraction directly without reading Contract or UseCases. Permission directories and their storage belong to the application.
 
-## Declare permissions only on Contract interfaces
+## Declare operation requirements
 
 ```csharp
 using NOF.Abstraction;
@@ -24,42 +24,35 @@ public interface IConfigService : IApplicationService
 }
 ```
 
-RequirePermission requires at least one nonblank identifier and implies authentication. Its default Match is All. Multiple groups on one declaration combine with AND. For example, separate `RequirePermission("config.read")` and `RequirePermission("owner", "admin", Match = PermissionMatch.Any)` mean read AND (owner OR admin).
+RequirePermission requires nonblank identifiers and implies authentication. All is the default; separate groups combine with AND. Method declarations replace interface defaults. Only actual descendant declarations override ancestors; competing inherited branches must agree or explicitly resolve ambiguity. AllowAnonymous cancels this Contract's inherited defaults, without bypassing native host or tenant requirements. Unannotated contracts permit anonymous access.
 
-An operation declaration replaces interface defaults. Nearer interface/method declarations replace inherited defaults. AllowAnonymous cancels inherited defaults within that Contract; it cannot bypass host authentication or tenant constraints. An unannotated Contract preserves anonymous access. Handlers, request/message types and UI pages are not sources of permission declarations.
+Declarations belong exclusively to Contract interfaces/methods. Handlers, request/message types and UI pages are not declaration sources. NOF240 checks invalid groups, NOF241 rejects contradictory anonymous/authenticated declarations and NOF242 rejects implementation targets. Custom Attributes may implement IPermissionMetadata; there is no generic string-key metadata protocol.
 
-NOF240 reports empty/invalid groups; NOF241 reports anonymous and authenticated/permission declarations on the same member; NOF242 rejects implementation-method declarations. Runtime resolution also validates custom Attributes implementing IPermissionMetadata. Sibling inherited declarations must agree on permission groups, independent of enumeration order; ambiguity fails configuration and requires an explicit derived declaration. There is no common MetadataAttribute, string key protocol or IMetadata marker.
+## Dynamic permission data
 
-## Define available permissions separately from grants
-
-```csharp
-services.AddPermissions(
-    new PermissionDefinition("config.read", "Read configuration", "Configuration"),
-    new PermissionDefinition("config.write", "Write configuration", "Configuration"),
-    new PermissionDefinition("config.admin", "Manage configuration", "Configuration"));
-```
-
-AddNOF and AddNOFUI install default checking services, so hosts only add their definitions. PermissionCatalog lists immutable definitions in stable order. IDs use ordinal case-insensitive comparison; duplicate IDs fail, and configuration freezes on first use. Separate service collections have independent catalogs. Defining a permission never grants it.
-
-Every referenced permission, including every Any alternative, must exist. Default execution validates generated operation registrations before serving and validates manually supplied descriptors before execution. Unknown identifiers are configuration errors, including direct IsGrantedAsync calls. Register definitions before describing endpoints, resolving a catalog or starting the host. Explicitly add the same definitions to a separate UI host; no permission/role database or migration is installed.
-
-## Check permissions and replace the grant source
+AddNOF and AddNOFUI install the default scoped checker automatically, through normal Abstraction registration. There is no AddPermissions API, framework PermissionDefinition or frozen PermissionCatalog. Identifiers do not need registering before startup or endpoint description. The framework validates declaration shape, not membership in an application dictionary.
 
 ```csharp
+services.AddScoped<IPermissionGrantProvider, DatabasePermissionGrantProvider>();
+
 var granted = await permissions.IsGrantedAsync("config.read", ct);
 ```
 
-IPermissionChecker uses the scoped IUserContext and current semantic Context for this convenience API. CheckAsync accepts an immutable AuthorizationPolicy, explicit ClaimsPrincipal and Context and returns Granted, AuthenticationRequired or Denied. Groups are snapshotted; mutable Attributes or caller arrays cannot change an effective policy.
+The application-owned provider queries current grants for the supplied ClaimsPrincipal, permission identifier and explicit semantic Context. It may use a database, external service or application-managed cache. Missing, disabled or ungranted permissions should return false. Names, groups, directory administration, role data and cache invalidation are application concerns; NOF introduces no directory-provider facade or storage schema.
 
-The default ClaimsPermissionGrantProvider accepts exact and wildcard permission claims from authenticated identities only. OAuth scopes and roles are not automatically interpreted as business permissions. An unrelated unauthenticated identity cannot add a grant to an authenticated principal.
+Contract policy snapshots may be cached. Authorization decisions are evaluated on each invocation and are not cached by NOF: adding or revoking grants can affect the next check in the same scope without restarting, rebuilding DI or invalidating a plan. A provider owns any freshness limits of its own cache. Register custom providers before or after default composition; repeated default registration preserves overrides.
 
-For application-owned grant data, register a scoped IPermissionGrantProvider using normal DI. It receives the identity, one defined permission, explicit tenant context and cancellation token. NOF still owns authentication, Any/All and denial handling. Provider exceptions propagate as technical failures; they never become grants. This version provides no role or organization administration.
+The default ClaimsPermissionGrantProvider reads exact/wildcard permission claims from authenticated identities only. It does not consult a directory, translate OAuth scopes/roles or query dynamic storage. Claim changes depend on the host's identity refresh; choose a database-backed provider when server-side revocation must be checked immediately.
 
-Execution, failure description and OpenAPI use the same cached Contract policy. HTTP, local invocation and message consumption check it before constructing business handlers. Tenant trust is checked before constructing or querying grant providers. The provider is resolved lazily inside the explicit authenticated tenant context, so scoped persistence captures the trusted tenant. Anonymous denials never construct the grant provider. Messages do not restore producer claims/tokens; hosts explicitly establish any trusted consumer identity. A custom invocation engine retains responsibility for enforcing its declared plan.
+## Execution and context
 
-Generated operation initializers preserve inherited Contract methods for trimming. Standalone trimmed callers of AuthorizationPolicyResolver must also preserve their selected Contract's inherited method declarations.
+IPermissionChecker.IsGrantedAsync uses the scoped IUserContext and Context.Current. CheckAsync accepts an explicit immutable AuthorizationPolicy, principal and Context, returning Granted, AuthenticationRequired or Denied. Separate groups combine with AND, while each group applies its own All/Any mode. Provider exceptions and cancellation propagate; they never grant access.
 
-## UI checks presentation permissions directly
+HTTP, local calls and message consumption share the cached Contract requirements, checked before business handler construction. Tenant trust is validated before constructing/querying the grant provider. The provider resolves lazily under the explicit authenticated tenant context, preserving tenant-scoped persistence and restoring the ambient caller. Anonymous denials do not construct providers. Messages do not restore producer claims or tokens; the host establishes a trusted consumer identity. Custom execution engines must enforce their effective plans.
+
+Generated operation initializers preserve inherited Contract methods for trimming; standalone trimmed resolver callers must preserve the selected inherited declarations too.
+
+## UI and Sample
 
 ```razor
 <AuthGuard Permission="config.write">
@@ -68,14 +61,10 @@ Generated operation initializers preserve inherited Contract methods for trimmin
 </AuthGuard>
 ```
 
-AuthGuard calls the shared checker; Policy accepts explicit UI-owned Any/All groups when needed. Do not specify both Policy and Permission. Without either, AuthGuard requires authentication. A route wrapper receives an explicit Policy; it does not read page Attributes or infer UseCases. Native RouteView remains sufficient for unrestricted routes.
+AuthGuard checks a permission identifier or an explicit UI-owned Policy; do not pass both. With neither, it requires authentication. PermissionRouteView requires an explicit Policy and never inspects page Attributes or UseCase contracts. Identity changes trigger rechecking and stale asynchronous grants cannot overwrite newer denials. Changes in external grant data need application-owned UI refresh/invalidation; there is no automatic database subscription. UI visibility never replaces server enforcement.
 
-UI and server use the same catalog/checking semantics, but may have different identity state. UI visibility is not a security boundary and never substitutes for server checking. Identity changes trigger rechecking; stale asynchronous grants cannot overwrite newer denials. No UI-to-UseCase mapping or role-expression DSL is introduced.
+SamplePermissions contains example-owned SamplePermission display data only. IPermissionDemoService declares an Any group; its ordinary handler returns that example data, and `/permissions-demo` uses AuthGuard by identifier. The API's JWT tests cover 401/403 and both allowed alternatives, without any permission registration. The sample list is not an enforcement whitelist, and no role/organization administration is added.
 
-## Sample and migration
+## Migration
 
-SamplePermissions defines the shared catalog. IPermissionDemoService.GetOverview declares its Any group in Contract; PermissionDemoService has an ordinary handler. The HTTP adapter exposes `/api/permissions/overview`; native JWT tests cover 401, 403 and both allowed alternatives. `/permissions-demo` displays the catalog and uses AuthGuard directly by permission ID. Existing CRUD access rules remain unchanged. The sample does not mint business grants from OAuth scopes or invent a UI login flow.
-
-Replace bare/empty RequirePermission with RequireAuthenticated. Move former handler permissions to the appropriate Contract method and review the intended access policy. Remove MetadataAttribute and its string keys; custom metadata uses ordinary Attributes and purpose-specific consumers. SummaryAttribute now directly inherits Attribute; BCL Description/Category remain usable. Replace page permission Attributes with explicit UI checks and pass Policy to PermissionRouteView, or use native RouteView. No database schema change is required.
-
-Import NOF.Abstraction for permission models, policies, catalogs and checks, and NOF.Application for AuthorizationPolicyResolver. Replace any standalone authorization package reference with the owning existing package. The old ClaimsPrincipal.HasPermission path is removed; use IPermissionChecker so catalog validation and authentication semantics stay consistent.
+Delete AddPermissions calls and framework directory/model dependencies. Move directory DTOs and queries into application-owned contracts/services if needed, and implement IPermissionGrantProvider for dynamic grants. Import NOF.Abstraction for checking models and NOF.Application for Contract resolution. Keep permission annotations on Contract only; use RequireAuthenticated for login-only access. Replace old page Attributes with explicit UI checks and removed HasPermission calls with IPermissionChecker. No database schema migration is required by this change.

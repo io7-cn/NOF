@@ -65,13 +65,53 @@ public sealed class ContractAuthorizationExecutionTests
     }
 
     [Fact]
-    public async Task UnknownPermissionReference_FailsAtStartupWithoutConstructingHandler()
+    public async Task ContractPermission_NeedsNoCatalog_AndStartupNeverQueriesGrants()
     {
-        var builder = Configure(define: false);
+        var builder = Configure();
+        builder.Services.AddScoped<IPermissionGrantProvider>(_ => throw new InvalidOperationException("Grant source must remain lazy."));
         using var host = builder.Build();
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
-        Assert.Contains("read", error.Message);
-        Assert.Equal(0, host.Services.GetRequiredService<Probe>().Constructed);
+        await host.StartAsync();
+        try
+        {
+            Assert.Equal(0, host.Services.GetRequiredService<Probe>().Constructed);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(InvocationOrigin.Http)]
+    [InlineData(InvocationOrigin.Local)]
+    [InlineData(InvocationOrigin.Message)]
+    public async Task CachedPlan_DoesNotCacheDynamicGrants(InvocationOrigin origin)
+    {
+        var builder = Configure();
+        var grants = new DynamicGrants();
+        builder.Services.AddScoped<IPermissionGrantProvider>(_ => grants);
+        using var host = builder.Build();
+        await host.StartAsync();
+        try
+        {
+            using var scope = host.Services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity("test"));
+            var descriptor = new ServiceOperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
+            var plans = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>();
+            var plan = plans.Describe(descriptor, origin);
+            var executor = scope.ServiceProvider.GetRequiredService<IOperationExecutor>();
+            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            grants.Permissions.Add("read");
+            Assert.IsType<Empty>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            grants.Permissions.Clear();
+            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            Assert.Same(plan, plans.Describe(descriptor, origin));
+            Assert.Equal(1, host.Services.GetRequiredService<Probe>().Constructed);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
     }
 
     [Theory]
@@ -81,7 +121,7 @@ public sealed class ContractAuthorizationExecutionTests
     {
         var builder = Configure();
         builder.Services.AddScoped<IPermissionChecker>(provider => new PermissionChecker(provider.GetRequiredService<IUserContext>(),
-            () => provider.GetRequiredService<IPermissionGrantProvider>(), provider.GetRequiredService<PermissionCatalog>()));
+            () => provider.GetRequiredService<IPermissionGrantProvider>()));
         builder.Services.AddScoped<IPermissionGrantProvider, TenantGrants>();
         builder.Services.Configure<TenantAuthorizationOptions>(options => options.RejectMismatchedTenant = rejectMismatch);
         using var host = builder.Build();
@@ -105,14 +145,10 @@ public sealed class ContractAuthorizationExecutionTests
         }
     }
 
-    private static HostApplicationBuilder Configure(bool define = true)
+    private static HostApplicationBuilder Configure()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        if (define)
-        {
-            builder.Services.AddPermissions(new PermissionDefinition("read", "Read"));
-        }
         builder.Services.AddSingleton<Probe>();
         builder.Services.AddScoped<Handler>();
         builder.Services.AddScoped<IPermissionChecker, CapturingChecker>();
@@ -137,6 +173,12 @@ public sealed class ContractAuthorizationExecutionTests
         public int Constructed { get; set; }
         public string? GrantConstructorTenant { get; set; }
         public string? GrantQueryTenant { get; set; }
+    }
+    public sealed class DynamicGrants : IPermissionGrantProvider
+    {
+        public HashSet<string> Permissions { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public ValueTask<bool> IsGrantedAsync(ClaimsPrincipal user, string permission, Context context, CancellationToken cancellationToken)
+            => ValueTask.FromResult(Permissions.Contains(permission));
     }
     public sealed class TenantGrants : IPermissionGrantProvider
     {
@@ -164,9 +206,9 @@ public sealed class ContractAuthorizationExecutionTests
         public IReadOnlyList<string> Permissions => ["not.a.contract.permission"];
         public new PermissionMatch Match => PermissionMatch.All;
     }
-    public sealed class CapturingChecker(IUserContext user, IPermissionGrantProvider grants, PermissionCatalog catalog) : IPermissionChecker
+    public sealed class CapturingChecker(IUserContext user, IPermissionGrantProvider grants) : IPermissionChecker
     {
-        private readonly PermissionChecker _inner = new(user, () => grants, catalog);
+        private readonly PermissionChecker _inner = new(user, () => grants);
         public AuthorizationPolicy? Policy { get; private set; }
         public ValueTask<bool> IsGrantedAsync(string permission, CancellationToken cancellationToken = default) => _inner.IsGrantedAsync(permission, cancellationToken);
         public ValueTask<PermissionCheckResult> CheckAsync(AuthorizationPolicy policy, ClaimsPrincipal principal, Context context, CancellationToken cancellationToken = default)

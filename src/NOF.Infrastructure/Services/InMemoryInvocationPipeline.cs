@@ -74,7 +74,7 @@ public static class InMemoryInvocationPipelineExtensions
     /// <summary>Registers the default engine and construction-free plan validation.</summary>
     public static IServiceCollection UseInMemoryInvocationPipeline(this IServiceCollection services)
     {
-        services.AddPermissions();
+        services.AddNOFAbstraction();
         services.AddOptions<TenantAuthorizationOptions>();
         services.TryAddSingleton<ApplicationServiceRegistry>();
         services.GetOrAddSingleton<InvocationFilterRegistry>();

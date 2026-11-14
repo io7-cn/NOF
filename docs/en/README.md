@@ -73,6 +73,6 @@ The shared Sample UI uses native Blazor event binding and HTML controls, with no
 
 - [Host composition and identity ownership](design/host-composition.md)
 
-- [Contract authorization and permission catalogs](design/authorization.md)
+- [Contract authorization and dynamic permissions](design/authorization.md)
 
 - [Framework boundaries and native platform APIs](design/framework-simplification.md)

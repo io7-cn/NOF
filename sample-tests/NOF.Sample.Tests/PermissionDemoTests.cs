@@ -31,7 +31,6 @@ public sealed class PermissionDemoTests
         builder.WebHost.UseTestServer();
         builder.AddApplicationPart(typeof(PermissionDemoService).Assembly);
         builder.AddApplicationService<PermissionDemoService>();
-        builder.Services.AddPermissions(SamplePermissions.Definitions);
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
             options.MapInboundClaims = false;

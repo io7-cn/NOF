@@ -48,7 +48,6 @@ public sealed class TenantRequestAuthorizationTests
         using var rsa = RSA.Create(2048);
         var key = new RsaSecurityKey(rsa) { KeyId = "test-key" };
         var builder = WebApplication.CreateBuilder([]).AddNOF();
-        builder.Services.AddPermissions(new PermissionDefinition("platform.manage", "Manage platform"));
         builder.WebHost.UseTestServer();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {

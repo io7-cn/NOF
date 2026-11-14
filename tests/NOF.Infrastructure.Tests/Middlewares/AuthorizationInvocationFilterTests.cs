@@ -402,14 +402,7 @@ public sealed class AuthorizationInvocationFilterTests
             Options.Create(tenantOptions ?? new()));
 
     private static IPermissionChecker CreatePermissions(IUserContext user)
-    {
-        var catalog = new PermissionCatalog();
-        foreach (var id in new[] { "message", "input-type", "platform.manage", "input-method", "execute-method", "handler" })
-        {
-            catalog.Add(new(id, id));
-        }
-        return new PermissionChecker(user, () => new ClaimsPermissionGrantProvider(), catalog);
-    }
+        => new PermissionChecker(user, () => new ClaimsPermissionGrantProvider());
 
     private static ClaimsIdentity CreateAuthenticatedIdentity(params string[] permissionClaims)
     {

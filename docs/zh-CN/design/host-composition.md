@@ -25,7 +25,7 @@ builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 
 入口注册公共策略，类型化 Selector 选择 Provider 并保留完整方法名。重复调用入口不会重复注册共享服务，
 自定义实现仍可直接使用 DI。选择缓存不会顺带启动传输或持久化 Worker。AddMemoryMessaging 开启内存消息；
-AddInbox/AddOutbox 按需安装消息专用内存持久化。使用 MessageDelivery 的原生 RabbitMQ 发布适配器显式注册其依赖。
+AddInbox/AddOutbox 按需安装消息专用内存持久化。AddNOF/AddOutbox/AddMemoryMessaging 自动以 Scoped 注册 MessageDelivery，原生 RabbitMQ 适配器只选择具体客户端与序列化器。
 EF/NHibernate 依然是独立选择。
 
 SnowflakeIdGenerator 与 SnowflakeIdGeneratorOptions 移到 Infrastructure。Domain 只保留 IIdGenerator 和可空的
@@ -119,4 +119,4 @@ PersistedSigningKey、RevokedRefreshToken 表保留在活动模型之外，不�
 不能把旧哈希、加密密钥、授权码或刷新令牌直接解释为 OpenIddict 记录。停止旧程序、备份各数据库后，审查新客户端和权限配置、
 凭据轮换，并重新认证，或另行设计并审查明确的过渡方案。Down 要求恢复匹配备份和包，不猜测反向转换。本轮源码验证不升级真实数据库。
 
-权限检查由 NOF.Abstraction 提供，Application 解析 Contract 声明，UI 无须引用 Contract。AddNOF/AddNOFUI 装配默认检查器与 Claim 授予来源，宿主通过 AddPermissions 显式添加 PermissionDefinition。权限仅声明在 Contract 接口/方法上，UI 直接按标识检查。见[授权指南](authorization.md)。
+权限检查由 NOF.Abstraction 提供，Application 解析 Contract 声明，UI 无须引用 Contract。AddNOF/AddNOFUI 装配默认检查器与 Claim 授予来源，业务通过 IPermissionGrantProvider 查询当前授予，无需注册框架权限字典。权限仅声明在 Contract 接口/方法上，UI 直接按标识检查。见[授权指南](authorization.md)。

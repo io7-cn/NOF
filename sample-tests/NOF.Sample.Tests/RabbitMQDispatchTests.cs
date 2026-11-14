@@ -215,7 +215,6 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
         builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-        builder.Services.AddScoped<MessageDelivery>();
         builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
         builder.Services.AddOutbox();
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));

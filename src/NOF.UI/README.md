@@ -13,7 +13,7 @@ Provides shared UI-facing capabilities for browser clients:
 
 `NOF.Hosting.BlazorWebAssembly` depends on this package and focuses on host bootstrapping.
 
-Authorization uses NOF.Abstraction directly, without a Contract/Application/Domain dependency. AddNOFUI installs the default checker; register shared PermissionDefinition entries with AddPermissions. AuthGuard checks a permission ID or explicit UI Policy; it does not inspect UseCase contracts or page Attributes. PermissionRouteView accepts an explicit Policy. Identity changes cancel stale checks; server authorization remains authoritative. See [the authorization guide](../../docs/en/design/authorization.md) ([简体中文](../../docs/zh-CN/design/authorization.md)).
+Authorization uses NOF.Abstraction directly, without a Contract/Application/Domain dependency. AddNOFUI installs the default checker; replace IPermissionGrantProvider through normal DI for dynamic grants. No directory registration is required. AuthGuard checks a permission ID or explicit UI Policy; it does not inspect UseCase contracts or page Attributes. PermissionRouteView accepts an explicit Policy. Identity changes cancel stale checks; server authorization remains authoritative. See [the authorization guide](../../docs/en/design/authorization.md) ([简体中文](../../docs/zh-CN/design/authorization.md)).
 
 ## Installation
 

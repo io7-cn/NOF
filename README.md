@@ -40,7 +40,7 @@ Persistence uses application-owned aggregate repositories, DTO query ports and I
 
 | Package                                                                                                                           | Description                                                                                                             |
 | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, permission checks/catalogs, and in-memory event primitives                                       |
+| [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, permission checks, and in-memory event primitives                                       |
 | [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, validation and ID generator contract                                       |
 | [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - application service contracts, DTOs and declared operation outcomes |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - application operations, handlers, mapping, caching and object-storage contracts              |
@@ -183,4 +183,4 @@ This project is licensed under the [Apache License 2.0](https://www.apache.org/l
 
 Expected use-case failures are declared on non-partial Contract interfaces with FailureCase; concrete Result and branch types are generated in Application operations. Every case implements IFailure with Title/Detail, optionally typed Error; dispatch uses the concrete type. Generic HTTP maps use MapGet<Service.Operation>, native groups and explicit feature mapping. See the [guide](docs/en/design/expected-failures.md) ([简体中文](docs/zh-CN/design/expected-failures.md)).
 
-Permission declarations, catalogs and shared checks are described in the [authorization guide](docs/en/design/authorization.md) ([简体中文](docs/zh-CN/design/authorization.md)).
+Permission declarations, dynamic grants and shared checks are described in the [authorization guide](docs/en/design/authorization.md) ([简体中文](docs/zh-CN/design/authorization.md)).

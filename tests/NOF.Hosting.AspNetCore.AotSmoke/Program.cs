@@ -23,7 +23,6 @@ var nameJson = JsonSerializer.Serialize(nodeName, smokeJson.GetRequiredTypeInfo<
 Expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");
 var builder = WebApplication.CreateBuilder(args).AddNOF();
-builder.Services.AddPermissions(new PermissionDefinition("order.read", "Read orders"));
 builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);

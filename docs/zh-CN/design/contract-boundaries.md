@@ -8,7 +8,7 @@ NOF.Contract 只包含声明和数据模型。其运行时程序集为复用共�
 |---|---|
 | Contract | IApplicationService、FailureCase/策略元数据特性、请求、成功 DTO、自定义错误数据、Empty/Optional/Page |
 | Application | ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据、调用接口和 Contract 授权解析 |
-| Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure、权限模型/策略/检查/目录等基础能力 |
+| Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure、权限模型/策略/检查等基础能力 |
 | 宿主/基础设施 | IInvocationFilter/InvocationDelegate/IInvocationPipeline、有效计划与失败目录、传输适配、身份建立、所选执行引擎、HTTP 表达、消息路由与可靠接收/重试 |
 
 ## 声明与执行

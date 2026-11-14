@@ -8,7 +8,7 @@ NOF 专注业务操作的描述与执行。共享业务语义归入现有分层�
 
 | 归属 | 职责 |
 |---|---|
-| Abstraction | PermissionDefinition、PermissionMatch、IPermissionMetadata、不可变策略、PermissionCatalog、IPermissionChecker 与默认 Claim 授予实现 |
+| Abstraction | PermissionMatch、IPermissionMetadata、不可变策略、IPermissionChecker 与默认 Claim 授予实现 |
 | Contract | 仅在接口和操作方法上保留 RequirePermission、RequireAuthenticated、AllowAnonymous 声明 |
 | Application | AuthorizationPolicyResolver 解释契约默认值及继承规则 |
 | Infrastructure | 缓存调用策略，在租户信任校验后、构造 Handler 前执行权限检查 |
@@ -48,3 +48,5 @@ Inbox 仅对 DataException 在新作用域中复核，确认同一消息 ID 与�
 Scoped Lazy<T>、显式能力 Selector、ApplicationPart 发现、强类型业务失败、调用 Filter、最小持久化端口和可靠 Inbox/Outbox 仍有具体调用或框架语义，予以保留。OutboxPermanentFailureException 仍表达终止投递；换成无法区分的普通异常会丢失重试决策。
 
 运行时、Provider 与生成器需同步更新。共享权限类型改用 NOF.Abstraction，AuthorizationPolicyResolver 改用 NOF.Application。这批 API 调整不需要数据库迁移，也不重新解释已存消息。
+
+权限目录与展示 DTO 归业务所有，AddPermissions、PermissionCatalog 和 PermissionDefinition 删除；缓存执行计划不缓存授予结果，每次检查都调用来源查询当前数据。AddNOF/AddOutbox/AddMemoryMessaging 自动以 Scoped 注册 MessageDelivery，注册辅助服务本身不启用消息工作进程。

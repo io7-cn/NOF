@@ -10,7 +10,7 @@ public sealed record InvocationPlanHostConfiguration(bool CustomAuthorization,
 
 /// <summary>Builds and caches execution and description from the same effective rule set.</summary>
 public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, ApplicationServiceRegistry services,
-    InvocationPlanHostConfiguration configuration, PermissionCatalog permissions)
+    InvocationPlanHostConfiguration configuration)
 {
     private readonly ConcurrentDictionary<(ServiceOperationDescriptor, Type, InvocationOrigin), InvocationPlan> _plans = new();
     /// <summary>Describes captured registration metadata without resolving scoped application services.</summary>
@@ -40,7 +40,6 @@ public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, Applic
                 RequireAuthenticatedTenant = configuration.RequireAuthenticatedTenant,
                 RejectMismatchedTenant = configuration.RejectMismatchedTenant
             }, configuration.CustomAuthorization);
-        permissions.Validate(policy.Authorization);
         var failures = new List<InvocationFailureCase>();
         foreach (var filter in filters)
         {

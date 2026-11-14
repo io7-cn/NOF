@@ -29,6 +29,7 @@ public static partial class NOFInfrastructureExtensions
             builder.Properties[InfrastructureConfiguredKey] = true;
             builder.AddNOFHosting();
             builder.Services.AddNOFApplication();
+            builder.Services.TryAddScoped<MessageDelivery>();
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
             builder.Services.TryAddScoped<IOperationInvoker, OperationInvoker>();
             builder.Services.TryAddScoped<IOperationExecutor, OperationExecutor>();

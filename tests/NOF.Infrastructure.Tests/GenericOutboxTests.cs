@@ -20,7 +20,6 @@ public sealed class GenericOutboxTests
         services.AddSingleton<IObjectSerializer, JsonObjectSerializer>();
         services.AddSingleton<Probe>();
         services.AddOptions();
-        services.AddSingleton<MessageDelivery>();
         services.AddOutbox().AddOutboxHandler<Work, Handler>("custom.work");
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
@@ -266,7 +265,6 @@ public sealed class GenericOutboxTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddScoped<MessageDelivery>();
         builder.Services.AddSingleton<Probe>();
         builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>("work", 2);
         builder.Services.Configure<TransactionalMessageOptions>(options =>

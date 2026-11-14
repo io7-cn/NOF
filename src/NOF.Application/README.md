@@ -205,6 +205,6 @@ Execution models, descriptors and policy interpretation belong to this package. 
 
 ## Authorization and persistence boundaries
 
-AuthorizationPolicyResolver interprets Contract interface/method declarations into immutable Abstraction policies; shared checks/catalogs live in Abstraction. Handlers are never declaration sources and UI has no Application dependency.
+AuthorizationPolicyResolver interprets Contract interface/method declarations into immutable Abstraction policies; shared checks live in Abstraction. Handlers are never declaration sources and UI has no Application dependency.
 
 Application has no custom database exceptions. Providers report failed optimistic-lock saves with System.Data.DBConcurrencyException and data-save failures with System.Data.DataException, retaining native causes. Transaction failures and cancellation propagate unchanged. See [persistence boundaries](../../docs/en/design/persistence-boundaries.md) and [framework simplification](../../docs/en/design/framework-simplification.md), each with a Chinese edition.
