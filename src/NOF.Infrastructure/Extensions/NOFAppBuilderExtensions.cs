@@ -93,9 +93,8 @@ public static partial class NOFInfrastructureExtensions
 
             #region Pipelines
             builder.Services.TryAddScoped<IOperationExecutor, OperationExecutor>();
-            builder.Services.TryAddScoped<MessageOperationExecutor>();
             builder.Services.TryAddSingleton<MessageInboxReceiver>();
-            builder.Services.GetOrAddSingleton<MessageBindingRegistry>();
+            builder.Services.GetOrAddSingleton<MemoryEndpointRegistry>();
             #endregion
 
 

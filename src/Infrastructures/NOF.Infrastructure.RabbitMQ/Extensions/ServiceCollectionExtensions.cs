@@ -24,7 +24,8 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             return services.AddRabbitMQBackplane();
         }
 
-        public IServiceCollection AddRabbitMQ(Action<RabbitMQOptions> configureOptions)
+        /// <summary>Registers RabbitMQ clients and, when configured, adapter-owned endpoints with durable Inbox processing.</summary>
+        public IServiceCollection AddRabbitMQ(Action<RabbitMQOptions> configureOptions, Action<RabbitMQEndpointsBuilder>? configureEndpoints = null)
         {
             ArgumentNullException.ThrowIfNull(configureOptions);
 
@@ -47,7 +48,12 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             services.ReplaceOrAddSingleton<RabbitMQCommandRider, RabbitMQCommandRider>();
             services.ReplaceOrAddSingleton<RabbitMQNotificationRider, RabbitMQNotificationRider>();
             services.ReplaceOrAddScoped<RabbitMQMessageClient, RabbitMQMessageClient>();
-            services.AddHostedService<RabbitMQConsumerHostedService>();
+            if (configureEndpoints is not null)
+            {
+                services.AddInbox();
+                configureEndpoints(new(services, services.GetOrAddSingleton<RabbitMQEndpointRegistry>()));
+                services.AddHostedService<RabbitMQConsumerHostedService>();
+            }
             return services;
         }
     }

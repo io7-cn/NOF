@@ -68,3 +68,8 @@
   href: ../en/design/ambient-binding.md
 - name: Ambient 绑定
   href: ../zh-CN/design/ambient-binding.md
+
+- name: RabbitMQ two-service sample
+  href: ../en/design/rabbitmq-sample.md
+- name: RabbitMQ 双服务示例
+  href: ../zh-CN/design/rabbitmq-sample.md

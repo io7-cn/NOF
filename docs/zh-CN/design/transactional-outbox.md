@@ -58,13 +58,13 @@ await rabbitClient.PublishAsync("orders.created.v1", orderCreated, context, ct);
 await memoryClient.SendAsync("mail.send.v1", message, deliveryContext, ct);
 
 // 只负责入站：物理拓扑与 Outbox 逻辑消息结构分开。
-services.AddMessageBindings(bindings =>
-    bindings.Queue<SendEmail>("mail.send.v1").To(MailService.Send.Descriptor));
+services.AddMemoryMessaging(endpoints =>
+    endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-AddNOF 注册 MemoryMessageClient；AddRabbitMQ 额外注册 RabbitMQMessageClient，不再静默替换内存客户端，并继续配置 RabbitMQ 入站消费者。Queue/Subscription 仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
+AddNOF 注册 MemoryMessageClient；AddRabbitMQ 额外注册 RabbitMQMessageClient，不再静默替换内存客户端，只有传入端点配置才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
 
-示例 TransactionalMessages 暂存 SendEmail 和 OrderCreated；宿主的 SendEmailOutboxHandler、OrderCreatedOutboxHandler 选择内存客户端与实际路由，再由现有邮件、订单操作消费。换成消息代理、HTTP 或 SDK，只修改基础设施处理器，无需改变 Application 入队 API。
+示例 TransactionalMessages 暂存 SendEmail 和 OrderCreated；NOF.Sample.Messaging 适配器选择 RabbitMQ 和实际路由，独立 NOF.Sample.Notifications 服务把队列和两个 Topic 订阅绑定到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递客户端只修改基础设施，无需改变 Application 入队 API。
 
 ## 可靠处理与迁移
 
@@ -80,11 +80,11 @@ AddNOF 注册 MemoryMessageClient；AddRabbitMQ 额外注册 RabbitMQMessageClie
 4. 部署一致的运行时/Provider/宿主包后恢复生产者。DeferSend/DeferPublish 及顺序变体改为 EnqueueAsync 加选项，即时分派改为具体客户端。NOFTestScope.EnqueueAsync 在当前作用域暂存，需显式保存该作用域；测试宿主的即时 Send/Publish 包装已删除。
 5. 回滚时一起恢复备份和旧包。因为无法推断意图对应的旧路由，自动 Down 被拒绝。旧程序不能打开新结构。
 
-这里只提供迁移代码，真实 PostgreSQL 数据库应用属于部署步骤。SQLite 回归验证共享事务存储、顺序阻塞和领取者隔离；其他测试覆盖快照/回滚、重试 ID/作用域、独立订阅、租户隔离、取消恢复与禁用反射后的强类型投递。本地验证不启动真实 Broker 或 PostgreSQL，消息确认条件由具体客户端保证。
+这里只提供迁移代码，真实 PostgreSQL 数据库应用属于部署步骤。SQLite 回归验证共享事务存储、顺序阻塞和领取者隔离；其他测试覆盖快照/回滚、重试 ID/作用域、独立订阅、租户隔离、取消恢复与禁用反射后的强类型投递。消息确认条件由具体客户端保证。可选的 [RabbitMQ 示例集成测试](rabbitmq-sample.md) 验证真实队列、事件分发和离线恢复，不负责 PostgreSQL 部署验证。
 
 ## 按能力装配与独立 Worker 宿主
 
-仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddMessageBindings 完整装配 Inbox 能力。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
+仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddInbox 完整装配传输无关的 Inbox 能力。AddMemoryMessaging 和配置端点的 AddRabbitMQ 自动调用 AddInbox；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
 
 ```csharp
 builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
@@ -96,3 +96,5 @@ builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbo
 自定义 IOutboxStore 在没有 ORM/传输、开启 DI 依赖验证时仍可使用；默认有序流分配器仅在实际使用该能力时解析 Provider 持久化。AddNOF 继续提供便捷缓存、序列化、对象存储和原生宿主默认值，不要求用户逐项注册底层服务。
 
 能力配置不会修改既有模型快照或执行删表。共享数据库的迁移宿主应保留该库完整的能力模型，不要为了关闭某个进程的 Worker 生成破坏性删表迁移；RunWorkers=false 保留模型及持久化进度。
+
+端点映射现由具体传输适配器负责。调整已有 Inbox 和顺序状态路由前，参见[适配器边界与回执键迁移](rabbitmq-sample.md#适配器边界与回执键迁移)。

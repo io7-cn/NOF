@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -12,16 +13,16 @@ public class RabbitMQConsumerHostedServiceTests
     [Fact]
     public void ConsumerRegistrations_UseExplicitStableRoutesAndIndependentSubscriptions()
     {
-        var registry = new MessageBindingRegistry();
-        var bindings = new MessageBindingsBuilder(registry);
+        var registry = new RabbitMQEndpointRegistry();
+        var bindings = new RabbitMQEndpointsBuilder(new ServiceCollection(), registry);
         var descriptor = new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply));
-        bindings.Queue<TestCommand>("work.v1").To(descriptor);
-        bindings.Subscription<TestCommand>("facts.v1", "projection").To(descriptor);
-        bindings.Subscription<TestCommand>("facts.v1", "audit").To(descriptor);
-        var queue = Assert.Single(RabbitMQConsumerHostedService.BuildCommandConsumerRegistrations(registry.Bindings));
+        bindings.MapQueue<TestCommand>("work.v1", descriptor);
+        bindings.MapSubscription<TestCommand>("facts.v1", "projection", descriptor);
+        bindings.MapSubscription<TestCommand>("facts.v1", "audit", descriptor);
+        var queue = Assert.Single(RabbitMQConsumerHostedService.BuildCommandConsumerRegistrations(registry.Endpoints));
         Assert.Equal("work.v1", queue.QueueName);
-        Assert.Equal("queue:work.v1", queue.ConsumerId);
-        var subscriptions = RabbitMQConsumerHostedService.BuildNotificationConsumerRegistrations(registry.Bindings);
+        Assert.Equal("rabbitmq:queue:work.v1", queue.ConsumerId);
+        var subscriptions = RabbitMQConsumerHostedService.BuildNotificationConsumerRegistrations(registry.Endpoints);
         Assert.Equal(["subscription:projection", "subscription:audit"], subscriptions.Select(binding => binding.QueueName));
         Assert.All(subscriptions, binding => Assert.Equal(["facts.v1"], binding.NotificationTypes));
     }
@@ -31,9 +32,8 @@ public class RabbitMQConsumerHostedServiceTests
     {
         var manager = new RabbitMQConnectionManager(Options.Create(new RabbitMQOptions { HostName = "localhost" }));
         manager.Dispose();
-        var registry = new MessageBindingRegistry();
-        new MessageBindingsBuilder(registry).Queue<TestCommand>("work.v1")
-            .To(new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply)));
+        var registry = new RabbitMQEndpointRegistry();
+        new RabbitMQEndpointsBuilder(new ServiceCollection(), registry).MapQueue<TestCommand>("work.v1", new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply)));
         using var service = new RabbitMQConsumerHostedService(manager, Options.Create(new RabbitMQOptions()), registry,
             new MessageInboxReceiver(null!, new JsonObjectSerializer()), NullLogger<RabbitMQConsumerHostedService>.Instance);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.StartAsync(CancellationToken.None));

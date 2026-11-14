@@ -83,7 +83,7 @@ The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> W
 
 ### Message consumers and transactional intents
 
-Inbound Queue/Subscription bindings target ordinary Empty-returning application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
+Transport-owned queue/subscription endpoints target ordinary Empty-returning application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
 
 ```csharp
 await outbox.EnqueueAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken: cancellationToken);

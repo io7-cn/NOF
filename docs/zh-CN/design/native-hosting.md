@@ -77,4 +77,4 @@ MigrateOnInitialize 改为 MigrateOnStart，数据库断言从构建阶段迁至
 环境扩展属性及主节点 Predicate 改为 DeploymentOptions。显式注册端点程序集并映射模块。
 所有包和宿主协调升级；回滚时恢复配套旧包与配置。
 
-可靠消息由 AddOutbox/AddMessageBindings 按需装配，参见[能力与 Worker 配置](transactional-outbox.md#按能力装配与独立-worker-宿主)。
+可靠消息由 AddOutbox/AddInbox（传输端点配置自动启用 Inbox） 按需装配，参见[能力与 Worker 配置](transactional-outbox.md#按能力装配与独立-worker-宿主)。

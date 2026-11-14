@@ -8,6 +8,7 @@ using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
 using NOF.Sample.Endpoints;
+using NOF.Sample.Messaging;
 using NOF.Sample.Services;
 using NOF.Sample.UI.Services;
 
@@ -18,17 +19,18 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
-builder.AddApplicationService<MessageDemoService>();
+builder.AddApplicationService<MessageDispatchService>();
 builder.Services.AddOutbox(outbox =>
 {
     outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
     outbox.Add<OrderCreated, OrderCreatedOutboxHandler>("sample.order-created", 1);
 });
-builder.Services.AddMessageBindings(bindings =>
+// Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
+builder.Services.AddInbox();
+builder.Services.Configure<TransactionalMessageOptions>(options =>
 {
-    bindings.Queue<SendEmail>("sample.mail.v1").To(MessageDemoService.SendMail.Descriptor);
-    bindings.Subscription<OrderCreated>("sample.orders.created.v1", "sample-order-audit")
-        .To(MessageDemoService.RecordOrder.Descriptor);
+    options.Outbox.PollingInterval = TimeSpan.FromSeconds(1);
+    options.Inbox.RunWorkers = false;
 });
 builder.AddApplicationService<OAuthChainDemoService>();
 builder.AddApplicationService<DemoDownstreamService>();
@@ -90,6 +92,7 @@ builder.Services.AddRazorComponents()
 var app = builder.Build();
 app.UseNOF();
 app.MapConfigNodeEndpoints();
+app.MapMessageDispatchEndpoints();
 app.MapOAuthDemoEndpoints();
 app.MapOidcServer();
 app.MapHealthChecks("/health");

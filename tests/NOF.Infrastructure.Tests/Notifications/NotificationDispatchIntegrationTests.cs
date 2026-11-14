@@ -20,8 +20,7 @@ public sealed class NotificationDispatchIntegrationTests
         builder.AddNOF();
         ConfigureMessages(builder.Services);
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<OrderedNotification>("test.ordered.v1", "ordered")
-            .To(new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<OrderedNotification>("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
         var calls = new List<int>();
         builder.Services.AddSingleton(calls);
         builder.Services.AddInvocationFilter<CountingDeny>();
@@ -75,8 +74,7 @@ public sealed class NotificationDispatchIntegrationTests
         ConfigureMessages(builder.Services);
         builder.Services.AddInvocationFilter<ServiceOperationPipelineTests.Deny>();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<FailingNotification>("test.failing.v1", "rejected")
-            .To(new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<FailingNotification>("test.failing.v1", "rejected", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
         // The handler is deliberately unregistered: policy rejection must precede its construction.
         using var host = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -87,7 +85,7 @@ public sealed class NotificationDispatchIntegrationTests
             await scope.ServiceProvider.GetRequiredService<MemoryMessageClient>().PublishAsync("test.failing.v1", new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
             var receipt = await WaitForInboxStatusAsync(host.Services, InboxMessageStatus.Failed, timeout.Token);
             Assert.Equal(1, receipt.RetryCount);
-            Assert.Equal("subscription:rejected", receipt.Route);
+            Assert.Equal("memory:subscription:rejected", receipt.Route);
         }
         finally
         {
@@ -187,12 +185,9 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
         });
 
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<ConcreteNotification>("test.concrete.v1", "first")
-            .To(new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "First")));
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<ConcreteNotification>("test.concrete.v1", "second")
-            .To(new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "Second")));
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<BaseNotification>("test.base.v1", "base")
-            .To(new ServiceOperationDescriptor<BaseNotification, Empty>(typeof(INotificationOperations), "Base")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<ConcreteNotification>("test.concrete.v1", "first", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "First")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<ConcreteNotification>("test.concrete.v1", "second", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "Second")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<BaseNotification>("test.base.v1", "base", new ServiceOperationDescriptor<BaseNotification, Empty>(typeof(INotificationOperations), "Base")));
 
         builder.Services.AddSingleton<NotificationDispatchProbe>();
         builder.Services.AddScoped<FirstConcreteNotificationHandler>();
@@ -220,9 +215,9 @@ public sealed class NotificationDispatchIntegrationTests
             Assert.Equal(2, inboxMessages.Count);
             Assert.Single(inboxMessages.Select(static message => message.Id).Distinct());
             Assert.All(inboxMessages, static message => Assert.Equal(InboxMessageStatus.Processed, message.Status));
-            Assert.Contains(inboxMessages, static message => message.Route == "subscription:first");
-            Assert.Contains(inboxMessages, static message => message.Route == "subscription:second");
-            Assert.DoesNotContain(inboxMessages, static message => message.Route == "subscription:base");
+            Assert.Contains(inboxMessages, static message => message.Route == "memory:subscription:first");
+            Assert.Contains(inboxMessages, static message => message.Route == "memory:subscription:second");
+            Assert.DoesNotContain(inboxMessages, static message => message.Route == "memory:subscription:base");
             Assert.Equal(0, probe.BaseCount);
         }
         finally
@@ -244,8 +239,7 @@ public sealed class NotificationDispatchIntegrationTests
             options.Inbox.MaxRetryCount = 2;
         });
 
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<FailingNotification>("test.failing.v1", "failing")
-            .To(new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<FailingNotification>("test.failing.v1", "failing", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
         builder.Services.AddSingleton<FailingNotificationProbe>();
         builder.Services.AddScoped<FailingNotificationHandler>();
 
@@ -344,8 +338,7 @@ public sealed class NotificationDispatchIntegrationTests
             options.Inbox.BatchSize = 10;
         });
 
-        builder.Services.AddMessageBindings(bindings => bindings.Subscription<OrderedNotification>("test.ordered.v1", "ordered")
-            .To(new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription<OrderedNotification>("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
         builder.Services.AddSingleton<OrderedNotificationProbe>();
         builder.Services.AddScoped<OrderedNotificationHandler>();
 

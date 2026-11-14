@@ -67,9 +67,7 @@ public sealed class MessageCapabilityRegistrationTests
         builder.Services.AddOutbox(_ =>
         {
         });
-        builder.Services.AddMessageBindings(_ =>
-        {
-        });
+        builder.Services.AddInbox();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Inbox.RunWorkers = options.Outbox.RunWorkers = false;
@@ -123,7 +121,7 @@ public sealed class MessageCapabilityRegistrationTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        builder.Services.AddMessageBindings(bindings => bindings.Queue<Work>("work").To(new ServiceOperationDescriptor<Work, Empty>(typeof(IConsumer), nameof(IConsumer.Handle))));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapQueue<Work>("work", new ServiceOperationDescriptor<Work, Empty>(typeof(IConsumer), nameof(IConsumer.Handle))));
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = false);
         using var host = builder.Build();
         await host.StartAsync();

@@ -221,8 +221,8 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
             using var activity = StartBoundaryActivity(message, traceParent);
 
-            var outcome = await services.GetRequiredService<MessageOperationExecutor>().ExecuteAsync(
-                pendingMessage.Payload, pendingMessage.Route, processingHeaders, cancellationToken);
+            var outcome = await services.GetRequiredKeyedService<IInboxHandler>(pendingMessage.Route).HandleAsync(
+                pendingMessage.Payload, processingHeaders, cancellationToken);
 
             if (outcome is IFailure)
             {

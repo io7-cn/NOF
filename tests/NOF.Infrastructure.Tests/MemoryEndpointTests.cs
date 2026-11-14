@@ -6,19 +6,19 @@ using Xunit;
 
 namespace NOF.Infrastructure.Tests;
 
-public sealed class MessageBindingTests
+public sealed class MemoryEndpointTests
 {
     [Fact]
     public void EmptySuccessWithDeclaredFailures_CannotBeSubmittedOrBoundAsEmpty()
     {
-        var registry = new MessageBindingRegistry();
-        var bindings = new MessageBindingsBuilder(registry);
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
         var reference = new ServiceOperationReference<Message>(typeof(IService), nameof(IService.MayFail));
         Assert.False(ServiceOperationInspector.CanSubmit(reference));
         // Even a manually forged success-only descriptor must not bypass the Contract declaration.
         var descriptor = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
-        Assert.Throws<InvalidOperationException>(() => bindings.Queue<Message>("invalid.v1").To(descriptor));
-        Assert.Throws<InvalidOperationException>(() => bindings.Subscription<Message>("facts.v1", "invalid").To(descriptor));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue<Message>("invalid.v1", descriptor));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription<Message>("facts.v1", "invalid", descriptor));
     }
     private static ServiceOperationDescriptor<Message, Empty> First => new(typeof(IService), nameof(IService.First));
     private static ServiceOperationDescriptor<Message, Empty> Second => new(typeof(IService), nameof(IService.Second));
@@ -26,51 +26,50 @@ public sealed class MessageBindingTests
     [Fact]
     public void SharedInput_DifferentOperationsAndSubscriptions_HaveIndependentIdentities()
     {
-        var registry = new MessageBindingRegistry();
-        var bindings = new MessageBindingsBuilder(registry);
-        bindings.Queue<Message>("first.v1").To(First);
-        bindings.Queue<Message>("second.v1").To(Second);
-        bindings.Subscription<Message>("facts.v1", "projection").To(First);
-        bindings.Subscription<Message>("facts.v1", "audit").To(Second);
-        Assert.Equal("first.v1", registry.GetConsumer("queue:first.v1").Route);
-        Assert.Equal("second.v1", registry.GetConsumer("queue:second.v1").Route);
-        Assert.Equal(First.Id, registry.GetConsumer("subscription:projection").Operation.Id);
-        Assert.Equal(Second.Id, registry.GetConsumer("subscription:audit").Operation.Id);
-        Assert.Throws<InvalidOperationException>(() => bindings.Queue<Message>("late.v1").To(First));
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapQueue<Message>("first.v1", First);
+        bindings.MapQueue<Message>("second.v1", Second);
+        bindings.MapSubscription<Message>("facts.v1", "projection", First);
+        bindings.MapSubscription<Message>("facts.v1", "audit", Second);
+        Assert.Equal("first.v1", registry.GetConsumer("memory:queue:first.v1").Route);
+        Assert.Equal("second.v1", registry.GetConsumer("memory:queue:second.v1").Route);
+        Assert.Equal(First.Id, registry.GetConsumer("memory:subscription:projection").Operation.Id);
+        Assert.Equal(Second.Id, registry.GetConsumer("memory:subscription:audit").Operation.Id);
+        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue<Message>("late.v1", First));
     }
 
     [Fact]
     public void OneOperation_CanReceiveMultipleExplicitInboundQueues()
     {
-        var registry = new MessageBindingRegistry();
-        var bindings = new MessageBindingsBuilder(registry);
-        bindings.Queue<Message>("first.v1").To(First);
-        bindings.Queue<Message>("second.v1").To(First);
-        Assert.Equal(2, registry.Bindings.Count);
-        Assert.All(registry.Bindings, binding => Assert.Equal(First.Id, binding.Operation.Id));
-        Assert.Null(typeof(MessageBindingsBuilder).GetMethod("RouteToQueue"));
-        Assert.Null(typeof(MessageBindingsBuilder).GetMethod("Topic"));
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapQueue<Message>("first.v1", First);
+        bindings.MapQueue<Message>("second.v1", First);
+        Assert.Equal(2, registry.Endpoints.Count);
+        Assert.All(registry.Endpoints, binding => Assert.Equal(First.Id, binding.Operation.Id));
+        Assert.Null(typeof(MemoryEndpointsBuilder).GetMethod("RouteToQueue"));
+        Assert.Null(typeof(MemoryEndpointsBuilder).GetMethod("Topic"));
     }
 
     [Fact]
     public void AmbiguousConsumerIds_AreRejected()
     {
-        var registry = new MessageBindingRegistry();
-        var bindings = new MessageBindingsBuilder(registry);
-        bindings.Subscription<Message>("facts.v1", "same").To(First);
-        bindings.Subscription<Message>("facts.v1", "same").To(Second);
-        Assert.Throws<InvalidOperationException>(() => registry.Bindings);
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapSubscription<Message>("facts.v1", "same", First);
+        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription<Message>("facts.v1", "same", Second));
     }
 
     [Fact]
     public void HostRegistries_AreIsolated()
     {
-        var first = new ServiceCollection().AddMessageBindings(bindings => bindings.Queue<Message>("one.v1").To(First));
-        var second = new ServiceCollection().AddMessageBindings(bindings => bindings.Queue<Message>("two.v1").To(First));
+        var first = new ServiceCollection().AddMemoryMessaging(bindings => bindings.MapQueue<Message>("one.v1", First));
+        var second = new ServiceCollection().AddMemoryMessaging(bindings => bindings.MapQueue<Message>("two.v1", First));
         using var one = first.BuildServiceProvider();
         using var two = second.BuildServiceProvider();
-        Assert.Equal("one.v1", one.GetRequiredService<MessageBindingRegistry>().Bindings.Single().Route);
-        Assert.Equal("two.v1", two.GetRequiredService<MessageBindingRegistry>().Bindings.Single().Route);
+        Assert.Equal("one.v1", one.GetRequiredService<MemoryEndpointRegistry>().Endpoints.Single().Route);
+        Assert.Equal("two.v1", two.GetRequiredService<MemoryEndpointRegistry>().Endpoints.Single().Route);
     }
 
     [Theory]

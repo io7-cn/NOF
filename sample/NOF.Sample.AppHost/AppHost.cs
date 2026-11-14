@@ -24,12 +24,19 @@ postgresUserName.WithParentRelationship(postgres);
 postgresPassword.WithParentRelationship(postgres);
 var database = postgres.AddDatabase("db2");
 
+var notifications = builder.AddProject<NOF_Sample_Notifications>("sample-notifications")
+    .WithReference(rabbitMq, "rabbitmq")
+    .WaitFor(rabbitMq)
+    .WithHttpHealthCheck("/health");
+
 var sample = builder.AddProject<NOF_Sample>("NOF-Sample")
     .WithReference(rabbitMq, "rabbitmq")
     .WaitFor(rabbitMq)
     .WithReference(database, "postgres")
     .WaitFor(database)
     .WithReference(garnet, "redis")
-    .WaitFor(garnet);
+    .WaitFor(garnet)
+    // Establish durable topic subscriptions before publishing demonstration events.
+    .WaitFor(notifications);
 
 builder.Build().Run();

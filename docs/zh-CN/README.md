@@ -58,3 +58,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [HTTP 适配](design/http-adaptation.md)
 
 - [Ambient 绑定](design/ambient-binding.md)
+
+- [RabbitMQ 双服务手动路由示例](design/rabbitmq-sample.md)

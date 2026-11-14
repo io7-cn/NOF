@@ -19,7 +19,17 @@ builder.Services.AddRabbitMQ(options =>
 });
 ```
 
-`AddRabbitMQ(...)` configures options, registers concrete RabbitMQMessageClient and its consumer hosted service. It does not replace MemoryMessageClient.
+`AddRabbitMQ(options)` registers clients only. To receive, pass an optional adapter-owned endpoint callback:
+
+```csharp
+builder.Services.AddRabbitMQ(options => options.ConnectionString = connectionString, endpoints =>
+{
+    endpoints.MapQueue<MailService.Send>("mail.send.v1");
+    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "order-audit");
+});
+```
+
+The callback enables Inbox and RabbitMQ consumers. It does not replace MemoryMessageClient or consume Memory endpoints. Core Inbox resolves scoped keyed IInboxHandler entries without understanding topology. See docs/en/design/rabbitmq-sample.md for the complete two-service demo and explicit old receipt/order-state key migration.
 
 ## 3. Configure the Connection
 
@@ -44,7 +54,7 @@ await outbox.EnqueueAsync(notification, context, cancellationToken: cancellation
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-The host registers AddOutbox stable schemas and IOutboxHandler<T> adapters using RabbitMQMessageClient. Use its OutboxDeliveryContext overload to retain message ID and ordering. Inbound Queue/Subscription bindings are independent. See docs/en/design/transactional-outbox.md.
+The host registers AddOutbox stable schemas and IOutboxHandler<T> adapters using RabbitMQMessageClient. Use its OutboxDeliveryContext overload to retain message ID and ordering. Inbound RabbitMQ endpoints are adapter-owned and independent from Memory endpoints. See docs/en/design/transactional-outbox.md.
 
 ## 5. Optional RabbitMQ Backplane
 

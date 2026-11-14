@@ -15,7 +15,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
 {
     private readonly RabbitMQConnectionManager _connectionManager;
     private readonly IOptions<RabbitMQOptions> _options;
-    private readonly MessageBindingRegistry _bindings;
+    private readonly RabbitMQEndpointRegistry _bindings;
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
     private readonly MessageInboxReceiver _receiver;
     private readonly List<IChannel> _channels = [];
@@ -26,7 +26,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
     public RabbitMQConsumerHostedService(
         RabbitMQConnectionManager connectionManager,
         IOptions<RabbitMQOptions> options,
-        MessageBindingRegistry bindings,
+        RabbitMQEndpointRegistry bindings,
         MessageInboxReceiver receiver,
         ILogger<RabbitMQConsumerHostedService> logger)
     {
@@ -59,7 +59,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
 
     private async Task RegisterConsumersFromRegistryAsync(CancellationToken cancellationToken)
     {
-        var commandRegistrations = BuildCommandConsumerRegistrations(_bindings.Bindings);
+        var commandRegistrations = BuildCommandConsumerRegistrations(_bindings.Endpoints);
 
         foreach (var registration in commandRegistrations)
         {
@@ -67,7 +67,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
             await SetupCommandConsumerAsync(registration.QueueName, registration.MessageRoute, cancellationToken);
         }
 
-        var notificationRegistrations = BuildNotificationConsumerRegistrations(_bindings.Bindings);
+        var notificationRegistrations = BuildNotificationConsumerRegistrations(_bindings.Endpoints);
 
         foreach (var registration in notificationRegistrations)
         {
@@ -247,17 +247,17 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
     }
 
     /// <summary>Builds one competing consumer queue for each explicit target binding.</summary>
-    public static IReadOnlyCollection<CommandConsumerRegistration> BuildCommandConsumerRegistrations(IEnumerable<MessageBinding> registrations)
+    public static IReadOnlyCollection<CommandConsumerRegistration> BuildCommandConsumerRegistrations(IEnumerable<RabbitMQEndpoint> registrations)
         => [.. registrations.Where(binding => !binding.IsSubscription)
-            .Select(binding => new CommandConsumerRegistration(binding.Route, binding.ConsumerId, RabbitMQTopology.BuildCommandQueueName(binding.Route)))];
+            .Select(binding => new CommandConsumerRegistration(binding.Route, binding.ConsumerId, binding.QueueName))];
 
     /// <summary>Uses the stable queue route directly.</summary>
     public static string BuildCommandQueueName(string messageRoute) => RabbitMQTopology.BuildCommandQueueName(messageRoute);
 
     /// <summary>Builds independently durable subscriptions, unaffected by handler or deployment renames.</summary>
-    public static IReadOnlyCollection<NotificationConsumerRegistration> BuildNotificationConsumerRegistrations(IEnumerable<MessageBinding> registrations)
+    public static IReadOnlyCollection<NotificationConsumerRegistration> BuildNotificationConsumerRegistrations(IEnumerable<RabbitMQEndpoint> registrations)
         => [.. registrations.Where(binding => binding.IsSubscription)
-            .Select(binding => new NotificationConsumerRegistration(binding.ConsumerId, binding.ConsumerId, [binding.Route]))];
+            .Select(binding => new NotificationConsumerRegistration(binding.QueueName, binding.ConsumerId, [binding.Route]))];
 
     private static Guid ResolveMessageId(Dictionary<string, string?>? headers)
     {

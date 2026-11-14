@@ -88,4 +88,4 @@ Replace environment extension properties and custom primary predicates with Depl
 Map HTTP modules explicitly and register their application parts. Upgrade all packages and hosts
 together; rollback restores the previous coherent package/configuration set.
 
-Reliable messaging is assembled only by AddOutbox/AddMessageBindings; see [worker capability configuration](transactional-outbox.md#capability-assembly-and-worker-hosts).
+Reliable messaging is assembled only by AddOutbox/AddInbox (enabled by transport endpoint configuration); see [worker capability configuration](transactional-outbox.md#capability-assembly-and-worker-hosts).

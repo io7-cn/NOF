@@ -75,3 +75,33 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/coverage.cobertura.xml'
         fail_ci_if_error: false
+
+  rabbitmq-sample:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:4.2@sha256:0ea64c69ef2ced52e7188c6db826152d42f78e448433ed8b4e570170c427a437
+        env:
+          RABBITMQ_DEFAULT_USER: nof-demo
+          RABBITMQ_DEFAULT_PASS: nof-demo-local
+        ports:
+        - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        submodules: recursive
+        persist-credentials: false
+    - name: Setup .NET
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    - name: Verify real RabbitMQ queue, fanout and offline recovery
+      env:
+        NOF_SAMPLE_RABBITMQ: Host=localhost;Port=5672;UserName=nof-demo;Password=nof-demo-local;VirtualHost=/
+      run: dotnet test sample-tests/NOF.Sample.Tests/NOF.Sample.Tests.csproj --configuration ${{ env.CONFIGURATION }} --filter FullyQualifiedName~RabbitMQDispatchTests --logger "trx;LogFileName=rabbitmq-live.trx" --results-directory artifacts/rabbitmq-tests

@@ -1,4 +1,4 @@
-# Unified operations, message bindings and aggregate collections
+# Unified operations, transport endpoints and aggregate collections
 
 [简体中文](../../zh-CN/design/unified-operations.md) · [Invocation extensions](invocation-extensions.md) · [Persistence boundaries](persistence-boundaries.md)
 
@@ -33,17 +33,15 @@ Register the application assembly and each service container once. Individual op
 ```csharp
 builder.AddApplicationPart(typeof(MailService).Assembly);
 builder.AddApplicationService<MailService>();
-builder.Services.AddMessageBindings(bindings =>
+builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
-    bindings.Queue<SendMail>("mail.send.v1").To(MailService.Send.Descriptor);
-    bindings.Subscription<OrderCreated>("orders.created.v1", "orders-audit")
-        .To(OrderAudit.Record.Descriptor);
-    bindings.Subscription<OrderCreated>("orders.created.v1", "orders-projection")
-        .To(OrderProjection.Apply.Descriptor);
+    endpoints.MapQueue<MailService.Send>("mail.send.v1");
+    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "orders-audit");
+    endpoints.MapSubscription<OrderProjection.Apply>("orders.created.v1", "orders-projection");
 });
 ```
 
-Queue/Subscription.To accepts only `ServiceOperationDescriptor<T, Empty>`. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
+RabbitMQ and Memory adapters expose their own MapQueue/MapSubscription APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
 
 ## Calls and durable intents
 
@@ -56,7 +54,7 @@ await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
 
-Message bindings are inbound only. Keep Queue/Subscription.To for consumer topology; remove producer RouteToQueue/Topic declarations. One operation may receive multiple queues. Concrete clients name physical destinations explicitly. See [generic transactional outbox](transactional-outbox.md) for registration, typed adapters, retries and deployment migration.
+Inbound endpoints belong to concrete transport adapters. The shared MessageBinding API and producer RouteToQueue/Topic declarations are removed. One operation may receive multiple queues. Concrete clients name physical destinations explicitly. See [generic transactional outbox](transactional-outbox.md) for registration, typed adapters, retries and deployment migration.
 
 ## One execution boundary
 

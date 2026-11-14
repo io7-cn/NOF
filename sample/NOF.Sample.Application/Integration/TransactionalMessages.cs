@@ -18,7 +18,7 @@ public static class TransactionalMessages
     {
         // Persist business changes using this same unitOfWork before saving.
         await outbox.EnqueueAsync(new OrderCreated(orderId), context, cancellationToken: cancellationToken);
-        await outbox.EnqueueAsync(new SendEmail(email, "Created", "Order created."), context, cancellationToken: cancellationToken);
+        await outbox.EnqueueAsync(new SendEmail(email, "Created", "Order created.", OrderId: orderId), context, cancellationToken: cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

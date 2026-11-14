@@ -321,3 +321,5 @@ appsettings.Development.json
 .cody/
 
 .dotnet/
+# Persistent local data for the standalone notification demo
+sample/NOF.Sample.Notifications/notifications.db*

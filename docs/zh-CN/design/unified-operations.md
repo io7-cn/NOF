@@ -33,17 +33,15 @@ Contract 不再生成代码；NOF.Contract.SourceGenerator 保留原名，只承
 ```csharp
 builder.AddApplicationPart(typeof(MailService).Assembly);
 builder.AddApplicationService<MailService>();
-builder.Services.AddMessageBindings(bindings =>
+builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
-    bindings.Queue<SendMail>("mail.send.v1").To(MailService.Send.Descriptor);
-    bindings.Subscription<OrderCreated>("orders.created.v1", "orders-audit")
-        .To(OrderAudit.Record.Descriptor);
-    bindings.Subscription<OrderCreated>("orders.created.v1", "orders-projection")
-        .To(OrderProjection.Apply.Descriptor);
+    endpoints.MapQueue<MailService.Send>("mail.send.v1");
+    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "orders-audit");
+    endpoints.MapSubscription<OrderProjection.Apply>("orders.created.v1", "orders-projection");
 });
 ```
 
-Queue/Subscription.To 只接受 ServiceOperationDescriptor<T, Empty>，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
+RabbitMQ 和 Memory 适配器各自提供 MapQueue/MapSubscription；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
 
 ## 调用与可靠意图
 
@@ -56,7 +54,7 @@ await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
 ```
 
-消息绑定只负责入站，保留 Queue/Subscription.To，移除生产者 RouteToQueue/Topic 声明。同一操作可以接多个明确队列；具体客户端显式指定物理目标。注册、强类型适配器、重试与部署迁移见[通用事务性发件箱](transactional-outbox.md)。
+消息端点属于具体传输适配器，通用 MessageBinding 和生产者 RouteToQueue/Topic 声明已移除。同一操作可以接多个明确队列；具体客户端显式指定物理目标。注册、强类型适配器、重试与部署迁移见[通用事务性发件箱](transactional-outbox.md)。
 
 ## 一个执行边界
 

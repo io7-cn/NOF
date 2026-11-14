@@ -54,3 +54,15 @@ The backplane implementation uses dedicated `nof.backplane.*` fanout exchanges a
 - [`RabbitMQ.Client`](https://www.nuget.org/packages/RabbitMQ.Client)
 
 Immediate messages use concrete MemoryMessageClient/RabbitMQMessageClient with explicit destinations. Generic IOutbox intents are interpreted by host-registered IOutboxHandler<T> adapters; AddRabbitMQ does not replace the memory client. Inbound Queue/Subscription bindings remain separate. See [transactional outbox](../../../docs/en/design/transactional-outbox.md).
+
+## Operation endpoints
+
+```csharp
+builder.Services.AddRabbitMQ(options => options.ConnectionString = connectionString, endpoints =>
+{
+    endpoints.MapQueue<MailService.Send>("mail.send.v1");
+    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "order-audit");
+});
+```
+
+The optional endpoint callback enables RabbitMQ consumers and durable Inbox processing. Client-only registration enables neither. These endpoints belong solely to RabbitMQ; Memory endpoints are configured separately with AddMemoryMessaging. There is no shared MessageBinding API. The common Inbox executes scoped keyed IInboxHandler entries and never interprets topology. Operations must return Empty without declared failures. See the [runnable sample and receipt-key migration](../../../docs/en/design/rabbitmq-sample.md).

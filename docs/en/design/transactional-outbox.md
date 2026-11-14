@@ -58,13 +58,13 @@ await rabbitClient.PublishAsync("orders.created.v1", orderCreated, context, ct);
 await memoryClient.SendAsync("mail.send.v1", message, deliveryContext, ct);
 
 // Inbound only: physical topology is independent of the outbox schema.
-services.AddMessageBindings(bindings =>
-    bindings.Queue<SendEmail>("mail.send.v1").To(MailService.Send.Descriptor));
+services.AddMemoryMessaging(endpoints =>
+    endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-MemoryMessageClient is registered by AddNOF; AddRabbitMQ additionally registers RabbitMQMessageClient without silently replacing the memory client. AddRabbitMQ still configures inbound broker consumers. Queue/Subscription bindings still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
+MemoryMessageClient is registered by AddNOF; AddRabbitMQ additionally registers RabbitMQMessageClient without silently replacing the memory client. Only AddRabbitMQ with an endpoint callback enables inbound broker consumers. Adapter-owned queue/subscription endpoints still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
 
-The sample's TransactionalMessages stages SendEmail and OrderCreated. Host SendEmailOutboxHandler and OrderCreatedOutboxHandler choose the memory client and physical routes; the existing mail and order operations consume the inbound messages. Switch infrastructure handlers to a broker, HTTP client or SDK without changing Application's enqueue API.
+The sample's TransactionalMessages stages SendEmail and OrderCreated. NOF.Sample.Messaging adapters choose RabbitMQ and physical destinations; a separate NOF.Sample.Notifications service explicitly binds the queue and two topic subscriptions to operations. See the [two-service routing sample](rabbitmq-sample.md). Changing the delivery client affects infrastructure without changing Application's enqueue API.
 
 ## Durable processing and migration
 
@@ -80,11 +80,11 @@ Breaking upgrade procedure:
 4. Deploy the coherent runtime/provider/host set and resume producers. Replace DeferSend/DeferPublish variants with EnqueueAsync and options; replace immediate dispatcher calls with concrete clients. NOFTestScope.EnqueueAsync stages in the existing scope; save that scope explicitly. Test-host immediate Send/Publish wrappers are removed.
 5. Rollback restores the backup and matching previous packages together. Automatic Down is refused because generic intent schemas cannot be inferred as legacy routes. New schemas must not be opened by old binaries.
 
-The migration is supplied as code; applying it to a live PostgreSQL database is a deployment step. SQLite regressions exercise the shared transactional store, stream blocking and owner fencing. Other tests cover snapshot/rollback, retry identity/scopes, independent subscriptions, tenant isolation, cancellation recovery and reflection-disabled typed delivery. Broker acknowledgement behavior remains the concrete client's responsibility; local tests do not run a live broker or PostgreSQL deployment.
+The migration is supplied as code; applying it to a live PostgreSQL database is a deployment step. SQLite regressions exercise the shared transactional store, stream blocking and owner fencing. Other tests cover snapshot/rollback, retry identity/scopes, independent subscriptions, tenant isolation, cancellation recovery and reflection-disabled typed delivery. Broker acknowledgement behavior remains the concrete client's responsibility. The optional [RabbitMQ sample integration test](rabbitmq-sample.md) exercises live queue/fanout delivery and offline recovery; it does not validate a PostgreSQL deployment.
 
 ## Capability assembly and worker hosts
 
-AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddMessageBindings registers the complete Inbox capability. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
+AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddInbox registers the complete transport-independent Inbox capability. AddMemoryMessaging and AddRabbitMQ with configured endpoints call AddInbox; client-only AddRabbitMQ installs no consumers or Inbox workers. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
 
 ```csharp
 builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
@@ -96,3 +96,5 @@ A producer-only host still stages snapshots and commits its unit of work, but do
 Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. Default ordered stream allocation resolves provider persistence only when that feature is actually used. AddNOF retains convenient cache, serialization, object storage and ordinary native-host defaults; users do not register every low-level service manually.
 
 Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.
+
+Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-receipt-key-migration) before changing existing Inbox and order-state routes.
