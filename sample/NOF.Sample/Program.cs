@@ -20,11 +20,10 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
-builder.Services.AddScoped<RabbitMQDemoPublisher>();
 builder.Services.AddOutbox(outbox =>
 {
-    outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
-    outbox.Add<OrderCreated, OrderCreatedOutboxHandler>("sample.order-created", 1);
+    outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
+    outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
 });
 // Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
 builder.Services.AddInbox();

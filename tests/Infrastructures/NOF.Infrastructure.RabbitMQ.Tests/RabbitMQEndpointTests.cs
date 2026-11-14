@@ -17,7 +17,7 @@ public sealed class RabbitMQEndpointTests
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IInboxStore));
         Assert.DoesNotContain(services, item => item.ImplementationType == typeof(RabbitMQConsumerHostedService));
         Assert.DoesNotContain(services, item => item.ImplementationType == typeof(InboxMessageBackgroundService));
-        Assert.DoesNotContain(services, item => item.ServiceType == typeof(RabbitMQConfiguration));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(RabbitMQBuilder));
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed class RabbitMQEndpointTests
         builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", First));
         using var host = builder.Build();
         Assert.Empty(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
-        Assert.Single(host.Services.GetRequiredService<RabbitMQConfiguration>().Freeze().Endpoints);
+        Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
         await Assert.ThrowsAsync<InvalidOperationException>(() => host.Services.GetRequiredService<MemoryCommandRider>()
             .SendAsync(new byte[] { 1 }, "work", null));
     }
@@ -44,7 +44,7 @@ public sealed class RabbitMQEndpointTests
         builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", Second));
         using var host = builder.Build();
         var memory = Assert.Single(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
-        var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQConfiguration>().Freeze().Endpoints);
+        var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
         Assert.Equal(First.Id, memory.Operation.Id);
         Assert.Equal(Second.Id, rabbit.Operation.Id);
         Assert.NotEqual(memory.ConsumerId, rabbit.ConsumerId);
@@ -57,7 +57,7 @@ public sealed class RabbitMQEndpointTests
     public void DuplicateEndpointAndForgedFailureOperation_AreRejectedAtRegistration()
     {
         var services = new ServiceCollection();
-        var endpoints = new RabbitMQBuilder(services, new RabbitMQConfiguration());
+        var endpoints = new RabbitMQBuilder(services);
         endpoints.MapQueue<Input>("work", First);
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("work", Second));
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("invalid",

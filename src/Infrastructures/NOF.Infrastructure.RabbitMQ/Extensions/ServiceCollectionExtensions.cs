@@ -33,7 +33,7 @@ public static partial class NOFInfrastructureRabbitMQExtensions
                 throw new InvalidOperationException("Configure RabbitMQ before building the host.");
             }
             services.AddLogging();
-            configure(new(services, services.GetOrAddSingleton<RabbitMQConfiguration>()));
+            configure(services.GetOrAddSingleton(() => new RabbitMQBuilder(services)));
             services.AddHostedService<RabbitMQConsumerHostedService>();
             return services;
         }

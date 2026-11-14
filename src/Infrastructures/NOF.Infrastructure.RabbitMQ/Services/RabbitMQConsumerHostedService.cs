@@ -13,7 +13,7 @@ namespace NOF.Infrastructure.RabbitMQ;
 public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposable
 {
     private readonly RabbitMQConnection _connection;
-    private readonly RabbitMQConfiguration _configuration;
+    private readonly RabbitMQBuilder _configuration;
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
     private readonly IServiceProvider _services;
     private readonly List<IChannel> _channels = [];
@@ -21,7 +21,7 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
 
     public RabbitMQConsumerHostedService(
         RabbitMQConnection connection,
-        RabbitMQConfiguration configuration,
+        RabbitMQBuilder configuration,
         IServiceProvider services,
         ILogger<RabbitMQConsumerHostedService> logger)
     {
@@ -58,7 +58,63 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
     {
         try
         {
-            await RegisterConsumersFromRegistryAsync(cancellationToken);
+            foreach (var endpoint in _configuration.Freeze().Endpoints)
+            {
+                var connection = await _connection.GetAsync(cancellationToken);
+                var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+                _channels.Add(channel);
+                await channel.BasicQosAsync(0, 1, false, cancellationToken);
+                if (endpoint.ConfigureChannel is not null)
+                {
+                    await endpoint.ConfigureChannel(channel, cancellationToken);
+                }
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (_, args) =>
+                {
+                    try
+                    {
+                        var payload = args.Body;
+
+                        Dictionary<string, string?>? headers = null;
+                        if (args.BasicProperties.Headers is not null)
+                        {
+                            headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                            foreach (var (key, value) in args.BasicProperties.Headers)
+                            {
+                                if (value is byte[] bytes)
+                                {
+                                    headers[key] = System.Text.Encoding.UTF8.GetString(bytes);
+                                }
+                            }
+                        }
+
+                        var messageId = Guid.TryParse(args.BasicProperties.MessageId, out var nativeId)
+                            ? nativeId : MessageInboxReceiver.GetMessageId(headers);
+                        await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, InboxMessageType.Command, payload, endpoint.ConsumerId, headers, CancellationToken.None);
+
+                        await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        var requeue = endpoint.RequeueOnFailure;
+                        _logger.LogError(
+                            ex,
+                            "Error handling message from queue {QueueName}. Requeue: {Requeue}",
+                            endpoint.QueueName,
+                            requeue);
+                        try
+                        {
+                            await consumer.Channel.BasicNackAsync(args.DeliveryTag, false, requeue);
+                        }
+                        catch
+                        {
+                            // Ignore
+                        }
+                    }
+                };
+                // BasicConsume fails if the queue does not exist. The consumer never infers broker topology.
+                await channel.BasicConsumeAsync(endpoint.QueueName, autoAck: false, consumer: consumer, cancellationToken: cancellationToken);
+            }
             _logger.LogInformation("RabbitMQ consumers initialized successfully");
         }
         catch (Exception ex)
@@ -74,72 +130,6 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
         Dispose();
         return Task.CompletedTask;
     }
-
-    private async Task RegisterConsumersFromRegistryAsync(CancellationToken cancellationToken)
-    {
-        foreach (var endpoint in _configuration.Freeze().Endpoints)
-        {
-            var connection = await _connection.GetAsync(cancellationToken);
-            var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
-            _channels.Add(channel);
-            await channel.BasicQosAsync(0, 1, false, cancellationToken);
-            if (endpoint.ConfigureChannel is not null)
-            {
-                await endpoint.ConfigureChannel(channel, cancellationToken);
-            }
-            var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.ReceivedAsync += async (_, args) => await HandleMessageAsync(endpoint, consumer, args);
-            // BasicConsume fails if the queue does not exist. The consumer never infers broker topology.
-            await channel.BasicConsumeAsync(endpoint.QueueName, autoAck: false, consumer: consumer, cancellationToken: cancellationToken);
-        }
-    }
-
-    private async Task HandleMessageAsync(RabbitMQEndpoint endpoint, AsyncEventingBasicConsumer consumer, BasicDeliverEventArgs args)
-    {
-        try
-        {
-            var payload = args.Body;
-
-            Dictionary<string, string?>? headers = null;
-            if (args.BasicProperties.Headers is not null)
-            {
-                headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (key, value) in args.BasicProperties.Headers)
-                {
-                    if (value is byte[] bytes)
-                    {
-                        headers[key] = System.Text.Encoding.UTF8.GetString(bytes);
-                    }
-                }
-            }
-
-            var messageId = ResolveMessageId(args.BasicProperties.MessageId, headers);
-            await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, InboxMessageType.Command, payload, endpoint.ConsumerId, headers, CancellationToken.None);
-
-            await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
-        }
-        catch (Exception ex)
-        {
-            var requeue = endpoint.RequeueOnFailure;
-            _logger.LogError(
-                ex,
-                "Error handling message from queue {QueueName}. Requeue: {Requeue}",
-                endpoint.QueueName,
-                requeue);
-            try
-            {
-                await consumer.Channel.BasicNackAsync(args.DeliveryTag, false, requeue);
-            }
-            catch
-            {
-                // Ignore
-            }
-        }
-    }
-
-    /// <summary>Uses a native GUID MessageId, with NOF envelope headers as a fallback.</summary>
-    public static Guid ResolveMessageId(string? propertyMessageId, IEnumerable<KeyValuePair<string, string?>>? headers)
-        => Guid.TryParse(propertyMessageId, out var id) ? id : MessageInboxReceiver.GetMessageId(headers);
 
     public void Dispose()
     {

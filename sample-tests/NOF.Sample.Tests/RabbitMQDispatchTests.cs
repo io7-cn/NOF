@@ -16,6 +16,7 @@ using NOF.Sample.Endpoints;
 using NOF.Sample.Messaging;
 using NOF.Sample.Notifications;
 using NOF.Sample.Notifications.Persistence;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using System.Net;
 using System.Net.Http.Json;
@@ -110,6 +111,49 @@ public sealed class RabbitMQDispatchTests
         Assert.True(error.IsReturn);
     }
 
+    [RabbitMQSampleFact]
+    public async Task NativeAndLegacyMessageIdentities_ArePreservedByTheActualConsumer()
+    {
+        var connection = Environment.GetEnvironmentVariable("NOF_SAMPLE_RABBITMQ")!;
+        await using var consumer = CreateConsumer(connection, MemoryDatabase());
+        await consumer.StartAsync();
+        var orderId = Guid.NewGuid();
+        var nativeId = Guid.NewGuid();
+        var legacyId = Guid.NewGuid();
+        var ignoredHeaderId = Guid.NewGuid();
+        var nativeConnection = await consumer.Services.GetRequiredService<RabbitMQConnection>().GetAsync();
+        await using var channel = await nativeConnection.CreateChannelAsync(
+            new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true));
+        using var scope = consumer.Services.CreateScope();
+        var serializer = scope.ServiceProvider.GetRequiredService<IObjectSerializer>();
+        var properties = new[]
+        {
+            new BasicProperties
+            {
+                MessageId = nativeId.ToString(),
+                Headers = new Dictionary<string, object?> { [NOFAbstractionConstants.Transport.Headers.MessageId] = ignoredHeaderId.ToString() }
+            },
+            new BasicProperties
+            {
+                Headers = new Dictionary<string, object?> { [NOFAbstractionConstants.Transport.Headers.MessageId.ToUpperInvariant()] = legacyId.ToString() }
+            },
+            new BasicProperties()
+        };
+        foreach (var property in properties)
+        {
+            await channel.BasicPublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, mandatory: true, property,
+                serializer.Serialize(new SendEmail("demo@example.test", "Identity", "Test", orderId), typeof(SendEmail)));
+        }
+        using var client = consumer.GetTestClient();
+        await WaitForReceiptsAsync(client, orderId);
+        var ids = await Ef.ToListAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>().Select(item => item.Id));
+        Assert.Equal(3, ids.Distinct().Count());
+        Assert.Contains(nativeId, ids);
+        Assert.Contains(legacyId, ids);
+        Assert.DoesNotContain(ignoredHeaderId, ids);
+        Assert.DoesNotContain(Guid.Empty, ids);
+    }
+
     private static WebApplicationBuilder Builder()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production }).AddNOF();
@@ -128,11 +172,10 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
-        builder.Services.AddScoped<RabbitMQDemoPublisher>();
         builder.Services.AddOutbox(outbox =>
         {
-            outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
-            outbox.Add<OrderCreated, OrderCreatedOutboxHandler>("sample.order-created", 1);
+            outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
+            outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
         });
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
@@ -151,9 +194,11 @@ public sealed class RabbitMQDispatchTests
         if (missingQueue is null)
         {
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
-            // Register endpoints first to verify later topology modules still execute before consumers.
+            var moduleQueue = "sample.module." + Guid.NewGuid().ToString("N");
+            builder.Services.ConfigureRabbitMQ(rabbit => rabbit.MapQueue<ConsumerService.SendMail>(moduleQueue));
             builder.Services.ConfigureRabbitMQ(NotificationMessaging.Configure);
-            builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(RabbitMQDemoTopology.DeclareAsync));
+            builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(async (channel, ct) =>
+                await channel.QueueDeclareAsync(moduleQueue, durable: true, exclusive: false, autoDelete: false, cancellationToken: ct)));
         }
         else
         {

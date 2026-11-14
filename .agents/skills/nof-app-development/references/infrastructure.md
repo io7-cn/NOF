@@ -96,7 +96,7 @@ builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configurat
 
 This registers native ConnectionFactory/IConnectionFactory and lazy RabbitMQConnection access only. Configure native TLS, AMQP URI, authentication, timeouts and recovery through ConnectionFactory. RabbitMQOptions and RabbitMQConnectionManager are removed. ConfigureRabbitMQ may be called repeatedly before Build; its fluent Topology callbacks and MapQueue endpoints compose. Framework StartingAsync executes every native topology callback in registration order before consumers start. Mapping a queue enables Inbox; topology-only configuration does not. Each MapQueue can configure its native channel (for example BasicQosAsync) and receipt-failure requeue policy. Backplane registration remains independent through AddRabbitMQBackplane().
 
-See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition): sample topology is a static native declaration method, with no application IHostedLifecycleService. Infrastructure uses MessageDelivery with full OutboxDeliveryContext around native BasicPublishAsync. Native channels are caller-owned; RabbitMQConnection.GetAsync returns a shared connection that callers must not dispose.
+See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition): sample topology is an inline native lambda alongside queue mappings in one feature entry, with no application IHostedLifecycleService or separate topology holder. Infrastructure uses MessageDelivery with full OutboxDeliveryContext around native BasicPublishAsync. Native channels are caller-owned; RabbitMQConnection.GetAsync returns a shared connection that callers must not dispose.
 
 ## OAuth/OIDC Authority
 

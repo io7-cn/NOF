@@ -25,7 +25,7 @@ public sealed class RabbitMQConfigurationTests
         Assert.True(factory.Ssl.Enabled);
         Assert.Equal("demo", factory.VirtualHost);
         Assert.Equal("native-settings", factory.ClientProvidedName);
-        var configuration = provider.GetRequiredService<RabbitMQConfiguration>();
+        var configuration = provider.GetRequiredService<RabbitMQBuilder>();
         var snapshot = configuration.Freeze();
         Assert.Equal(2, snapshot.Topologies.Count);
         Assert.Equal(new[] { "first", "second" }, snapshot.Endpoints.Select(item => item.QueueName));
@@ -48,7 +48,7 @@ public sealed class RabbitMQConfigurationTests
         Assert.Throws<InvalidOperationException>(() => builder.Services.ConfigureRabbitMQ(_ => invoked = true));
         Assert.Throws<InvalidOperationException>(() => captured!.Topology((_, _) => Task.CompletedTask));
         Assert.False(invoked);
-        Assert.Single(host.Services.GetRequiredService<RabbitMQConfiguration>().Freeze().Topologies);
+        Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Topologies);
     }
 
     [Fact]
