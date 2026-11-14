@@ -93,7 +93,7 @@ public sealed class InboxCleanupBackgroundService : BackgroundService
             return;
         }
         var olderThan = DateTime.UtcNow - _options.RetentionPeriod;
-        var (deletedCount, deletedOrderStateCount) = await store.CleanupAsync(olderThan, cancellationToken);
+        var deletedCount = await store.CleanupAsync(olderThan, cancellationToken);
 
         if (deletedCount > 0)
         {
@@ -106,12 +106,5 @@ public sealed class InboxCleanupBackgroundService : BackgroundService
             _logger.LogDebug("Inbox cleanup completed. No messages to delete");
         }
 
-        if (deletedOrderStateCount > 0)
-        {
-            _logger.LogInformation(
-                "Inbox cleanup deleted {Count} completed order states older than {Date}",
-                deletedOrderStateCount,
-                olderThan);
-        }
     }
 }

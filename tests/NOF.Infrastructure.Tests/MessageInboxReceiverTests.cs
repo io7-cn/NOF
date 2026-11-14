@@ -16,8 +16,8 @@ public sealed class MessageInboxReceiverTests
         string? constructorTenant = null;
         NOFInboxMessage? receipt = null;
         var store = new Mock<IInboxStore>();
-        store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<InboxMessageOrder?>(), It.IsAny<CancellationToken>()))
-            .Callback<NOFInboxMessage, InboxMessageOrder?, CancellationToken>((message, _, _) => receipt = message).Returns(Task.CompletedTask);
+        store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<CancellationToken>()))
+            .Callback<NOFInboxMessage, CancellationToken>((message, _) => receipt = message).Returns(Task.CompletedTask);
         var services = new ServiceCollection();
         services.AddScoped<IInboxStore>(_ => { constructorTenant = Context.Current.TenantId; return store.Object; });
         await using var provider = services.BuildServiceProvider();
@@ -37,7 +37,7 @@ public sealed class MessageInboxReceiverTests
         var id = Guid.NewGuid();
         var store = new Mock<IInboxStore>();
         var error = new DbUpdateException("storage failure");
-        store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<InboxMessageOrder?>(), It.IsAny<CancellationToken>())).ThrowsAsync(error);
+        store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<CancellationToken>())).ThrowsAsync(error);
         store.Setup(value => value.ExistsAsync(id, "subscription:audit", It.IsAny<CancellationToken>())).ReturnsAsync(exists);
         var services = new ServiceCollection().AddScoped(_ => store.Object);
         await using var provider = services.BuildServiceProvider();

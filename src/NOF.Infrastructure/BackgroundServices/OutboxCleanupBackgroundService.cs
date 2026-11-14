@@ -92,7 +92,7 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
             return;
         }
         var olderThan = DateTime.UtcNow - _options.RetentionPeriod;
-        var (deletedCount, compactedOrderStateCount, deletedCompletedOrderStateCount) = await store.CleanupAsync(olderThan, cancellationToken);
+        var deletedCount = await store.CleanupAsync(olderThan, cancellationToken);
 
         if (deletedCount > 0)
         {
@@ -105,12 +105,5 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
             _logger.LogDebug("Outbox cleanup completed. No messages to delete");
         }
 
-        if (compactedOrderStateCount > 0 || deletedCompletedOrderStateCount > 0)
-        {
-            _logger.LogInformation(
-                "Outbox order-state cleanup completed. Compacted {CompactedCount} historical allocations and deleted {CompletedCount} completed keys",
-                compactedOrderStateCount,
-                deletedCompletedOrderStateCount);
-        }
     }
 }

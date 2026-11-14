@@ -207,7 +207,7 @@ public class NOFTestHostTests
     private sealed class FakeOutbox : IOutbox
     {
         public static readonly Guid Id = Guid.NewGuid();
-        public ValueTask<Guid> EnqueueAsync<T>(T message, Context context, OutboxEnqueueOptions? options = null,
+        public ValueTask<Guid> EnqueueAsync<T>(T message, Context context, IReadOnlyDictionary<string, string?>? headers = null,
             CancellationToken cancellationToken = default) => ValueTask.FromResult(Id);
     }
 

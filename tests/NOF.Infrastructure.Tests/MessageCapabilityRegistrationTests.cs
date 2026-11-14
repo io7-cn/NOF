@@ -49,7 +49,7 @@ public sealed class MessageCapabilityRegistrationTests
         Assert.Equal(2, workers.Length);
         Assert.Contains(workers, service => service is OutboxMessageBackgroundService);
         Assert.Contains(workers, service => service is OutboxCleanupBackgroundService);
-        Assert.Equal(2, host.Services.GetServices<IDbContextModelCreatingContributor>().Count());
+        Assert.Single(host.Services.GetServices<IDbContextModelCreatingContributor>());
         using var scope = host.Services.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
         Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());

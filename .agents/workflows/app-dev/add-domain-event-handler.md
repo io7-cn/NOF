@@ -45,4 +45,4 @@ await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), invocation.Con
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-Inject IOutbox in the Application operation. The host registers its stable ID/version and an IOutboxHandler<T> that calls a concrete client. Enqueue snapshots without sending or saving. Use OutboxEnqueueOptions for an ordered stream and complete only its final intent. See docs/en/design/transactional-outbox.md.
+Inject IOutbox in the Application operation. The host registers its stable ID/version and an IOutboxHandler<T> that calls a concrete client. Enqueue snapshots without sending or saving. Pass optional generic Headers for durable explicit metadata. NOF does not guarantee ordering; infrastructure owns its scheduling and consumer coordination. See docs/en/design/transactional-outbox.md.

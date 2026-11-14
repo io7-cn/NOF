@@ -18,6 +18,8 @@ public sealed class GenericOutboxTests
         services.AddSingleton(store.Object);
         services.AddSingleton<IObjectSerializer, JsonObjectSerializer>();
         services.AddSingleton<Probe>();
+        services.AddOptions();
+        services.AddSingleton<MessageDelivery>();
         services.AddOutbox(outbox => outbox.Add<Work, Handler>("custom.work"));
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
@@ -32,8 +34,10 @@ public sealed class GenericOutboxTests
         using var host = CreateHost();
         using var scope = host.Services.CreateScope();
         var value = new Work { Value = "before" };
+        var headers = new Dictionary<string, string?> { ["partition"] = "before", ["nullable"] = null };
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(value,
-            Context.Empty.WithItem("Authorization", "secret").WithItem("arbitrary", "private"));
+            Context.Empty.WithItem("Authorization", "secret").WithItem("arbitrary", "private"), headers);
+        headers["partition"] = "after";
         value.Value = "after";
         using (var observer = host.Services.CreateScope())
         {
@@ -48,13 +52,23 @@ public sealed class GenericOutboxTests
         Assert.DoesNotContain("secret", record.Headers);
         Assert.DoesNotContain("private", record.Headers);
         Assert.Equal(id, record.Id);
+        var metadata = host.Services.GetRequiredService<IObjectSerializer>().Deserialize<Dictionary<string, string?>>(record.Headers)!;
+        Assert.Equal("before", metadata["partition"]);
+        Assert.Null(metadata["nullable"]);
     }
 
     [Fact]
     public async Task GenericHandler_RetriesWithSameId_AndUsesAFreshScopePerAttempt()
     {
         using var host = CreateHost();
-        var id = await StageAsync(host, new Work { Value = "retry" });
+        Guid id;
+        using (var scope = host.Services.CreateScope())
+        {
+            var headers = new Dictionary<string, string?> { ["partition"] = "unchanged", ["nullable"] = null };
+            id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work { Value = "retry" }, Context.Empty, headers);
+            headers["partition"] = "mutated";
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token);
         try
@@ -65,6 +79,15 @@ public sealed class GenericOutboxTests
             Assert.All(attempts, attempt => Assert.Equal(id, attempt.Id));
             Assert.Equal(2, attempts.Select(attempt => attempt.Scope).Distinct().Count());
             Assert.All(attempts, attempt => Assert.Equal(attempt.Tenant, attempt.AmbientTenant));
+            var envelopes = host.Services.GetRequiredService<Probe>().Envelopes.ToArray();
+            Assert.Equal(2, envelopes.Length);
+            Assert.All(envelopes, headers =>
+            {
+                Assert.Equal("unchanged", headers["partition"]);
+                Assert.Null(headers["nullable"]);
+                Assert.Equal(id.ToString(), headers[NOFAbstractionConstants.Transport.Headers.MessageId]);
+                Assert.Equal("host", headers[NOFAbstractionConstants.Transport.Headers.TenantId]);
+            });
         }
         finally
         {
@@ -73,7 +96,7 @@ public sealed class GenericOutboxTests
     }
 
     [Fact]
-    public async Task UnknownSchema_IsPermanent_BlocksItsStream_AndDoesNotBlockIndependentWork()
+    public async Task UnknownSchema_IsPermanent_AndDoesNotBlockOtherWork()
     {
         using var host = CreateHost();
         Guid unknown;
@@ -81,9 +104,9 @@ public sealed class GenericOutboxTests
         using (var scope = host.Services.CreateScope())
         {
             var outbox = scope.ServiceProvider.GetRequiredService<IOutbox>();
-            var options = new OutboxEnqueueOptions { OrderKey = "stream" };
-            unknown = await outbox.EnqueueAsync(new Work { Value = "unknown" }, Context.Empty, options);
-            follower = await outbox.EnqueueAsync(new Work { Value = "follower" }, Context.Empty, options);
+            var headers = new Dictionary<string, string?> { ["partition"] = "stream" };
+            unknown = await outbox.EnqueueAsync(new Work { Value = "unknown" }, Context.Empty, headers);
+            follower = await outbox.EnqueueAsync(new Work { Value = "follower" }, Context.Empty, headers);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
         using (var scope = host.Services.CreateScope())
@@ -99,10 +122,8 @@ public sealed class GenericOutboxTests
             var failed = await WaitForAsync(host, unknown, OutboxMessageStatus.Failed, timeout.Token);
             Assert.Equal(1, failed.RetryCount);
             await WaitForAsync(host, independent, OutboxMessageStatus.Sent, timeout.Token);
-            var blocked = await ReadAsync(host, follower);
-            Assert.Equal(OutboxMessageStatus.Pending, blocked.Status);
-            Assert.Equal(0, blocked.RetryCount);
-            Assert.Equal("independent", Assert.Single(host.Services.GetRequiredService<Probe>().Attempts).Value);
+            await WaitForAsync(host, follower, OutboxMessageStatus.Sent, timeout.Token);
+            Assert.Equal(new[] { "follower", "independent" }.Order(), host.Services.GetRequiredService<Probe>().Attempts.Select(attempt => attempt.Value).Order());
         }
         finally
         {
@@ -174,6 +195,11 @@ public sealed class GenericOutboxTests
         using var host = CreateHost();
         var first = await StageAsync(host, new Work { Value = "wait" });
         var second = await StageAsync(host, new Work { Value = "unstarted" });
+        using (var scope = host.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>()
+                .Where(record => record.Id == first).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.CreatedAtUtc, DateTime.UtcNow.AddMinutes(-1)));
+        }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token);
         try
@@ -202,8 +228,21 @@ public sealed class GenericOutboxTests
         var outbox = scope.ServiceProvider.GetRequiredService<IOutbox>();
         await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.EnqueueAsync(new Work(), Context.Empty.WithTenantId("other")).AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.EnqueueAsync("unregistered", Context.Empty).AsTask());
+        await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().AnyAsync());
+    }
+
+    [Theory]
+    [InlineData("x-message-id")]
+    [InlineData("x-tenant-id")]
+    [InlineData("TRACEPARENT")]
+    public async Task Enqueue_RejectsManagedHeaderOverrides_BeforeStaging(string name)
+    {
+        using var host = CreateHost();
+        using var scope = host.Services.CreateScope();
+        var outbox = scope.ServiceProvider.GetRequiredService<IOutbox>();
         await Assert.ThrowsAsync<ArgumentException>(() => outbox.EnqueueAsync(new Work(), Context.Empty,
-            new OutboxEnqueueOptions { CompletesOrderKey = true }).AsTask());
+            new Dictionary<string, string?> { [name] = "override" }).AsTask());
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         Assert.False(await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().AnyAsync());
     }
@@ -269,14 +308,25 @@ public sealed class GenericOutboxTests
     public sealed class Probe
     {
         public ConcurrentQueue<Attempt> Attempts { get; } = new();
+        public ConcurrentQueue<Dictionary<string, string?>> Envelopes { get; } = new();
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
-    public sealed class Handler(Probe probe) : IOutboxHandler<Work>
+    public sealed class Handler(Probe probe, MessageDelivery delivery) : IOutboxHandler<Work>
     {
         private readonly Guid _scope = Guid.NewGuid();
         public async ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken)
         {
+            if (message.Value == "retry")
+            {
+                Assert.Equal("unchanged", context.Headers["PARTITION"]);
+                Assert.Throws<NotSupportedException>(() => ((IDictionary<string, string?>)context.Headers)["partition"] = "changed");
+            }
             probe.Attempts.Enqueue(new(context.MessageId, context.Attempt, _scope, message.Value, context.Context.TenantId, Context.Current.TenantId));
+            await delivery.ExecuteAsync(message, context.Context, (headers, _) =>
+            {
+                probe.Envelopes.Enqueue(headers);
+                return ValueTask.CompletedTask;
+            }, cancellationToken, context);
             if (message.Value == "retry" && context.Attempt == 1)
             {
                 throw new InvalidOperationException("Try again");

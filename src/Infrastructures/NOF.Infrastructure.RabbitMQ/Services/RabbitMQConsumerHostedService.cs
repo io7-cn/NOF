@@ -85,6 +85,10 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
                                 {
                                     headers[key] = System.Text.Encoding.UTF8.GetString(bytes);
                                 }
+                                else if (value is null or string)
+                                {
+                                    headers[key] = (string?)value;
+                                }
                             }
                         }
 

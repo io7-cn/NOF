@@ -101,7 +101,7 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         var succeededCount = 0;
         var failedCount = 0;
 
-        foreach (var message in pendingMessages.Where(static message => message.OrderKey is null))
+        foreach (var message in pendingMessages)
         {
             try
             {
@@ -118,52 +118,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             {
                 failedCount++;
                 // Failure details are recorded in the inbox row (retry/failed) and logged at the decision point.
-            }
-        }
-
-        foreach (var orderedGroup in pendingMessages
-                     .Where(static message => message.OrderKey is not null)
-                     .GroupBy(static message => (message.Route, message.OrderKey)))
-        {
-            var orderedMessages = orderedGroup.OrderBy(static message => message.Sequence).ToArray();
-            var groupFailed = false;
-            for (var index = 0; index < orderedMessages.Length; index++)
-            {
-                var message = orderedMessages[index];
-                try
-                {
-                    if (await ProcessSingleMessageAsync(message, cancellationToken))
-                    {
-                        succeededCount++;
-                    }
-                    else
-                    {
-                        failedCount++;
-                        groupFailed = true;
-                        await ReleaseUnprocessedOrderedMessagesAsync(orderedMessages.Skip(index + 1), cancellationToken);
-                        break;
-                    }
-                }
-                catch (Exception)
-                {
-                    failedCount++;
-                    groupFailed = true;
-                    await ReleaseUnprocessedOrderedMessagesAsync(
-                        orderedMessages.Skip(index + 1),
-                        cancellationToken);
-                    break;
-                }
-            }
-
-            await ReleaseOrderStateClaimAsync(
-                orderedGroup.Key.Route,
-                orderedGroup.Key.OrderKey!,
-                orderedMessages[0].ClaimedBy,
-                cancellationToken);
-
-            if (groupFailed)
-            {
-                continue;
             }
         }
 
@@ -205,8 +159,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
                 return false;
             }
 
-            var orderState = await store.LoadAndValidateOrderStateAsync(pendingMessage, cancellationToken);
-
             var headers = DeserializeHeaders(pendingMessage.Headers);
             var traceParent = ExtractTraceParent(headers);
             var processingHeaders = RemoveTraceParent(headers)
@@ -236,17 +188,6 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             pendingMessage.ErrorMessage = null;
             pendingMessage.ClaimedBy = null;
             pendingMessage.ClaimExpiresAtUtc = null;
-
-            if (orderState is not null)
-            {
-                orderState.NextSequence = checked(orderState.NextSequence + 1);
-                orderState.UpdatedAtUtc = DateTime.UtcNow;
-                orderState.ErrorMessage = null;
-                if (pendingMessage.CompletesOrderKey)
-                {
-                    orderState.CompletedAtUtc = DateTime.UtcNow;
-                }
-            }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -306,17 +247,5 @@ public sealed class InboxMessageBackgroundService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         await scope.ServiceProvider.GetRequiredService<IInboxStore>().MarkFailedAsync(message, error, cancellationToken, ex);
-    }
-    private async Task ReleaseUnprocessedOrderedMessagesAsync(IEnumerable<NOFInboxMessage> messages, CancellationToken cancellationToken)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
-        await scope.ServiceProvider.GetRequiredService<IInboxStore>().ReleaseUnprocessedOrderedMessagesAsync(messages, cancellationToken);
-    }
-    private async Task ReleaseOrderStateClaimAsync(string route, string orderKey, string? claimedBy, CancellationToken cancellationToken)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
-        await scope.ServiceProvider.GetRequiredService<IInboxStore>().ReleaseOrderStateClaimAsync(route, orderKey, claimedBy, cancellationToken);
     }
 }

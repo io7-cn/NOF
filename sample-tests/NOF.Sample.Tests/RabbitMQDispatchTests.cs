@@ -42,6 +42,48 @@ public sealed class RabbitMQDispatchTests
     }
 
     [RabbitMQSampleFact]
+    public async Task ExplicitHeaders_SurviveOutboxAndNativeRabbitMQ_WithoutOrderingInterpretation()
+    {
+        var connection = Environment.GetEnvironmentVariable("NOF_SAMPLE_RABBITMQ")!;
+        await using var consumer = CreateConsumer(connection, MemoryDatabase());
+        await consumer.StartAsync();
+        await using var producer = CreateProducer(connection, MemoryDatabase());
+        var headers = new Dictionary<string, string?>
+        {
+            ["correlation-id"] = "original",
+            ["optional"] = null,
+            ["X-Order-Key"] = "opaque",
+            ["X-Sequence"] = "not-a-number"
+        };
+        Guid id;
+        using (var scope = producer.Services.CreateScope())
+        {
+            id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(
+                new SendEmail("headers@example.test", "Headers", "Snapshot"), Context.Empty, headers);
+            headers["correlation-id"] = "changed";
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+        await producer.StartAsync();
+        await WaitUntilAsync(async () =>
+        {
+            using var scope = consumer.Services.CreateScope();
+            return await Ef.AnyAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>(),
+                receipt => receipt.Id == id && receipt.Status == InboxMessageStatus.Processed);
+        });
+        using var verification = consumer.Services.CreateScope();
+        var receipt = await Ef.SingleAsync(verification.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>(),
+            receipt => receipt.Id == id);
+        var received = verification.ServiceProvider.GetRequiredService<IObjectSerializer>()
+            .Deserialize<Dictionary<string, string?>>(receipt.Headers)!;
+        Assert.Equal("original", received["correlation-id"]);
+        Assert.Null(received["optional"]);
+        Assert.Equal("opaque", received["X-Order-Key"]);
+        Assert.Equal("not-a-number", received["X-Sequence"]);
+        Assert.Equal(id.ToString(), received[NOFAbstractionConstants.Transport.Headers.MessageId]);
+        Assert.Equal("host", received[NOFAbstractionConstants.Transport.Headers.TenantId]);
+    }
+
+    [RabbitMQSampleFact]
     public async Task TwoHosts_UseRabbitMQQueueAndFanout_AndRetainMessagesAcrossConsumerRestart()
     {
         var connection = Environment.GetEnvironmentVariable("NOF_SAMPLE_RABBITMQ")!;

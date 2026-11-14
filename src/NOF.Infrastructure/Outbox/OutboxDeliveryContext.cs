@@ -11,10 +11,6 @@ public sealed record OutboxDeliveryContext
     public required Context Context { get; init; }
     /// <summary>Gets the one-based attempt number.</summary>
     public required int Attempt { get; init; }
-    /// <summary>Gets the qualified ordering stream.</summary>
-    public string? OrderKey { get; init; }
-    /// <summary>Gets the sequence in the ordering stream.</summary>
-    public long? Sequence { get; init; }
-    /// <summary>Gets whether this intent completes its stream.</summary>
-    public bool CompletesOrderKey { get; init; }
+    /// <summary>Gets the read-only snapshot of explicitly staged headers and the persisted tenant.</summary>
+    public required IReadOnlyDictionary<string, string?> Headers { get; init; }
 }

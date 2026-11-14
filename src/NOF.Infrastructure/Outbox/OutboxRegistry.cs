@@ -91,9 +91,6 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxMessageModelCreatingContributor>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxOrderStateModelCreatingContributor>());
-        services.TryAddScoped<OutboxOrderSequenceAllocator>(provider => new(provider.GetRequiredService<IPersistenceSession>(),
-            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<NOF.Hosting.DeploymentOptions>>()));
         configure(new(services, registry));
         return services;
     }

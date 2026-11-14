@@ -14,7 +14,7 @@ namespace NOF.Infrastructure.Tests.Notifications;
 public sealed class NotificationDispatchIntegrationTests
 {
     [Fact]
-    public async Task OrderedFilterFailure_BlocksSuccessorsWithoutExceptionsOrTechnicalRetries()
+    public async Task FilterFailure_DoesNotBlockOtherReceiptsOrConsumeTechnicalRetries()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -36,19 +36,16 @@ public sealed class NotificationDispatchIntegrationTests
         await host.StartAsync(timeout.Token);
         try
         {
-            await WaitUntilAsync(() => logs.Messages.Contains("Inbox batch processed: 0 processed, 1 failed"), timeout.Token);
+            await WaitUntilAsync(() => logs.Messages.Contains("Inbox batch processed: 0 processed, 2 failed"), timeout.Token);
             using var scope = host.Services.CreateScope();
             var session = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-            var receipts = await session.Set<NOFInboxMessage>().AsNoTracking().OrderBy(item => item.Sequence).ToListAsync(timeout.Token);
+            var receipts = await session.Set<NOFInboxMessage>().AsNoTracking().OrderBy(item => item.CreatedAtUtc).ToListAsync(timeout.Token);
             Assert.Equal(InboxMessageStatus.Failed, receipts[0].Status);
             Assert.Equal(1, receipts[0].RetryCount);
-            Assert.Equal(InboxMessageStatus.Pending, receipts[1].Status);
-            Assert.Equal(0, receipts[1].RetryCount);
+            Assert.Equal(InboxMessageStatus.Failed, receipts[1].Status);
+            Assert.Equal(1, receipts[1].RetryCount);
             Assert.Null(receipts[1].ClaimedBy);
-            Assert.Equal([1], calls);
-            var order = await session.Set<NOFInboxOrderState>().SingleAsync(timeout.Token);
-            Assert.Equal(1, order.BlockedSequence);
-            Assert.Equal(1, order.NextSequence);
+            Assert.Equal([1, 2], calls);
         }
         finally
         {
@@ -91,85 +88,6 @@ public sealed class NotificationDispatchIntegrationTests
         {
             await host.StopAsync(CancellationToken.None);
         }
-    }
-
-    [Fact]
-    public async Task EnqueueOrderedAsync_ShouldQualifyKeyAndAllocateContiguousSequences()
-    {
-        var builder = Host.CreateApplicationBuilder();
-        builder.AddNOF();
-        ConfigureMessages(builder.Services);
-
-        using var host = builder.Build();
-        using var scope = host.Services.CreateScope();
-        var publisher = scope.ServiceProvider.GetRequiredService<IOutbox>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        var environment = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value;
-
-        await publisher.EnqueueAsync(new ConcreteNotification("first"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask();
-        await publisher.EnqueueAsync(new ConcreteNotification("second"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42", CompletesOrderKey = true }).AsTask();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => publisher.EnqueueAsync(new ConcreteNotification("after-terminal"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask());
-        await publisher.EnqueueAsync(new ConcreteNotification("unordered"), Context.Empty);
-        await dbContext.SaveChangesAsync();
-
-        var messages = await dbContext.Set<NOFOutboxMessage>()
-            .Where(static message => message.OrderKey != null)
-            .OrderBy(static message => message.Sequence)
-            .ToListAsync();
-        var allocations = await dbContext.Set<NOFOutboxOrderState>()
-            .OrderBy(static state => state.Sequence)
-            .ToListAsync();
-
-        Assert.Equal(2, messages.Count);
-        Assert.Equal([1L, 2L], messages.Select(static message => message.Sequence!.Value).ToArray());
-        Assert.All(messages, message => Assert.Equal($"{environment.ServiceName}:Invoice:42", message.OrderKey));
-        Assert.False(messages[0].CompletesOrderKey);
-        Assert.True(messages[1].CompletesOrderKey);
-        Assert.Equal([1L, 2L], allocations.Select(static state => state.Sequence).ToArray());
-
-        var unordered = await dbContext.Set<NOFOutboxMessage>()
-            .SingleAsync(static message => message.OrderKey == null);
-        Assert.Null(unordered.Sequence);
-        Assert.False(unordered.CompletesOrderKey);
-
-        using var secondScope = host.Services.CreateScope();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IOutbox>();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => secondPublisher.EnqueueAsync(new ConcreteNotification("after-persisted-terminal"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:42" }).AsTask());
-    }
-
-    [Fact]
-    public async Task ConcurrentOrderedAllocations_ShouldConflictAndRetryWithNextSequence()
-    {
-        var builder = Host.CreateApplicationBuilder();
-        builder.AddNOF();
-        ConfigureMessages(builder.Services);
-
-        using var host = builder.Build();
-        using var firstScope = host.Services.CreateScope();
-        using var secondScope = host.Services.CreateScope();
-        var firstPublisher = firstScope.ServiceProvider.GetRequiredService<IOutbox>();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<IOutbox>();
-        var firstDbContext = firstScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        var secondDbContext = secondScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-
-        await firstPublisher.EnqueueAsync(new ConcreteNotification("first-instance"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
-        await secondPublisher.EnqueueAsync(new ConcreteNotification("second-instance"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
-
-        await firstDbContext.SaveChangesAsync();
-        await Assert.ThrowsAsync<DbUpdateException>(() => secondDbContext.SaveChangesAsync());
-
-        using var retryScope = host.Services.CreateScope();
-        var retryPublisher = retryScope.ServiceProvider.GetRequiredService<IOutbox>();
-        var retryDbContext = retryScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        await retryPublisher.EnqueueAsync(new ConcreteNotification("retry"), Context.Empty, new OutboxEnqueueOptions { OrderKey = "Invoice:99" }).AsTask();
-        await retryDbContext.SaveChangesAsync();
-
-        var sequences = await retryDbContext.Set<NOFOutboxOrderState>()
-            .Where(static state => state.OrderKey.EndsWith(":Invoice:99"))
-            .OrderBy(static state => state.Sequence)
-            .Select(static state => state.Sequence)
-            .ToListAsync();
-        Assert.Equal([1L, 2L], sequences);
     }
 
     [Fact]
@@ -327,7 +245,7 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     [Fact]
-    public async Task OrderedNotification_ShouldWaitForMissingPredecessorAndThenProcessContiguously()
+    public async Task LegacyOrderingHeaders_AreOpaque_DoNotWaitForGapsOrCloseAStream()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -353,25 +271,18 @@ public sealed class NotificationDispatchIntegrationTests
             const string orderKey = "ProducerService:Invoice:42";
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(2), orderKey, 2, true, timeout.Token);
-            await Task.Delay(100, timeout.Token);
-            Assert.Empty(host.Services.GetRequiredService<OrderedNotificationProbe>().Values);
+            await WaitUntilAsync(() => host.Services.GetRequiredService<OrderedNotificationProbe>().Values.Count == 1, timeout.Token);
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(1), orderKey, 1, false, timeout.Token);
             var probe = host.Services.GetRequiredService<OrderedNotificationProbe>();
             await WaitUntilAsync(() => probe.Values.Count == 2, timeout.Token);
 
-            Assert.Equal([1, 2], probe.Values);
+            Assert.Equal([2, 1], probe.Values);
 
-            using var verificationScope = host.Services.CreateScope();
-            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-            var state = await dbContext.Set<NOFInboxOrderState>().SingleAsync(timeout.Token);
-            Assert.Equal(3, state.NextSequence);
-            Assert.NotNull(state.CompletedAtUtc);
-            Assert.Null(state.BlockedSequence);
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(3), orderKey, 1, false, timeout.Token);
             await WaitUntilAsync(() => probe.Values.Count == 3, timeout.Token);
-            Assert.Equal([1, 2, 3], probe.Values);
+            Assert.Equal([2, 1, 3], probe.Values);
         }
         finally
         {
@@ -391,9 +302,9 @@ public sealed class NotificationDispatchIntegrationTests
         var headers = new Dictionary<string, string?>
         {
             [NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString(),
-            [NOFAbstractionConstants.Transport.Headers.OrderKey] = orderKey,
-            [NOFAbstractionConstants.Transport.Headers.Sequence] = sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [NOFAbstractionConstants.Transport.Headers.CompletesOrderKey] = completesOrderKey.ToString()
+            ["X-Order-Key"] = orderKey,
+            ["X-Sequence"] = sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["X-Completes-Order-Key"] = completesOrderKey.ToString()
         };
         return rider.PublishAsync(
             serializer.Serialize(notification),

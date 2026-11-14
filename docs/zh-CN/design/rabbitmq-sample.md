@@ -55,7 +55,7 @@ await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, h
 await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
 ```
 
-宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 通过 `MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和顺序 Header，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
+宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 通过 `MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和自定义 Headers，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
 
 接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
 
@@ -95,7 +95,7 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 ## 持久化与验证
 
-接收服务在项目工作目录使用 `notifications.db`。NOF 首次使用时初始化全新 SQLite 结构，此演示库没有迁移链；重置时先停服务再删除该数据库。生产环境应制定明确迁移策略。生产者仍遵循现有 PostgreSQL 迁移及升级注意事项，本次没有增加迁移或自动清理已有数据。新增 `SendEmail.OrderId` 为可选项，原 v1 负载仍可接收。
+接收服务在项目工作目录使用 `notifications.db`。NOF 首次使用时初始化全新 SQLite 结构，此演示库没有迁移链；重置时先停服务再删除该数据库。生产环境应制定明确迁移策略。生产者仍遵循现有 PostgreSQL 迁移及升级注意事项，本次移除顺序模型需要执行显式 RemoveMessageOrdering 迁移，不推断自动清理或 Header 转换。新增 `SendEmail.OrderId` 为可选项，原 v1 负载仍可接收。
 
 投递语义是至少一次。NOF 保留消息 ID，通过 Inbox 按路由去重；事件的两个订阅刻意使用不同 Inbox 路由，因此相同 ID 会分别处理。真实 SMTP 等外部副作用仍需要自己的幂等方案。
 
@@ -119,7 +119,7 @@ MapQueue 可指定 `configureChannel: async (channel, ct) => await channel.Basic
 
 通用 Inbox 仍把 Route 当作不透明键，通过原生 keyed DI 解析 scoped IInboxHandler，在现有租户作用域和事务内持久化、去重和执行，不理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
 
-升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，同步修改 Inbox.Route 与 InboxOrderState.Route，保留 ID、已完成去重历史和顺序进度。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。
+升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，修改 Inbox.Route，保留 ID 和已完成去重历史。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。
 
 Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConfigurationSnapshot。只读视图在启动冻结后保持不变。消费者启动及接收处理逻辑直接内联；连接持有器因生命周期不同于 Channel 和消息作用域而保留。
 
@@ -130,4 +130,8 @@ Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConf
 - NOF.Sample 保存 Services/RabbitMQMessageClient.cs 与 MessageOutboxHandler.cs；Handler 将可信 Outbox 元数据转换为 Header，客户端完成序列化和原生发布。
 - NOF.Sample.Notifications 是单个可执行项目，包含操作、回执端口、持久化与原生拓扑/端点模块，不再有独立 Notifications.Application 或共享 Messaging 实现项目。接收宿主将自身程序集注册为 Application Part。
 
-合并不改变队列名、负载 Schema、回执键或 SQLite 实体映射。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。
+合并保留队列名、负载 Schema 和回执键；移除框架顺序能力同时会删除 SQLite 模型中的顺序列与状态表。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。
+
+处理器经 MessageDelivery 将 `OutboxDeliveryContext.Headers` 转为原生 RabbitMQ Headers，重试保留入队时的自定义头快照，NOF 补充 ID、租户与追踪。示例不保证邮件、审计、指标队列之间的先后关系。需要顺序时，由基础设施实现领取调度与消费协调，业务版本则放入负载。升级已有数据库前，执行[移除顺序模型的迁移](transactional-outbox.md#可靠处理与迁移)。
+
+Notifications 示例使用 EnsureCreated 创建本地 SQLite 文件，不升级已有结构。升级前停止接收者，排空或显式迁移顺序回执，备份文件，再通过显式 SQLite 迁移删除两张顺序状态表、顺序索引与 NOFInboxMessage 的三个顺序列，保留回执 ID 和历史。可丢弃的演示数据库可在备份后有意重建；持久服务必须保留去重历史。生产者的 PostgreSQL 迁移不会升级这个独立接收者数据库。

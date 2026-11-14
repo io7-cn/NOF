@@ -3,7 +3,7 @@ using NOF.Sample.Application;
 
 namespace NOF.Sample.Services;
 
-/// <summary>Preserves the trusted delivery envelope while selecting native destinations through the application port.</summary>
+/// <summary>Forwards staged generic headers and the trusted delivery envelope while selecting native destinations through the application port.</summary>
 public sealed class MessageOutboxHandler(IMessageClient client, MessageDelivery delivery) : IOutboxHandler<SendEmail>, IOutboxHandler<OrderCreated>
 {
     public ValueTask HandleAsync(SendEmail message, OutboxDeliveryContext context, CancellationToken cancellationToken)

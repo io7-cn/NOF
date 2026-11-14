@@ -42,7 +42,7 @@ builder.Services.ConfigureRabbitMQ(endpoints =>
 });
 ```
 
-RabbitMQ maps existing queues only, while Memory owns its independent endpoint API. Exchange topology and publishing use native RabbitMQ APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
+RabbitMQ maps existing queues only, while Memory owns its independent endpoint API. Exchange topology and publishing use native RabbitMQ APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
 
 ## Calls and durable intents
 
@@ -75,7 +75,7 @@ TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests and RejectMisma
 
 Replace old command/notification handlers with Empty-returning operations and explicit inbound Queue/Subscription bindings. InvocationContext plus Origin replaces the old context subclasses. Immediate calls use concrete clients; deferred APIs become IOutbox.EnqueueAsync and options. Old dispatcher and producer routing APIs have no compatibility adapter.
 
-The generic outbox requires a schema migration after draining legacy records. Follow the [outbox migration procedure](transactional-outbox.md). Earlier inbox/broker route-name changes still require draining or an explicit old-to-new receipt, subscription and order-state mapping in every tenant database. Back up, preserve deduplication and ordering progress, and never guess unresolved routes.
+The generic outbox requires a schema migration after draining legacy records. Follow the [outbox migration procedure](transactional-outbox.md). Earlier inbox/broker route-name changes still require draining or an explicit old-to-new receipt and subscription mapping in every tenant database. Back up, preserve deduplication history, and never guess unresolved routes.
 
 ## Aggregate-owned collections
 

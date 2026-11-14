@@ -94,7 +94,6 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
                 logger.LogWarning(error, "Outbox message {MessageId} attempt {Attempt} failed", record.Id, record.RetryCount);
                 await store.AtomicRecordDeliveryFailureAsync(record, error.Message,
                     error is OutboxPermanentFailureException, cancellationToken);
-                // Claiming excludes later records in the same stream, so independent work can continue.
             }
         }
         if (messages.Count != 0)
@@ -118,21 +117,14 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
         {
             throw new OutboxPermanentFailureException("Outbox metadata does not match its persistence tenant.");
         }
-        if ((record.OrderKey is null) != (record.Sequence is null)
-            || record.OrderKey is not null && (string.IsNullOrWhiteSpace(record.OrderKey) || record.Sequence is not > 0)
-            || record.CompletesOrderKey && record.OrderKey is null)
-        {
-            throw new OutboxPermanentFailureException("Invalid outbox ordering metadata.");
-        }
         var registration = scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType, record.SchemaVersion);
         var context = new OutboxDeliveryContext
         {
             MessageId = record.Id,
             Context = Context.Current,
             Attempt = record.RetryCount,
-            OrderKey = record.OrderKey,
-            Sequence = record.Sequence,
-            CompletesOrderKey = record.CompletesOrderKey
+            Headers = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string?>(
+                new Dictionary<string, string?>(headers, StringComparer.OrdinalIgnoreCase))
         };
         await registration.Deliver(scope.ServiceProvider, record, context, cancellationToken).ConfigureAwait(false);
     }

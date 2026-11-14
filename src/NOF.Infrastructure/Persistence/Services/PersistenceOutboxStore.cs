@@ -39,8 +39,6 @@ public sealed partial class PersistenceOutboxStore(IPersistenceSession session, 
                         m.RetryCount < _options.MaxRetryCount &&
                         (m.NextAttemptAtUtc == null || m.NextAttemptAtUtc <= now) &&
                         (m.ClaimedBy == null || m.ClaimExpiresAtUtc == null || m.ClaimExpiresAtUtc <= now))
-            .Where(m => m.OrderKey == null || !_session.Set<NOFOutboxMessage>().Any(prior =>
-                prior.OrderKey == m.OrderKey && prior.Sequence < m.Sequence && prior.Status != OutboxMessageStatus.Sent))
             .OrderBy(m => m.CreatedAtUtc)
             .ThenBy(m => m.Id)
             .Take(batchSize)

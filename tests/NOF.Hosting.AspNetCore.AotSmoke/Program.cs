@@ -54,7 +54,8 @@ using (var scope = app.Services.CreateScope())
         {
             MessageId = record.Id,
             Context = Context.Empty,
-            Attempt = 1
+            Attempt = 1,
+            Headers = new Dictionary<string, string?>()
         }, CancellationToken.None);
     Expect(SmokeIntentHandler.Delivered == "typed", "The statically registered outbox handler did not run");
 }
@@ -347,8 +348,8 @@ public sealed class SmokeOutboxStore : IOutboxStore
         => ValueTask.FromResult(0);
     public ValueTask AtomicRecordDeliveryFailureAsync(NOFOutboxMessage message, string errorMessage, bool permanent = false,
         CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-    public Task<(int Messages, int Compacted, int Completed)> CleanupAsync(DateTime olderThan, CancellationToken cancellationToken)
-        => Task.FromResult((0, 0, 0));
+    public Task<int> CleanupAsync(DateTime olderThan, CancellationToken cancellationToken)
+        => Task.FromResult(0);
 }
 
 public static class SmokeEndpointModule

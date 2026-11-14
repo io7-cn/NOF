@@ -43,6 +43,7 @@
     <Compile Include="..\..\sample\NOF.Sample\Services\RabbitMQMessageClient.cs" Link="Services\RabbitMQMessageClient.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Services\MessageOutboxHandler.cs" Link="Services\MessageOutboxHandler.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Migrations\20261113130000_GenericOutbox.cs" Link="Migrations\GenericOutbox.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114090000_RemoveMessageOrdering.cs" Link="Migrations\RemoveMessageOrdering.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.EntityFrameworkCore\NOF.Infrastructure.EntityFrameworkCore.csproj" />

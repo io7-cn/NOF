@@ -42,7 +42,7 @@ builder.Services.ConfigureRabbitMQ(endpoints =>
 });
 ```
 
-RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；Memory 使用独立端点 API；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
+RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；Memory 使用独立端点 API；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
 
 ## 调用与可靠意图
 
@@ -75,7 +75,7 @@ TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests 和 RejectMisma
 
 旧 Command/Notification Handler 改成返回 Empty 的操作与明确入站 Queue/Subscription 绑定，旧上下文子类改用 InvocationContext＋Origin。即时调用使用具体客户端；延迟 API 改为 IOutbox.EnqueueAsync 加选项。旧分派器与出站路由 API 不保留兼容层。
 
-通用 Outbox 必须在排空旧记录后执行结构迁移，按[发件箱迁移步骤](transactional-outbox.md)部署。此前 Inbox/Broker 路由名变更仍需排空，或为所有租户显式映射旧记录、订阅与顺序状态，备份并保留去重/顺序进度，不猜测未解析路由。
+通用 Outbox 必须在排空旧记录后执行结构迁移，按[发件箱迁移步骤](transactional-outbox.md)部署。此前 Inbox/Broker 路由名变更仍需排空，或为所有租户显式映射旧记录与订阅，备份并保留去重历史，不猜测未解析路由。
 
 ## 聚合拥有的集合
 

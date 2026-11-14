@@ -20,21 +20,12 @@ public sealed class MessageDelivery(IOptions<DeploymentOptions> deployment)
         activity?.SetServiceDeploymentTags(deployment.Value);
         var tenant = context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out var value) && value is string supplied
             ? supplied : Context.Current.TenantId;
-        var headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        var headers = new Dictionary<string, string?>(deliveryContext?.Headers ?? new Dictionary<string, string?>(), StringComparer.OrdinalIgnoreCase)
         {
             [NOFAbstractionConstants.Transport.Headers.MessageId] = (deliveryContext?.MessageId ?? Guid.NewGuid()).ToString(),
             [NOFAbstractionConstants.Transport.Headers.TenantId] = TenantId.Normalize(tenant),
             [NOFAbstractionConstants.Transport.Headers.TraceParent] = Activity.Current?.ToTraceParent()
         };
-        if (deliveryContext?.OrderKey is { } orderKey)
-        {
-            headers[NOFAbstractionConstants.Transport.Headers.OrderKey] = orderKey;
-            headers[NOFAbstractionConstants.Transport.Headers.Sequence] = deliveryContext.Sequence!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (deliveryContext.CompletesOrderKey)
-            {
-                headers[NOFAbstractionConstants.Transport.Headers.CompletesOrderKey] = bool.TrueString;
-            }
-        }
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageId, headers[NOFAbstractionConstants.Transport.Headers.MessageId]);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.TenantId, headers[NOFAbstractionConstants.Transport.Headers.TenantId]);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageType, message.GetType().Name);

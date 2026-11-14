@@ -61,13 +61,13 @@ public class SqliteInMemoryPersistenceTests
         var sender = scope.ServiceProvider.GetRequiredService<IOutbox>();
         await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
         {
-            var state = new NOFOutboxOrderState { OrderKey = "shared", Sequence = 1 };
-            concrete.Set<NOFOutboxOrderState>().Add(state);
-            Assert.Same(state, Assert.Single(concrete.ChangeTracker.Entries<NOFOutboxOrderState>()).Entity);
+            var state = NOFInboxMessage.Create(Guid.NewGuid(), InboxMessageType.Command, "shared", [], "{}");
+            concrete.Set<NOFInboxMessage>().Add(state);
+            Assert.Same(state, Assert.Single(concrete.ChangeTracker.Entries<NOFInboxMessage>()).Entity);
             Assert.NotNull(concrete.Database.CurrentTransaction);
             await publisher.EnqueueAsync(new ScopedTransactionMessage("first"), Context.Current);
             await application.SaveChangesAsync();
-            concrete.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState { OrderKey = "native", Sequence = 2 });
+            concrete.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(Guid.NewGuid(), InboxMessageType.Command, "native", [], "{}"));
             await sender.EnqueueAsync(new ScopedTransactionMessage("second"), Context.Current);
             await application.SaveChangesAsync();
             await application.SaveChangesAsync();
@@ -84,7 +84,7 @@ public class SqliteInMemoryPersistenceTests
 
         using var verificationScope = services.CreateScope();
         var verification = verificationScope.ServiceProvider.GetRequiredService<DbContext>();
-        Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxOrderState>()));
+        Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFInboxMessage>()));
         Assert.Equal(commit ? 2 : 0, await EFQuery.CountAsync(verification.Set<NOFOutboxMessage>()));
     }
 
@@ -150,16 +150,13 @@ public class SqliteInMemoryPersistenceTests
 
         var db = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        db.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState
-        {
-            OrderKey = "efcore-default",
-            Sequence = 1
-        });
+        var id = Guid.NewGuid();
+        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, InboxMessageType.Command, "efcore-default", [], "{}"));
         await db.SaveChangesAsync();
 
-        var orderState = await db.FindAsync<NOFOutboxOrderState>(["efcore-default", 1L]);
-        Assert.NotNull(orderState);
-        Assert.Equal(1, orderState.Sequence);
+        var receipt = await db.FindAsync<NOFInboxMessage>([id, "efcore-default"]);
+        Assert.NotNull(receipt);
+        Assert.Equal("efcore-default", receipt.Route);
     }
 
     [Fact]
@@ -329,16 +326,13 @@ public class SqliteInMemoryPersistenceTests
 
         var db = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        db.Set<NOFOutboxOrderState>().Add(new NOFOutboxOrderState
-        {
-            OrderKey = "default",
-            Sequence = 1
-        });
+        var id = Guid.NewGuid();
+        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, InboxMessageType.Command, "default", [], "{}"));
         await db.SaveChangesAsync();
 
-        var orderState = await db.FindAsync<NOFOutboxOrderState>(["default", 1L]);
-        Assert.NotNull(orderState);
-        Assert.Equal(1, orderState.Sequence);
+        var receipt = await db.FindAsync<NOFInboxMessage>([id, "default"]);
+        Assert.NotNull(receipt);
+        Assert.Equal("default", receipt.Route);
     }
 
     [Fact]
@@ -363,13 +357,16 @@ public class SqliteInMemoryPersistenceTests
 
         var db = scope.ServiceProvider.GetRequiredService<NOFDbContext>();
         var inbox = db.Model.FindEntityType(typeof(NOFInboxMessage));
-        var inboxOrderState = db.Model.FindEntityType(typeof(NOFInboxOrderState));
         var outbox = db.Model.FindEntityType(typeof(NOFOutboxMessage));
-        var outboxOrderState = db.Model.FindEntityType(typeof(NOFOutboxOrderState));
         Assert.NotNull(inbox);
-        Assert.NotNull(inboxOrderState);
         Assert.NotNull(outbox);
-        Assert.NotNull(outboxOrderState);
+        Assert.Null(db.Model.FindEntityType("NOF.Infrastructure.NOFInboxOrderState"));
+        Assert.Null(db.Model.FindEntityType("NOF.Infrastructure.NOFOutboxOrderState"));
+        foreach (var removed in new[] { "OrderKey", "Sequence", "CompletesOrderKey" })
+        {
+            Assert.Null(inbox.FindProperty(removed));
+            Assert.Null(outbox.FindProperty(removed));
+        }
 
         Assert.Equal(nameof(NOFInboxMessage), inbox.GetTableName());
         Assert.Equal(nameof(NOFOutboxMessage), outbox.GetTableName());
@@ -377,34 +374,24 @@ public class SqliteInMemoryPersistenceTests
         Assert.Null(outbox.FindProperty("TenantId"));
         Assert.Equal([nameof(NOFInboxMessage.Id), nameof(NOFInboxMessage.Route)],
             inbox.FindPrimaryKey()!.Properties.Select(static property => property.Name).ToArray());
-        Assert.Equal([nameof(NOFInboxOrderState.Route), nameof(NOFInboxOrderState.OrderKey)],
-            inboxOrderState.FindPrimaryKey()!.Properties.Select(static property => property.Name).ToArray());
-        Assert.Equal([nameof(NOFOutboxOrderState.OrderKey), nameof(NOFOutboxOrderState.Sequence)],
-            outboxOrderState.FindPrimaryKey()!.Properties.Select(static property => property.Name).ToArray());
         Assert.Contains(outbox.GetIndexes(), index =>
             index.Properties.Select(static property => property.Name).SequenceEqual([nameof(NOFOutboxMessage.TraceParent)]));
     }
 
     [Fact]
-    public async Task OrderedInboxClaim_ShouldExecuteAgainstRelationalProvider()
+    public async Task InboxClaim_ShouldExecuteAgainstRelationalProvider()
     {
         using var services = CreateServiceProvider();
         using (var setupScope = services.CreateScope())
         {
             SetTenant(setupScope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
             var dbContext = setupScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-            dbContext.Set<NOFInboxOrderState>().Add(new NOFInboxOrderState
-            {
-                Route = "OrderedHandler",
-                OrderKey = "Producer:Aggregate:1"
-            });
             dbContext.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(
                 Guid.NewGuid(),
                 InboxMessageType.Notification,
                 "OrderedHandler",
                 [1],
-                "{}",
-                new InboxMessageOrder("Producer:Aggregate:1", 1, false)));
+                "{}"));
             await dbContext.SaveChangesAsync();
         }
 
@@ -419,7 +406,7 @@ public class SqliteInMemoryPersistenceTests
         }
 
         var claimedMessage = Assert.Single(claimed);
-        Assert.Equal(1, claimedMessage.Sequence);
+        Assert.Equal(1, claimedMessage.RetryCount);
         Assert.NotNull(claimedMessage.ClaimedBy);
     }
 
@@ -505,6 +492,13 @@ public class SqliteInMemoryPersistenceTests
 
         Assert.NotNull(inbox);
         Assert.NotNull(outbox);
+        Assert.Null(db.Model.FindEntityType("NOF.Infrastructure.NOFInboxOrderState"));
+        Assert.Null(db.Model.FindEntityType("NOF.Infrastructure.NOFOutboxOrderState"));
+        foreach (var removed in new[] { "OrderKey", "Sequence", "CompletesOrderKey" })
+        {
+            Assert.Null(inbox.FindProperty(removed));
+            Assert.Null(outbox.FindProperty(removed));
+        }
         Assert.NotNull(inbox.FindProperty("TenantId"));
         Assert.NotNull(outbox.FindProperty("TenantId"));
     }
@@ -1643,7 +1637,7 @@ public class SqliteInMemoryPersistenceTests
     }
 
     [Fact]
-    public async Task SqliteOutboxClaims_BlockFailedPredecessors_AndFenceOldOwners()
+    public async Task SqliteOutboxClaims_IgnoreFailedRecords_AndFenceOldOwners()
     {
         using var services = CreateServiceProvider();
         using var scope = services.CreateScope();
@@ -1657,8 +1651,6 @@ public class SqliteInMemoryPersistenceTests
             MessageType = "test",
             Payload = [],
             Headers = "{}",
-            OrderKey = "stream",
-            Sequence = 1,
             Status = OutboxMessageStatus.Failed
         });
         session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
@@ -1667,8 +1659,6 @@ public class SqliteInMemoryPersistenceTests
             MessageType = "test",
             Payload = [],
             Headers = "{}",
-            OrderKey = "stream",
-            Sequence = 2
         });
         session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
         {
@@ -1679,8 +1669,10 @@ public class SqliteInMemoryPersistenceTests
         });
         await session.SaveChangesAsync();
         var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-        var first = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
-        Assert.Equal(independent, first.Id);
+        var batch = await store.AtomicClaimPendingMessagesAsync().ToListAsync();
+        Assert.Equal(2, batch.Count);
+        Assert.Contains(batch, message => message.Id == blocked);
+        var first = Assert.Single(batch, message => message.Id == independent);
         await session.Set<NOFOutboxMessage>().Where(message => message.Id == independent)
             .ExecuteUpdateAsync(setters => setters.SetProperty(message => message.ClaimExpiresAtUtc, DateTime.UtcNow.AddSeconds(-1)));
         var second = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());

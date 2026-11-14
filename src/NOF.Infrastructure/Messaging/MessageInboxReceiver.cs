@@ -19,12 +19,11 @@ public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSeria
         await using var scope = services.CreateAsyncScope();
         using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var store = scope.ServiceProvider.GetRequiredService<IInboxStore>();
-        var order = InboxMessageOrdering.Parse(metadata);
         var message = NOFInboxMessage.Create(messageId, kind, consumerId, payload.ToArray(),
-            serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>)), order);
+            serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>)));
         try
         {
-            await store.ReceiveAsync(message, order, cancellationToken).ConfigureAwait(false);
+            await store.ReceiveAsync(message, cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateException)
         {

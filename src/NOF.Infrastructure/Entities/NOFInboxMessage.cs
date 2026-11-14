@@ -19,9 +19,6 @@ public class NOFInboxMessage
     public string? ClaimedBy { get; set; }
     public DateTime? ClaimExpiresAtUtc { get; set; }
     public InboxMessageStatus Status { get; set; } = InboxMessageStatus.Pending;
-    public string? OrderKey { get; set; }
-    public long? Sequence { get; set; }
-    public bool CompletesOrderKey { get; set; }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static NOFInboxMessage Create(
@@ -29,23 +26,16 @@ public class NOFInboxMessage
         InboxMessageType messageType,
         string route,
         byte[] payload,
-        string headers,
-        InboxMessageOrder? order)
+        string headers)
         => new()
         {
             Id = id,
             MessageType = messageType,
             Route = route,
             Payload = payload,
-            Headers = headers,
-            OrderKey = order?.OrderKey,
-            Sequence = order?.Sequence,
-            CompletesOrderKey = order?.CompletesOrderKey ?? false
+            Headers = headers
         };
 }
-
-[EditorBrowsable(EditorBrowsableState.Never)]
-public readonly record struct InboxMessageOrder(string OrderKey, long Sequence, bool CompletesOrderKey);
 
 public enum InboxMessageType
 {

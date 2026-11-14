@@ -19,9 +19,17 @@ await unitOfWork.SaveChangesAsync(ct);
 
 IOutbox.EnqueueAsync returns ValueTask<Guid>. Its ID identifies a staged snapshot, not a completed side effect. Payload serialization happens at enqueue time; later mutation of the original object cannot change the intent. It performs no network call and does not save or commit. Save the same scoped unit of work; an explicit transaction also requires CommitAsync. Disposing or rolling back an unsaved scope discards its intents with its business changes.
 
-The current persistence tenant is authoritative. An explicit mismatching tenant is rejected. Only the normalized tenant and producer trace are persisted; access tokens, claims and arbitrary Context.Items are not replayed. Delivery restores a fresh Context and a fresh DI scope for each attempt, without impersonating the original request user.
+The current persistence tenant is authoritative. An explicit mismatching tenant is rejected. The normalized tenant and producer trace accompany explicitly supplied headers; the current identity, access tokens, claims and arbitrary Context.Items are not copied. Headers are durable data: callers must deliberately choose safe values rather than copying request headers wholesale. Delivery restores a fresh Context and a fresh DI scope for each attempt, without impersonating the original request user.
 
-For a stream, pass new OutboxEnqueueOptions { OrderKey = "order:42", CompletesOrderKey = false }. The final intent can set CompletesOrderKey to true. Keys are qualified by service and tenant persistence, with the existing contiguous sequence allocation. Later records cannot overtake an unfinished or permanently failed predecessor. Independent streams continue processing. Recover a failed stream explicitly; the framework never silently skips its failed intent.
+Pass optional `IReadOnlyDictionary<string, string?> headers` as the third argument. Enqueue copies and serializes the dictionary immediately, including null values. `OutboxDeliveryContext.Headers` exposes a read-only snapshot on every attempt. Header keys are case-insensitive; attempts to supply NOF-managed `X-Message-Id`, `X-Tenant-Id` or `traceparent` fail before staging. MessageDelivery copies custom headers and supplies the stable message ID, authoritative tenant and current attempt trace.
+
+```csharp
+var messageId = await outbox.EnqueueAsync(message, invocation.Context,
+    headers: new Dictionary<string, string?> { ["correlation-id"] = correlationId },
+    cancellationToken: ct);
+```
+
+NOF provides no send/receive ordering guarantee. OutboxEnqueueOptions, sequence allocation, ordering headers/constants, stream leases, gap waiting, completion flags and failure blocking are removed. Old ordering-looking headers are opaque values. CreatedAtUtc/Id sorting only schedules batches; concurrent workers, retries and multiple queues may reorder delivery. A permanently failed record does not block other work. Business versions belong in message data. Infrastructure owns ordering when required, including its persistence and claim scheduling, producer/queue concurrency, and consumer recovery; adding a header or serializing one publisher alone does not guarantee end-to-end order.
 
 ## Infrastructure registration and handlers
 
@@ -43,7 +51,7 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
 }
 ```
 
-OutboxDeliveryContext exposes MessageId, Context, Attempt, OrderKey, Sequence and CompletesOrderKey. It is delivery metadata, not InvocationContext; an intent need not execute a NOF operation. The normal return from a handler must mean that the configured client has met its acceptance contract. Retryable exceptions follow MaxRetryCount and optional RetryDelay; OutboxPermanentFailureException terminates an unrecoverable delivery immediately. Unknown schema IDs/versions and malformed registered JSON also fail permanently, rather than dynamically loading CLR types or guessing an adapter.
+OutboxDeliveryContext exposes MessageId, Context, Attempt and Headers. It is delivery metadata, not InvocationContext; an intent need not execute a NOF operation. The normal return from a handler must mean that the configured client has met its acceptance contract. Retryable exceptions follow MaxRetryCount and optional RetryDelay; OutboxPermanentFailureException terminates an unrecoverable delivery immediately. Unknown schema IDs/versions and malformed registered JSON also fail permanently, rather than dynamically loading CLR types or guessing an adapter.
 
 A CLR message type and a stable (MessageType, SchemaVersion) pair each have exactly one handler per host. Registrations are DI-local and freeze on first use. Represent independently retryable channels with distinct intent types. Preserve old schema registrations or explicitly migrate their records before deploying changed schemas. Register the payload's generated JsonSerializerContext in JsonSerializerOptions.NOF for Native AOT; registry delegates remain statically typed and use IObjectSerializer without runtime CLR-name lookup.
 
@@ -54,7 +62,7 @@ A CLR message type and a stable (MessageType, SchemaVersion) pair each have exac
 await memoryClient.SendAsync("mail.send.v1", message, context, ct);
 await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, payload, ct);
 
-// An outbox adapter forwards stable ID and ordering metadata with this overload.
+// An outbox adapter forwards stable ID and custom headers with this overload.
 await memoryClient.SendAsync("mail.send.v1", message, deliveryContext, ct);
 
 // Inbound only: physical topology is independent of the outbox schema.
@@ -68,7 +76,7 @@ The sample's SubmitDemoOrder handler directly stages SendEmail and OrderCreated,
 
 ## Durable processing and migration
 
-Records use stable string MessageType plus SchemaVersion, Payload, allowlisted Headers, TraceParent, status/attempt/claim fields, NextAttemptAtUtc and optional stream fields. DispatchRoutes and OutboxMessageType are removed. Claims exclude delayed attempts and blocked stream successors. Completion, failure and release are fenced by the claim owner; a stale worker cannot overwrite a newer claimant. Shutdown leaves an uncertain started attempt for lease recovery and releases unstarted work without charging an attempt.
+Records use stable string MessageType plus SchemaVersion, Payload, explicitly staged Headers, TraceParent, status/attempt/claim fields, NextAttemptAtUtc. DispatchRoutes and OutboxMessageType are removed. Claims exclude delayed attempts and live leases. Completion, failure and release are fenced by the claim owner; a stale worker cannot overwrite a newer claimant. Shutdown leaves an uncertain started attempt for lease recovery and releases unstarted work without charging an attempt.
 
 Delivery is at least once. A process can exit after an external side effect and before completion is persisted. Every retry keeps the original MessageId; concrete clients and external systems must honor their chosen idempotency semantics. Multiple external systems in one handler can partially succeed; separate intents when independent recovery is required. Handler-local changes are not automatically committed by the outbox worker.
 
@@ -77,24 +85,26 @@ Breaking upgrade procedure:
 1. Stop producers on the old package set, drain its pending outbox and explicitly resolve failed records. Do not let old workers run against the new schema.
 2. Back up the host and every tenant database, register all new intent schemas and configure their JSON metadata and handlers.
 3. Apply the matching provider migration to each database. The PostgreSQL sample migration 20261113130000_GenericOutbox takes a table lock and rejects any legacy row that is not Sent before replacing legacy type/routes. Historical completed rows become legacy.completed, schema 1; they are never redelivered. No pending payload is automatically reinterpreted.
-4. Deploy the coherent runtime/provider/host set and resume producers. Replace DeferSend/DeferPublish variants with EnqueueAsync and options; replace immediate dispatcher calls with concrete clients. NOFTestScope.EnqueueAsync stages in the existing scope; save that scope explicitly. Test-host immediate Send/Publish wrappers are removed.
+4. Deploy the coherent runtime/provider/host set and resume producers. Replace DeferSend/DeferPublish variants with EnqueueAsync and optional headers; replace immediate dispatcher calls with concrete clients. NOFTestScope.EnqueueAsync stages in the existing scope; save that scope explicitly. Test-host immediate Send/Publish wrappers are removed.
 5. Rollback restores the backup and matching previous packages together. Automatic Down is refused because generic intent schemas cannot be inferred as legacy routes. New schemas must not be opened by old binaries.
 
-The migration is supplied as code; applying it to a live PostgreSQL database is a deployment step. SQLite regressions exercise the shared transactional store, stream blocking and owner fencing. Other tests cover snapshot/rollback, retry identity/scopes, independent subscriptions, tenant isolation, cancellation recovery and reflection-disabled typed delivery. Broker acknowledgement behavior remains the concrete client's responsibility. The optional [RabbitMQ sample integration test](rabbitmq-sample.md) exercises live queue/fanout delivery and offline recovery; it does not validate a PostgreSQL deployment.
+For hosts already using generic intents, stop all producers and workers, drain or explicitly migrate outstanding ordered Outbox/Inbox work into the infrastructure implementation, resolve blocked sequences, and back up every tenant database. Apply `20261114090000_RemoveMessageOrdering` after `GenericOutbox`. It locks both receipt tables and both order-state tables and refuses unfinished ordered work or blocked inbox state. It drops the two order-state tables, their indexes and the three ordering columns on each message table. IDs, payloads, Headers, statuses, retry metadata and receipt history remain intact, including unordered pending records. Archive old order state if needed before applying it. Historical migrations are unchanged; no conversion from old sequence columns to headers is guessed. Rollback requires the matching backup and binaries; Down refuses to invent lost state. Custom stores remove ordering from ReceiveAsync/claims and now return only an integer count from CleanupAsync.
+
+The migration is supplied as code; applying it to a live PostgreSQL database is a deployment step. SQLite regressions exercise the shared transactional store, independent claims and owner fencing. Other tests cover snapshot/rollback, retry identity/scopes, independent subscriptions, tenant isolation, cancellation recovery and reflection-disabled typed delivery. Broker acknowledgement behavior remains the concrete client's responsibility. The optional [RabbitMQ sample integration test](rabbitmq-sample.md) exercises live queue/fanout delivery and offline recovery; it does not validate a PostgreSQL deployment.
 
 ## Capability assembly and worker hosts
 
-AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddInbox registers the complete transport-independent Inbox capability. AddMemoryMessaging and AddRabbitMQ with configured endpoints call AddInbox; client-only AddRabbitMQ installs no consumers or Inbox workers. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
+AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddInbox registers the complete transport-independent Inbox capability. AddMemoryMessaging and ConfigureRabbitMQ with queue mappings call AddInbox; client-only AddRabbitMQ installs no consumers or Inbox workers. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
 
 ```csharp
 builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
 ```
 
-A producer-only host still stages snapshots and commits its unit of work, but does not claim, deliver, retry or clean up messages. Inbox.RunWorkers=false similarly accepts durable receipts without processing or cleanup. Independent worker hosts enable the matching capability with the same schemas/bindings and appropriate persistence/transport configuration. Disabling workers never discards pending records or resets ordering/ownership state. No new schema migration is required by capability gating; existing generic-outbox migrations still apply when upgrading old schemas.
+A producer-only host still stages snapshots and commits its unit of work, but does not claim, deliver, retry or clean up messages. Inbox.RunWorkers=false similarly accepts durable receipts without processing or cleanup. Independent worker hosts enable the matching capability with the same schemas/bindings and appropriate persistence/transport configuration. Disabling workers never discards pending records or resets ownership state. No new schema migration is required by capability gating; existing generic-outbox migrations still apply when upgrading old schemas.
 
-Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. Default ordered stream allocation resolves provider persistence only when that feature is actually used. AddNOF retains convenient cache, serialization, object storage and ordinary native-host defaults; users do not register every low-level service manually.
+Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. AddNOF retains convenient cache, serialization, object storage and ordinary native-host defaults; users do not register every low-level service manually.
 
 Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.
 
-Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-migration) before changing existing Inbox and order-state routes.
+Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-migration) before changing existing Inbox receipt routes.
