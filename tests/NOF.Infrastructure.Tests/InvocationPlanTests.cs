@@ -14,7 +14,7 @@ public sealed class InvocationPlanTests
     [Fact]
     public async Task Scopes_NestInOrder_WithStableTiesAndOnlyOneInstancePerType()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         services.AddSingleton<List<string>>();
         services.AddInvocationFilters(filters =>
         {
@@ -37,7 +37,7 @@ public sealed class InvocationPlanTests
     [InlineData(InvocationOrigin.Message)]
     public async Task Exclude_RemovesRuntimeAndDescription_ReenableUsesInnerPosition(InvocationOrigin origin)
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         services.AddSingleton<List<string>>();
         services.AddScoped<CatalogFilter>(_ => throw new InvalidOperationException("Excluded filter constructed"));
         services.AddInvocationFilters(filters =>
@@ -62,14 +62,14 @@ public sealed class InvocationPlanTests
     [Fact]
     public void ExcludedFilter_DescribeIsNeverCalled_AndRulesAreHostLocalAndFrozen()
     {
-        var one = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var one = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         one.AddInvocationFilters(filters =>
         {
             filters.Global.Use<InvalidDescription>();
             filters.Service<IService>().Exclude<InvalidDescription>();
         });
         using var first = one.BuildServiceProvider();
-        using var second = new ServiceCollection().UseInMemoryInvocationPipeline().BuildServiceProvider();
+        using var second = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read")).BuildServiceProvider();
         Assert.Empty(first.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)).FailureCases);
         Assert.Empty(second.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)).Filters);
         Assert.Throws<InvalidOperationException>(() => one.AddInvocationFilter<First>());
@@ -78,7 +78,7 @@ public sealed class InvocationPlanTests
     [Fact]
     public void Rules_DoNotLeakToSiblingServicesOrOperations()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         services.AddInvocationFilters(filters =>
         {
             filters.Service<IService>().Use<First>();
@@ -96,7 +96,7 @@ public sealed class InvocationPlanTests
     [InlineData(false)]
     public void SameScope_UseAndExcludeUseTheLastDeclaration(bool excludeFirst)
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         services.AddInvocationFilters(filters =>
         {
             if (excludeFirst)
@@ -118,7 +118,7 @@ public sealed class InvocationPlanTests
     [Fact]
     public void MoreSpecificOrder_OverridesWithoutConstructingFilters()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"));
         services.AddInvocationFilters(filters =>
         {
             filters.Global.Use<CatalogFilter>(10);
@@ -127,7 +127,7 @@ public sealed class InvocationPlanTests
         using var provider = services.BuildServiceProvider();
         var plan = provider.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read));
         Assert.Equal(20, Assert.Single(plan.Filters).Order);
-        using var sameScope = new ServiceCollection().UseInMemoryInvocationPipeline()
+        using var sameScope = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read"))
             .AddInvocationFilters(filters => filters.Global.Use<First>(1).Use<First>(2)).BuildServiceProvider();
         Assert.Equal(2, Assert.Single(sameScope.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)).Filters).Order);
     }
@@ -135,7 +135,7 @@ public sealed class InvocationPlanTests
     [Fact]
     public async Task Describe_SelectsOnlyOwnDeclaredCases_AndRuntimeRejectsUndeclaredValues()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddInvocationFilter<SubsetFilter>();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read")).AddInvocationFilter<SubsetFilter>();
         using var provider = services.BuildServiceProvider();
         var pipeline = provider.GetRequiredService<IInvocationPipeline>();
         var plan = pipeline.Describe(CreateContext(Read));
@@ -143,14 +143,14 @@ public sealed class InvocationPlanTests
         Assert.Throws<InvalidOperationException>(() => plan.Validate(new CatalogFilter.Conflict(new ConflictDetails(42))));
         var result = await pipeline.ExecuteAsync(CreateContext(Read), new Query(), (_, _, _) => throw new InvalidOperationException("Should short circuit"), default);
         Assert.IsType<CatalogFilter.Denied>(result);
-        using var invalid = new ServiceCollection().UseInMemoryInvocationPipeline().AddInvocationFilter<InvalidDescription>().BuildServiceProvider();
+        using var invalid = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read")).AddInvocationFilter<InvalidDescription>().BuildServiceProvider();
         Assert.Throws<InvalidOperationException>(() => invalid.GetRequiredService<IInvocationPipeline>().Describe(CreateContext(Read)));
     }
 
     [Fact]
     public async Task Filter_ReturnCanTransformBusinessValue_WithoutMutableContextState()
     {
-        using var provider = new ServiceCollection().UseInMemoryInvocationPipeline().AddInvocationFilter<Transform>().BuildServiceProvider();
+        using var provider = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read")).AddInvocationFilter<Transform>().BuildServiceProvider();
         var result = await provider.GetRequiredService<IInvocationPipeline>().ExecuteAsync(CreateContext(Read), new Query(), (_, _, _) => ValueTask.FromResult<object?>("business"), default);
         Assert.Equal("business filtered", result);
         Assert.Throws<InvalidOperationException>(() => new InvocationPlan(Read, InvocationOrigin.Local, [], []).Validate(42));
@@ -159,7 +159,7 @@ public sealed class InvocationPlanTests
     [Fact]
     public void Describe_UsesCapturedImplementationMetadata_WithoutConstructingHandlerOrFilter()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddInvocationFilter<MetadataFilter>();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("read", "Read")).AddInvocationFilter<MetadataFilter>();
         var descriptor = Read;
         var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
         registry.AddOperationImplementation(typeof(ServiceOperation<Query, string>), typeof(Handler));
@@ -242,7 +242,7 @@ public sealed class InvocationPlanTests
         public static IReadOnlyList<InvocationFailureCase> FailureCases => CatalogFilter.FailureCases;
         public static void Describe(InvocationDescriptionContext description)
         {
-            if (description.GetMetadata<RequirePermissionAttribute>()?.Permission == "read")
+            if (description.GetMetadata<RequirePermissionAttribute>()?.Permissions.Contains("read") == true)
             {
                 description.Include<CatalogFilter.Denied>();
             }

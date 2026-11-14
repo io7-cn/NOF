@@ -63,7 +63,7 @@ IOperationExecutor 在宿主现有作用域内执行已确定的操作并等待�
 
 Application 中的 InvocationContext 组合语义 Context，提供 Operation、InvocationId、Origin（Local/Http/Message）、实现策略元数据。过滤器通过 WithContext/WithTenantId 替换语义信息，视图保留调用身份，结果通过返回值传播。Context.Current 保存语义 Context；向嵌套语义 API 传递 invocation.Context。身份唯一来源仍是作用域内的 IUserContext。
 
-所有入口执行相同的契约与实现授权策略。消息入口不会反序列化生产者身份或访问令牌；宿主在授权前通过所选管道/过滤器建立消费者身份，匿名消费者不能调用受保护操作。宿主应限制消息代理入口和租户头的信任边界。严格租户策略适用于所有操作来源。
+所有入口检查仅声明在 Contract 接口/操作方法上的权限，Handler 不再声明权限。消息入口不会反序列化生产者身份或访问令牌；宿主在授权前通过所选管道/过滤器建立消费者身份，匿名消费者不能调用受保护操作。宿主应限制消息代理入口和租户头的信任边界。严格租户策略适用于所有操作来源。
 
 HTTP 状态码和认证挑战头由 HttpRequestInboundAdapter 处理；RejectionReason 用 Policy/Authentication/Authorization 表达原因，执行上下文不携带 HTTP 状态码。策略拒绝与已完成的业务失败 union 区分。技术异常继续传播；Inbox 将策略拒绝记录为终止失败，技术故障按既有策略重试。消息代理在可靠接受收件记录后确认，不等待业务执行完成。
 

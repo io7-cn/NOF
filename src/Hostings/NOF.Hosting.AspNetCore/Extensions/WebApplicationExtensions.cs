@@ -6,6 +6,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 using NOF.Abstraction;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace NOF.Hosting.AspNetCore;
@@ -15,6 +16,8 @@ public static class WebApplicationExtensions
 {
     private static readonly object RegistrationKey = new();
     /// <summary>Registers execution and HTTP adapter prerequisites, including JSON, ProblemDetails and OpenAPI, without building or starting the application.</summary>
+    // OpenAPI 3.11 uses this type as a new()-constrained generic argument even when no reference is constructed.
+    [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor, typeof(OpenApiReferenceWithDescriptionAndSummary))]
     public static WebApplicationBuilder AddNOF(this WebApplicationBuilder builder)
     {
         var properties = ((IHostApplicationBuilder)builder).Properties;

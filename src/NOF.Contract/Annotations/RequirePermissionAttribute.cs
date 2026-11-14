@@ -3,25 +3,22 @@ namespace NOF.Contract;
 /// <summary>
 /// Permission requirement attribute for marking handlers or messages that need specific permissions
 /// </summary>
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
-public sealed class RequirePermissionAttribute : MetadataAttribute
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
+public sealed class RequirePermissionAttribute : Attribute, IPermissionMetadata
 {
-    public const string MetadataKey = "api.permission";
-
-    /// <summary>
-    /// Required permission value.
-    /// Empty string means authentication is required but no specific permission is required.
-    /// </summary>
-    public string Permission => Value ?? string.Empty;
-
-    /// <summary>
-    /// Constructor
-    /// </summary>
-    /// <param name="permission">
-    /// Required permission value. Use empty string to require authentication only.
-    /// </param>
-    public RequirePermissionAttribute(string permission = "")
-        : base(MetadataKey, permission)
+    /// <summary>Creates a nonempty permission group; multiple groups at one declaration are combined with AND.</summary>
+    public RequirePermissionAttribute(params string[] permissions)
     {
+        ArgumentNullException.ThrowIfNull(permissions);
+        if (permissions.Length == 0 || permissions.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("Declare at least one nonblank permission. Use RequireAuthenticated for login-only access.", nameof(permissions));
+        }
+        Permissions = Array.AsReadOnly(permissions.ToArray());
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> Permissions { get; }
+    /// <inheritdoc />
+    public new PermissionMatch Match { get; set; } = PermissionMatch.All;
 }

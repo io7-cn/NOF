@@ -9,7 +9,7 @@ public abstract class ServiceOperationDescriptor
 {
     /// <summary>Creates execution metadata with a complete Application-owned output type.</summary>
     protected ServiceOperationDescriptor(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)] Type serviceType,
         string operationName, bool allowsNullResponse)
     {
         ArgumentNullException.ThrowIfNull(serviceType);
@@ -21,7 +21,7 @@ public abstract class ServiceOperationDescriptor
             ?? throw new ArgumentException($"Operation '{Id}' does not exist.", nameof(operationName));
     }
     /// <summary>Gets the declaring contract.</summary>
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
     public Type ServiceType { get; }
     /// <summary>Gets the declared operation name.</summary>
     public string OperationName { get; }
@@ -44,7 +44,7 @@ public sealed class ServiceOperationDescriptor<TRequest, TResponse> : ServiceOpe
 {
     /// <summary>Creates a typed execution descriptor and validates the declared input.</summary>
     public ServiceOperationDescriptor(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)] Type serviceType,
         string operationName, bool allowsNullResponse = false, IReadOnlyList<ServiceOperationResultCase>? resultCases = null) : base(serviceType, operationName, allowsNullResponse)
     {
         if (MethodInfo.GetParameters() is not [{ ParameterType: var input }] || input != typeof(TRequest))

@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Authorization;
 using NOF.Contract;
 using System.Reflection;
 using System.Security.Claims;
@@ -15,6 +16,8 @@ public interface IInboundAuthorizationHandler
 
 public sealed class InboundAuthorizationContext
 {
+    /// <summary>Gets the immutable declaration policy shared with invocation description.</summary>
+    public required AuthorizationPolicy Policy { get; init; }
     public required ClaimsPrincipal User { get; init; }
 
     public required Context ExecutionContext { get; init; }

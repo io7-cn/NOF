@@ -7,7 +7,7 @@ namespace NOF.Application;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public interface IApplicationServiceType
 {
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
     static abstract Type ServiceType { get; }
 }
 
@@ -52,9 +52,9 @@ public abstract class ApplicationService;
 /// <summary>
 /// Typed base class for an application service container.
 /// </summary>
-public abstract class ApplicationService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TService> : ApplicationService, IApplicationServiceType
+public abstract class ApplicationService<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)] TService> : ApplicationService, IApplicationServiceType
     where TService : class, IApplicationService
 {
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
     public static Type ServiceType => typeof(TService);
 }

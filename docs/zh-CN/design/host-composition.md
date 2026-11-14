@@ -118,3 +118,5 @@ Snowflake 改为 NOF.Infrastructure 命名空间；检查 IdGenerator.Current �
 PersistedSigningKey、RevokedRefreshToken 表保留在活动模型之外，不修改业务与消息的负载、Headers、ID、租约或去重历史。
 不能把旧哈希、加密密钥、授权码或刷新令牌直接解释为 OpenIddict 记录。停止旧程序、备份各数据库后，审查新客户端和权限配置、
 凭据轮换，并重新认证，或另行设计并审查明确的过渡方案。Down 要求恢复匹配备份和包，不猜测反向转换。本轮源码验证不升级真实数据库。
+
+权限检查由 NOF.Authorization 提供。AddNOF/AddNOFUI 装配默认检查器与 Claim 授予来源，宿主通过 AddPermissions 显式添加 PermissionDefinition。权限仅声明在 Contract 接口/方法上，UI 直接按标识检查。见[授权指南](authorization.md)。

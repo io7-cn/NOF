@@ -44,6 +44,7 @@ Persistence uses application-owned aggregate repositories, DTO query ports and I
 | [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, validation and ID generator contract                                       |
 | [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - application service contracts, DTOs and declared operation outcomes |
 | [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - application operations, handlers, mapping, caching and object-storage contracts              |
+| [`NOF.Authorization`](https://www.nuget.org/packages/NOF.Authorization) | Shared permission checks and catalogs, independent of Application/Domain and HTTP |
 | [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Native host integration - application-part registration, deployment options, and JWT identity primitives             |
 | [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - operation execution, explicit optional capabilities and transactional messaging |
 | [`NOF.Infrastructure.AmazonS3`](https://www.nuget.org/packages/NOF.Infrastructure.AmazonS3)                                       | AWS S3 and S3-compatible object-storage rider                                                                           |
@@ -131,6 +132,7 @@ The [RabbitMQ sample](docs/en/design/rabbitmq-sample.md) ([简体中文](docs/zh
 NOF.Abstraction                <- Shared annotations, user context, in-memory events
 NOF.Domain                     <- Value objects, domain utilities and ID generation
 NOF.Contract                   <- RPC contracts, payload models, business outcomes
+NOF.Authorization              <- Contract permission policies, grant checks and permission catalogs
 NOF.Application                <- Application operations, policies, work units, mapping and caching
 NOF.Hosting                    <- Native host integration and deployment options
 NOF.Infrastructure             <- Builder defaults, shared runtime pipeline, and auth resource server
@@ -182,3 +184,5 @@ This repository uses Central Package Management via `Directory.Packages.props`.
 This project is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 Expected use-case failures are declared on non-partial Contract interfaces with FailureCase; concrete Result and branch types are generated in Application operations. Every case implements IFailure with Title/Detail, optionally typed Error; dispatch uses the concrete type. Generic HTTP maps use MapGet<Service.Operation>, native groups and explicit feature mapping. See the [guide](docs/en/design/expected-failures.md) ([简体中文](docs/zh-CN/design/expected-failures.md)).
+
+Permission declarations, catalogs and shared checks are described in the [authorization guide](docs/en/design/authorization.md) ([简体中文](docs/zh-CN/design/authorization.md)).

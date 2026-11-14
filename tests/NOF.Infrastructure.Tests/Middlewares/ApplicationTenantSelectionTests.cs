@@ -91,15 +91,15 @@ public sealed class ApplicationTenantSelectionTests
 
 public interface IHostTenantTestService : IApplicationService
 {
-    [RequirePermission]
+    [RequireAuthenticated]
     Testing.TestOutcome Host(Empty request);
 
-    [Metadata("NOF.TENANT.USE_HOST", "true")]
+    [LegacyTenantHint(true)]
     Testing.TestOutcome MetadataHost(Empty request);
 
     Testing.TestOutcome Regular(Empty request);
 
-    [Metadata("NOF.TENANT.USE_HOST", "false")]
+    [LegacyTenantHint(false)]
     Testing.TestOutcome Disabled(Empty request);
 }
 
@@ -164,4 +164,11 @@ public sealed class ApplicationHostSelectionFilter : IInvocationFilter
         using var binding = Context.PushCurrent(host.Context);
         return await next(host, input, ct);
     }
+}
+
+// Application-owned metadata is deliberately ignored by NOF authorization.
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class LegacyTenantHintAttribute(bool useHost) : Attribute
+{
+    public bool UseHost { get; } = useHost;
 }

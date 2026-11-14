@@ -9,9 +9,11 @@ public sealed class InvocationPlan
 {
     /// <summary>Creates an immutable host plan.</summary>
     public InvocationPlan(ServiceOperationDescriptor operation, InvocationOrigin origin,
-        IEnumerable<InvocationFilterRegistration> filters, IEnumerable<InvocationFailureCase> failures)
+        IEnumerable<InvocationFilterRegistration> filters, IEnumerable<InvocationFailureCase> failures,
+        InvocationAuthorizationPolicy? authorization = null)
     {
         Operation = operation;
+        Authorization = authorization;
         Origin = origin;
         Filters = Array.AsReadOnly(filters.ToArray());
         var entries = failures.ToArray();
@@ -23,6 +25,8 @@ public sealed class InvocationPlan
     }
     /// <summary>Gets the operation described by this plan.</summary>
     public ServiceOperationDescriptor Operation { get; }
+    /// <summary>Gets the cached authorization snapshot; custom engines may supply their own effective policy.</summary>
+    public InvocationAuthorizationPolicy? Authorization { get; }
     /// <summary>Gets its entry origin.</summary>
     public InvocationOrigin Origin { get; }
     /// <summary>Gets effective filters with their scope provenance.</summary>

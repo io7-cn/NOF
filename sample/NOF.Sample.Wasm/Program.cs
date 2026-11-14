@@ -3,6 +3,7 @@ using NOF.Sample;
 using NOF.Sample.UI.Services;
 
 var builder = Microsoft.AspNetCore.Components.WebAssembly.Hosting.WebAssemblyHostBuilder.CreateDefault(args).AddNOF();
+builder.Services.AddPermissions(SamplePermissions.Definitions);
 
 builder.Services.AddScoped<SampleMessageService>();
 builder.Services.AddScoped<ISampleApi, HttpSampleApi>();

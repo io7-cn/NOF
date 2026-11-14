@@ -34,6 +34,7 @@ public sealed class InvocationContext
     /// <summary>Gets the input type.</summary>
     public Type InputType => Operation.RequestType;
     /// <summary>Gets the service contract.</summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
     public Type ServiceType => Operation.ServiceType;
     /// <summary>Gets the contract method.</summary>
     public MethodInfo ServiceMethodInfo => Operation.MethodInfo;

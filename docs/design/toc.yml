@@ -73,3 +73,8 @@
   href: ../en/design/rabbitmq-sample.md
 - name: RabbitMQ 双服务示例
   href: ../zh-CN/design/rabbitmq-sample.md
+
+- name: Contract authorization and permission catalogs
+  href: ../en/design/authorization.md
+- name: 契约授权与权限目录
+  href: ../zh-CN/design/authorization.md

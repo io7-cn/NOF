@@ -6,6 +6,12 @@ namespace NOF.UI.Tests.Extensions;
 public class ServiceCollectionExtensionsTests
 {
     [Fact]
+    public void UiAuthorization_DoesNotReferenceApplicationDomainOrInfrastructure()
+    {
+        Assert.DoesNotContain(typeof(global::NOF.UI.Components.AuthGuard).Assembly.GetReferencedAssemblies(),
+            assembly => assembly.Name is "NOF.Application" or "NOF.Domain" or "NOF.Infrastructure");
+    }
+    [Fact]
     public void AddNOFUI_ShouldRegisterPackageDefaults()
     {
         var services = new ServiceCollection();

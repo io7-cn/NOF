@@ -43,6 +43,9 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
+builder.AddApplicationService<PermissionDemoService>();
+builder.Services.AddPermissions(SamplePermissions.Definitions);
+builder.Services.AddNOFUI();
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.Services.AddScoped<MessageDelivery>();
 builder.Services.AddOutbox();
@@ -97,6 +100,7 @@ app.UseAuthorization();
 app.UseNOF();
 app.MapConfigNodeEndpoints();
 app.MapMessageDispatchEndpoints();
+app.MapPermissionDemoEndpoints();
 if (app.Environment.IsDevelopment())
 {
     app.MapOAuthDemoEndpoints();

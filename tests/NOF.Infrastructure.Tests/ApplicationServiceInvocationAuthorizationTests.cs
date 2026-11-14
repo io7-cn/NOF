@@ -126,7 +126,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
 
     private static ServiceProvider BuildServiceProvider()
     {
-        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddPermissions(new PermissionDefinition("fleet.read", "Read fleets"));
         services.AddLogging();
 
         services.AddScoped<IUserContext, UserContext>();

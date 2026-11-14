@@ -100,8 +100,13 @@ public sealed class InvocationPipelineTests
     {
         HandlerType = typeof(InvocationPipelineTests),
         HandlerMethodInfo = typeof(InvocationPipelineTests).GetMethod(nameof(FilterRegistration_AloneDoesNotSelectOrRunAnEngine))!,
-        Operation = new InvocationTestDescriptor(typeof(object), nameof(ToString), typeof(object), typeof(string))
+        Operation = new ServiceOperationDescriptor<object, string>(typeof(IPipelineContract), nameof(IPipelineContract.Execute))
     };
+
+    public interface IPipelineContract : IApplicationService
+    {
+        string Execute(object request);
+    }
 
     public sealed class HostPipeline : IInvocationPipeline
     {

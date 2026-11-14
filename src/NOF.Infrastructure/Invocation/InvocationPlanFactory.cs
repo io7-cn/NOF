@@ -1,4 +1,5 @@
 using NOF.Application;
+using NOF.Authorization;
 using System.Collections.Concurrent;
 
 namespace NOF.Infrastructure;
@@ -9,7 +10,7 @@ public sealed record InvocationPlanHostConfiguration(bool CustomAuthorization,
 
 /// <summary>Builds and caches execution and description from the same effective rule set.</summary>
 public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, ApplicationServiceRegistry services,
-    InvocationPlanHostConfiguration configuration)
+    InvocationPlanHostConfiguration configuration, PermissionCatalog permissions)
 {
     private readonly ConcurrentDictionary<(ServiceOperationDescriptor, Type, InvocationOrigin), InvocationPlan> _plans = new();
     /// <summary>Describes captured registration metadata without resolving scoped application services.</summary>
@@ -34,11 +35,12 @@ public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, Applic
     {
         var filters = rules.Resolve(context.ServiceType, context.Operation.Id);
         var policy = InvocationAuthorizationPolicy.Resolve(context.ServiceType, context.ServiceMethodInfo,
-            context.HandlerType, context.HandlerMethodInfo, new TenantAuthorizationOptions
+            new TenantAuthorizationOptions
             {
                 RequireAuthenticatedTenant = configuration.RequireAuthenticatedTenant,
                 RejectMismatchedTenant = configuration.RejectMismatchedTenant
             }, configuration.CustomAuthorization);
+        permissions.Validate(policy.Authorization);
         var failures = new List<InvocationFailureCase>();
         foreach (var filter in filters)
         {
@@ -46,7 +48,7 @@ public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, Applic
             filter.Describe(description);
             failures.AddRange(description.Included);
         }
-        return new(context.Operation, context.Origin, filters, failures);
+        return new(context.Operation, context.Origin, filters, failures, policy);
     }
     /// <summary>Validates rule conflicts for every known operation before the selected engine starts serving.</summary>
     public void ValidateConfiguration()

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Authorization;
 using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics;
@@ -16,7 +17,8 @@ namespace NOF.Infrastructure;
 public sealed partial class AuthorizationInvocationFilter(
     IUserContext userContext,
     IInboundAuthorizationHandler authorizationHandler,
-    IOptions<TenantAuthorizationOptions> tenantOptions) :
+    IOptions<TenantAuthorizationOptions> tenantOptions,
+    IInvocationPlanProvider? plans = null) :
     IInvocationFilter
 {
     private readonly TenantAuthorizationOptions _tenantOptions = tenantOptions.Value;
@@ -31,18 +33,25 @@ public sealed partial class AuthorizationInvocationFilter(
     /// <inheritdoc />
     public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        var result = await authorizationHandler.AuthorizeAsync(new InboundAuthorizationContext
+        var denial = ValidateRequestTenant(context);
+        var trusted = WithTrustedTenant(context);
+        if (denial is null)
         {
-            User = userContext.User,
-            ExecutionContext = context.Context,
-            Input = input,
-            HandlerType = context.HandlerType,
-            HandlerMethodInfo = context.HandlerMethodInfo,
-            ServiceType = context.ServiceType,
-            ServiceMethodInfo = context.ServiceMethodInfo,
-            InputType = context.InputType
-        }, cancellationToken).ConfigureAwait(false);
-        var denial = GetDenial(result) ?? ValidateRequestTenant(context);
+            var result = await authorizationHandler.AuthorizeAsync(new InboundAuthorizationContext
+            {
+                Policy = plans?.Describe(context.Operation, context.Origin).Authorization?.Authorization
+                    ?? AuthorizationPolicyResolver.Resolve(context.ServiceType, context.ServiceMethodInfo),
+                User = userContext.User,
+                ExecutionContext = trusted.Context,
+                Input = input,
+                HandlerType = context.HandlerType,
+                HandlerMethodInfo = context.HandlerMethodInfo,
+                ServiceType = context.ServiceType,
+                ServiceMethodInfo = context.ServiceMethodInfo,
+                InputType = context.InputType
+            }, cancellationToken).ConfigureAwait(false);
+            denial = GetDenial(result);
+        }
         if (denial is not null)
         {
             return denial.Reason switch
@@ -52,7 +61,7 @@ public sealed partial class AuthorizationInvocationFilter(
                 _ => new PolicyDenied(new(denial.Result.Title), denial.Result.Detail)
             };
         }
-        return await next(WithTrustedTenant(context), input, cancellationToken);
+        return await next(trusted, input, cancellationToken);
     }
 
     /// <summary>Selects failures from the same declaration policy used by the authorization provider.</summary>

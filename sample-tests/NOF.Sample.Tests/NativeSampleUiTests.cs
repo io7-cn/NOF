@@ -16,10 +16,13 @@ public class NativeSampleUiTests
     [InlineData(typeof(StreamingDemo), "开始流式调用")]
     [InlineData(typeof(OidcDemo), "Authorize URL Builder")]
     [InlineData(typeof(OAuthChainDemo), "生成 Client")]
+    [InlineData(typeof(PermissionsDemo), "sample.permissions.read")]
     public async Task DemoPagesRenderWithNativeControls(Type component, string expectedText)
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddNOFUI();
+        services.AddPermissions(SamplePermissions.Definitions);
         services.AddScoped<SampleMessageService>();
         services.AddSingleton<NavigationManager, SampleNavigationManager>();
         services.AddScoped(_ => new HttpClient(new RootNodesHandler()) { BaseAddress = new Uri("http://localhost/") });
@@ -33,7 +36,7 @@ public class NativeSampleUiTests
 
         Assert.Contains(expectedText, WebUtility.HtmlDecode(html));
         Assert.DoesNotContain("ant-", html);
-        Assert.Contains("<button", html);
+        Assert.Contains(component == typeof(PermissionsDemo) ? "<table" : "<button", html);
     }
 
     public sealed class SampleNavigationManager : NavigationManager

@@ -23,6 +23,7 @@ var nameJson = JsonSerializer.Serialize(nodeName, smokeJson.GetRequiredTypeInfo<
 Expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");
 var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.Services.AddPermissions(new PermissionDefinition("order.read", "Read orders"));
 builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
@@ -179,7 +180,13 @@ public sealed record UpdateBody
 {
     public required string State { get; init; }
 }
-public interface IOrderService : IApplicationService
+public interface IProtectedOrderAccess
+{
+    [RequirePermission("order.read")]
+    PlainDecision ReadProtected(ReadOrderRequest request);
+}
+
+public interface IOrderService : IApplicationService, IProtectedOrderAccess
 {
     PlainDecision Update(UpdateOrderRequest request);
     PlainDecision Read(ReadOrderRequest request);
@@ -188,8 +195,7 @@ public interface IOrderService : IApplicationService
     OrderDto? Find(ReadOrderRequest request);
     PlainDecision Decide(ReadOrderRequest request);
     OrderReceipt ReadWithMessage(ReadOrderRequest request);
-    [RequirePermission("order.read")]
-    PlainDecision ReadProtected(ReadOrderRequest request);
+    new PlainDecision ReadProtected(ReadOrderRequest request);
 }
 
 public sealed class UpdateOrderRequest

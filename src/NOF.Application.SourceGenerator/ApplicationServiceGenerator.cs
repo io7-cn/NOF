@@ -108,6 +108,12 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var operationBase = $"global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>";
             sb.AppendLine($"    public abstract class {method.Name} : {operationBase}, global::NOF.Application.IServiceOperationDefinition");
             sb.AppendLine("    {");
+            foreach (var metadataInterface in serviceInterface.AllInterfaces.Append(serviceInterface)
+                .Where(type => type.GetMembers().OfType<IMethodSymbol>().Any(member => member.MethodKind == MethodKind.Ordinary)))
+            {
+                sb.AppendLine($"        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicMethods, typeof({metadataInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]");
+            }
+            sb.AppendLine($"        static {method.Name}() {{ }}");
             var serviceTypeName = serviceInterface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var allowNull = ExpectedFailureModel.AllowsNull(method);
             if (allowNull)

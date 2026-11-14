@@ -48,6 +48,7 @@ public sealed class TenantRequestAuthorizationTests
         using var rsa = RSA.Create(2048);
         var key = new RsaSecurityKey(rsa) { KeyId = "test-key" };
         var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.Services.AddPermissions(new PermissionDefinition("platform.manage", "Manage platform"));
         builder.WebHost.UseTestServer();
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
@@ -152,13 +153,13 @@ public sealed class TenantRequestAuthorizationTests
 
     public interface ITenantService : IApplicationService
     {
-        [RequirePermission]
+        [RequireAuthenticated]
         Testing.TestOutcome<string> Tenant(Empty request);
 
         [RequirePermission("platform.manage")]
         Testing.TestOutcome<string> Host(Empty request);
 
-        [RequirePermission]
+        [RequireAuthenticated]
         Testing.TestOutcome<IAsyncEnumerable<string>> Stream(Empty request);
     }
 

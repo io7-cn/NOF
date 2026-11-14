@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Authorization;
 using NOF.Contract;
 using System.Security.Claims;
 using Xunit;
@@ -226,31 +227,19 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [Fact]
-    public async Task InvokeAsync_Request_ShouldRequireInputAndExecutionPermissions()
+    public async Task InvokeAsync_ContractPermission_DoesNotRequireAnAdditionalHandlerPermission()
     {
-        var userContext = new UserContext();
-        userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-method"));
-        var middleware = CreateMiddleware(userContext);
-
-        var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler));
-        var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
-
-        var denied = AsFailure(deniedOutcome);
-        Assert.Equal("Permission denied", denied.Title);
-
-        userContext.Logout();
-        userContext.User.AddIdentity(CreateAuthenticatedIdentity(
-            ClaimTypes.Permission, "input-method",
-            ClaimTypes.Permission, "execute-method"));
-        var allowedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler));
-        var nextCalled = false;
-        await middleware.InvokeAsync(allowedContext, new TestRequest(), (_, _, _) =>
+        var user = new UserContext();
+        user.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-method"));
+        var middleware = CreateMiddleware(user);
+        var executed = false;
+        await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.OverridePermissionMethod),
+            handlerMethodName: nameof(TestHandler.ExecutePermissionHandler)), new TestRequest(), (_, _, _) =>
         {
-            nextCalled = true;
+            executed = true;
             return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
-
-        Assert.True(nextCalled);
+        Assert.True(executed);
     }
 
     [Fact]
@@ -295,36 +284,22 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [Fact]
-    public async Task InvokeAsync_Command_ShouldRequireMessageAndHandlerPermissions()
+    public async Task InvokeAsync_MessageEntry_UsesOnlyTheUseCaseContractPermission()
     {
-        var userContext = new UserContext();
-        userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "message"));
-        var middleware = CreateMiddleware(userContext);
-        var context = CreateCommandContext(typeof(ProtectedCommand), typeof(CommandHandlerWithPermission), nameof(CommandHandlerWithPermission.Handle));
-
-        var nextCalled = false;
-        var outcome = await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
+        var user = new UserContext();
+        user.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "message"));
+        var executed = false;
+        await CreateMiddleware(user).InvokeAsync(CreateCommandContext(typeof(ProtectedCommand), typeof(CommandHandlerWithPermission),
+            nameof(CommandHandlerWithPermission.Handle)), new ProtectedCommand(), (_, _, _) =>
         {
-            nextCalled = true;
+            executed = true;
             return ValueTask.FromResult<object?>(Empty.Instance);
         }, default);
-        Assert.False(nextCalled);
-
-        userContext.Logout();
-        userContext.User.AddIdentity(CreateAuthenticatedIdentity(
-            ClaimTypes.Permission, "message",
-            ClaimTypes.Permission, "handler"));
-        outcome = await middleware.InvokeAsync(context, new ProtectedCommand(), (_, _, _) =>
-        {
-            nextCalled = true;
-            return ValueTask.FromResult<object?>(Empty.Instance);
-        }, default);
-
-        Assert.True(nextCalled);
+        Assert.True(executed);
     }
 
     [Fact]
-    public async Task InvokeAsync_Notification_ShouldRequireMessageAndHandlerPermissions()
+    public async Task InvokeAsync_NotificationEntry_UsesTheSameUseCaseContract()
     {
         var userContext = new UserContext();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(
@@ -424,8 +399,18 @@ public sealed class AuthorizationInvocationFilterTests
         TenantAuthorizationOptions? tenantOptions = null)
         => new(
             userContext,
-            authorizationHandler ?? new DefaultInboundAuthorizationHandler(NullLogger<DefaultInboundAuthorizationHandler>.Instance),
+            authorizationHandler ?? new DefaultInboundAuthorizationHandler(CreatePermissions(userContext), NullLogger<DefaultInboundAuthorizationHandler>.Instance),
             Options.Create(tenantOptions ?? new()));
+
+    private static IPermissionChecker CreatePermissions(IUserContext user)
+    {
+        var catalog = new PermissionCatalog();
+        foreach (var id in new[] { "message", "input-type", "platform.manage", "input-method", "execute-method", "handler" })
+        {
+            catalog.Add(new(id, id));
+        }
+        return new PermissionChecker(user, () => new ClaimsPermissionGrantProvider(), catalog);
+    }
 
     private static ClaimsIdentity CreateAuthenticatedIdentity(params string[] permissionClaims)
     {
@@ -441,50 +426,44 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [RequirePermission("message")]
-    private sealed class TestMessageService { public void Handle(object input) { } }
+    private interface TestMessageService { void Handle(object input); }
 
     [RequirePermission("input-type")]
-    private sealed class TestService
+    private interface TestService
     {
         [RequirePermission("platform.manage")]
-        public void HostMethod(TestRequest request) { }
+        void HostMethod(TestRequest request);
 
         [AllowAnonymous]
-        public void AllowAnonymousMethod(TestRequest request) { }
+        void AllowAnonymousMethod(TestRequest request);
 
-        [RequirePermission]
-        public void LoginOnlyMethod(TestRequest request) { }
+        [RequireAuthenticated]
+        void LoginOnlyMethod(TestRequest request);
 
         [RequirePermission("input-method")]
-        public void OverridePermissionMethod(TestRequest request) { }
+        void OverridePermissionMethod(TestRequest request);
     }
 
     private sealed class TestHandler
     {
-        [AllowAnonymous]
         public void AllowAnonymousHandler(TestRequest request) { }
 
-        [RequirePermission("execute-method")]
         public void ExecutePermissionHandler(TestRequest request) { }
     }
 
     private sealed class TestRequest;
 
-    [RequirePermission("message")]
     private sealed class ProtectedCommand;
 
-    [RequirePermission("message")]
     private sealed class ProtectedNotification;
 
     private sealed class CommandHandlerWithPermission
     {
-        [RequirePermission("handler")]
         public void Handle(ProtectedCommand command) { }
     }
 
     private sealed class NotificationHandlerWithPermission
     {
-        [RequirePermission("handler")]
         public void Handle(ProtectedNotification notification) { }
     }
 

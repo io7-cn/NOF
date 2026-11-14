@@ -25,3 +25,5 @@ For types and members, continue to the [API reference](~/api/index.md).
 - [Contract boundaries](../en/design/contract-boundaries.md)
 
 - [Generic transactional outbox](../en/design/transactional-outbox.md) ([简体中文](../zh-CN/design/transactional-outbox.md))
+
+- [Contract authorization](../en/design/authorization.md) ([简体中文](../zh-CN/design/authorization.md)) — typed declarations, permission catalogs and independent UI checks.
