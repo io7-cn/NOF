@@ -14,7 +14,8 @@ public class ClientGenerationRemovalTests
     public void HostingAnalyzerAssembly_ShouldContainNoHttpRouteGeneratorsOrTransportDiagnostics()
     {
         var types = typeof(FilterFailureCaseGenerator).Assembly.GetTypes();
-        Assert.Equal(["FilterFailureCaseGenerator"], types.Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type)).Select(type => type.Name));
+        Assert.Equal(["FilterFailureCaseGenerator", "OutboxHandlerRegistrationGenerator"],
+            types.Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type)).Select(type => type.Name).Order());
         Assert.DoesNotContain(types, type => type.Name == "HttpApplicationServiceAnalyzer");
         Assert.DoesNotContain(new CodeFixes.AttributeRemovalCodeFixProvider().FixableDiagnosticIds,
             id => id != "NOF020");

@@ -216,11 +216,8 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationService<MessageDispatchService>();
         builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
         builder.Services.AddScoped<MessageDelivery>();
-        builder.Services.AddOutbox(outbox =>
-        {
-            outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
-            outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
-        });
+        builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
+        builder.Services.AddOutbox();
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
         var app = builder.Build();

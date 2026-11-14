@@ -210,7 +210,7 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.MaxRetryCount = 2;
         });
 
-        var rider = new AlwaysFailingOutboxHandler();
+        var rider = new AlwaysFailingOutboxHandler<FailingNotification>();
         builder.Services.AddSingleton(rider);
         var loggerProvider = new CapturingLoggerProvider();
         builder.Logging.ClearProviders();
@@ -406,13 +406,13 @@ public sealed class NotificationDispatchIntegrationTests
 
     private sealed record FailingNotification;
 
-    private sealed class AlwaysFailingOutboxHandler : IOutboxHandler<FailingNotification>
+    public sealed class AlwaysFailingOutboxHandler<T> : OutboxHandler<T>
     {
         private int _attemptCount;
 
         public int AttemptCount => Volatile.Read(ref _attemptCount);
 
-        public ValueTask HandleAsync(FailingNotification message, OutboxDeliveryContext context,
+        public override ValueTask HandleAsync(T message, OutboxDeliveryContext context,
             CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _attemptCount);
@@ -473,20 +473,18 @@ public sealed class NotificationDispatchIntegrationTests
 
     private static void ConfigureMessages(IServiceCollection services, bool failingDelivery = false)
     {
-        services.AddOutbox(outbox =>
+        services.AddOutbox();
+        services.AddOutboxHandler<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>("test.concrete.v1");
+        services.AddOutboxHandler<BaseNotification, NotificationOutboxHandler<BaseNotification>>("test.base.v1");
+        services.AddOutboxHandler<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>("test.ordered.v1");
+        if (failingDelivery)
         {
-            outbox.Add<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>("test.concrete.v1");
-            outbox.Add<BaseNotification, NotificationOutboxHandler<BaseNotification>>("test.base.v1");
-            outbox.Add<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>("test.ordered.v1");
-            if (failingDelivery)
-            {
-                outbox.Add<FailingNotification, AlwaysFailingOutboxHandler>("test.failing.v1");
-            }
-            else
-            {
-                outbox.Add<FailingNotification, NotificationOutboxHandler<FailingNotification>>("test.failing.v1");
-            }
-        });
+            services.AddOutboxHandler<FailingNotification, AlwaysFailingOutboxHandler<FailingNotification>>("test.failing.v1");
+        }
+        else
+        {
+            services.AddOutboxHandler<FailingNotification, NotificationOutboxHandler<FailingNotification>>("test.failing.v1");
+        }
         var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
         registry.Add(new(typeof(INotificationOperations), typeof(object))
         {
@@ -501,9 +499,9 @@ public sealed class NotificationDispatchIntegrationTests
         });
     }
 
-    public sealed class NotificationOutboxHandler<T>(MemoryMessageClient client) : IOutboxHandler<T>
+    public sealed class NotificationOutboxHandler<T>(MemoryMessageClient client) : OutboxHandler<T>
     {
-        public async ValueTask HandleAsync(T message, OutboxDeliveryContext context, CancellationToken ct)
+        public override async ValueTask HandleAsync(T message, OutboxDeliveryContext context, CancellationToken ct)
         {
             var topic = typeof(T) == typeof(ConcreteNotification) ? "test.concrete.v1"
                 : typeof(T) == typeof(BaseNotification) ? "test.base.v1"

@@ -46,7 +46,7 @@ RabbitMQ maps existing queues only, while Memory owns its independent endpoint A
 
 ## Calls and durable intents
 
-InvokeAsync waits for an application operation to finish. Immediate remote calls use a concrete client. Transactional work uses IOutbox.EnqueueAsync(message, context, options, ct), followed by saving the same IUnitOfWork; its return value is an intent ID, not a remote business result. Infrastructure registers a stable message ID/version and IOutboxHandler<T>; the outbox knows neither queues nor service operations.
+InvokeAsync waits for an application operation to finish. Immediate remote calls use a concrete client. Transactional work uses IOutbox.EnqueueAsync(message, context, options, ct), followed by saving the same IUnitOfWork; its return value is an intent ID, not a remote business result. Infrastructure registers a stable message ID/version and OutboxHandler<T>; the outbox knows neither queues nor service operations.
 
 ```csharp
 await MailService.Send.InvokeAsync(services, mail, context, ct);

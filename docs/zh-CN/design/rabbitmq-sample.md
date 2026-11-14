@@ -41,14 +41,11 @@ await unitOfWork.SaveChangesAsync(ct);
 
 ```csharp
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-builder.Services.AddOutbox(outbox =>
-{
-    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
-    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
-});
+builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
+builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/MessageOutboxHandler.cs` 实现两种强类型 Outbox 入口，通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，声明稳定的 MessageType 常量（版本默认 1），通过 ApplicationPart 自动注册。每个 Handler 通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
@@ -127,7 +124,7 @@ Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConf
 
 - NOF.Sample.Contract 保存消息负载、服务声明和 Messaging/RabbitMQDemoRoutes.cs 常量，不依赖 Broker。
 - NOF.Sample.Application 保存 IMessageClient 和生产者用例。SubmitDemoOrder 直接暂存两条意图并保存一次，删除 TransactionalMessages。客户端接口只使用普通消息和 Header 值，不依赖 RabbitMQ 类型或 OutboxDeliveryContext。
-- NOF.Sample 保存 Services/RabbitMQMessageClient.cs 与 MessageOutboxHandler.cs；Handler 将可信 Outbox 元数据转换为 Header，客户端完成序列化和原生发布。
+- NOF.Sample 保存 Services/RabbitMQMessageClient.cs、SendEmailOutboxHandler.cs 与 OrderCreatedOutboxHandler.cs；每个 Handler 将可信 Outbox 元数据转换为 Header，客户端完成序列化和原生发布。
 - NOF.Sample.Notifications 是单个可执行项目，包含操作、回执端口、持久化与原生拓扑/端点模块，不再有独立 Notifications.Application 或共享 Messaging 实现项目。接收宿主将自身程序集注册为 Application Part。
 
 合并保留队列名、负载 Schema 和回执键；移除框架顺序能力同时会删除 SQLite 模型中的顺序列与状态表。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。

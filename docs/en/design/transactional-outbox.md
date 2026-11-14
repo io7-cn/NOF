@@ -34,14 +34,15 @@ NOF provides no send/receive ordering guarantee. OutboxEnqueueOptions, sequence 
 ## Infrastructure registration and handlers
 
 ```csharp
-services.AddOutbox(outbox => outbox
-    .Add<SendOrderConfirmation, SendOrderConfirmationHandler>(
-        messageType: "orders.send-confirmation", schemaVersion: 1));
+builder.AddApplicationPart(typeof(SendOrderConfirmationHandler).Assembly);
+builder.Services.AddOutbox();
 
 public sealed class SendOrderConfirmationHandler(MailClient client)
-    : IOutboxHandler<SendOrderConfirmation>
+    : OutboxHandler<SendOrderConfirmation>
 {
-    public async ValueTask HandleAsync(
+    public const string MessageType = "orders.send-confirmation";
+
+    public override async ValueTask HandleAsync(
         SendOrderConfirmation message, OutboxDeliveryContext context, CancellationToken ct)
     {
         // MailClient is the application's concrete client, with its own acceptance contract.
@@ -50,6 +51,10 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
     }
 }
 ```
+
+Concrete OutboxHandler<TMessage> classes handle exactly one message type. The Infrastructure source generator discovers accessible, non-generic handlers and registers scoped implementations and typed delivery delegates through AddApplicationPart; no Attribute or partial modifier is needed. Each handler declares a public const string MessageType; an optional positive public const int SchemaVersion defaults to 1. These constants describe the durable schema, not a queue or CLR name. Invalid declarations report NOF330; duplicate message types or schemas within an assembly report NOF331, while cross-assembly conflicts fail during host composition. Registration never constructs handlers or enables workers. AddOutbox() explicitly enables the capability, before or after adding application parts. Open generic templates are not discovered; closed adapters may be registered explicitly through AddOutboxHandler<TMessage, THandler>(id, version) when the host needs manual selection.
+
+Migration: replace IOutboxHandler<T> with OutboxHandler<T>, mark HandleAsync as override, split multi-message implementations, move the existing IDs/versions unchanged into constants, and replace the AddOutbox callback with AddApplicationPart plus AddOutbox(). OutboxBuilder is removed; persisted records require no format change.
 
 OutboxDeliveryContext exposes MessageId, Context, Attempt and Headers. It is delivery metadata, not InvocationContext; an intent need not execute a NOF operation. The normal return from a handler must mean that the configured client has met its acceptance contract. Retryable exceptions follow MaxRetryCount and optional RetryDelay; OutboxPermanentFailureException terminates an unrecoverable delivery immediately. Unknown schema IDs/versions and malformed registered JSON also fail permanently, rather than dynamically loading CLR types or guessing an adapter.
 
@@ -97,13 +102,14 @@ The migration is supplied as code; applying it to a live PostgreSQL database is 
 AddNOF alone does not register IOutbox, durable Inbox/Outbox stores, their model contributors or their processing/cleanup workers. AddOutbox registers the complete Outbox capability; AddInbox registers the complete transport-independent Inbox capability. AddMemoryMessaging and ConfigureRabbitMQ with queue mappings call AddInbox; client-only AddRabbitMQ installs no consumers or Inbox workers. Calls are idempotent at the infrastructure level, respect custom store/provider registrations, and work before or after AddNOF. Duplicate message/schema declarations remain errors. Default scheduling options validate only for enabled capabilities whose workers run.
 
 ```csharp
-builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
+builder.AddApplicationPart(typeof(DeliverOrderCreated).Assembly);
+builder.Services.AddOutbox();
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
 ```
 
 A producer-only host still stages snapshots and commits its unit of work, but does not claim, deliver, retry or clean up messages. Inbox.RunWorkers=false similarly accepts durable receipts without processing or cleanup. Independent worker hosts enable the matching capability with the same schemas/bindings and appropriate persistence/transport configuration. Disabling workers never discards pending records or resets ownership state. No new schema migration is required by capability gating; existing generic-outbox migrations still apply when upgrading old schemas.
 
-Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. AddNOF retains convenient cache, serialization, object storage and ordinary native-host defaults; users do not register every low-level service manually.
+Custom IOutboxStore implementations remain usable without an ORM or transport under DI dependency validation. AddNOF registers core execution; hosts explicitly select optional capabilities and concrete providers.
 
 Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.
 

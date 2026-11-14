@@ -12,7 +12,7 @@ public sealed class InMemoryServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         services.AddInMemoryMessagingPersistence();
         services.AddInbox();
-        services.AddOutbox(_ => { });
+        services.AddOutbox();
         return services.BuildServiceProvider();
     }
     private static NOFOutboxMessage Intent() => new() { Id = Guid.NewGuid(), MessageType = "test", Payload = [1], Headers = "{}" };

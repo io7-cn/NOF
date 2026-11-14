@@ -34,14 +34,15 @@ NOF 不保证发件或收件顺序。删除 OutboxEnqueueOptions、序号分配�
 ## 基础设施注册与处理器
 
 ```csharp
-services.AddOutbox(outbox => outbox
-    .Add<SendOrderConfirmation, SendOrderConfirmationHandler>(
-        messageType: "orders.send-confirmation", schemaVersion: 1));
+builder.AddApplicationPart(typeof(SendOrderConfirmationHandler).Assembly);
+builder.Services.AddOutbox();
 
 public sealed class SendOrderConfirmationHandler(MailClient client)
-    : IOutboxHandler<SendOrderConfirmation>
+    : OutboxHandler<SendOrderConfirmation>
 {
-    public async ValueTask HandleAsync(
+    public const string MessageType = "orders.send-confirmation";
+
+    public override async ValueTask HandleAsync(
         SendOrderConfirmation message, OutboxDeliveryContext context, CancellationToken ct)
     {
         // MailClient 是应用自己的具体客户端，拥有明确的接受条件。
@@ -50,6 +51,10 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
     }
 }
 ```
+
+每个具体 OutboxHandler<TMessage> 只处理一种消息。Infrastructure 生成器发现程序集内可访问的非泛型 Handler，通过 AddApplicationPart 注册 Scoped 实现与强类型投递委托，不需要 Attribute 或 partial。Handler 必须声明 public const string MessageType；可选的正整数 public const int SchemaVersion 默认是 1。这些常量描述持久化格式，与队列和 CLR 名称无关。无效声明报告 NOF330，同程序集消息类型或标识/版本重复报告 NOF331，跨程序集冲突在宿主装配时失败。注册不构造 Handler，也不启动 Worker；宿主在添加 ApplicationPart 之前或之后显式调用 AddOutbox() 启用能力。开放泛型模板不自动发现；需要手动选择闭合适配器时，可使用 AddOutboxHandler<TMessage, THandler>(id, version)。
+
+迁移时将 IOutboxHandler<T> 改成 OutboxHandler<T>，为 HandleAsync 添加 override，拆开多消息实现，并将原有标识和版本原样移入常量。用 AddApplicationPart 和无参 AddOutbox() 替换原注册回调，移除 OutboxBuilder。持久化记录格式不变。
 
 OutboxDeliveryContext 提供 MessageId、Context、Attempt 和 Headers。它是投递元数据，不是 InvocationContext；意图不一定执行 NOF 操作。处理器正常返回前，应达到具体客户端约定的接受条件。可重试异常遵循 MaxRetryCount 与可选 RetryDelay；OutboxPermanentFailureException 表示无法通过重试恢复，立即终止。未知标识/版本和与注册 JSON 结构不符的内容也永久失败，不根据持久化 CLR 名称加载类型或猜测适配器。
 
@@ -97,13 +102,14 @@ AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可�
 仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddInbox 完整装配传输无关的 Inbox 能力。AddMemoryMessaging 和配置队列端点的 ConfigureRabbitMQ 自动调用 AddInbox；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
 
 ```csharp
-builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));
+builder.AddApplicationPart(typeof(DeliverOrderCreated).Assembly);
+builder.Services.AddOutbox();
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
 ```
 
 仅生产者宿主仍可暂存快照、提交工作单元，但不认领、发送、重试或清理消息。Inbox.RunWorkers=false 同样接收持久化回执，但不处理/清理。独立 Worker 宿主使用相同 Schema/绑定启用对应能力，并配置正确持久化与传输。关闭 Worker 不丢弃待处理记录，也不重置所有权。本次能力开关无需新增数据库迁移；从旧版本升级仍须遵循既有 generic-outbox 迁移要求。
 
-自定义 IOutboxStore 在没有 ORM/传输、开启 DI 依赖验证时仍可使用。AddNOF 继续提供便捷缓存、序列化、对象存储和原生宿主默认值，不要求用户逐项注册底层服务。
+自定义 IOutboxStore 在没有 ORM/传输、开启 DI 依赖验证时仍可使用。AddNOF 注册核心执行能力；宿主显式选择可选能力与具体 Provider。
 
 能力配置不会修改既有模型快照或执行删表。共享数据库的迁移宿主应保留该库完整的能力模型，不要为了关闭某个进程的 Worker 生成破坏性删表迁移；RunWorkers=false 保留模型及持久化进度。
 

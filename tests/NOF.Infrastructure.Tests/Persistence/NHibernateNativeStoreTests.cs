@@ -20,7 +20,7 @@ public sealed class NHibernateNativeStoreTests
         {
             var builder = Host.CreateApplicationBuilder();
             builder.AddNOF();
-            builder.Services.AddOutbox(_ => { });
+            builder.Services.AddOutbox();
             builder.Services.AddInbox();
             builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")
                 .WithOptions((configuration, _) =>

@@ -21,7 +21,7 @@ public sealed class GenericOutboxTests
         services.AddSingleton<Probe>();
         services.AddOptions();
         services.AddSingleton<MessageDelivery>();
-        services.AddOutbox(outbox => outbox.Add<Work, Handler>("custom.work"));
+        services.AddOutbox().AddOutboxHandler<Work, Handler>("custom.work");
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work(), Context.Empty);
@@ -251,13 +251,13 @@ public sealed class GenericOutboxTests
     [Fact]
     public void Registrations_AreHostLocalUnambiguousAndFrozenOnUse()
     {
-        var first = new ServiceCollection().AddOutbox(outbox => outbox.Add<Work, Handler>("work", 2));
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox(outbox => outbox.Add<Work, Handler>("other", 1)));
+        var first = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>("work", 2);
+        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<Work, Handler>("other", 1));
         using var one = first.BuildServiceProvider();
-        using var two = new ServiceCollection().AddOutbox(outbox => outbox.Add<Work, Handler>("other", 1)).BuildServiceProvider();
+        using var two = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>("other", 1).BuildServiceProvider();
         Assert.Equal("work", one.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
         Assert.Equal("other", two.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox(outbox => outbox.Add<string, StringHandler>("late")));
+        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<string, StringHandler>("late"));
         Assert.Null(typeof(IOutbox).Assembly.GetType("NOF.Application.IMessageDispatcher"));
     }
 
@@ -268,7 +268,7 @@ public sealed class GenericOutboxTests
         builder.AddNativeTestPersistence();
         builder.Services.AddScoped<MessageDelivery>();
         builder.Services.AddSingleton<Probe>();
-        builder.Services.AddOutbox(outbox => outbox.Add<Work, Handler>("work", 2));
+        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>("work", 2);
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -314,10 +314,12 @@ public sealed class GenericOutboxTests
         public ConcurrentQueue<Dictionary<string, string?>> Envelopes { get; } = new();
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
-    public sealed class Handler(Probe probe, MessageDelivery delivery) : IOutboxHandler<Work>
+    public sealed class Handler(Probe probe, MessageDelivery delivery) : OutboxHandler<Work>
     {
+        public const string MessageType = "test.generic.work";
+        public const int SchemaVersion = 2;
         private readonly Guid _scope = Guid.NewGuid();
-        public async ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken)
+        public override async ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken)
         {
             if (message.Value == "retry")
             {
@@ -345,8 +347,9 @@ public sealed class GenericOutboxTests
             }
         }
     }
-    public sealed class StringHandler : IOutboxHandler<string>
+    public sealed class StringHandler : OutboxHandler<string>
     {
-        public ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public const string MessageType = "test.generic.string";
+        public override ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken cancellationToken) => ValueTask.CompletedTask;
     }
 }

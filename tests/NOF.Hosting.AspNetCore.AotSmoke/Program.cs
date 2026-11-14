@@ -37,7 +37,7 @@ builder.Services.AddInvocationFilters(filters =>
 });
 builder.Services.AddSingleton<SmokeOutboxStore>();
 builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
-builder.Services.AddOutbox(outbox => outbox.Add<SmokeIntent, SmokeIntentHandler>("smoke.intent", 1));
+builder.Services.AddOutbox();
 await using var app = builder.Build();
 app.UseNOF();
 SmokeEndpointModule.Map(app);
@@ -323,10 +323,11 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 public partial class SmokeJsonContext : JsonSerializerContext;
 
 public sealed record SmokeIntent(string Value);
-public sealed class SmokeIntentHandler : IOutboxHandler<SmokeIntent>
+public sealed class SmokeIntentHandler : OutboxHandler<SmokeIntent>
 {
+    public const string MessageType = "smoke.intent";
     public static string? Delivered { get; private set; }
-    public ValueTask HandleAsync(SmokeIntent message, OutboxDeliveryContext context, CancellationToken cancellationToken)
+    public override ValueTask HandleAsync(SmokeIntent message, OutboxDeliveryContext context, CancellationToken cancellationToken)
     {
         Delivered = message.Value;
         return ValueTask.CompletedTask;

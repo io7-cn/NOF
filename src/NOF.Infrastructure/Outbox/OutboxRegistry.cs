@@ -33,20 +33,21 @@ public sealed class OutboxRegistry : Registry<OutboxRegistration>
         ?? throw new OutboxPermanentFailureException($"No outbox handler for '{messageType}' schema {schemaVersion}. Drain or migrate pending records before upgrading.");
 }
 
-/// <summary>Binds a stable message schema to one scoped infrastructure handler.</summary>
-public sealed class OutboxBuilder(IServiceCollection services, OutboxRegistry registry)
+/// <summary>Registers generic transactional intents independently of transport clients and operation bindings.</summary>
+public static class OutboxServiceCollectionExtensions
 {
-    /// <summary>Registers one message type and version; configure its JSON metadata through the normal serializer.</summary>
-    public OutboxBuilder Add<TMessage, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(
-        string messageType, int schemaVersion = 1) where THandler : class, IOutboxHandler<TMessage>
+    /// <summary>Registers one schema and scoped handler without enabling Outbox. Generated application parts call this method.</summary>
+    public static IServiceCollection AddOutboxHandler<TMessage, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(
+        this IServiceCollection services, string messageType, int schemaVersion = 1) where THandler : OutboxHandler<TMessage>
     {
+        ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(messageType);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(schemaVersion);
         if (messageType.Length > 512)
         {
             throw new ArgumentOutOfRangeException(nameof(messageType), "Outbox message IDs cannot exceed 512 characters.");
         }
-        registry.Add(new(typeof(TMessage), messageType, schemaVersion, static async (provider, record, context, ct) =>
+        services.GetOrAddSingleton<OutboxRegistry>().Add(new(typeof(TMessage), messageType, schemaVersion, static async (provider, record, context, ct) =>
         {
             object? value;
             try
@@ -64,18 +65,14 @@ public sealed class OutboxBuilder(IServiceCollection services, OutboxRegistry re
             await provider.GetRequiredService<THandler>().HandleAsync(message, context, ct).ConfigureAwait(false);
         }));
         services.TryAddScoped<THandler>();
-        return this;
+        return services;
     }
-}
 
-/// <summary>Registers generic transactional intents independently of transport clients and operation bindings.</summary>
-public static class OutboxServiceCollectionExtensions
-{
-    /// <summary>Registers host-owned schemas and scoped handlers.</summary>
-    public static IServiceCollection AddOutbox(this IServiceCollection services, Action<OutboxBuilder> configure)
+    /// <summary>Enables transactional staging, persistence and workers. Register handler application parts separately.</summary>
+    public static IServiceCollection AddOutbox(this IServiceCollection services)
     {
-        ArgumentNullException.ThrowIfNull(configure);
-        var registry = services.GetOrAddSingleton<OutboxRegistry>();
+        ArgumentNullException.ThrowIfNull(services);
+        services.GetOrAddSingleton<OutboxRegistry>();
         services.TryAddScoped<IOutbox, TransactionalOutbox>();
         services.AddLogging();
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
@@ -91,7 +88,6 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddScoped<IOutboxStore>(sp => sp.GetRequiredKeyedService<IOutboxStore>(typeof(IOutboxStore)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
-        configure(new(services, registry));
         return services;
     }
 }

@@ -46,7 +46,7 @@ RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；
 
 ## 调用与可靠意图
 
-InvokeAsync 等待应用操作完成。即时远程调用使用具体客户端；事务性工作通过 IOutbox.EnqueueAsync(message, context, options, ct) 暂存，再保存同一 IUnitOfWork，返回的是意图 ID，不是远程业务结果。基础设施注册稳定消息标识/版本与 IOutboxHandler<T>，Outbox 不认识队列或服务操作。
+InvokeAsync 等待应用操作完成。即时远程调用使用具体客户端；事务性工作通过 IOutbox.EnqueueAsync(message, context, options, ct) 暂存，再保存同一 IUnitOfWork，返回的是意图 ID，不是远程业务结果。基础设施注册稳定消息标识/版本与 OutboxHandler<T>，Outbox 不认识队列或服务操作。
 
 ```csharp
 await MailService.Send.InvokeAsync(services, mail, context, ct);

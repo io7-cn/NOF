@@ -41,14 +41,11 @@ The producer explicitly selects scoped infrastructure adapters and stable logica
 
 ```csharp
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-builder.Services.AddOutbox(outbox =>
-{
-    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
-    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
-});
+builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
+builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/MessageOutboxHandler.cs` implements both typed Outbox handlers, preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, declare their stable MessageType constants (version 1), and are automatically registered by the application part. Each handler preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
@@ -127,7 +124,7 @@ The builder is also the host-local configuration owner: RabbitMQConfiguration an
 
 - NOF.Sample.Contract owns message payloads, service declarations and Messaging/RabbitMQDemoRoutes.cs constants. It has no broker dependency.
 - NOF.Sample.Application owns IMessageClient and the producer use case. SubmitDemoOrder directly enqueues both intents and saves once; TransactionalMessages is removed. IMessageClient uses plain message/header values, without RabbitMQ types or OutboxDeliveryContext.
-- NOF.Sample owns Services/RabbitMQMessageClient.cs and MessageOutboxHandler.cs. The handler converts trusted Outbox metadata into headers; the client serializes and publishes natively.
+- NOF.Sample owns Services/RabbitMQMessageClient.cs, SendEmailOutboxHandler.cs and OrderCreatedOutboxHandler.cs. Each handler converts trusted Outbox metadata into headers; the client serializes and publishes natively.
 - NOF.Sample.Notifications is one executable project containing its operations, receipt port, persistence and native topology/endpoint module. There is no separate Notifications.Application project or shared Messaging implementation project. The receiving host registers its own assembly as an application part.
 
 Project consolidation preserves queue names, payload schemas and receipt keys; removing framework ordering also removes its SQLite model columns and state tables. The sample tests use the merged receiver and link the producer's actual client/handler files; they verify the full metadata path and assembly dependency boundaries.

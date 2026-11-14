@@ -37,16 +37,12 @@ public sealed class MessageCapabilityRegistrationTests
         var builder = Host.CreateApplicationBuilder();
         if (capabilityFirst)
         {
-            builder.Services.AddOutbox(_ =>
-            {
-            });
+            builder.Services.AddOutbox();
         }
 
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox(_ =>
-        {
-        });
+        builder.Services.AddOutbox();
         using var host = builder.Build();
         var workers = host.Services.GetServices<IHostedService>().Where(service => WorkerTypes.Contains(service.GetType())).ToArray();
         Assert.Equal(2, workers.Length);
@@ -71,9 +67,7 @@ public sealed class MessageCapabilityRegistrationTests
         builder.AddNativeTestPersistence();
         builder.Services.AddSingleton(inbox.Object);
         builder.Services.AddSingleton(outbox.Object);
-        builder.Services.AddOutbox(_ =>
-        {
-        });
+        builder.Services.AddOutbox();
         builder.Services.AddInbox();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
@@ -102,7 +96,7 @@ public sealed class MessageCapabilityRegistrationTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox(outbox => outbox.Add<Work, Handler>("work"));
+        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>("work");
         builder.Services.AddSingleton<Probe>();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
         using var host = builder.Build();
@@ -155,9 +149,7 @@ public sealed class MessageCapabilityRegistrationTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox(_ =>
-        {
-        });
+        builder.Services.AddOutbox();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Inbox.BatchSize = 0;
@@ -179,9 +171,10 @@ public sealed class MessageCapabilityRegistrationTests
         public int Constructed { get; set; }
     }
 
-    public sealed class Handler : IOutboxHandler<Work>
+    public sealed class Handler : OutboxHandler<Work>
     {
+        public const string MessageType = "test.capability.work";
         public Handler(Probe probe) => probe.Constructed++;
-        public ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken) => throw new InvalidOperationException("Workers are disabled.");
+        public override ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken) => throw new InvalidOperationException("Workers are disabled.");
     }
 }

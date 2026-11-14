@@ -45,11 +45,7 @@ builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.Services.AddScoped<MessageDelivery>();
-builder.Services.AddOutbox(outbox =>
-{
-    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
-    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
-});
+builder.Services.AddOutbox();
 // Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
 builder.Services.AddInbox();
 builder.Services.Configure<TransactionalMessageOptions>(options =>

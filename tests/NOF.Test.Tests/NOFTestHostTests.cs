@@ -137,7 +137,7 @@ public class NOFTestHostTests
     public async Task MessageUnitOfWork_ShouldStageAcrossHarnessScopes()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddOutbox(_ => { });
+        builder.Services.AddOutbox();
         await using var host = builder.BuildTestHost();
         var id = Guid.NewGuid();
         await host.ExecuteAsync(async scope =>

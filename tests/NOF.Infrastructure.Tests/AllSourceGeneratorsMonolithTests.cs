@@ -88,6 +88,13 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record AppCommand(string Value);
 
+            public sealed class AppOutboxHandler : OutboxHandler<AppCommand>
+            {
+                public const string MessageType = "monolith.command";
+                public override ValueTask HandleAsync(AppCommand message, OutboxDeliveryContext context, CancellationToken ct)
+                    => ValueTask.CompletedTask;
+            }
+
             public sealed record PingRequest(string Value);
 
             [AutoInject(ServiceLifetime.Scoped)]
@@ -146,6 +153,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
             new ApplicationServiceGenerator().AsSourceGenerator(),
             new FilterFailureCaseGenerator().AsSourceGenerator(),
+            new OutboxHandlerRegistrationGenerator().AsSourceGenerator(),
             new OperationRequestBindingGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
