@@ -1,59 +1,21 @@
 ---
-description: Replace NOF's in-memory command and notification riders with RabbitMQ
+description: Configure native RabbitMQ connections, composable topology and operation consumers
 ---
 
 # Add RabbitMQ Messaging
 
-## 1. Add the Package to the Host
-
-```bash
-dotnet add package NOF.Infrastructure.RabbitMQ
-```
-
-## 2. Register RabbitMQ
+Install NOF.Infrastructure.RabbitMQ. Register native connection access separately from endpoint/topology configuration:
 
 ```csharp
-builder.Services.AddRabbitMQ(options =>
-{
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
-});
+services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
+services.ConfigureRabbitMQ(rabbit => rabbit.Topology(DeclareNativeTopologyAsync));
+services.ConfigureRabbitMQ(rabbit => rabbit.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-`AddRabbitMQ(...)` configures options, replaces `ICommandRider` and `INotificationRider`, and registers the RabbitMQ consumer hosted service.
+ConfigureRabbitMQ is fluent and may be called repeatedly by feature modules before Build. Topology callbacks use native IChannel/CancellationToken and append in registration order. Framework StartingAsync completes every callback before consumers start, so applications implement no IHostedLifecycleService. Only MapQueue enables Inbox; topology-only/empty configuration does not. Queues must exist before consumption; MapQueue never infers or repairs exchange topology. Configuration freezes at startup; duplicates and later mutation are errors.
 
-## 3. Configure the Connection
+Use native ConnectionFactory settings for AMQP/AMQPS URI, authentication, TLS, timeouts and automatic recovery. RabbitMQOptions, its key/value ConnectionString parser and RabbitMQConnectionManager are removed. For custom QoS, pass a native configureChannel callback to MapQueue; receipt-storage failures requeue by default, with per-endpoint requeueOnFailure available.
 
-`RabbitMQOptions.ConnectionString` accepts either an AMQP URI or key/value form:
+Infrastructure Outbox handlers use RabbitMQConnection.GetAsync and native IConnection.CreateChannelAsync/CreateChannelOptions/BasicPublishAsync. Do not dispose the shared connection; dispose created channels. Wrap publishing with MessageDelivery.ExecuteAsync and the original OutboxDeliveryContext to preserve identity, tenant/trace and custom Headers. Use mandatory publication and native publisher confirms/tracking; propagate return/nack errors to Outbox retry. Application depends only on IOutbox and its owned ports.
 
-```json
-{
-  "ConnectionStrings": {
-    "rabbitmq": "Host=localhost;Port=5672;UserName=guest;Password=guest;VirtualHost=/"
-  }
-}
-```
-
-The options also expose durability, auto-delete, prefetch, requeue, and publisher-confirmation settings.
-
-## 4. Send with the NOF Abstractions
-
-```csharp
-await commandSender.SendAsync(command, context, cancellationToken);
-await notificationPublisher.PublishAsync(notification, context, cancellationToken);
-```
-
-Transport routing comes from source-generated command and notification handler metadata; callers do not specify a queue or exchange.
-
-For writes that must commit with outgoing work:
-
-```csharp
-await commandSender.DeferSendAsync(command, context, cancellationToken);
-await notificationPublisher.DeferPublishAsync(notification, context, cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
-```
-
-Use the ordered deferred variants only when messages form one strict stream. The framework qualifies the order key with the producer service name and allocates sequence numbers transactionally.
-
-## 5. Optional RabbitMQ Backplane
-
-`builder.Services.AddRabbitMQBackplane(...)` replaces `IBackplane` only. It is independent from `AddRabbitMQ(...)`; enable it when application backplane traffic should also use RabbitMQ.
+AddRabbitMQBackplane() is independent and reuses connection registration; configure its native connection through AddRabbitMQ. See docs/en/design/rabbitmq-sample.md for both services, receipt queries, native declarations, and explicit migration instructions.

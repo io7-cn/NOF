@@ -9,7 +9,7 @@ using System.Text;
 namespace NOF.Abstraction.SourceGenerator;
 
 /// <summary>
-/// Source generator: detects handler classes inheriting InMemoryEventHandler in the current project
+/// Source generator: detects handler classes inheriting LocalEventHandler in the current project
 /// and generates assembly initializer metadata for the event handler registry.
 /// </summary>
 [Generator]
@@ -67,7 +67,7 @@ public sealed class EventHandlerRegistrationGenerator : IIncrementalGenerator
         while (current is not null)
         {
             if (current.IsGenericType
-                && current.OriginalDefinition.ToDisplayString() == "NOF.Abstraction.InMemoryEventHandler<TEvent>")
+                && current.OriginalDefinition.ToDisplayString() == "NOF.Abstraction.LocalEventHandler<TEvent>")
             {
                 return true;
             }
@@ -96,7 +96,7 @@ public sealed class EventHandlerRegistrationGenerator : IIncrementalGenerator
             var current = handlerClass.BaseType;
             while (current is not null)
             {
-                if (current.IsGenericType && current.OriginalDefinition.ToDisplayString() == "NOF.Abstraction.InMemoryEventHandler<TEvent>")
+                if (current.IsGenericType && current.OriginalDefinition.ToDisplayString() == "NOF.Abstraction.LocalEventHandler<TEvent>")
                 {
                     var eventTypeName = current.TypeArguments[0].ToDisplayString(typeFormat);
                     statements.Add($"services.GetOrAddSingleton<global::NOF.Abstraction.EventHandlerRegistry>().Add(new global::NOF.Abstraction.EventHandlerRegistration(typeof({handlerTypeName}), typeof({eventTypeName})));");

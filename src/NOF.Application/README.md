@@ -4,60 +4,70 @@ Application layer package for the [NOF Framework](https://github.com/XmmShp/NOF)
 
 ## Overview
 
-Contains the application service abstractions used to implement NOF applications: RPC servers, request handlers, command handlers, notification handlers, mapping, caching, object storage, and persistence contracts.
+Contains the application service abstractions used to implement NOF applications: service operations and message submission, mapping, caching, object storage, and persistence contracts.
 
 This package does not define runtime outbound authentication directives.
 
 `AddNOFApplication()` registers the package-local application defaults, including expression-based mapping and the package-local Domain defaults.
 
-Commands and notifications are plain payload types. Handler discovery comes from the `CommandHandler<T>` and `NotificationHandler<T>` base classes rather than marker interfaces on the message types.
+All consumers implement generated ApplicationService operations. The host binds stable queues/subscriptions to Empty-returning operation descriptors. Plain contracts need no partial modifier; descriptors are generated in a separate Contract class.
+
+## Application services
+
+IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> accepts ordinary business responses. IRpcResponse is removed. Generated descriptors identify operations for HTTP adapters without introducing an HTTP dependency. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 
 ### RPC Servers
 
-RPC contracts are declared on `IRpcService` interfaces in the contract layer. Application implementations use `RpcServer<TService>`:
+RPC contracts are declared on `IApplicationService` interfaces in the contract layer. Application implementations use `ApplicationService<TService>`:
 
 ```csharp
 using NOF.Application;
+using NOF.Contract;
 
-public partial class OrderService : RpcServer<IOrderService>;
+public interface IOrderService : IApplicationService
+{
+    [FailureCase("NotFound", "404")]
+    OrderDto GetOrder(GetOrderRequest request);
+}
+
+public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
-    private readonly IDbContext _dbContext;
+    private readonly IOrderQueries _orders;
 
-    public GetOrder(IDbContext dbContext)
+    public GetOrder(IOrderQueries orders)
     {
-        _dbContext = dbContext;
+        _orders = orders;
     }
 
-    public override async Task<Result<OrderDto>> HandleAsync(GetOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var order = await _dbContext.Set<Order>()
-            .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
+        var order = await _orders.FindAsync(request.Id, cancellationToken);
         if (order is null)
         {
-            return Result.Fail("404", "Order not found");
+            return new NotFound("Order not found");
         }
 
-        return Result.Success(new OrderDto(order.Id, order.Status));
+        return new OrderDto(order.Id, order.Status);
     }
 }
 ```
 
-When a host references `NOF.Infrastructure`, the same `OrderService` declaration also causes a `LocalOrderServiceClient` to be generated in the server namespace. Its service/client contract relationship comes from `IOrderServiceClient : IRpcClient<IOrderService>`, not from matching interface names.
+Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IOperationInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
 
-Streaming RPC handlers use the same generated nested `RpcHandler<TRequest, StreamingResult<T>>` model:
+Streaming operations may directly return IAsyncEnumerable<T> when they declare no initial failure:
 
 ```csharp
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class Watch : OrderService.Watch
 {
-    public override Task<StreamingResult<OrderEvent>> HandleAsync(WatchOrdersRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<IAsyncEnumerable<OrderEvent>> HandleAsync(WatchOrdersRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        return Task.FromResult(StreamingResult.Success(Stream()));
+        return Task.FromResult(Stream());
 
         async IAsyncEnumerable<OrderEvent> Stream()
         {
@@ -69,76 +79,27 @@ public sealed class Watch : OrderService.Watch
 }
 ```
 
-The contract surface for the same method remains `StreamingResult<OrderEvent> Watch(WatchOrdersRequest request);`.
+The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> Watch(WatchOrdersRequest request);`.
 
-### Command Handlers
+### Message consumers and transactional intents
 
-```csharp
-public record SendEmailCommand(string To, string Subject, string Body);
-
-public sealed class SendEmailHandler : CommandHandler<SendEmailCommand>
-{
-    public override Task HandleAsync(SendEmailCommand command, Context context, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-### Notification Handlers
+Transport-owned queue/subscription endpoints target ordinary Empty-returning application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
 
 ```csharp
-public record OrderCreatedNotification(Guid OrderId);
-
-public sealed class OrderCreatedHandler : NotificationHandler<OrderCreatedNotification>
-{
-    public override Task HandleAsync(OrderCreatedNotification notification, Context context, CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
+await outbox.EnqueueAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken: cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-### Transactional Message Sending
+Concrete OutboxHandler<T> classes declare public MessageType and optional SchemaVersion constants. AddApplicationPart applies their generated scoped registrations; AddOutbox() explicitly enables staging and workers. Each handler processes one message type, without Attributes or partial declarations. Enqueue snapshots without sending or saving; the returned Guid is an intent ID. Optional generic headers are snapshotted with the payload; ordering belongs to infrastructure. No IMessageDispatcher, deferred Send/Publish family or operation-based producer routing remains. See [transactional outbox](../../docs/en/design/transactional-outbox.md) and the [compiled sample](../../sample/NOF.Sample.Application/Services/MessageDispatchService.cs).
 
-Use `ICommandSender` and `INotificationPublisher` for both immediate and deferred dispatch:
+### Persistence boundaries
 
-The [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs)
-contains the complete deferred-dispatch example.
-
-```csharp
-await _notificationPublisher.DeferPublishAsync(new OrderCreatedNotification(order.Id), context, cancellationToken);
-await _commandSender.DeferSendAsync(new SendEmailCommand(order.Email, "Created", "Order created."), context, cancellationToken);
-await _dbContext.SaveChangesAsync(cancellationToken);
-```
-
-Pass the handler's explicit `Context`. Deferred dispatch runs the outbound middleware and stores
-its resulting headers and trace parent in the outbox; arbitrary context items and the authenticated
-principal are not automatically serialized. Tenant-header middleware uses the explicit context's
-tenant item, falling back to `Context.Current.TenantId`. Pass the authorized handler context,
-and validate tenant access at public boundaries; passing `Context` alone does not establish tenant trust. Identity
-propagation requires an explicit outbound authentication policy. See the
-[tenant authorization](../NOF.Infrastructure/README.md#tenant-authorization) for the trust boundaries.
-
-With an explicit transaction, `SaveChangesAsync` writes inside that transaction and
-`CommitAsync` makes it durable. After rollback or an uncertain commit, dispose the scope and
-recover using a fresh context and an application idempotency key. See
-[persistence boundaries](../../docs/design/repository-uow.md).
-
-### Persistence Abstractions
-
-Application code should depend on `IDbContext` from `NOF.Application`, repository abstractions from `NOF.Domain`, and async query helpers under `NOF.Application` rather than a concrete ORM type.
-
-```csharp
-using NOF.Application;
-using NOF.Domain;
-
-var exists = await _dbContext.Set<Order>()
-    .AsNoTracking()
-    .AnyAsync(order => order.Id == request.Id, cancellationToken);
-```
-
-The async query surface is exposed through `IAsyncQueryable<T>` in `NOF.Domain` plus extension methods such as `AnyAsync`, `CountAsync`, `FirstOrDefaultAsync`, `SingleAsync`, `ToListAsync`, `SumAsync`, and `AverageAsync`. Concrete infrastructure adapters decide how those terminal operations are executed.
+Declare aggregate-specific repositories in Domain and DTO query interfaces in Application.
+Use IUnitOfWork.SaveChangesAsync to save staged aggregate, projection and outbox changes
+through one scoped persistence context. Optional ITransactionManager exposes async commit
+and rollback. IDbContext, generic repositories, async query executors and update expressions
+are removed from core. Native queries and ORM state belong in infrastructure implementations.
+See [migration and transaction semantics](../../docs/en/design/persistence-boundaries.md).
 
 ### Object Mapping (`IMapper`)
 
@@ -156,7 +117,8 @@ Those mappings become available once the assembly is added via `AddApplicationPa
 Apply a generated mapping directly to a query after filtering, ordering, and paging:
 
 ```csharp
-var orders = await _dbContext.Set<Order>()
+// Inside a persistence/query adapter using its native query source:
+var orders = await orderQuery
     .AsNoTracking()
     .Where(order => order.IsActive)
     .ProjectTo<OrderDto>()
@@ -178,7 +140,7 @@ For package-local defaults:
 services.AddNOFApplication();
 ```
 
-This registers `MappingRegistry`, the default `ExpressionMapper` implementation of `IMapper`, and a scoped daemon that binds `Mapper.Current` to the current async flow.
+This registers MappingRegistry and the default ExpressionMapper. Managed entries or an explicit services.BindNOF(context) scope bind and restore Mapper.Current; ordinary DI scopes have no activation requirement. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
 
 `AddNOFApplication()` already includes `AddNOFDomain()`:
 
@@ -230,3 +192,13 @@ The host selects an `IObjectStorageRider`; application handlers continue to depe
 ## License
 
 Apache-2.0
+
+[FailureCase declarations](../../docs/en/design/expected-failures.md) stay on Contract methods. Application generates closed outcomes inside each operation; registration, descriptors and local invocation use that generated response type. Handler overrides use `Task<Result>` and `new NotFound(...)`. No case factories or custom expected-outcome analyzer are generated.
+
+### Invocation extensions
+
+`IInvocationFilter` is the unified extension contract for service operations, commands and notifications. Registration through `AddInvocationFilter<T>()` declares an extension; the host chooses `IInvocationPipeline` to execute it. The optional in-memory default lives in Infrastructure. See [host-selected execution](../../docs/en/design/invocation-extensions.md).
+
+FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Application owns the single complete operation descriptor. See [expected failures](../../docs/en/design/expected-failures.md).
+
+Execution models, descriptors and policy interpretation belong to this package. ServiceOperationDescriptor is the sole operation metadata model; input-only Reference and instance mapping/resolver fallbacks are removed; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).

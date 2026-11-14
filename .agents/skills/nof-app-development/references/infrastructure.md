@@ -1,168 +1,25 @@
-# NOF Infrastructure Setup Reference
+# Native infrastructure integration
 
-Concrete providers are host concerns. Application handlers should continue to depend on `IDbContext`, `IRepository<T>`, `ICacheService`, `ICommandSender`, and `INotificationPublisher`.
+Business handlers depend on aggregate repositories, DTO query ports, IUnitOfWork, ICacheService and application message interfaces. Native DbContext/ISession remain in infrastructure. See docs/en/design/persistence-boundaries.md.
 
-## EF Core + PostgreSQL
-
-Packages:
-
-```bash
-dotnet add package NOF.Infrastructure.EntityFrameworkCore
-dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL
-```
-
-Registration:
+AddNOF selects execution only. Concrete capabilities use typed selectors:
 
 ```csharp
-using Microsoft.EntityFrameworkCore;
-using NOF.Hosting;
-using NOF.Infrastructure.EntityFrameworkCore;
-
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+builder.Services.AddCacheService().AddMemoryCacheService();
+builder.Services.AddCacheService().AddRedisCache(connectionString);
+builder.Services.AddObjectStorage().AddFileSystemObjectStorage();
+builder.Services.AddBackplane().AddMemoryBackplane();
+builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 ```
 
-`MigrateOnInitialize()` migrates the context resolved during host initialization. It does not
-enumerate application-defined tenant databases in `DatabasePerTenant` mode.
+Choose a single cache provider; later explicit selection replaces the rider. Root entries install common policy, providers remain optional packages. ID implementations/options live in Infrastructure; Domain needs no registration. IdGenerator.Current is nullable. New() requires an ambient provider; New(IIdGenerator) is explicit.
 
-`DatabasePerTenant` deliberately uses the same model and migration chain for the host and every
-tenant database. Their schemas are identical, so tenant databases must accept tables used only by
-host-level features as a potentially empty schema superset. Inbox and outbox tables can contain
-tenant-scoped transactional messages and are not guaranteed to be empty.
+Native EF configuration uses UseDbContext<T>().WithTenantMode(...).WithConnectionString(...).WithOptions((options, connection) => options.UseNpgsql(connection)).MigrateOnStart(). Register ITenantProvider for durable database-per-tenant migration and message polling. Native startup migration precedes hosted-service client bootstrap; tenant migration failures require explicit recovery. Use WithConnectionStringResolver for application tenant routing. NOFDbContext applies native model configuration, value-object conversions, owned collection conventions and optional soft deletion.
 
-`NOFDbContext` applies the registered model contributors for inbox, outbox, and ordered-message entities. It also supplies value-object conversion/length conventions, multi-tenancy, and opt-in soft delete. Soft delete is disabled by default; use `.WithSoftDelete(true)` for a context-wide opt-in or `HasSoftDelete()` in EF model configuration for an entity-level opt-in.
+RabbitMQ uses AddRabbitMQ with native ConnectionFactory and repeatable ConfigureRabbitMQ topology/queue bindings. Mapping queues enables Inbox; topology-only setup does not. AddOutbox stages generic intents; infrastructure handlers select destinations. Native publishing adapters explicitly register MessageDelivery and the serializer they use. Native connections are shared, channels caller-owned. See docs/en/design/rabbitmq-sample.md and transactional-outbox.md.
 
-The host may inject EF `DbContext` or the concrete context, but application handlers should use `IDbContext` / `IRepository<T>` so they remain provider-neutral.
+Authentication is native AddAuthentication().AddJwtBearer(...), UseAuthentication/UseAuthorization and endpoint RequireAuthorization. NOF only copies verified HttpContext.User. Local calls isolate the scoped principal; messages carry no durable user identity. Special tenant selection is application policy; no host-tenant annotation exists.
 
-For dynamic database selection, replace the template lookup with `.WithConnectionStringResolver(...)`. Its context provides the normalized tenant ID, concrete `DbContext` type, tenant mode, fallback template, and scoped services, so the resolver can consult a tenant catalog, secret store, or shard map before `WithOptions(...)` configures the provider.
+Use an external identity provider or OpenIddict directly; NOF owns no OIDC protocol or persistence package. Sample Identity uses the existing ConfigurationDbContext and migration chain, alongside message/business tables. Native identity records opt out of business soft deletion. Login/consent/client management and credentials belong to the host. Do not convert old tokens/hashes automatically; see docs/en/design/host-composition.md for migration and production constraints.
 
-For an application-owned migration job, resolve `ITenantDbContextFactory<TDbContext>` in a scope
-and call `MigrateAsync(tenantId, cancellationToken)` for each tenant. The application remains in
-control of tenant enumeration, retries, and concurrency, while the factory reuses the configured
-tenant connection resolution and provider options.
-
-When the context creation lifecycle itself must be customized, derive from
-`NOFDbContextFactory<TDbContext>`, override `CreateDbContext()` and/or
-`CreateDbContext(string tenantId)`, and register it with
-`UseDbContext<TDbContext, TDbContextFactory>()`. Prefer `WithConnectionStringResolver(...)` when
-only tenant database routing differs.
-
-## Default In-Memory Infrastructure
-
-`NOFWebApplicationBuilder.Create(args)` calls `AddNOFInfrastructure()`, which registers in-memory persistence, cache, command, notification, and backplane defaults. Use those defaults for lightweight development/tests; selecting a provider replaces the corresponding abstractions.
-
-`builder.AddNOFEntityFrameworkCore()` is a separate EF Core SQLite in-memory option. It is useful when code needs EF-specific behavior rather than the provider-neutral in-memory store.
-
-## Redis Cache and Backplane
-
-Package:
-
-```bash
-dotnet add package NOF.Infrastructure.StackExchangeRedis
-```
-
-Registration:
-
-```csharp
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
-    ?? throw new InvalidOperationException("Connection string 'redis' not found."));
-```
-
-This replaces `ICacheServiceRider`; callers continue to inject `ICacheService`. Use `AddRedisBackplane(...)` separately when `IBackplane` should also use Redis.
-
-## RabbitMQ
-
-Package:
-
-```bash
-dotnet add package NOF.Infrastructure.RabbitMQ
-```
-
-Registration:
-
-```csharp
-builder.Services.AddRabbitMQ(options =>
-{
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
-});
-```
-
-This replaces the default `ICommandRider` and `INotificationRider` and adds the consumer hosted service. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
-
-## OAuth/OIDC Authority
-
-Package:
-
-```bash
-dotnet add package NOF.Hosting.AspNetCore.Extension.OidcServer
-```
-
-Registration:
-
-```csharp
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
-
-builder.AddOidcServer(options =>
-{
-    options.Issuer = "https://auth.example.com/oauth2";
-    options.AccessTokenAudience = "my-app";
-    options.SigningKeyEncryptionKey = builder.Configuration["NOF:OidcServer:SigningKeyEncryptionKey"]
-        ?? throw new InvalidOperationException("OIDC signing-key encryption key not found.");
-})
-.AddPublicClient(
-    "my-app-ui",
-    ["openid", "profile", "my-app.read"],
-    redirectUris: ["https://app.example.com/oauth/callback"]);
-```
-
-`AddOidcServer(...)` registers persistent signing keys, revoked refresh tokens, clients, background cleanup/rotation, and an initialization step. The initialization step maps the OIDC/OAuth endpoints automatically and bootstraps configured clients after database migration. Supply a durable persistence provider in production.
-
-Replace `IOAuthAuthorizeEndpoint` and `IOAuthSubjectService` with application implementations when using authorization-code/OIDC identity flows. Device, confidential, private-key JWT, and dynamic-registration surfaces are also available through the OIDC server package.
-
-## JWT Resource Server
-
-```csharp
-builder.Services.AddAuthenticationResourceServer(options =>
-{
-    options.AuthorizationServerIssuer = "https://auth.example.com/oauth2";
-    options.ExpectedIssuer = "https://auth.example.com/oauth2";
-    options.Audience = "my-app";
-    options.RequireHttpsMetadata = true;
-});
-```
-
-The resource server discovers OAuth authorization-server metadata and JWKS from `AuthorizationServerIssuer`. It populates `IUserContext` and the tenant pipeline for RPC, command, and notification handling.
-
-## Object Storage and Direct Transfers
-
-Application code uses `IObjectStorage`; the default rider stores objects on the local file system.
-Use `AddMemoryObjectStorage()` for tests or `AddAmazonS3ObjectStorage(...)` for an S3 endpoint.
-`CreatePresignedUploadAsync(bucket, key, lifetime, writeOptions, cancellationToken)` and
-`CreatePresignedDownloadAsync(bucket, key, lifetime, cancellationToken)` return a URL, HTTP method,
-required headers, and expiration for direct transfers. Check `SupportsPresignedRequests`: S3
-supports this capability; file system and memory riders throw `NotSupportedException`.
-Signing applies the same tenant-aware key prefix as ordinary storage operations. Authorize the
-caller and select the bucket/key before signing; send the returned headers unchanged and configure
-bucket CORS for browser clients. S3 lifetimes range from one second to seven days, and temporary
-credentials can expire sooner. Presigned PUT uploads raw content; it is not a multipart/POST-policy API.
-
-## Configuration Snippet
-
-```json
-{
-  "ConnectionStrings": {
-    "postgres": "Host=localhost;Database=myapp;Username=postgres;Password=postgres",
-    "redis": "localhost:6379",
-    "rabbitmq": "Host=localhost;Port=5672;UserName=guest;Password=guest;VirtualHost=/"
-  },
-  "NOF": {
-    "OidcServer": {
-      "SigningKeyEncryptionKey": "replace-with-secret-configuration"
-    }
-  }
-}
-```
+JSON payloads use AddNOFJson with per-host IOptions<JsonSerializerOptions>; HTTP uses ConfigureHttpJsonOptions. Register generated contexts at index zero for reflection-disabled execution. Standalone CreateNOF() returns independent options. The host configures native OpenTelemetry sources/meters/exporters.

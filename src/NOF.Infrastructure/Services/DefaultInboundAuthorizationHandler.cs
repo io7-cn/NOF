@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using NOF.Application;
 using NOF.Contract;
 using System.Reflection;
 using System.Security.Claims;
@@ -14,30 +15,21 @@ public sealed class DefaultInboundAuthorizationHandler(
     {
         _ = cancellationToken;
 
-        var inputRequirement = ResolveInputRequirement(context);
-        var inputFailure = AuthorizeRequirement(
-            context,
-            inputRequirement,
-            ResolveOperationName(context, input: true));
-        if (inputFailure is not null)
+        var policy = InvocationAuthorizationPolicy.Resolve(context.ServiceType, context.ServiceMethodInfo,
+            context.HandlerType, context.HandlerMethodInfo);
+        foreach (var permission in policy.Requirements)
         {
-            return ValueTask.FromResult<InboundAuthorizationResult>(inputFailure);
-        }
-
-        var executionRequirement = ResolveExecutionRequirement(context);
-        var executionFailure = AuthorizeRequirement(
-            context,
-            executionRequirement,
-            ResolveOperationName(context, input: false));
-        if (executionFailure is not null)
-        {
-            return ValueTask.FromResult<InboundAuthorizationResult>(executionFailure);
+            var failure = AuthorizeRequirement(context, new PermissionRequirement(permission, false), context.HandlerMethodInfo.Name);
+            if (failure is not null)
+            {
+                return ValueTask.FromResult<InboundAuthorizationResult>(failure);
+            }
         }
 
         logger.LogDebug(
             "Authorization passed for {HandlerType}/{OperationName}",
             context.HandlerType.DisplayName,
-            ResolveOperationName(context, input: false));
+            context.HandlerMethodInfo.Name);
         return ValueTask.FromResult<InboundAuthorizationResult>(InboundAuthorizationResult.Success);
     }
 
@@ -63,8 +55,8 @@ public sealed class DefaultInboundAuthorizationHandler(
                 context.HandlerType.DisplayName,
                 operationName);
             return new InboundAuthorizationResult.Denied(
-                Result.Fail("401", "Please login first"),
-                StatusCode: 401,
+                new Abstraction.Failure("401", "Please login first"),
+                Reason: AuthorizationFailureReason.Authentication,
                 ChallengePermissions: GetPermissions(requirement.Value));
         }
 
@@ -88,51 +80,12 @@ public sealed class DefaultInboundAuthorizationHandler(
                 operationName,
                 permission);
             return new InboundAuthorizationResult.Denied(
-                Result.Fail("403", "Insufficient permissions"),
-                StatusCode: 403,
+                new Abstraction.Failure("403", "Insufficient permissions"),
+                Reason: AuthorizationFailureReason.Authorization,
                 ChallengePermissions: requiredPermissions);
         }
 
         return null;
-    }
-
-    private static string ResolveOperationName(InboundAuthorizationContext context, bool input)
-        => context.Kind switch
-        {
-            InboundAuthorizationKind.Request when input => context.ServiceMethodInfo?.Name ?? context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Request => context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Command => context.MessageType?.DisplayName ?? context.HandlerMethodInfo.Name,
-            InboundAuthorizationKind.Notification => context.MessageType?.DisplayName ?? context.HandlerMethodInfo.Name,
-            _ => context.HandlerMethodInfo.Name
-        };
-
-    private static PermissionRequirement? ResolveInputRequirement(InboundAuthorizationContext context)
-        => context.Kind switch
-        {
-            InboundAuthorizationKind.Request when context.ServiceType is not null && context.ServiceMethodInfo is not null
-                => ResolveRequestRequirement(context.ServiceType, context.ServiceMethodInfo),
-            InboundAuthorizationKind.Command when context.MessageType is not null
-                => GetRequirement(context.MessageType),
-            InboundAuthorizationKind.Notification when context.MessageType is not null
-                => GetRequirement(context.MessageType),
-            _ => null
-        };
-
-    private static PermissionRequirement? ResolveExecutionRequirement(InboundAuthorizationContext context)
-        => GetRequirement(context.HandlerMethodInfo) ?? GetRequirement(context.HandlerType);
-
-    private static PermissionRequirement? ResolveRequestRequirement(Type serviceType, MethodInfo serviceMethodInfo)
-        => GetRequirement(serviceMethodInfo) ?? GetRequirement(serviceType);
-
-    private static PermissionRequirement? GetRequirement(MemberInfo memberInfo)
-    {
-        var attr = memberInfo.GetCustomAttributes(inherit: true)
-            .OfType<MetadataAttribute>()
-            .LastOrDefault(static attr => string.Equals(attr.Key, RequirePermissionAttribute.MetadataKey, StringComparison.OrdinalIgnoreCase));
-
-        return attr is null
-            ? null
-            : new PermissionRequirement(attr.Value, RequiresAllPermissions: false);
     }
 
     private static IReadOnlyCollection<string> ResolveGrantedPermissions(ClaimsPrincipal user)

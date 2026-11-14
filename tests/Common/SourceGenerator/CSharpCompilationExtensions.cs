@@ -24,7 +24,8 @@ public static class CSharpCompilationExtensions
 
         public static CSharpCompilation CreateCompilation(string assemblyName, string source, bool isDll, params MetadataReference[] additionalRefs)
         {
-            var syntaxTree = CSharpSyntaxTree.ParseText(source);
+            // Union declarations require the C# 15 preview parser in the independently shipped Roslyn test package.
+            var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
 
             var references = _appDomainAssemblies.Select(
                     assembly => MetadataReference.CreateFromFile(assembly.Location))

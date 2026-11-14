@@ -7,31 +7,38 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
-    public AddOrUpdateConfigFile(IDbContext dbContext, ICacheService cache)
+    public AddOrUpdateConfigFile(IConfigNodeRepository nodes, IUnitOfWork unitOfWork, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(AddOrUpdateConfigFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
+        var id = ConfigNodeId.From(request.NodeId);
+        var node = await _nodes.GetAsync(id, cancellationToken);
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return new NotFound("Node not found.");
         }
 
-        var fileName = ConfigFileName.Of(request.FileName);
-        var content = ConfigContent.Of(request.Content);
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName, out var fileNameErrorMessage))
+        {
+            return new InvalidInput(fileNameErrorMessage);
+        }
+        if (!ConfigContent.TryFrom(request.Content, out var content, out var contentErrorMessage))
+        {
+            return new InvalidInput(contentErrorMessage);
+        }
 
         node.AddOrUpdateConfigFile(fileName, content);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(id), cancellationToken);
@@ -43,6 +50,6 @@ public class AddOrUpdateConfigFile : NOFSampleService.AddOrUpdateConfigFile
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 }

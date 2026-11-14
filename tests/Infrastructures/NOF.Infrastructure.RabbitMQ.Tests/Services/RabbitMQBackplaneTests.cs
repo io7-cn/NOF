@@ -21,7 +21,11 @@ public sealed class RabbitMQBackplaneTests
     {
         var services = new ServiceCollection();
 
-        services.AddRabbitMQBackplane(options => options.ConnectionString = "amqp://guest:guest@localhost:5672/");
+        services.AddRabbitMQ(factory => factory.Uri = new Uri("amqp://guest:guest@localhost:5672/"));
+        services.AddBackplane().AddRabbitMQBackplane();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+        Assert.IsType<RabbitMQBackplane>(provider.GetRequiredService<IBackplane>());
 
         Assert.Contains(
             services,
@@ -29,8 +33,8 @@ public sealed class RabbitMQBackplaneTests
                           descriptor.ImplementationType == typeof(RabbitMQBackplane));
         Assert.Contains(
             services,
-            descriptor => descriptor.ServiceType == typeof(RabbitMQConnectionManager) &&
-                          descriptor.ImplementationType == typeof(RabbitMQConnectionManager));
+            descriptor => descriptor.ServiceType == typeof(RabbitMQConnection) &&
+                          descriptor.ImplementationType == typeof(RabbitMQConnection));
         Assert.DoesNotContain(
             services,
             descriptor => descriptor.ServiceType == typeof(IHostedService) &&

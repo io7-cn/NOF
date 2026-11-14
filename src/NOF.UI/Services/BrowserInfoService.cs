@@ -37,7 +37,10 @@ public sealed class BrowserInfoService : IBrowserInfoService, IAsyncDisposable
     public async ValueTask<BrowserInfo> RefreshAsync(CancellationToken cancellationToken = default)
     {
         await EnsureListeningAsync(cancellationToken);
+        // Explicit refresh must propagate JS failures and cancellation to its caller.
+#pragma warning disable BL0016
         _cachedInfo = await _jsRuntime.InvokeAsync<BrowserInfo>(GetBrowserInfoIdentifier, cancellationToken);
+#pragma warning restore BL0016
         return _cachedInfo ?? new BrowserInfo();
     }
 
@@ -51,14 +54,7 @@ public sealed class BrowserInfoService : IBrowserInfoService, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        try
-        {
-            await StopListeningAsync();
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-
+        await StopListeningAsync();
         _dotNetObjectReference?.Dispose();
     }
 
@@ -115,7 +111,17 @@ public sealed class BrowserInfoService : IBrowserInfoService, IAsyncDisposable
             return;
         }
 
-        await _jsRuntime.InvokeVoidAsync(UnsubscribeBrowserInfoIdentifier, cancellationToken, _listenerId);
-        _isListening = false;
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync(UnsubscribeBrowserInfoIdentifier, cancellationToken, _listenerId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // A disconnected browser has no subscription left to remove.
+        }
+        finally
+        {
+            _isListening = false;
+        }
     }
 }

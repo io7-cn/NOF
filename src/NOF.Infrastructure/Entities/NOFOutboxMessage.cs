@@ -8,14 +8,13 @@ namespace NOF.Infrastructure;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public class NOFOutboxMessage
 {
-    private static long _lastCreatedAtUtcTicks;
-
     public Guid Id { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public int RetryCount { get; set; }
 
-    public OutboxMessageType MessageType { get; set; }
-    public string DispatchRoutes { get; set; } = null!;
+    public string MessageType { get; set; } = null!;
+    public int SchemaVersion { get; set; } = 1;
+    public DateTime? NextAttemptAtUtc { get; set; }
     public byte[] Payload { get; set; } = null!;
     public string Headers { get; set; } = null!;
     public DateTime? SentAtUtc { get; set; }
@@ -27,56 +26,26 @@ public class NOFOutboxMessage
     public OutboxMessageStatus Status { get; set; } = OutboxMessageStatus.Pending;
 
     public string? TraceParent { get; set; }
-    public string? OrderKey { get; set; }
-    public long? Sequence { get; set; }
-    public bool CompletesOrderKey { get; set; }
 
     internal static NOFOutboxMessage Create(
-        OutboxMessageType messageType,
-        string dispatchRoutes,
+        string messageType,
+        int schemaVersion,
         byte[] payload,
         string headers,
-        string? traceParent,
-        OutboxOrder? order = null)
+        string? traceParent)
     {
-        var createdAtUtc = GetNextCreatedAtUtc();
+        var createdAtUtc = DateTime.UtcNow;
         return new NOFOutboxMessage
         {
             Id = Guid.CreateVersion7(new DateTimeOffset(createdAtUtc)),
             CreatedAtUtc = createdAtUtc,
             MessageType = messageType,
-            DispatchRoutes = dispatchRoutes,
+            SchemaVersion = schemaVersion,
             Payload = payload,
             Headers = headers,
-            TraceParent = traceParent,
-            OrderKey = order?.OrderKey,
-            Sequence = order?.Sequence,
-            CompletesOrderKey = order?.CompletesOrderKey ?? false
+            TraceParent = traceParent
         };
     }
-
-    private static DateTime GetNextCreatedAtUtc()
-    {
-        while (true)
-        {
-            // Use microsecond increments because common relational providers persist at least that precision.
-            // This preserves enqueue order across command and notification senders in the same process.
-            var nowTicks = DateTime.UtcNow.Ticks;
-            nowTicks -= nowTicks % 10;
-            var lastTicks = Volatile.Read(ref _lastCreatedAtUtcTicks);
-            var nextTicks = Math.Max(nowTicks, lastTicks + 10);
-            if (Interlocked.CompareExchange(ref _lastCreatedAtUtcTicks, nextTicks, lastTicks) == lastTicks)
-            {
-                return new DateTime(nextTicks, DateTimeKind.Utc);
-            }
-        }
-    }
-}
-
-public enum OutboxMessageType
-{
-    Command = 0,
-    Notification = 1
 }
 
 public enum OutboxMessageStatus

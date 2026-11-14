@@ -13,11 +13,13 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
     private readonly AsyncServiceScope _scope;
     private Context _context = Context.Empty;
     private IDisposable? _contextScope;
+    private readonly IDisposable _ambientBinding;
     private Activity? _tracingActivity;
 
     public NOFTestScope(AsyncServiceScope scope)
     {
         _scope = scope;
+        _ambientBinding = scope.ServiceProvider.BindNOF(_context);
     }
 
     public IServiceProvider Services => _scope.ServiceProvider;
@@ -109,35 +111,24 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
             roleType: ClaimTypes.Role)));
     }
 
-    public TClient GetRpcClient<TClient>() where TClient : notnull
-    {
-        return GetRequiredService<TClient>();
-    }
-
-    public Task<TResult> CallAsync<TClient, TResult>(
-        Func<TClient, Context, CancellationToken, Task<TResult>> invocation,
-        Context? context = null,
-        CancellationToken cancellationToken = default)
-        where TClient : notnull
+    /// <summary>Executes a server operation using this scope's service provider and explicit context.</summary>
+    public Task<TResult> CallAsync<TResult>(
+        Func<IServiceProvider, Context, CancellationToken, Task<TResult>> invocation,
+        Context? context = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(invocation);
-
-        return invocation(GetRpcClient<TClient>(), context ?? Context, cancellationToken);
+        return invocation(_scope.ServiceProvider, context ?? Context, cancellationToken);
     }
 
-    public Task SendAsync<TCommand>(TCommand command, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        return GetRequiredService<ICommandSender>().SendAsync(command, context ?? Context, cancellationToken);
-    }
-
-    public Task PublishAsync<TNotification>(TNotification notification, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        return GetRequiredService<INotificationPublisher>().PublishAsync(notification, context ?? Context, cancellationToken);
-    }
+    /// <summary>Stages an intent in this scope; save its unit of work explicitly before disposing.</summary>
+    public ValueTask<Guid> EnqueueAsync<T>(T message, Context? context = null,
+        IReadOnlyDictionary<string, string?>? headers = null, CancellationToken cancellationToken = default)
+        => GetRequiredService<IOutbox>().EnqueueAsync(message, context ?? Context, headers, cancellationToken);
 
     public void Dispose()
     {
         _contextScope?.Dispose();
+        _ambientBinding.Dispose();
         _tracingActivity?.Dispose();
         _scope.Dispose();
     }
@@ -145,6 +136,7 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
     public ValueTask DisposeAsync()
     {
         _contextScope?.Dispose();
+        _ambientBinding.Dispose();
         _tracingActivity?.Dispose();
         return _scope.DisposeAsync();
     }

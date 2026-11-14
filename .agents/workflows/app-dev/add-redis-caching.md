@@ -15,7 +15,7 @@ dotnet add package NOF.Infrastructure.StackExchangeRedis
 ## 2. Register Redis
 
 ```csharp
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
+builder.Services.AddCacheService().AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
 ```
 
@@ -46,7 +46,7 @@ public sealed record OrderCacheKey(long OrderId)
 public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
     : OrderService.GetOrder
 {
-    public override async Task<Result<OrderDto>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
         var cached = await cache.GetAsync(key, cancellationToken);
         if (cached.HasValue)
         {
-            return Result.Success(cached.Value);
+            return cached.Value;
         }
 
         var order = await dbContext.Set<Order>()
@@ -63,16 +63,16 @@ public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
             .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
         if (order is null)
         {
-            return Result.Fail("404", "Order not found");
+            return new NotFound("Order not found");
         }
 
         var dto = new OrderDto(order.Id, order.Status);
         await cache.SetAsync(key, dto, cancellationToken: cancellationToken);
-        return Result.Success(dto);
+        return dto;
     }
 }
 ```
 
 `ICacheService` also implements `IDistributedCache` and supports multi-key operations, atomic counters, TTL operations, and distributed locks. Cache keys are tenant-prefixed by default; use `IgnoreQueryFilters()` only for deliberate cross-tenant/host access.
 
-Use `builder.Services.AddRedisBackplane(...)` separately when `IBackplane` should use Redis as well.
+Use `builder.Services.AddBackplane().AddRedisBackplane(...)` separately when `IBackplane` should use Redis as well.

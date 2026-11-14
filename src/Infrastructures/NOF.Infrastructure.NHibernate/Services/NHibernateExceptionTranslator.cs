@@ -13,9 +13,9 @@ public static class NHibernateExceptionTranslator
     public static Exception TranslateSaveChangesException(Exception ex)
         => ex switch
         {
+            StaleStateException => new AppDbUpdateConcurrencyException(ex.Message, ex),
+            ADOException => new AppDbUpdateException(ex.Message, ex),
             HibernateException => new AppDbException(ex.Message, ex),
-            _ when ex.GetType().Name.Contains("Stale", StringComparison.Ordinal) => new AppDbUpdateConcurrencyException(ex.Message, ex),
-            _ when ex.GetType().Name.Contains("ADO", StringComparison.OrdinalIgnoreCase) => new AppDbUpdateException(ex.Message, ex),
             _ => ex
         };
 

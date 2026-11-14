@@ -7,29 +7,38 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class SetActiveFile : NOFSampleService.SetActiveFile
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
-    public SetActiveFile(IDbContext dbContext, ICacheService cache)
+    public SetActiveFile(IConfigNodeRepository nodes, IUnitOfWork unitOfWork, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(SetActiveFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(SetActiveFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
+        var id = ConfigNodeId.From(request.NodeId);
+        var node = await _nodes.GetAsync(id, cancellationToken);
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return new NotFound("Node not found.");
         }
 
-        var fileName = string.IsNullOrEmpty(request.FileName) ? (ConfigFileName?)null : ConfigFileName.Of(request.FileName);
+        ConfigFileName? fileName = null;
+        if (!string.IsNullOrEmpty(request.FileName))
+        {
+            if (!ConfigFileName.TryFrom(request.FileName, out var parsedFileName, out var parsedFileNameErrorMessage))
+            {
+                return new InvalidInput(parsedFileNameErrorMessage);
+            }
+            fileName = parsedFileName;
+        }
         node.SetActiveFileName(fileName);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(id), cancellationToken);
@@ -41,6 +50,6 @@ public class SetActiveFile : NOFSampleService.SetActiveFile
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 }

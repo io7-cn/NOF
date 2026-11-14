@@ -2,7 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
+using NOF.Hosting;
+using NOF.Infrastructure;
 namespace NOF.Infrastructure;
 
 /// <summary>
@@ -13,25 +16,28 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxCleanupBackgroundService> _logger;
     private readonly TransactionalMessageProcessorOptions _options;
-    private readonly IHostEnvironment _hostEnvironment;
+    private readonly IOptions<DeploymentOptions> _deployment;
     private readonly ITenantProvider _tenantProvider;
 
     public OutboxCleanupBackgroundService(
         IServiceProvider serviceProvider,
         IOptions<TransactionalMessageOptions> options,
         ILogger<OutboxCleanupBackgroundService> logger,
-        IHostEnvironment hostEnvironment,
+        IOptions<DeploymentOptions> deployment,
         ITenantProvider tenantProvider)
     {
         _serviceProvider = serviceProvider;
         _options = options.Value.Outbox;
         _logger = logger;
-        _hostEnvironment = hostEnvironment;
+        _deployment = deployment;
         _tenantProvider = tenantProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.RunWorkers)
+        { return; }
+
         _logger.LogInformation(
             "Outbox cleanup service started. Cleanup interval: {Interval}, Retention period: {Retention}",
             _options.CleanupInterval, _options.RetentionPeriod);
@@ -41,11 +47,11 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
             try
             {
                 await Task.Delay(_options.CleanupInterval, stoppingToken);
-                if (!_hostEnvironment.IsPrimaryNodeEnvironment)
+                if (!_deployment.Value.IsPrimaryNode)
                 {
                     _logger.LogDebug(
                         "Skipping outbox cleanup on non-primary node {InstanceId}",
-                        _hostEnvironment.InstanceId);
+                        _deployment.Value.InstanceId);
                     continue;
                 }
 
@@ -78,30 +84,15 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     private async Task CleanupOutboxAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
-        scope.ServiceProvider.ResolveDaemonServices();
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
-        if (dbContext is null)
+        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
+        var store = scope.ServiceProvider.GetService<IOutboxStore>();
+        if (store is null)
         {
-            _logger.LogDebug("Skipping outbox cleanup because no IDbContext provider is registered.");
+            _logger.LogDebug("Skipping outbox cleanup because no IOutboxStore is registered.");
             return;
         }
         var olderThan = DateTime.UtcNow - _options.RetentionPeriod;
-        var deletedCount = await dbContext.Set<NOFOutboxMessage>()
-            .Where(m => m.Status == OutboxMessageStatus.Sent)
-            .Where(m => m.SentAtUtc != null && m.SentAtUtc < olderThan)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var compactedOrderStateCount = await dbContext.Set<NOFOutboxOrderState>()
-            .Where(state => state.CreatedAtUtc < olderThan)
-            .Where(state => dbContext.Set<NOFOutboxOrderState>().Any(newer =>
-                newer.OrderKey == state.OrderKey && newer.Sequence > state.Sequence))
-            .ExecuteDeleteAsync(cancellationToken);
-
-        var deletedCompletedOrderStateCount = await dbContext.Set<NOFOutboxOrderState>()
-            .Where(state => state.CompletesOrderKey && state.CreatedAtUtc < olderThan)
-            .Where(state => !dbContext.Set<NOFOutboxMessage>().Any(message =>
-                message.OrderKey == state.OrderKey && message.Status != OutboxMessageStatus.Sent))
-            .ExecuteDeleteAsync(cancellationToken);
+        var deletedCount = await store.CleanupAsync(olderThan, cancellationToken);
 
         if (deletedCount > 0)
         {
@@ -114,12 +105,5 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
             _logger.LogDebug("Outbox cleanup completed. No messages to delete");
         }
 
-        if (compactedOrderStateCount > 0 || deletedCompletedOrderStateCount > 0)
-        {
-            _logger.LogInformation(
-                "Outbox order-state cleanup completed. Compacted {CompactedCount} historical allocations and deleted {CompletedCount} completed keys",
-                compactedOrderStateCount,
-                deletedCompletedOrderStateCount);
-        }
     }
 }

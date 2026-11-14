@@ -9,47 +9,42 @@ namespace NOF.Domain;
 /// </remarks>
 public static class IdGenerator
 {
-    private static readonly AsyncLocal<IIdGenerator?> _currentGenerator = new();
+    private static readonly AsyncLocal<Func<IIdGenerator?>?> _currentGenerator = new();
 
     /// <summary>
-    /// Gets the ambient <see cref="IIdGenerator"/> instance for the current async flow.
+    /// Gets the ambient <see cref="IIdGenerator"/> for the current async flow, or null when none is bound.
     /// </summary>
-    public static IIdGenerator Current
-    {
-        get => _currentGenerator.Value ?? throw new InvalidOperationException(
-            "No ambient IIdGenerator is available for the current async flow.");
-    }
+    public static IIdGenerator? Current => _currentGenerator.Value?.Invoke();
 
     /// <summary>
     /// Pushes an ambient <see cref="IIdGenerator"/> into the current async flow for convenience API usage.
     /// </summary>
-    public static IDisposable PushCurrent(IIdGenerator generator)
-    {
-        ArgumentNullException.ThrowIfNull(generator);
+    /// <remarks>A null generator explicitly shadows the previous binding until disposal.</remarks>
+    public static IDisposable PushCurrent(IIdGenerator? generator) => PushFactory(() => generator);
 
+    private static IDisposable PushFactory(Func<IIdGenerator?> resolve)
+    {
         var previous = _currentGenerator.Value;
-        _currentGenerator.Value = generator;
+        _currentGenerator.Value = resolve;
         return new AmbientIdGeneratorScope(previous);
     }
 
     /// <summary>
-    /// Resolves and pushes the current scope's <see cref="IIdGenerator"/> into the ambient async flow.
+    /// Lazily resolves the bound scope's <see cref="IIdGenerator"/> into the ambient async flow.
     /// </summary>
     public static IDisposable PushCurrent(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var generator = services.GetService(typeof(IIdGenerator)) as IIdGenerator
-            ?? throw new InvalidOperationException($"No service of type '{typeof(IIdGenerator).FullName}' is registered.");
-        return PushCurrent(generator);
+        return PushFactory(() => services.GetService(typeof(IIdGenerator)) as IIdGenerator);
     }
 
     private sealed class AmbientIdGeneratorScope : IDisposable
     {
-        private readonly IIdGenerator? _previousGenerator;
+        private readonly Func<IIdGenerator?>? _previousGenerator;
         private bool _disposed;
 
-        public AmbientIdGeneratorScope(IIdGenerator? previousGenerator)
+        public AmbientIdGeneratorScope(Func<IIdGenerator?>? previousGenerator)
         {
             _previousGenerator = previousGenerator;
         }

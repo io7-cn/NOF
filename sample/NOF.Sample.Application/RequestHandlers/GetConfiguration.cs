@@ -2,34 +2,36 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using NOF.Sample.Application.Repositories;
 using System.Text.Json.Nodes;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
 public class GetConfiguration : NOFSampleService.GetConfiguration
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeQueries _queries;
     private readonly ICacheService _cache;
 
-    public GetConfiguration(IDbContext dbContext, ICacheService cache)
+    public GetConfiguration(IConfigNodeQueries queries, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _queries = queries;
         _cache = cache;
     }
 
-    public override async Task<Result<GetConfigurationResponse>> HandleAsync(GetConfigurationRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigurationRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var appNameStr = request.AppName;
+        if (!ConfigNodeName.TryFrom(request.AppName, out var appName, out var appNameErrorMessage))
+        {
+            return new InvalidInput(appNameErrorMessage);
+        }
+        var appNameStr = (string)appName;
         var appCacheKey = new ConfigResultCacheKey(appNameStr);
 
         // 1. Find App Node
-        var appName = ConfigNodeName.Of(appNameStr);
         var appNodeDto = await GetNodeByNameAsync(appName, cancellationToken);
 
         if (appNodeDto is null)
         {
-            return Result.Fail("404", "Config node not found.");
+            return new NotFound("Config node not found.");
         }
 
         // 2. Expand Path to Root
@@ -37,7 +39,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
         // Check versions
         var maxVersion = 0L;
-        foreach (var versionKey in fullPath.Select(node => new ConfigNodeVersionCacheKey(ConfigNodeId.Of(node.Id))))
+        foreach (var versionKey in fullPath.Select(node => new ConfigNodeVersionCacheKey(ConfigNodeId.From(node.Id))))
         {
             var version = await _cache.GetAsync(versionKey, cancellationToken: cancellationToken);
             version.IfSome(versionVal =>
@@ -86,10 +88,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
             return cachedValue.Value;
         }
 
-        var dto = await _dbContext.Set<ConfigNode>()
-            .QueryNodeByName(name)
-            .ProjectTo<ConfigNodeDto>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var dto = await _queries.FindByNameAsync(name, cancellationToken);
         if (dto is null)
         {
             return null;
@@ -113,10 +112,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
             return cachedValue.Value;
         }
 
-        var dto = await _dbContext.Set<ConfigNode>()
-            .QueryNodeById(id)
-            .ProjectTo<ConfigNodeDto>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var dto = await _queries.FindAsync(id, cancellationToken);
         if (dto is null)
         {
             return null;
@@ -141,7 +137,7 @@ public class GetConfiguration : NOFSampleService.GetConfiguration
 
         while (current.ParentId.HasValue)
         {
-            var parent = await GetNodeByIdAsync(ConfigNodeId.Of(current.ParentId.Value), cancellationToken);
+            var parent = await GetNodeByIdAsync(ConfigNodeId.From(current.ParentId.Value), cancellationToken);
             if (parent is null)
             {
                 break;

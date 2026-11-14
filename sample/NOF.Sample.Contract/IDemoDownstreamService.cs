@@ -3,12 +3,14 @@ using System.ComponentModel;
 
 namespace NOF.Sample;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IDemoDownstreamService : IRpcService
+public interface IDemoDownstreamService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Post, "rpc/OAuthChainDemo/Downstream/Inspect")]
     [Summary("消费 access token")]
     [Description("由下游服务读取 access token 中的 subject、permissions、scopes 与 proxy service name")]
     [Category("认证演示")]
-    Result<ConsumeDemoAccessTokenResponse> InspectAccessToken(Empty request);
+    [FailureCase("Rejected")]
+    [FailureCase("Unauthorized", "401")]
+    [FailureCase("Forbidden", "403")]
+    [FailureCase("ServerError", "500")]
+    ConsumeDemoAccessTokenResponse InspectAccessToken(Empty request);
 }

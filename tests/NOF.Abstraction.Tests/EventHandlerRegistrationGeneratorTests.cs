@@ -13,11 +13,10 @@ public class EventHandlerRegistrationGeneratorTests
     {
         const string source = """
             using NOF.Abstraction;
-            using NOF.Contract;
             namespace App
             {
                 public record MyEvent;
-                public class MyEventHandler : InMemoryEventHandler<MyEvent>
+                public class MyEventHandler : LocalEventHandler<MyEvent>
                 {
                     public override System.Threading.Tasks.Task HandleAsync(MyEvent @event, Context context, System.Threading.CancellationToken cancellationToken) => throw new System.NotImplementedException();
                 }
@@ -27,7 +26,7 @@ public class EventHandlerRegistrationGeneratorTests
         var comp = CSharpCompilation.CreateCompilation("App", source, isDll: true,
             typeof(IServiceCollection),
             typeof(InitializedTypes),
-            typeof(InMemoryEventHandler<>),
+            typeof(LocalEventHandler<>),
             typeof(EventHandlerRegistration));
 
         var result = new EventHandlerRegistrationGenerator().GetResult(comp);

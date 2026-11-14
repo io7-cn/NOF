@@ -4,16 +4,18 @@ Unified infrastructure entry package for the [NOF Framework](https://github.com/
 
 ## Overview
 
-`NOF.Infrastructure` provides the default runtime wiring for NOF applications, including:
+`NOF.Infrastructure` installs operation execution and common authorization/tenant policy. Cache, object storage, backplane, ID algorithms and messaging are explicit capabilities, selected through typed selectors. Authentication and telemetry exporters belong to the native host.
 
-- builder defaults and step orchestration
-- in-memory cache and messaging riders
-- OpenTelemetry registration and transport middleware
-- JWT resource server validation and command/notification token propagation
-- `[UseHostTenant]` RPC execution after authorization, registered by default through `HostTenantInboundMiddleware`
-- ambient `IMapper` and `IIdGenerator` activation through scoped `IDaemonService` implementations
+```csharp
+builder.Services.AddCacheService().AddMemoryCacheService();
+builder.Services.AddObjectStorage().AddFileSystemObjectStorage();
+builder.Services.AddBackplane().AddMemoryBackplane();
+builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
+```
 
-This lets consumers reference one package/project while still getting the full default infrastructure setup.
+See [host composition and identity migration](../../docs/en/design/host-composition.md) ([简体中文](../../docs/zh-CN/design/host-composition.md)).
+
+Application services use AddApplicationService<TService>() and application-part initialization for generated operation implementations. Generated Service.Operation.InvokeAsync uses the existing policy pipeline; no client interfaces or implementations are generated, and undecorated contracts expose no HTTP routes. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Usage
 
@@ -32,12 +34,11 @@ This package includes:
 - in-memory cache (`ICacheService` + `MemoryCacheServiceRider`)
 - local file system object storage (`IObjectStorage` + `FileSystemObjectStorageRider`), with an optional `MemoryObjectStorageRider` for tests
 - in-memory backplane (`IBackplane` + `MemoryBackplane`)
-- in-memory riders (`MemoryCommandRider`, `MemoryNotificationRider`)
-- in-memory persistence for tests/development (`services.AddInMemoryPersistence()`)
+- direct MemoryMessageClient queue/subscription receipt acceptance
+- message-only in-memory persistence for development (`services.AddInMemoryMessagingPersistence()`)
 - in-process event publisher (`IEventPublisher`)
-- database-agnostic persistence adapters for `IDbContext`, Domain `IRepository<T>`, and async query extensions
+- feature-specific IInboxStore/IOutboxStore contracts, implemented through native APIs in provider packages
 - outbox / inbox entities and transactional message background services
-- JWT resource server primitives (`services.AddAuthenticationResourceServer(...)`, JWKS fetching/cache, inbound token validation)
 
 The default in-memory cache implementation is isolated per NOF host:
 
@@ -50,12 +51,12 @@ The default backplane implementation is also host-local:
 - subscriptions live in `MemoryBackplaneState`
 - published messages are delivered only to subscribers inside the same NOF host process
 
-The default object storage implementation persists content and metadata locally under `AppContext.BaseDirectory/App_Data/objects`. Configure a writable, persistent directory through `builder.Services.AddFileSystemObjectStorage(options => options.RootPath = "/data/objects")`. Relative paths resolve against the working directory. The directory is provider-owned: object names are hashed, and files contain both metadata and content; do not modify its files or add symbolic links. Writes replace complete objects atomically, and reads retain a snapshot across replacement or deletion. Listing uses ordinal key order and prefix matching; it scans the bucket's metadata files.
+The explicitly selected file-system object store persists content and metadata locally under `AppContext.BaseDirectory/App_Data/objects`. Configure a writable, persistent directory through `builder.Services.AddObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = "/data/objects")`. Relative paths resolve against the working directory. The directory is provider-owned: object names are hashed, and files contain both metadata and content; do not modify its files or add symbolic links. Writes replace complete objects atomically, and reads retain a snapshot across replacement or deletion. Listing uses ordinal key order and prefix matching; it scans the bucket's metadata files.
 
-For isolated tests, use `builder.Services.AddMemoryObjectStorage()`. `NOFTestAppBuilder` selects this automatically; state is shared between scopes within one host and discarded when that host is disposed. Replace `IObjectStorageRider` in a provider package to connect another backend while keeping application code unchanged. For AWS S3 and S3-compatible services, reference `NOF.Infrastructure.AmazonS3`:
+For isolated tests, use `builder.Services.AddObjectStorage().AddMemoryObjectStorage()`. `Host.CreateApplicationBuilder().AddNOFTest()` selects this automatically; state is shared between scopes within one host and discarded when that host is disposed. Replace `IObjectStorageRider` in a provider package to connect another backend while keeping application code unchanged. For AWS S3 and S3-compatible services, reference `NOF.Infrastructure.AmazonS3`:
 
 ```csharp
-builder.Services.AddAmazonS3ObjectStorage(options =>
+builder.Services.AddObjectStorage().AddAmazonS3ObjectStorage(options =>
 {
     options.Region = "ap-southeast-1";
 });
@@ -78,117 +79,37 @@ S3 supports signing; the built-in file system and memory riders report `false` a
 preserve compatibility for custom riders that have not implemented signing. Authorize each signing
 request in the application before issuing a URL. See the S3 provider README for browser usage.
 
-## Tenant authorization
+## Identity and tenant authorization
 
-Tenant headers are routing input. The default inbound pipeline authenticates the caller,
-normalizes the tenant header (missing means `host`), authorizes the operation, and then
-replaces the tenant with the authenticated identity's tenant when one is present.
-An authenticated identity without a tenant retains header-based selection by default.
-For public RPC hosts that require tenant-bound identities, enable both checks:
+The native host authenticates HTTP requests. Configure AddAuthentication().AddJwtBearer(...), UseAuthentication/UseAuthorization and endpoint RequireAuthorization when native challenge/forbid behavior is required. NOF copies only HttpContext.User, then runs cross-origin business authorization before constructing handlers. It never validates JWTs or treats Context.Items as credentials.
 
-```csharp
-builder.Services.Configure<TenantAuthorizationOptions>(options =>
-{
-    options.RequireAuthenticatedTenantForRequests = true;
-    options.RejectMismatchedTenantForRequests = true;
-});
-```
+TenantAuthorizationOptions can require an authenticated non-host tenant and reject conflicting tenant routing input. Both checks apply uniformly to all invocation origins, with no platform-operation exception. Missing routing metadata still normalizes to host; a trusted identity tenant takes precedence. Use an application-owned authorization handler for membership/catalog checks and an explicit application filter for special execution context. There is no host-tenant annotation or metadata key interpretation.
 
-The first option requires authentication for every RPC request, including operations
-marked `AllowAnonymous`. Ordinary operations additionally require a non-host identity
-tenant. The second rejects conflicting non-host request and identity tenants. Missing
-or `host` headers allow selection from the verified identity. Rejection occurs before
-handler dependency resolution, with HTTP 401 or 403 on Controller RPC. Both options
-default to false for compatibility. Custom endpoints outside RPC are unaffected.
+Local invocation isolates the scoped principal; reliable messages persist no user identity. Restrict broker access and establish trusted producer/tenant policy at the adapter boundary. See [native host composition](../../docs/en/design/host-composition.md) and the [HTTP identity regression](../../tests/NOF.Hosting.AspNetCore.Tests/TenantRequestAuthorizationTests.cs).
 
-`[UseHostTenant]` deliberately changes execution tenancy after authorization. It is
-exempt from identity-tenant and mismatch checks, but strict mode still requires an
-authenticated caller. Declare a separate `[RequirePermission("platform.manage")]`
-and validate platform access; the attribute alone grants no permissions.
+## Server operation invocation
 
-Use the existing `IInboundAuthorizationHandler` extension point to validate that the
-identity tenant is active and ready in an application-owned, trusted tenant catalog.
-Delegate ordinary permission checks to `DefaultInboundAuthorizationHandler`, then
-query that catalog before allowing execution. This hook runs before identity-based
-tenant replacement: read the authenticated `context.User.TenantId`, not the header's
-`context.ExecutionContext.TenantId`, when validating tenant membership. Do not resolve
-tenant-specific persistence while making that decision. The Host connection-string
-resolver must also reject unknown tenants instead of building database names from headers.
-See the [HTTP/JWT security test](../../tests/NOF.Hosting.AspNetCore.Tests/TenantRequestAuthorizationTests.cs)
-for a catalog decorator, strict configuration, and checks before tenant-service resolution.
-
-Command and notification consumers retain their existing behavior; these request
-options do not authenticate broker headers. Restrict broker publishers and subscriptions,
-and use `IInboundAuthorizationHandler` for `Command` and `Notification` to authorize
-the producer and catalog tenant. Carry only validated metadata from public requests.
-The handler's explicit `Context` contains the effective tenant; `WithTenantId` rewrites
-the same context item used by outbound tenant middleware. Do not reconstruct it from
-untrusted transport headers. Returning `Denied` for a message stops its handler;
-it does not throw or automatically send the message to a dead-letter queue. Design and
-test rejection/acknowledgement semantics when adding consumer authorization.
-
-## External access tokens
-
-The built-in resource server supports one trusted authority and one expected audience.
-Federate upstream identity sources through that authority when necessary. `Sources`
-selects token headers, not authorities; the JWKS cache is scoped to the configured
-authority and must not be switched according to an unverified token's issuer.
+Register the application service once and call the generated server operation entry:
 
 ```csharp
-builder.Services.AddAuthenticationResourceServer(options =>
-{
-    options.AuthorizationServerIssuer = "https://identity.example.com";
-    options.ExpectedIssuer = "https://identity.example.com";
-    options.Audience = "orders-api";
-    options.RequireHttpsMetadata = true;
-});
+builder.AddApplicationService<OrderService>();
+var order = await OrderService.GetOrder.InvokeAsync(services, request, context, ct);
 ```
 
-Replace issuer and audience with the values issued for your API. The issuer is always
-validated; if neither configuration nor metadata supplies one, authentication fails.
-Audience validation remains optional for compatibility, so configure it explicitly in
-production. Invalid tokens leave the caller unauthenticated; require authentication
-on protected operations through `RequirePermission` or the strict tenant policy.
-Map external tenant and permission claims to the NOF conventions in the trusted
-identity source. OAuth scope claims are not automatically converted to permissions.
+`IOperationInvoker` is registered as scoped infrastructure. Static operation
+entries delegate to it; no client interfaces or Local/HTTP Client implementations are
+generated. Invocation opens and asynchronously disposes a fresh scope for daemon
+services, inbound policies and the handler. Context items flow directly and the
+caller's identity is copied as an isolated snapshot; persistence dependencies are
+not shared. Local identity is already verified, so token authentication is skipped
+while application authorization and tenant policies still run. Authorization and tenant normalization precede
+handler resolution. Complete invocation returns `Task<object?>`: match a business value/union or a generated filter failure. Business handlers keep their closed typed response. Infrastructure owns filter interfaces, Global/Service/UseCase Use/Exclude rules and the effective failure catalog; InvocationContext has no mutable result slot. See [invocation extensions](../../docs/en/design/invocation-extensions.md).
 
-## Local RPC Clients
-
-The Infrastructure source generator discovers `RpcServer<TService>` implementations in the host and referenced application assemblies. For a server named `OrderService`, it generates a public `LocalOrderServiceClient` implementing the canonical client interface generated beside the service contract:
-
-```csharp
-public partial class OrderService : RpcServer<IOrderService>;
-
-builder.Services.ReplaceOrAddScoped<IOrderServiceClient, LocalOrderServiceClient>();
-```
-
-No `LocalRpcClientAttribute` or user-authored empty partial client class is required. Both the Contract and Infrastructure generators derive `IOrderServiceClient` independently from `IOrderService`; the Infrastructure generator never reads Contract generator output.
-
-Local calls preserve the same request boundary as a remote RPC for dependency-injection lifetimes. The outbound pipeline runs in the caller's scope. Its terminal dispatch creates and asynchronously disposes a new scope for RPC server resolution, daemon-service activation, the inbound pipeline, and the handler. Scoped dependencies such as `DbContext` are therefore not shared between the caller and handler, while headers produced by outbound middleware cross the boundary.
-
-Contracts marked with `[TransportOverMemory]` use the same local client path. Their server registrations remain available to `RpcServerInvoker`. The transport initialization step stays transport-agnostic and passes every registration to every `IRpcServerTransport`; each transport inspects the contract metadata and decides whether it applies. The built-in HTTP transport ignores memory-only contracts.
-
-## RPC Server Transport Extension Point
-
-`NOF.Infrastructure` owns the framework-level RPC server transport initialization step. Transport packages implement `IRpcServerTransport` and register the implementation in DI:
-
-```csharp
-public sealed class MyRpcServerTransport : IRpcServerTransport
-{
-    public TopologyComparison Compare(IRpcServerTransport other)
-        => TopologyComparison.DoesNotMatter;
-
-    public Task MapAsync(IHost host, RpcServerRegistration registration)
-    {
-        // Inspect the contract metadata and map this registration.
-        return Task.CompletedTask;
-    }
-}
-
-services.AddRpcServerTransport<MyRpcServerTransport>();
-```
-
-At application initialization, NOF orders all registered transports through the normal topology mechanism and passes every `RpcServerRegistration`, together with the built `IHost`, to each transport. The transport implementation owns applicability checks and mapping behavior.
+Plain contracts expose no HTTP routes. Ordinary HTTP feature extensions in the HTTP
+host own routing and use HttpContext.InvokeAsync with generated operation descriptors.
+Legacy HTTP RPC transports, IApplicationServiceTransport and automatic service-to-route
+initialization are deleted. Host endpoint modules explicitly select service operations.
+See the [REST implementation](../../docs/en/design/configuration-rest.md).
 
 ## Persistence Providers
 
@@ -200,14 +121,14 @@ After adding the EF Core package, persistence is configured through `UseDbContex
 using Microsoft.EntityFrameworkCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
 Available configuration methods:
@@ -216,11 +137,11 @@ Available configuration methods:
 - `WithConnectionString(...)`
 - `WithConnectionStringResolver(...)`
 - `WithOptions(...)`
-- `MigrateOnInitialize()`
+- `MigrateOnStart()`
 
 The resolver receives the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and scoped services. Use it for tenant catalogs, secret stores, or shard maps; the template remains the convenient static default.
 
-`MigrateOnInitialize()` waits for host database migration during initialization. In
+`MigrateOnStart()` waits for host database migration before hosted services start. In
 `DatabasePerTenant` mode, it then migrates tenants from `ITenantProvider` sequentially in the
 background after the application starts. Each migration uses an isolated scope and the tenant's
 resolved connection string; one tenant failure is logged without stopping the remaining migrations.
@@ -256,7 +177,7 @@ builder.UseDbContext<AppDbContext>()
     .WithConnectionString(builder.Configuration.GetConnectionString("sqlite")
         ?? throw new InvalidOperationException("Connection string 'sqlite' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
 ## In-Memory SQLite
@@ -266,3 +187,15 @@ For tests or lightweight local scenarios, `NOF.Infrastructure.EntityFrameworkCor
 ## License
 
 Apache-2.0
+
+## Invocation execution
+
+NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. `MessageDelivery` directly prepares identity, tenant and trace metadata for immediate and transactional sends. See [execution and migration](../../docs/en/design/invocation-extensions.md).
+
+Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. Native DbContext/ISession and query/model APIs remain in host/provider implementations. The generic session/query/update/model facade and general memory ORM are removed. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).
+
+See [unified operations](../../docs/en/design/unified-operations.md) for IOperationExecutor, host message bindings, durable consumer IDs and stored-route migration.
+
+Immediate messages use concrete MemoryMessageClient or native RabbitMQ IChannel with explicit destinations. Generic IOutbox intents are interpreted by OutboxHandler<T> adapters automatically registered through AddApplicationPart (public MessageType and optional SchemaVersion constants); AddOutbox() explicitly enables the capability; AddRabbitMQ does not replace the memory client. Transport-owned queue/subscription endpoints remain separate. See [transactional outbox](../../docs/en/design/transactional-outbox.md).
+
+Durable workers and model contributors are installed only by AddOutbox/AddInbox (enabled by transport endpoint configuration). Set TransactionalMessageOptions.Outbox/Inbox.RunWorkers=false for staging/receiving-only hosts. See [outbox capability assembly](../../docs/en/design/transactional-outbox.md).

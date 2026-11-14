@@ -2,24 +2,23 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using NOF.Sample.Application.Repositories;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
 public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeQueries _queries;
     private readonly ICacheService _cache;
 
-    public GetConfigNodeById(IDbContext dbContext, ICacheService cache)
+    public GetConfigNodeById(IConfigNodeQueries queries, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _queries = queries;
         _cache = cache;
     }
 
-    public override async Task<Result<GetConfigNodeByIdResponse>> HandleAsync(GetConfigNodeByIdRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigNodeByIdRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var nodeId = ConfigNodeId.Of(request.Id);
+        var nodeId = ConfigNodeId.From(request.Id);
         var cacheKey = new ConfigNodeByIdCacheKey(nodeId);
 
         var cachedValue = await _cache.GetAsync(cacheKey, cancellationToken: cancellationToken);
@@ -31,14 +30,11 @@ public class GetConfigNodeById : NOFSampleService.GetConfigNodeById
             };
         }
 
-        var dto = await _dbContext.Set<ConfigNode>()
-            .QueryNodeById(nodeId)
-            .ProjectTo<ConfigNodeDto>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var dto = await _queries.FindAsync(nodeId, cancellationToken);
 
         if (dto is null)
         {
-            return Result.Fail("404", "Config node not found.");
+            return new NotFound("Config node not found.");
         }
 
         await _cache.SetAsync(

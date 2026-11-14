@@ -8,7 +8,7 @@ namespace NOF.Infrastructure.Tests.Caching;
 
 public sealed class RedisBackplaneTests
 {
-    private static readonly JsonObjectSerializer _serializer = new();
+    private static readonly JsonObjectSerializer _serializer = new(System.Text.Json.JsonSerializerOptions.CreateNOF());
 
     [Fact]
     public async Task PublishAsync_ShouldSerializeEnvelopeAndPublishToChannel()

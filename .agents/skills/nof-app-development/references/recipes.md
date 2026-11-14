@@ -8,48 +8,49 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(OrderService).Assembly);
-builder.AddRpcServer<OrderService>();
+builder.AddApplicationService<OrderService>();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapOrderEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
-`BuildAsync()` runs initialization steps and maps registered RPC servers according to the transport declared on each contract.
+Use native Build(); app.UseNOF() installs scoped ambient activation, and ordinary app.MapOrderEndpoints() explicitly maps feature routes. Startup I/O uses native hosted services.
 
-## Controller-Style RPC Contract + Handler
+## Application Service Contract + Handler
 
 ```csharp
 using NOF.Application;
 using NOF.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "api/orders/get")]
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
+    [FailureCase("NotFound", "404")]
+    GetOrderResponse GetOrder(GetOrderRequest request);
 }
 
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 
 public sealed class GetOrder : OrderService.GetOrder
 {
-    public override Task<Result<GetOrderResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "sample")));
+        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "sample"));
     }
 }
 ```
@@ -60,22 +61,18 @@ public sealed class GetOrder : OrderService.GetOrder
 [Mappable<Order, GetOrderResponse>]
 public static partial class Mappings;
 
-public sealed class GetOrder(IDbContext dbContext) : OrderService.GetOrder
+public sealed class GetOrder(IOrderQueries queries) : OrderService.GetOrder
 {
-    public override async Task<Result<GetOrderResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        var response = await dbContext.Set<Order>()
-            .AsNoTracking()
-            .Where(order => order.Id == request.Id)
-            .ProjectTo<GetOrderResponse>()
-            .FirstOrDefaultAsync(cancellationToken);
+        var response = await queries.FindAsync(request.Id, cancellationToken);
 
         return response is null
-            ? Result.Fail("404", "Order not found")
-            : Result.Success(response);
+            ? new NotFound("Order not found")
+            : response;
     }
 }
 ```
@@ -85,11 +82,10 @@ Register the source/destination pair with `[Mappable<,>]`, then filter, order, a
 ## Domain Update
 
 ```csharp
-var order = await dbContext.Set<Order>()
-    .FirstOrDefaultAsync(entity => entity.Id == request.Id, cancellationToken);
+var order = await orders.GetAsync(request.Id, cancellationToken);
 
 order!.Confirm();
-await dbContext.SaveChangesAsync(cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
 ## Access User and Tenant
@@ -102,25 +98,33 @@ public sealed class MyHandler(IUserContext userContext)
 }
 ```
 
-## Immediate and Deferred Messaging
+## Immediate Calls and Transactional Intents
 
 ```csharp
-await commandSender.SendAsync(command, context, cancellationToken);
-await notificationPublisher.PublishAsync(notification, context, cancellationToken);
-
-await notificationPublisher.DeferPublishAsync(
-    new OrderCreatedNotification(order.Id),
-    context,
-    cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
+await client.SendAsync("mail.send.v1", message, context, cancellationToken);
+await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), context,
+    cancellationToken: cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-Deferred messages are inserted into the current `IDbContext`; saving that same context is the transaction boundary.
+The client is concrete. IOutbox only stages; the host enables AddOutbox() and adds the assembly whose OutboxHandler<T> classes declare schema constants; generated application-part registrations bind the adapters. Explicit transactions require commit. See docs/en/design/transactional-outbox.md.
 
-## Generated Client Call
+## Server Operation Call
 
 ```csharp
-var result = await orderServiceClient.GetOrderAsync(request, context, cancellationToken);
+var result = await OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken);
 ```
 
-HTTP and local implementations share the generated client interface and explicit `Context` parameter.
+This generated server entry runs authorization, tenant and invocation-scope policies.
+No client interface or HTTP/Local Client is generated. Remote callers maintain their
+own HTTP integration, as demonstrated by the sample UI API ports/adapters.
+
+## HTTP endpoint feature
+
+Use an ordinary MapOrderEndpoints extension returning RouteGroupBuilder. Map with
+`group.MapGet<OrderService.GetOrder>("/{id}")` and typed Request/Response rules.
+Configure `.Response<OrderService.GetOrder.NotFound>(404)`; use a typed lambda returning complete TypedResults for projection/Location.
+Call the feature extension after Build. No AutoInject module, discovery or mandatory
+endpoint filter is needed. Context values are explicit; business context never flows back. Response maps replace as a whole; no header/body/Problem field DSL, variants, selector or HTTP Filter view remains.
+Runtime OpenAPI uses the same final binding; source generation only retains request types.
+See docs/en/design/http-adaptation.md and configuration-rest.md.

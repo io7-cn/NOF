@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);NU1608;CS8620</NoWarn>
@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Hosting\NOF.Hosting.csproj" />
-    <ProjectReference Include="..\..\src\NOF.Hosting.SourceGenerator\NOF.Hosting.SourceGenerator.csproj" />
     <ProjectReference Include="..\..\src\NOF.Contract\NOF.Contract.csproj" />
   </ItemGroup>
 

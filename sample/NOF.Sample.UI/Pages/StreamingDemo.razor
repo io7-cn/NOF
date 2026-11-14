@@ -1,89 +1,45 @@
 @page "/streaming-demo"
 @implements IDisposable
-@inject IMessageService Message
-@inject INOFSampleServiceClient NOFService
+@inject SampleMessageService Message
+@inject ISampleApi NOFService
 
 <PageTitle>流式传输 Demo</PageTitle>
 
-<div style="padding: 24px;">
-    <Card Title="StreamingResult SSE Demo">
-        <Space Style="width: 100%;">
-            <Space Wrap="true">
-                <SpaceItem>
-                    <Input @bind-Value="_request.Topic" Placeholder="Topic" Style="width: 240px;"
-                           Disabled="@_isStreaming" />
-                </SpaceItem>
-                <SpaceItem>
-                    <AntDesign.InputNumber TValue="int" @bind-Value="_request.Count" Min="1" Max="20"
-                                           Disabled="@_isStreaming" />
-                </SpaceItem>
-                <SpaceItem>
-                    <AntDesign.InputNumber TValue="int" @bind-Value="_request.IntervalMilliseconds" Min="100" Max="5000"
-                                           Step="100" Disabled="@_isStreaming" />
-                </SpaceItem>
-                <SpaceItem>
-                    <label style="display: inline-flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" @bind="_request.ForceFailure" disabled="@_isStreaming" />
-                        <span>返回失败 JSON</span>
-                    </label>
-                </SpaceItem>
-                <SpaceItem>
-                    <Button Type="@ButtonType.Primary" Loading="@_isStreaming" OnClick="StartStream">
-                        开始流式调用
-                    </Button>
-                </SpaceItem>
-                <SpaceItem>
-                    <Button Disabled="@(!_isStreaming)" OnClick="StopStream">
-                        停止
-                    </Button>
-                </SpaceItem>
-                <SpaceItem>
-                    <Button OnClick="ClearEvents">
-                        清空
-                    </Button>
-                </SpaceItem>
-            </Space>
-
-            <Alert Type="@AlertType.Info" ShowIcon="true">
-                <ChildContent>
-                    这个页面通过 `INOFSampleServiceClient` 调用 `WatchSampleStreamAsync`，
-                    成功时走 `StreamingResult&lt;SampleStreamEvent&gt;` + HTTP SSE 链路，
-                    勾选“返回失败 JSON”后会改为演示服务端返回 JSON failure 的 fallback 路径。
-                </ChildContent>
-            </Alert>
-
-            <Descriptions Title="调用参数" Column="1" Bordered="true" Size="@DescriptionsSize.Small">
-                <DescriptionsItem Title="Topic">@_request.Topic</DescriptionsItem>
-                <DescriptionsItem Title="Count">@_request.Count</DescriptionsItem>
-                <DescriptionsItem Title="Interval">@($"{_request.IntervalMilliseconds} ms")</DescriptionsItem>
-                <DescriptionsItem Title="Fallback">@(_request.ForceFailure ? "JSON failure" : "SSE stream")</DescriptionsItem>
-                <DescriptionsItem Title="状态">@(_isStreaming ? "Streaming" : "Idle")</DescriptionsItem>
-            </Descriptions>
-
-            @if (_events.Count == 0)
+<div class="sample-page">
+    <h1>流式传输 Demo</h1>
+    <p class="sample-muted">实时查看服务端推送，也可以测试取消和失败响应。</p>
+    <section class="sample-card">
+        <h2>调用参数</h2>
+        <div class="sample-toolbar">
+            <label>Topic<input @bind:event="oninput" @bind="_request.Topic" disabled="@_isStreaming" /></label>
+            <label>事件数量<input type="number" @bind:event="oninput" @bind="_request.Count" min="1" max="20" disabled="@_isStreaming" /></label>
+            <label>间隔（毫秒）<input type="number" @bind:event="oninput" @bind="_request.IntervalMilliseconds" min="100" max="5000" step="100" disabled="@_isStreaming" /></label>
+            <label class="sample-check"><input type="checkbox" @bind="_request.ForceFailure" disabled="@_isStreaming" />返回失败 JSON</label>
+        </div>
+        <div class="sample-actions">
+            <button type="button" class="sample-primary" disabled="@_isStreaming" @onclick="StartStream">开始流式调用</button>
+            <button type="button" disabled="@(!_isStreaming)" @onclick="StopStream">停止</button>
+            <button type="button" disabled="@_isStreaming" @onclick="ClearEvents">清空</button>
+            <span role="status">@(_isStreaming ? "Streaming" : "Idle") · @_events.Count 条事件</span>
+        </div>
+    </section>
+    <section class="sample-card" aria-live="polite" aria-label="服务端事件">
+        <h2>服务端事件</h2>
+        @if (_events.Count == 0)
+        {
+            <p class="sample-empty">点击“开始流式调用”后，这里会实时显示服务端推送的事件。</p>
+        }
+        else
+        {
+            @foreach (var item in _events)
             {
-                <Empty Description="@("点击“开始流式调用”后，这里会实时显示服务端推送的事件")" />
+                <article class="sample-event">
+                    <div class="sample-actions"><span class="sample-tag">@item.Topic</span><strong>#@item.Index</strong><time>@item.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</time></div>
+                    <p>@item.Message</p>
+                </article>
             }
-            else
-            {
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    @foreach (var item in _events)
-                    {
-                        <Card Size="@CardSize.Small">
-                            <Space>
-                                <Space>
-                                    <Tag Color="TagColor.Blue">@item.Topic</Tag>
-                                    <Tag Color="TagColor.Green">@($"#{item.Index}")</Tag>
-                                    <Text>@item.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</Text>
-                                </Space>
-                                <Text>@item.Message</Text>
-                            </Space>
-                        </Card>
-                    }
-                </div>
-            }
-        </Space>
-    </Card>
+        }
+    </section>
 </div>
 
 @code {
@@ -107,15 +63,15 @@
         {
             var result = await NOFService.WatchSampleStreamAsync(
                 _request,
-                NOF.Contract.Context.Empty,
+                NOF.Abstraction.Context.Empty,
                 _streamCancellationTokenSource.Token);
-            if (!result.IsSuccess)
+            if (result.Value is not IAsyncEnumerable<SampleStreamEvent> success)
             {
                 Message.Error(result.GetRpcFailureMessage());
                 return;
             }
 
-            await foreach (var item in result.Value!.WithCancellation(_streamCancellationTokenSource.Token))
+            await foreach (var item in success.WithCancellation(_streamCancellationTokenSource.Token))
             {
                 _events.Add(item);
                 await InvokeAsync(StateHasChanged);

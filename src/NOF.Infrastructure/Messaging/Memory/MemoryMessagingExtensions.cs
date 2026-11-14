@@ -1,0 +1,19 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace NOF.Infrastructure;
+
+/// <summary>Registers endpoints owned by the in-process memory transport.</summary>
+public static class MemoryMessagingExtensions
+{
+    /// <summary>Enables durable memory-message acceptance and maps its local endpoints.</summary>
+    public static IServiceCollection AddMemoryMessaging(this IServiceCollection services, Action<MemoryEndpointsBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        services.AddInbox();
+        services.TryAddScoped<MessageDelivery>();
+        services.TryAddScoped<MemoryMessageClient>();
+        configure(new(services, services.GetOrAddSingleton<MemoryEndpointRegistry>()));
+        return services;
+    }
+}

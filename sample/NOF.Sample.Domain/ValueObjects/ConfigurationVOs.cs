@@ -7,47 +7,46 @@ namespace NOF.Sample;
 [ValueObjectLength(100, MinimumLength = 1)]
 public readonly partial struct ConfigNodeName : IValueObject<string>
 {
-    public static void Validate(string input)
+    public static bool IsValid(string input, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            throw new DomainValidationException("Node name cannot be empty.");
-        }
+        errorMessage = string.IsNullOrWhiteSpace(input) ? "Node name cannot be blank." : null;
+        return errorMessage is null;
     }
 }
 
 [ValueObjectLength(100, MinimumLength = 1)]
 public readonly partial struct ConfigFileName : IValueObject<string>
 {
-    public static void Validate(string input)
+    public static bool IsValid(string input, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            throw new DomainValidationException("File name cannot be empty.");
-        }
+        errorMessage = string.IsNullOrWhiteSpace(input) ? "File name cannot be blank." : null;
+        return errorMessage is null;
     }
 }
 
 public readonly partial struct ConfigContent : IValueObject<string>
 {
-    public static void Validate(string input)
+    public static bool IsValid(string input, out string? errorMessage)
     {
+        errorMessage = null;
         if (string.IsNullOrWhiteSpace(input))
         {
-            throw new DomainValidationException("Config content cannot be empty.");
+            errorMessage = "Configuration content cannot be blank.";
+            return false;
         }
-
         try
         {
-            var node = JsonNode.Parse(input);
-            if (node is not JsonObject)
+            if (JsonNode.Parse(input) is JsonObject)
             {
-                throw new DomainValidationException("Config content must be a JSON object.");
+                return true;
             }
+            errorMessage = "Configuration content must be a JSON object.";
+            return false;
         }
         catch (JsonException)
         {
-            throw new DomainValidationException("Invalid JSON format.");
+            errorMessage = "Invalid JSON format.";
+            return false;
         }
     }
 }

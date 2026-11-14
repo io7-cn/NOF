@@ -88,7 +88,7 @@ var orders = await dbContext.Set<Order>()
 
 The extension receiver is `IQueryable`, so only the destination generic argument is required and the source key comes from `ElementType`. Each registration carries a statically constructed generic query applicator, avoiding runtime `MakeGenericMethod` and keeping the API NativeAOT-safe. `ProjectTo` does not call `Compile()`, insert `AsEnumerable()`, or capture the mapper in the query tree.
 
-NOF binds `Mapper.Current` when the dependency injection scope's daemon services are resolved. The binding uses `AsyncLocal`, supports nested scopes, and is restored when the scope is disposed. Standalone code and tests can use the explicit overload:
+NOF binds and restores Mapper.Current at managed HTTP/operation/message/test entries or an explicit services.BindNOF(context) boundary. Ordinary DI scopes have no activation protocol. See [ambient binding](../en/design/ambient-binding.md). Standalone code and tests can use the explicit overload:
 
 ```csharp
 var projected = query.ProjectTo<OrderDto>(mapper);

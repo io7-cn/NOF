@@ -1,9 +1,12 @@
 using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
+using NOF.Sample.UI.Services;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace NOF.Sample.Services;
 
@@ -14,71 +17,106 @@ public static class OAuthChainDemoContextKeys
 
 public sealed class CreateClientHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.CreateClient
 {
-    public override Task<Result<CreateDemoOAuthClientResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         CreateDemoOAuthClientRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.CreateClientAsync(request, cancellationToken);
+        return (await backend.CreateClientAsync(request, cancellationToken)).Value switch
+        {
+            CreateDemoOAuthClientResponse value => value,
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class GetClientTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.GetClientToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetDemoClientTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.GetClientTokenAsync(request, cancellationToken);
+        return (await backend.GetClientTokenAsync(request, cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class GetUserTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.GetUserToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         GetDemoUserTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = request;
         _ = context;
-        return backend.GetUserTokenAsync(cancellationToken);
+        return (await backend.GetUserTokenAsync(request, cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
 public sealed class ExchangeTokenHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.ExchangeToken
 {
-    public override Task<Result<DemoTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         ExchangeDemoTokenRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
-        return backend.ExchangeTokenAsync(request, cancellationToken);
+        return (await backend.ExchangeTokenAsync(request, cancellationToken)).Value switch
+        {
+            DemoTokenResponse value => value,
+            HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
+            HttpTransportFailure { StatusCode: HttpStatusCode.Forbidden } failure => new Forbidden(failure.Detail),
+            HttpTransportFailure failure when (int)failure.StatusCode >= 500 => new ServerError(failure.Detail),
+            HttpTransportFailure failure => new Rejected(failure.Detail),
+            _ => throw new InvalidOperationException("No OAuth response.")
+        };
     }
 }
 
-public sealed class CallDownstreamHandler(IDemoDownstreamServiceClient downstreamClient) : OAuthChainDemoService.CallDownstream
+public sealed class CallDownstreamHandler(IDemoDownstreamApi downstreamClient) : OAuthChainDemoService.CallDownstream
 {
-    public override Task<Result<ConsumeDemoAccessTokenResponse>> HandleAsync(
+    public override async Task<Result> HandleAsync(
         CallDemoDownstreamRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = context;
         var downstreamContext = Context.Empty.WithItem(OAuthChainDemoContextKeys.AccessToken, request.AccessToken);
-        return downstreamClient.InspectAccessTokenAsync(Empty.Instance, downstreamContext, cancellationToken);
+        return (await downstreamClient.InspectAccessTokenAsync(Empty.Instance, downstreamContext, cancellationToken))
+            .Match<Result>(value => value, rejected => new Rejected(rejected.Detail),
+                unauthorized => new Unauthorized(unauthorized.Detail), forbidden => new Forbidden(forbidden.Detail),
+                serverError => new ServerError(serverError.Detail));
     }
 }
 
 public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDownstreamService.InspectAccessToken
 {
-    public override Task<Result<ConsumeDemoAccessTokenResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         Empty request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
         _ = request;
@@ -87,7 +125,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
         if (!userContext.User.IsAuthenticated)
         {
-            return Task.FromResult<Result<ConsumeDemoAccessTokenResponse>>(Result.Fail("401", "Access token is required."));
+            return Task.FromResult<Result>(new Unauthorized("Access token is required."));
         }
 
         var scopes = userContext.User.FindAll("scope")
@@ -97,7 +135,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
             .ToArray();
         var actor = ResolveActor(userContext.User);
 
-        return Task.FromResult<Result<ConsumeDemoAccessTokenResponse>>(new ConsumeDemoAccessTokenResponse
+        return Task.FromResult<Result>(new ConsumeDemoAccessTokenResponse
         {
             IsAuthenticated = true,
             Subject = userContext.User.FindFirst("sub")?.Value,
@@ -111,7 +149,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
     private static (string? Subject, string Json)? ResolveActor(ClaimsPrincipal user)
     {
-        var actorJson = user.FindFirst(OAuthClaimTypes.Actor)?.Value;
+        var actorJson = user.FindFirst(Claims.Actor)?.Value;
         if (string.IsNullOrWhiteSpace(actorJson))
         {
             return null;
@@ -119,7 +157,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
         using var document = JsonDocument.Parse(actorJson);
         var root = document.RootElement;
-        var subject = root.TryGetProperty(OAuthClaimTypes.Subject, out var subjectElement)
+        var subject = root.TryGetProperty(Claims.Subject, out var subjectElement)
             ? subjectElement.GetString()
             : null;
 
@@ -129,21 +167,18 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
     }
 }
 
-public sealed class OAuthChainDemoAccessTokenOutboundMiddleware : IRequestOutboundMiddleware
+/// <summary>Adds the demo's per-call access token to its downstream HTTP request.</summary>
+public sealed class OAuthChainDemoAccessTokenHandler : DelegatingHandler
 {
-    public TopologyComparison Compare(IRequestOutboundMiddleware other) => TopologyComparison.DoesNotMatter;
-
-    public ValueTask InvokeAsync(RequestOutboundContext context, object request, RequestOutboundHandlerDelegate next, CancellationToken cancellationToken)
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        _ = request;
-        if (context.TryGetItem(OAuthChainDemoContextKeys.AccessToken, out var tokenObject)
-            && tokenObject is string token
-            && !string.IsNullOrWhiteSpace(token)
-            && !context.Headers.ContainsKey(NOFAbstractionConstants.Transport.Headers.Authorization))
+        if (request.Headers.Authorization is null
+            && request.Options.TryGetValue(NOF.Sample.UI.Services.SampleHttpApi.ContextKey, out var context)
+            && context.TryGetItem(OAuthChainDemoContextKeys.AccessToken, out var tokenObject)
+            && tokenObject is string token && !string.IsNullOrWhiteSpace(token))
         {
-            context.Headers[NOFAbstractionConstants.Transport.Headers.Authorization] = $"Bearer {token}";
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
-
-        return next(context, request, cancellationToken);
+        return base.SendAsync(request, cancellationToken);
     }
 }

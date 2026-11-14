@@ -24,10 +24,7 @@ public class ServiceCollectionExtensionsTests
             descriptor.ServiceType == typeof(IEventPublisher)
             && descriptor.ImplementationType == typeof(InMemoryEventPublisher)
             && descriptor.Lifetime == ServiceLifetime.Scoped);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(EventPublisherAmbientDaemonService)
-            && descriptor.Lifetime == ServiceLifetime.Scoped);
+
     }
 
     [Fact]
@@ -41,9 +38,7 @@ public class ServiceCollectionExtensionsTests
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EventHandlerRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IUserContext));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IEventPublisher));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(EventPublisherAmbientDaemonService));
+
     }
 
     [Fact]

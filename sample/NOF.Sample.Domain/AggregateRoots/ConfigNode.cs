@@ -1,15 +1,17 @@
 using NOF.Abstraction;
+using NOF.Domain;
 
 namespace NOF.Sample;
 
-public class ConfigNode
+public partial class ConfigNode
 {
     public ConfigNodeId Id { get; init; }
     public ConfigNodeId? ParentId { get; private set; }
     public ConfigNodeName Name { get; private set; }
     public ConfigFileName? ActiveFileName { get; private set; }
 
-    public IEnumerable<ConfigFile> ConfigFiles { get; } = new List<ConfigFile>();
+    [ReadOnlyCollection]
+    private readonly List<ConfigFile> _configFiles = [];
 
     private ConfigNode() { }
 
@@ -41,7 +43,7 @@ public class ConfigNode
         }
         else
         {
-            ConfigFiles.Mut.Add(new ConfigFile(name, content));
+            _configFiles.Add(new ConfigFile(name, content));
         }
 
         new ConfigNodeUpdatedEvent(Id, Name, ParentId).PublishAsEvent();
@@ -52,7 +54,7 @@ public class ConfigNode
         var existing = ConfigFiles.FirstOrDefault(f => f.Name == name);
         if (existing is not null)
         {
-            ConfigFiles.Mut.Remove(existing);
+            _configFiles.Remove(existing);
             if (ActiveFileName == name)
             {
                 ActiveFileName = null;

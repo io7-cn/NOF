@@ -29,29 +29,34 @@ public readonly partial struct EmailAddress : IValueObject<string>
 {
     public static string Normalize(string value) => value.Trim().ToLowerInvariant();
 
-    public static void Validate(string value)
+    public static bool IsValid(string value, out string? errorMessage)
     {
-        if (!value.Contains('@'))
-        {
-            throw new DomainValidationException("Invalid email format.");
-        }
+        var valid = !string.IsNullOrWhiteSpace(value) && value.Contains('@');
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
     }
 }
 ```
 
-Construct values through `EmailAddress.Of(...)` and extract the primitive with an explicit cast. `default(EmailAddress)` and `new EmailAddress()` are invalid (`NOF018`).
+Construct values through `EmailAddress.From(...)` and extract the primitive with an explicit cast. `default(EmailAddress)` and `new EmailAddress()` are invalid (`NOF018`).
 
-## 2. Add Failure Definitions
+## 2. Declare Expected Application Failures in Contract
 
 ```csharp
-using NOF.Domain;
+using NOF.Contract;
 
-[Failure("NotFound", "Order not found", "404001")]
-[Failure("InvalidStatus", "Order status is invalid", "400002")]
-public static partial class OrderFailures;
+public interface IOrderService : IApplicationService
+{
+    [FailureCase("NotFound", "404001")]
+    [FailureCase("InvalidStatus", "400002")]
+    Empty Confirm(ConfirmOrderRequest request);
+}
 ```
 
-The generator emits static `Failure` members such as `OrderFailures.InvalidStatus`.
+The generator creates IOrderService.ConfirmOperation.Result and distinct case types. Domain
+methods return their own business values; Application maps those values to the declared
+cases. Error codes do not determine C# names. No static failure-holder class or
+DomainException conversion is needed.
 
 ## 3. Add a Domain Class and Events
 
@@ -80,15 +85,16 @@ public sealed class Order
         return order;
     }
 
-    public void Confirm()
+    public bool TryConfirm()
     {
         if (Status == "Confirmed")
         {
-            throw new DomainException(OrderFailures.InvalidStatus);
+            return false;
         }
 
         Status = "Confirmed";
         new OrderConfirmedEvent(Id).PublishAsEvent();
+        return true;
     }
 }
 
@@ -105,15 +111,15 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 
-public sealed class OrderCreatedProjectionHandler(IDbContext dbContext)
-    : InMemoryEventHandler<OrderCreatedEvent>
+public sealed class OrderCreatedProjectionHandler(IOrderProjectionStore projections)
+    : LocalEventHandler<OrderCreatedEvent>
 {
     public override Task HandleAsync(
         OrderCreatedEvent @event,
         Context context,
         CancellationToken cancellationToken)
     {
-        dbContext.Set<OrderProjection>().Add(OrderProjection.From(@event));
+        projections.Add(OrderProjection.From(@event));
         return Task.CompletedTask;
     }
 }
@@ -124,19 +130,19 @@ The handler is registered by its generated assembly initializer when the contain
 ## 5. Persist from the Application Layer
 
 ```csharp
-public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
+public sealed class CreateOrder(IOrderRepository orders, IUnitOfWork unitOfWork) : OrderService.CreateOrder
 {
-    public override async Task<Result> HandleAsync(
+    public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return Result.Success();
+        var order = Order.Create(EmailAddress.From(request.CustomerEmail));
+        orders.Add(order);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Empty.Instance;
     }
 }
 ```
 
-Application code uses `IDbContext` / `IRepository<T>`. Concrete EF Core `DbContext` and `NOFDbContext` stay in the host project.
+Application code uses owned aggregate/query interfaces and IUnitOfWork. Concrete EF Core `DbContext` and `NOFDbContext` stay in the host project.

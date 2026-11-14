@@ -5,108 +5,53 @@
 
 <PageTitle>OIDC Demo</PageTitle>
 
-<style>
-    .demo-section {
-        margin-bottom: 24px;
-    }
-
-    .mono-block {
-        background: #f5f5f5;
-        border-radius: 6px;
-        font-family: Consolas, monospace;
-        font-size: 12px;
-        padding: 12px;
-        white-space: pre-wrap;
-        word-break: break-all;
-    }
-</style>
-
-<h3>OIDC Demo</h3>
-
-<Alert Type="AlertType.Info" ShowIcon="true"
-       Message="Sample server now exposes standard OAuth 2.1 / OpenID Connect endpoints."
-       Description="The sample authorization handler auto-approves a fixed demo subject named demo-user so you can verify discovery, authorization-code + PKCE, token, userinfo, and JWKS end-to-end." />
-
-<Row Gutter="16" style="margin-top: 16px;">
-    <Col Span="12">
-    <Card Title="Discovery Endpoints" Class="demo-section">
-        <Descriptions Column="1" Size="@DescriptionsSize.Small" Bordered>
-            <DescriptionsItem Title="Issuer">@Issuer</DescriptionsItem>
-            <DescriptionsItem Title="OpenID Configuration"><a href="@OpenIdConfigurationUrl"
-                                                                  target="_blank">@OpenIdConfigurationUrl</a></DescriptionsItem>
-                <DescriptionsItem Title="Authorization Server Metadata"><a href="@AuthorizationMetadataUrl"
-                                                                               target="_blank">@AuthorizationMetadataUrl</a></DescriptionsItem>
-                    <DescriptionsItem Title="JWKS"><a href="@JwksUrl" target="_blank">@JwksUrl</a></DescriptionsItem>
-                    <DescriptionsItem Title="Authorize">@AuthorizeEndpoint</DescriptionsItem>
-                    <DescriptionsItem Title="Token">@TokenEndpoint</DescriptionsItem>
-                    <DescriptionsItem Title="UserInfo">@UserInfoEndpoint</DescriptionsItem>
-                </Descriptions>
-            </Card>
-        </Col>
-        <Col Span="12">
-        <Card Title="Authorize URL Builder" Class="demo-section">
-            <Form Layout="@FormLayout.Vertical" TModel="OidcDemoModel">
-                <FormItem Label="Client ID">
-                    <Input @bind-Value="_model.ClientId" />
-                </FormItem>
-                <FormItem Label="Redirect URI">
-                    <Input @bind-Value="_model.RedirectUri" />
-                </FormItem>
-                <FormItem Label="Scope">
-                    <Input @bind-Value="_model.Scope" />
-                </FormItem>
-                <FormItem Label="State">
-                    <Input @bind-Value="_model.State" />
-                </FormItem>
-                <FormItem Label="Nonce">
-                    <Input @bind-Value="_model.Nonce" />
-                </FormItem>
-                <FormItem>
-                    <Button Type="@ButtonType.Default" OnClick="@GeneratePkce">Generate PKCE</Button>
-                    <Button Type="@ButtonType.Primary" Style="margin-left: 8px;" OnClick="@BuildAuthorizeUrl">Build
-                        URL</Button>
-                    </FormItem>
-                </Form>
-            </Card>
-        </Col>
-    </Row>
-
-    <Row Gutter="16">
-        <Col Span="12">
-        <Card Title="PKCE" Class="demo-section">
-            <Descriptions Column="1" Size="@DescriptionsSize.Small" Bordered>
-                <DescriptionsItem Title="Code Verifier">
-                    <div class="mono-block">@_model.CodeVerifier</div>
-                </DescriptionsItem>
-                <DescriptionsItem Title="Code Challenge">
-                    <div class="mono-block">@_model.CodeChallenge</div>
-                </DescriptionsItem>
-                <DescriptionsItem Title="Method">S256</DescriptionsItem>
-            </Descriptions>
-        </Card>
-    </Col>
-    <Col Span="12">
-    <Card Title="Authorization Request" Class="demo-section">
-        <div class="mono-block">@_authorizeUrl</div>
-    </Card>
-</Col>
-</Row>
-
-<Card Title="Try It" Class="demo-section">
-    <Descriptions Column="1" Size="@DescriptionsSize.Small" Bordered>
-        <DescriptionsItem Title="Step 1">Open the generated authorize URL in a new browser tab.</DescriptionsItem>
-        <DescriptionsItem Title="Step 2">The sample server redirects back with a standard authorization code.
-        </DescriptionsItem>
-        <DescriptionsItem Title="Step 3">Exchange that code at the token endpoint with the code verifier shown above.
-        </DescriptionsItem>
-        <DescriptionsItem Title="Step 4">Call the userinfo endpoint with the returned bearer token.</DescriptionsItem>
-    </Descriptions>
-    <div class="mono-block" style="margin-top: 12px;">curl -X POST @TokenEndpoint \
-        -H \"Content-Type: application/x-www-form-urlencoded\" \
-        -d
-        \"grant_type=authorization_code&client_id=@_model.ClientId&code=YOUR_CODE&redirect_uri=@Uri.EscapeDataString(_model.RedirectUri)&code_verifier=@_model.CodeVerifier\"
+<div class="sample-page">
+    <h1>OIDC Demo</h1>
+    <p class="sample-muted">OAuth 2.1 / OpenID Connect 演示。演示服务使用固定用户 demo-user。</p>
+    <div class="sample-grid">
+        <section class="sample-card">
+            <h2>Discovery Endpoints</h2>
+            <dl class="sample-details">
+                <dt>Issuer</dt><dd>@Issuer</dd>
+                <dt>OpenID Configuration</dt><dd><a href="@OpenIdConfigurationUrl" target="_blank" rel="noopener">查看 OpenID 配置</a></dd>
+                <dt>Authorization Server Metadata</dt><dd><a href="@AuthorizationMetadataUrl" target="_blank" rel="noopener">查看授权服务元数据</a></dd>
+                <dt>JWKS</dt><dd><a href="@JwksUrl" target="_blank" rel="noopener">查看签名公钥</a></dd>
+                <dt>Authorize</dt><dd>@AuthorizeEndpoint</dd>
+                <dt>Token</dt><dd>@TokenEndpoint</dd>
+                <dt>UserInfo</dt><dd>@UserInfoEndpoint</dd>
+            </dl>
+        </section>
+        <section class="sample-card">
+            <h2>Authorize URL Builder</h2>
+            <div class="sample-form">
+                <label>Client ID<input @bind:event="oninput" @bind="_model.ClientId" /></label>
+                <label>Redirect URI<input @bind:event="oninput" @bind="_model.RedirectUri" /></label>
+                <label>Scope<input @bind:event="oninput" @bind="_model.Scope" /></label>
+                <label>State<input @bind:event="oninput" @bind="_model.State" /></label>
+                <label>Nonce<input @bind:event="oninput" @bind="_model.Nonce" /></label>
+                <div class="sample-actions">
+                    <button type="button" @onclick="GeneratePkce">Generate PKCE</button>
+                    <button type="button" class="sample-primary" @onclick="BuildAuthorizeUrl">Build URL</button>
+                </div>
+            </div>
+        </section>
+        <section class="sample-card">
+            <h2>PKCE</h2>
+            <h3>Code Verifier</h3><pre>@_model.CodeVerifier</pre>
+            <h3>Code Challenge · S256</h3><pre>@_model.CodeChallenge</pre>
+        </section>
+        <section class="sample-card">
+            <h2>Authorization Request</h2>
+            <pre>@_authorizeUrl</pre>
+            <p>使用生成的地址取得授权码，再结合上面的 Code Verifier 调用 Token 端点。</p>
+        </section>
     </div>
-</Card>
+    <section class="sample-card">
+        <h2>Try It</h2>
+        <ol><li>使用生成的授权地址获取授权码。</li><li>将授权码和 Code Verifier 提交到 Token 端点。</li><li>用返回的 Bearer Token 调用 UserInfo 端点。</li></ol>
+        <pre>curl -X POST @TokenEndpoint -H "Content-Type: application/x-www-form-urlencoded" -d "grant_type=authorization_code&amp;client_id=@_model.ClientId&amp;code=YOUR_CODE&amp;redirect_uri=@Uri.EscapeDataString(_model.RedirectUri)&amp;code_verifier=@_model.CodeVerifier"</pre>
+    </section>
+</div>
 
 @code {
     private readonly OidcDemoModel _model = new();
@@ -123,7 +68,7 @@
 
     protected override void OnInitialized()
     {
-        _model.RedirectUri = $"{BaseUri}/oidc-callback";
+        _model.RedirectUri = $"{BaseUri}/oauth/callback";
         GeneratePkce();
         BuildAuthorizeUrl();
     }
@@ -159,7 +104,7 @@
             .Replace('/', '_');
     }
 
-    private sealed class OidcDemoModel
+    public sealed class OidcDemoModel
     {
         public string ClientId { get; set; } = "nof-sample-ui";
 

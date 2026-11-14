@@ -1,83 +1,18 @@
 ---
-description: Add the built-in OAuth/OIDC server and JWT resource-server validation to a NOF ASP.NET Core application
+description: Integrate native JwtBearer and an upstream OAuth/OIDC identity provider with NOF
 ---
 
-# Add OAuth/OIDC Authentication
+# Add native identity
 
-The current authentication surface has two independent pieces:
+Use the native host APIs. NOF does not own an OIDC Server package, JWT validator, discovery/JWKS cache or endpoint-interface hierarchy.
 
-- `NOF.Hosting.AspNetCore.Extension.OidcServer`: local OAuth 2.0 / OpenID Connect authority
-- `NOF.Infrastructure`: JWT resource-server validation for RPC, command, and notification pipelines
+1. Choose an external identity provider or install OpenIddict directly into the host.
+2. Configure native storage and the provider's login, consent, client/permission management and durable credentials. The Sample integrates native OpenIddict models in its existing ConfigurationDbContext and migration chain; business soft-delete conventions are disabled for those entities.
+3. Register AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer with Authority, Audience and MapInboundClaims=false. Keep issuer/audience/lifetime/signature validation and HTTPS metadata enabled for deployment.
+4. Call UseAuthentication and UseAuthorization before UseNOF; use native RequireAuthorization for native challenge/forbid responses. NOF copies verified HttpContext.User into IUserContext and continues cross-origin business authorization/tenant checks.
+5. Application-owned filters may select execution context. Domain needs no registration, IdGenerator.Current is nullable, and Snowflake is an explicit Infrastructure provider.
+6. Configure source-generated JSON metadata per host and native telemetry explicitly.
 
-## 1. Add the OIDC Server Package
+Use docs/en/design/host-composition.md (and its reciprocal Chinese edition) for the complete API and migration. Old OAuth tables, credentials and sessions are not automatically compatible with OpenIddict. Review client provisioning, rotate credentials/re-authenticate and retain backups. No migrations are applied simply to configure or test source code.
 
-```bash
-dotnet add package NOF.Hosting.AspNetCore.Extension.OidcServer
-```
-
-Configure a durable `IDbContext` provider before production use; signing keys, clients, and revoked refresh tokens are persisted.
-
-## 2. Register the Authority and a Client
-
-```csharp
-using NOF.Hosting;
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
-
-var issuer = "https://auth.example.com/oauth2";
-
-builder.AddOidcServer(options =>
-{
-    options.Issuer = issuer;
-    options.PathBase = "/oauth2";
-    options.AccessTokenAudience = "my-app";
-    options.SigningKeyEncryptionKey = builder.Configuration["NOF:OidcServer:SigningKeyEncryptionKey"]
-        ?? throw new InvalidOperationException("OIDC signing-key encryption key not found.");
-})
-.AddPublicClient(
-    "my-app-ui",
-    ["openid", "profile", "email", "my-app.read"],
-    displayName: "My App UI",
-    redirectUris: ["https://app.example.com/oauth/callback"]);
-```
-
-The selector also supports confidential, device-flow, and private-key JWT clients. The OIDC initialization step maps metadata, JWKS, authorize, device, token, revoke, introspect, userinfo, and dynamic-registration endpoints automatically.
-
-Do not call the old `AddAuthenticationAuthority(...)` or manually map `TokenAuthorityService`; those APIs are not the current authority surface.
-
-## 3. Provide User Interaction and Subject Data
-
-The default authorize endpoint deliberately fails until the application replaces `IOAuthAuthorizeEndpoint`. For authorization-code/OIDC flows, also implement `IOAuthSubjectService` to supply subject claims. Device flow requires an `IOAuthDeviceVerificationEndpoint` implementation for user interaction.
-
-```csharp
-builder.Services.AddScoped<IOAuthAuthorizeEndpoint, MyAuthorizeEndpoint>();
-builder.Services.AddScoped<IOAuthSubjectService, MySubjectService>();
-```
-
-Use `OAuthAuthorizationCodeIssuer` from the authorize endpoint after the application has authenticated the user and obtained consent.
-
-## 4. Register JWT Validation
-
-```csharp
-builder.Services.AddAuthenticationResourceServer(options =>
-{
-    options.AuthorizationServerIssuer = issuer;
-    options.ExpectedIssuer = issuer;
-    options.Audience = "my-app";
-    options.RequireHttpsMetadata = true;
-});
-```
-
-The resource server discovers metadata and JWKS from `AuthorizationServerIssuer`. When it is colocated with `AddOidcServer(...)`, the local metadata/JWKS services remain registered.
-
-## 5. Access Identity and Tenant State
-
-```csharp
-public sealed class GetProfile(IUserContext userContext)
-{
-    public string? UserId => userContext.User.Id;
-    public IReadOnlyList<string> Permissions => userContext.User.Permissions;
-    public string GetTenantId(Context context) => context.TenantId;
-}
-```
-
-`ITransparentInfos` and the old `JwksEndpoint` option are not part of the current public API. The resource-server middleware populates `IUserContext`; authorization/tenant middleware derives trusted tenant state and stores it in the execution `Context`.
+Official references: https://documentation.openiddict.com/introduction and https://learn.microsoft.com/aspnet/core/security/authentication/configure-jwt-bearer-authentication.

@@ -1,59 +1,130 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
+using NOF.Hosting;
+using NOF.Infrastructure;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace NOF.Infrastructure.RabbitMQ;
 
-public class RabbitMQConsumerHostedService : IHostedService, IDisposable
+public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposable
 {
-    private readonly RabbitMQConnectionManager _connectionManager;
-    private readonly IOptions<RabbitMQOptions> _options;
-    private readonly CommandHandlerRegistry _commandHandlerRegistry;
-    private readonly NotificationHandlerRegistry _notificationHandlerRegistry;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly RabbitMQConnection _connection;
+    private readonly RabbitMQBuilder _configuration;
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
-    private readonly IHostEnvironment _hostEnvironment;
-    private readonly IObjectSerializer _objectSerializer;
+    private readonly IServiceProvider _services;
     private readonly List<IChannel> _channels = [];
-    private readonly Dictionary<string, string> _commandHandlerTypes = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _notificationHandlerRoutes = new(StringComparer.Ordinal);
     private bool _disposed;
 
     public RabbitMQConsumerHostedService(
-        RabbitMQConnectionManager connectionManager,
-        IOptions<RabbitMQOptions> options,
-        CommandHandlerRegistry commandHandlerRegistry,
-        NotificationHandlerRegistry notificationHandlerRegistry,
-        IHostEnvironment hostEnvironment,
-        IServiceProvider serviceProvider,
-        IObjectSerializer objectSerializer,
+        RabbitMQConnection connection,
+        RabbitMQBuilder configuration,
+        IServiceProvider services,
         ILogger<RabbitMQConsumerHostedService> logger)
     {
-        _connectionManager = connectionManager;
-        _options = options;
-        _commandHandlerRegistry = commandHandlerRegistry;
-        _notificationHandlerRegistry = notificationHandlerRegistry;
-        _hostEnvironment = hostEnvironment;
-        _serviceProvider = serviceProvider;
-        _objectSerializer = objectSerializer;
+        _connection = connection;
+        _configuration = configuration;
+        _services = services;
         _logger = logger;
     }
+
+    /// <summary>Executes all user topology callbacks before native host StartAsync starts consumers.</summary>
+    public async Task StartingAsync(CancellationToken cancellationToken)
+    {
+        var configuration = _configuration.Freeze();
+        if (configuration.Topologies.Count == 0)
+        {
+            return;
+        }
+        var connection = await _connection.GetAsync(cancellationToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        foreach (var configure in configuration.Topologies)
+        {
+            await configure(channel, cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await RegisterConsumersFromRegistryAsync(cancellationToken);
+            foreach (var endpoint in _configuration.Freeze().Endpoints)
+            {
+                var connection = await _connection.GetAsync(cancellationToken);
+                var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+                _channels.Add(channel);
+                await channel.BasicQosAsync(0, 1, false, cancellationToken);
+                if (endpoint.ConfigureChannel is not null)
+                {
+                    await endpoint.ConfigureChannel(channel, cancellationToken);
+                }
+                var consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += async (_, args) =>
+                {
+                    try
+                    {
+                        var payload = args.Body;
+
+                        Dictionary<string, string?>? headers = null;
+                        if (args.BasicProperties.Headers is not null)
+                        {
+                            headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                            foreach (var (key, value) in args.BasicProperties.Headers)
+                            {
+                                if (value is byte[] bytes)
+                                {
+                                    headers[key] = System.Text.Encoding.UTF8.GetString(bytes);
+                                }
+                                else if (value is null or string)
+                                {
+                                    headers[key] = (string?)value;
+                                }
+                            }
+                        }
+
+                        var messageId = Guid.TryParse(args.BasicProperties.MessageId, out var nativeId)
+                            ? nativeId : MessageInboxReceiver.GetMessageId(headers);
+                        await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, payload, endpoint.ConsumerId, headers, CancellationToken.None);
+
+                        await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
+                    }
+                    catch (Exception ex)
+                    {
+                        var requeue = endpoint.RequeueOnFailure;
+                        _logger.LogError(
+                            ex,
+                            "Error handling message from queue {QueueName}. Requeue: {Requeue}",
+                            endpoint.QueueName,
+                            requeue);
+                        try
+                        {
+                            await consumer.Channel.BasicNackAsync(args.DeliveryTag, false, requeue);
+                        }
+                        catch
+                        {
+                            // Ignore
+                        }
+                    }
+                };
+                // BasicConsume fails if the queue does not exist. The consumer never infers broker topology.
+                await channel.BasicConsumeAsync(endpoint.QueueName, autoAck: false, consumer: consumer, cancellationToken: cancellationToken);
+            }
             _logger.LogInformation("RabbitMQ consumers initialized successfully");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize RabbitMQ consumers");
+            Dispose();
             throw;
         }
     }
@@ -62,350 +133,6 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
     {
         Dispose();
         return Task.CompletedTask;
-    }
-
-    private async Task RegisterConsumersFromRegistryAsync(CancellationToken cancellationToken)
-    {
-        var commandRegistrations = BuildCommandConsumerRegistrations(_commandHandlerRegistry.Freeze());
-
-        foreach (var registration in commandRegistrations)
-        {
-            _commandHandlerTypes[registration.QueueName] = registration.HandlerTypeName;
-            await SetupCommandConsumerAsync(registration.QueueName, registration.MessageRoute, cancellationToken);
-        }
-
-        var notificationRegistrations = BuildNotificationConsumerRegistrations(
-            _notificationHandlerRegistry.Freeze(),
-            _hostEnvironment.ServiceName);
-
-        foreach (var registration in notificationRegistrations)
-        {
-            _notificationHandlerRoutes[registration.QueueName] = registration.HandlerTypeName;
-            await SetupNotificationConsumerAsync(registration.QueueName, registration.NotificationTypes, cancellationToken);
-        }
-    }
-
-    private async Task SetupCommandConsumerAsync(string queueName, string messageRoute, CancellationToken cancellationToken)
-    {
-        var channel = await _connectionManager.CreateChannelAsync();
-        _channels.Add(channel);
-
-        await RabbitMQTopology.DeclareSystemTopologyAsync(channel, cancellationToken);
-
-        await channel.ExchangeDeclareAsync(
-            exchange: messageRoute,
-            type: "direct",
-            durable: _options.Value.Durable,
-            autoDelete: _options.Value.AutoDelete,
-            arguments: RabbitMQTopology.BuildBusinessExchangeArguments(),
-            cancellationToken: cancellationToken);
-
-        await channel.QueueDeclareAsync(
-            queue: queueName,
-            durable: _options.Value.Durable,
-            exclusive: false,
-            autoDelete: _options.Value.AutoDelete,
-            arguments: RabbitMQTopology.BuildBusinessQueueArguments(),
-            cancellationToken: cancellationToken);
-
-        await channel.QueueBindAsync(
-            queue: queueName,
-            exchange: messageRoute,
-            routingKey: messageRoute,
-            cancellationToken: cancellationToken);
-
-        await channel.BasicQosAsync(0, _options.Value.PrefetchCount, false, cancellationToken);
-
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += async (sender, args) => await HandleMessageAsync(queueName, (AsyncEventingBasicConsumer)sender, args);
-
-        await channel.BasicConsumeAsync(
-            queue: queueName,
-            autoAck: false,
-            consumer: consumer,
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task SetupNotificationConsumerAsync(string queueName, IReadOnlyCollection<Type> notificationTypes, CancellationToken cancellationToken)
-    {
-        if (notificationTypes.Count == 0)
-        {
-            return;
-        }
-
-        var channel = await _connectionManager.CreateChannelAsync();
-        _channels.Add(channel);
-
-        await RabbitMQTopology.DeclareSystemTopologyAsync(channel, cancellationToken);
-
-        await channel.QueueDeclareAsync(
-            queue: queueName,
-            durable: _options.Value.Durable,
-            exclusive: false,
-            autoDelete: _options.Value.AutoDelete,
-            arguments: RabbitMQTopology.BuildBusinessQueueArguments(),
-            cancellationToken: cancellationToken);
-
-        foreach (var notificationType in notificationTypes)
-        {
-            var exchangeName = GetMessageExchangeName(notificationType);
-            await channel.ExchangeDeclareAsync(
-                exchange: exchangeName,
-                type: "fanout",
-                durable: _options.Value.Durable,
-                autoDelete: _options.Value.AutoDelete,
-                arguments: RabbitMQTopology.BuildBusinessExchangeArguments(),
-                cancellationToken: cancellationToken);
-
-            await channel.QueueBindAsync(
-                queue: queueName,
-                exchange: exchangeName,
-                routingKey: string.Empty,
-                cancellationToken: cancellationToken);
-        }
-
-        await channel.BasicQosAsync(0, _options.Value.PrefetchCount, false, cancellationToken);
-
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += async (sender, args) => await HandleMessageAsync(queueName, (AsyncEventingBasicConsumer)sender, args);
-
-        await channel.BasicConsumeAsync(
-            queue: queueName,
-            autoAck: false,
-            consumer: consumer,
-            cancellationToken: cancellationToken);
-    }
-
-    private async Task HandleMessageAsync(string queueName, AsyncEventingBasicConsumer consumer, BasicDeliverEventArgs args)
-    {
-        try
-        {
-            var payload = args.Body;
-
-            Dictionary<string, string?>? headers = null;
-            if (args.BasicProperties.Headers is not null)
-            {
-                headers = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (key, value) in args.BasicProperties.Headers)
-                {
-                    if (value is byte[] bytes)
-                    {
-                        headers[key] = System.Text.Encoding.UTF8.GetString(bytes);
-                    }
-                }
-            }
-
-            if (_notificationHandlerRoutes.TryGetValue(queueName, out var notificationHandlerTypeName))
-            {
-                var messageId = ResolveMessageId(headers);
-                await EnqueueAsync(
-                    messageId,
-                    InboxMessageType.Notification,
-                    payload,
-                    queueName,
-                    headers,
-                    CancellationToken.None);
-            }
-            else if (_commandHandlerTypes.TryGetValue(queueName, out var commandHandlerTypeName))
-            {
-                var messageId = ResolveMessageId(headers);
-                await EnqueueAsync(
-                    messageId,
-                    InboxMessageType.Command,
-                    payload,
-                    queueName,
-                    headers,
-                    CancellationToken.None);
-            }
-            else
-            {
-                throw new RabbitMQConsumerMessageException(
-                    $"Cannot route queue '{queueName}'. No matching handler route registered.",
-                    requeue: false);
-            }
-
-            await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
-        }
-        catch (Exception ex)
-        {
-            var requeue = ShouldRequeue(ex, _options.Value);
-            _logger.LogError(
-                ex,
-                "Error handling message from queue {QueueName}. Requeue: {Requeue}",
-                queueName,
-                requeue);
-            try
-            {
-                await consumer.Channel.BasicNackAsync(args.DeliveryTag, false, requeue);
-            }
-            catch
-            {
-                // Ignore
-            }
-        }
-    }
-
-    private async Task EnqueueAsync(
-        Guid messageId,
-        InboxMessageType messageType,
-        ReadOnlyMemory<byte> payload,
-        string route,
-        IEnumerable<KeyValuePair<string, string?>>? headers,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = _serviceProvider.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
-
-        var dbContext = scope.ServiceProvider.GetService<IDbContext>();
-        if (dbContext is null)
-        {
-            return;
-        }
-
-        var order = InboxMessageOrdering.Parse(headers);
-        await InboxMessageOrdering.EnsureStateAsync(dbContext, messageId, route, order, cancellationToken);
-        dbContext.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(
-            messageId,
-            messageType,
-            route,
-            payload.ToArray(),
-            SerializeHeaders(headers),
-            order));
-
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            if (await InboxMessageExistsAsync(messageId, route, cancellationToken).ConfigureAwait(false))
-            {
-                _logger.LogInformation(
-                    "Inbox message {MessageId} for route {Route} already exists. Treating RabbitMQ delivery as duplicate.",
-                    messageId,
-                    route);
-                return;
-            }
-
-            throw;
-        }
-    }
-
-    private async Task<bool> InboxMessageExistsAsync(Guid messageId, string route, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using var scope = _serviceProvider.CreateAsyncScope();
-            scope.ServiceProvider.ResolveDaemonServices();
-
-            var dbContext = scope.ServiceProvider.GetService<IDbContext>();
-            if (dbContext is null)
-            {
-                return false;
-            }
-
-            return await dbContext.Set<NOFInboxMessage>()
-                .Where(message => message.Id == messageId && message.Route == route)
-                .AnyAsync(cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private string SerializeHeaders(IEnumerable<KeyValuePair<string, string?>>? headers)
-    {
-        var dictionary = headers?.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value)
-            ?? new Dictionary<string, string?>(StringComparer.Ordinal);
-        return _objectSerializer.SerializeToText(dictionary, typeof(Dictionary<string, string?>));
-    }
-
-    internal static bool ShouldRequeue(Exception exception, RabbitMQOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        ArgumentNullException.ThrowIfNull(options);
-
-        return exception is RabbitMQConsumerMessageException messageException
-            ? messageException.Requeue
-            : options.RequeueOnConsumerFailure;
-    }
-
-    private static string GetMessageExchangeName(Type messageType)
-        => messageType.DisplayName;
-
-    internal static IReadOnlyCollection<CommandConsumerRegistration> BuildCommandConsumerRegistrations(
-        IEnumerable<CommandHandlerRegistration> registrations)
-    {
-        ArgumentNullException.ThrowIfNull(registrations);
-
-        return [.. registrations
-            .GroupBy(static registration => registration.CommandTypeName, StringComparer.Ordinal)
-            .Select(static group =>
-            {
-                var handlerTypeNames = group
-                    .Select(static registration => registration.HandlerTypeName)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-
-                if (handlerTypeNames.Length != 1)
-                {
-                    throw new InvalidOperationException(
-                        $"Command '{group.Key}' must have exactly one handler, but found: {string.Join(", ", handlerTypeNames)}.");
-                }
-
-                return new CommandConsumerRegistration(
-                    group.Key,
-                    handlerTypeNames[0],
-                    RabbitMQTopology.BuildCommandQueueName(group.Key));
-            })];
-    }
-
-    internal static string BuildCommandQueueName(string messageRoute)
-        => RabbitMQTopology.BuildCommandQueueName(messageRoute);
-
-    internal static string BuildNotificationQueueName(string? applicationName, string handlerDisplayName)
-    {
-        if (string.IsNullOrWhiteSpace(applicationName))
-        {
-            return handlerDisplayName;
-        }
-
-        return $"{applicationName}.{handlerDisplayName}";
-    }
-
-    internal static IReadOnlyCollection<NotificationConsumerRegistration> BuildNotificationConsumerRegistrations(
-        IEnumerable<NotificationHandlerRegistration> registrations,
-        string? applicationName)
-    {
-        ArgumentNullException.ThrowIfNull(registrations);
-
-        return [.. registrations
-            .GroupBy(static registration => registration.HandlerType)
-            .Select(group =>
-            {
-                var handlerTypeName = group.Key.DisplayName;
-                var queueName = BuildNotificationQueueName(applicationName, handlerTypeName);
-                var notificationTypes = group
-                    .Select(static registration => registration.NotificationType)
-                    .Distinct()
-                    .ToArray();
-
-                return new NotificationConsumerRegistration(queueName, handlerTypeName, notificationTypes);
-            })];
-    }
-
-    private static Guid ResolveMessageId(Dictionary<string, string?>? headers)
-    {
-        if (headers is not null
-            && headers.TryGetValue(NOFAbstractionConstants.Transport.Headers.MessageId, out var value)
-            && Guid.TryParse(value, out var messageId))
-        {
-            return messageId;
-        }
-
-        return Guid.NewGuid();
     }
 
     public void Dispose()
@@ -429,16 +156,4 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
 
         _disposed = true;
     }
-    /// <summary>Describes a RabbitMQ notification consumer registration.</summary>
-
-    public sealed record NotificationConsumerRegistration(
-        string QueueName,
-        string HandlerTypeName,
-        IReadOnlyCollection<Type> NotificationTypes);
-    /// <summary>Describes a RabbitMQ command consumer registration.</summary>
-
-    public sealed record CommandConsumerRegistration(
-        string MessageRoute,
-        string HandlerTypeName,
-        string QueueName);
 }

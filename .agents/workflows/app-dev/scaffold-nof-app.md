@@ -10,8 +10,8 @@ description: Scaffold a minimal NOF ASP.NET Core application with clean layers, 
 MyApp/
   MyApp/                    host, Program.cs, AppDbContext, appsettings.json
   MyApp.Domain/             domain classes, value objects, failures, events
-  MyApp.Application/        RPC servers and handlers, mappings, cache keys
-  MyApp.Contract/           RPC contracts, messages, DTOs
+  MyApp.Application/        application services and handlers, mappings, cache keys
+  MyApp.Contract/           application service contracts, messages, DTOs
 ```
 
 ## 1. Create the Solution and Projects
@@ -57,11 +57,9 @@ using NOF.Contract;
 
 namespace MyApp.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc, "api")]
-public interface IAppService : IRpcService
+public interface IAppService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "health")]
-    Result<HealthResponse> Health(Empty request);
+    HealthResponse Health(Empty request);
 }
 
 public sealed record HealthResponse(string Status);
@@ -78,16 +76,16 @@ using MyApp.Contract;
 
 namespace MyApp.Application;
 
-public partial class AppService : RpcServer<IAppService>;
+public partial class AppService : ApplicationService<IAppService>;
 
 public sealed class Health : AppService.Health
 {
-    public override Task<Result<HealthResponse>> HandleAsync(
+    public override Task<HealthResponse> HandleAsync(
         Empty request,
         Context context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new HealthResponse("ok")));
+        return Task.FromResult(new HealthResponse("ok"));
     }
 }
 ```
@@ -122,24 +120,44 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(AppService).Assembly);
-builder.AddRpcServer<AppService>();
+builder.AddApplicationService<AppService>();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapOrderEndpoints();
 app.MapOpenApi();
 await app.RunAsync();
 ```
 
-## 8. Configure appsettings.json
+## 8. Map native HTTP endpoints
+
+Place an ordinary feature extension in the host project and call it after Build:
+
+```csharp
+public static class OrderEndpoints
+{
+    public static RouteGroupBuilder MapOrderEndpoints(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api");
+        group.MapGet<AppService.Health>("/health");
+        return group;
+    }
+}
+```
+
+Keep HTTP namespaces and module types in the host project; the Contract project references no Hosting package.
+
+## 9. Configure appsettings.json
 
 ```json
 {
@@ -151,8 +169,8 @@ await app.RunAsync();
 
 ## Notes
 
-- `NOFWebApplicationBuilder.Create(args)` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
-- `AddApplicationPart(...)` executes generated assembly initializers; `AddRpcServer<T>()` explicitly registers the RPC server.
-- Applicable RPC endpoints are mapped automatically during `BuildAsync()`.
+- `WebApplication.CreateBuilder(args).AddNOF()` registers NOF infrastructure, JSON/OpenAPI services, health endpoints, and in-memory defaults.
+- `AddApplicationPart(...)` executes generated assembly initializers; `AddApplicationService<T>()` explicitly registers the RPC server.
+- Call app.UseNOF() and ordinary feature extensions after native Build(); map native health checks/OIDC explicitly.
 - Add RabbitMQ, Redis, or OIDC packages only when the application needs those providers.
 - Application handlers should inject `IDbContext` / `IRepository<T>`; keep EF Core types in the host.

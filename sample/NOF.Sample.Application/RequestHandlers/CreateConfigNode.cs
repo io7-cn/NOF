@@ -2,36 +2,45 @@ using Microsoft.Extensions.Caching.Distributed;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Sample.Application.CacheKeys;
-using NOF.Sample.Application.Repositories;
 
 namespace NOF.Sample.Application.RequestHandlers;
 
 public class CreateConfigNode : NOFSampleService.CreateConfigNode
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
     public CreateConfigNode(
-        IDbContext dbContext,
+        IConfigNodeRepository nodes, IUnitOfWork unitOfWork,
         ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(CreateConfigNodeRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var name = ConfigNodeName.Of(request.Name);
-        var parentId = request.ParentId.HasValue ? ConfigNodeId.Of(request.ParentId.Value) : (ConfigNodeId?)null;
-
-        if (await _dbContext.Set<ConfigNode>().ExistsByNameAsync(name, cancellationToken))
+        if (!ConfigNodeName.TryFrom(request.Name, out var name, out var nameErrorMessage))
         {
-            return Result.Fail("400", "Node with same name already exists.");
+            return new InvalidInput(nameErrorMessage);
+        }
+        var parentId = request.ParentId.HasValue ? ConfigNodeId.From(request.ParentId.Value) : (ConfigNodeId?)null;
+
+        if (await _nodes.ExistsByNameAsync(name, cancellationToken))
+        {
+            return new NameConflict("Node with same name already exists.");
+        }
+
+        if (parentId.HasValue && !await _nodes.ExistsAsync(parentId.Value, cancellationToken))
+        {
+            return new ParentNotFound("Parent node not found.");
         }
 
         var node = ConfigNode.Create(name, parentId);
-        _dbContext.Set<ConfigNode>().Add(node);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _nodes.Add(node);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByNameCacheKey(name), cancellationToken);
@@ -41,6 +50,6 @@ public class CreateConfigNode : NOFSampleService.CreateConfigNode
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return new CreatedConfigNode((long)node.Id);
     }
 }

@@ -6,29 +6,23 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class GetConfigNodeChildren : NOFSampleService.GetConfigNodeChildren
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeQueries _queries;
 
-    public GetConfigNodeChildren(IDbContext dbContext)
+    public GetConfigNodeChildren(IConfigNodeQueries queries)
     {
-        _dbContext = dbContext;
+        _queries = queries;
     }
 
-    public override async Task<Result<GetConfigNodeChildrenResponse>> HandleAsync(GetConfigNodeChildrenRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(GetConfigNodeChildrenRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var nodeId = ConfigNodeId.Of(request.Id);
-        var children = await _dbContext.Set<ConfigNodeChildren>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.NodeId == nodeId, cancellationToken);
+        var nodeId = ConfigNodeId.From(request.Id);
+        var children = await _queries.GetChildrenAsync(nodeId, cancellationToken);
 
         if (children is null)
         {
-            return Result.Fail("404", "未找到子节点信息");
+            return new NotFound("未找到子节点信息");
         }
 
-        return new GetConfigNodeChildrenResponse
-        {
-            NodeId = (long)children.NodeId,
-            ChildrenIds = children.ChildrenIds
-        };
+        return children;
     }
 }

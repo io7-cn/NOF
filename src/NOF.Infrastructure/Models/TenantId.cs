@@ -6,31 +6,29 @@ namespace NOF.Infrastructure;
 [ValueObjectLength(256, MinimumLength = 1)]
 public readonly partial struct TenantId : IValueObject<string>
 {
-    public static TenantId Host { get; } = Of(NOFAbstractionConstants.Tenant.HostId);
+    public static TenantId Host { get; } = From(NOFAbstractionConstants.Tenant.HostId);
 
     public static string Normalize(string? tenantId)
     {
         return NOFAbstractionConstants.Tenant.NormalizeTenantId(tenantId).Trim();
     }
 
-    public static void Validate(string value)
+    public static bool IsValid(string value, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        errorMessage = null;
+        if (string.IsNullOrWhiteSpace(value) || value[0] is < 'a' or > 'z')
         {
-            throw new ArgumentException("TenantId cannot be null or whitespace.", nameof(value));
+            errorMessage = "TenantId must start with a lowercase letter.";
+            return false;
         }
-
-        if (value[0] is < 'a' or > 'z')
-        {
-            throw new ArgumentException("TenantId must start with a lowercase letter.", nameof(value));
-        }
-
         foreach (var character in value)
         {
             if ((character < 'a' || character > 'z') && (character < '0' || character > '9'))
             {
-                throw new ArgumentException("TenantId must contain only lowercase letters and digits.", nameof(value));
+                errorMessage = "TenantId must contain only lowercase letters and digits.";
+                return false;
             }
         }
+        return true;
     }
 }

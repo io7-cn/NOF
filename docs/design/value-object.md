@@ -7,29 +7,30 @@ A value object in NOF is a `readonly partial struct` that implements `IValueObje
 ```csharp
 public readonly partial struct OrderName : IValueObject<string>
 {
-    public static void Validate(string value)
+    public static bool IsValid(string value, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new DomainValidationException("Order name cannot be empty.");
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
     }
 }
 ```
 
-The source generator produces everything else: a private validated constructor, a `static Of(T)` factory that calls `Validate`, an explicit cast to `T`, equality members, `ToString`, and a nested `JsonConverter`. The developer writes only the type declaration and optional validation. That's it.
-If you override `Normalize(T)`, keep it limited to canonicalization such as trimming or casing, and avoid calling `Of(...)` or `Validate(...)` from inside `Normalize`.
+The source generator produces everything else: a private validated constructor, throwing From and boolean TryFrom factories that share Normalize/IsValid, an explicit cast to `T`, equality members, `ToString`, and a nested `JsonConverter`. The developer writes only the type declaration and optional validation. That's it.
+If you override `Normalize(T)`, keep it limited to canonicalization such as trimming or casing, and avoid calling `From(...)` or `IsValid(...)` from inside `Normalize`.
 
 ## Default Values Are Not Value Objects
 
 C# permits every struct to be zero-initialized. That means `default(OrderName)`, array elements, unassigned fields, and generic `default(T)` can exist without running a constructor. NOF cannot prevent those bit patterns from being created while value objects remain structs, but it prevents them from being treated as valid domain values.
 
-Generated value objects carry a separate initialization marker that is set only after `Of(...)` (or another generated factory) has normalized and validated the primitive. The marker is deliberately separate from the primitive value: `Score.Of(0)` can be valid even though `0` is the primitive's default. An uninitialized value never compares equal to a validated value, including one whose primitive is the primitive default. Two uninitialized values compare equal so ORMs can use CLR zero-initialization as an internal sentinel. Other observations throw `InvalidOperationException`: conversion to the primitive, hashing, conversion to text, JSON serialization, and the generated persistence conversion path. Calling the generated public parameterless constructor also throws immediately.
+Generated value objects carry a separate initialization marker that is set only after `From(...)` (or another generated factory) has normalized and validated the primitive. The marker is deliberately separate from the primitive value: `Score.From(0)` can be valid even though `0` is the primitive's default. An uninitialized value never compares equal to a validated value, including one whose primitive is the primitive default. Two uninitialized values compare equal so ORMs can use CLR zero-initialization as an internal sentinel. Other observations throw `InvalidOperationException`: conversion to the primitive, hashing, conversion to text, JSON serialization, and the generated persistence conversion path. Calling the generated public parameterless constructor also throws immediately.
 
 Diagnostic `NOF018` rejects direct `default` and parameterless `new()` construction:
 
 ```csharp
 OrderName invalid1 = default; // NOF018
 OrderName invalid2 = new();   // NOF018
-var valid = OrderName.Of("Coffee");
+var valid = OrderName.From("Coffee");
 ```
 
 The analyzer intentionally does not report `OrderName? value = default`, because that represents a valid nullable value with no value. It also avoids warnings for arrays, uninitialized fields, reflection, and generic `default(T)` code where the concrete value-object type is not locally knowable; the runtime marker is the backstop for those cases.
@@ -42,17 +43,16 @@ String-backed value objects can declare their accepted `string.Length` range on 
 [ValueObjectLength(100, MinimumLength = 1)]
 public readonly partial struct OrderName : IValueObject<string>
 {
-    public static void Validate(string value)
+    public static bool IsValid(string value, out string? errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new DomainValidationException("Order name cannot be empty.");
-        }
+        var valid = !string.IsNullOrWhiteSpace(value);
+        errorMessage = valid ? null : "Invalid value.";
+        return valid;
     }
 }
 ```
 
-`ValueObjectGenerator` inserts the minimum- and maximum-length checks after `Normalize` and before the custom `Validate` method. `MinimumLength` defaults to `0`. EF Core and NHibernate read `MaximumLength` when constructing their models, so entity mappings do not repeat `HasMaxLength(100)`; minimum length remains a domain validation rule rather than a database column facet.
+`ValueObjectGenerator` inserts the minimum- and maximum-length checks after `Normalize` and before the custom `IsValid` predicate. `MinimumLength` defaults to `0`. EF Core and NHibernate read `MaximumLength` when constructing their models, so entity mappings do not repeat `HasMaxLength(100)`; minimum length remains a domain validation rule rather than a database column facet.
 
 Explicit constant persistence configuration is diagnosed at compilation time:
 
@@ -163,7 +163,7 @@ That keeps the public API small and consistent with how the framework's mapper a
 The `[Mappable]` source generator understands value objects natively:
 
 - **Unwrap**: `IValueObject<T>` → `T` via explicit cast `(T)value`. Only the exact underlying type is supported — a `string` value object won't auto-convert to `int`.
-- **Wrap**: `T` → `VoType.Of(value)`. Same exact-type restriction.
+- **Wrap**: `T` → `VoType.From(value)`. Same exact-type restriction.
 - **Cross-VO**: `OrderName` → `CustomerId` requires an explicit mapping expression, because cross-VO mapping is a domain decision.
 
 The generator never looks for `.Value`. It uses the same explicit cast that hand-written code would use. The generated code is what you would have written — there is no special path for value objects that diverges from the language's own conversion mechanics.
@@ -177,3 +177,5 @@ The generator never looks for `.Value`. It uses the same explicit cast that hand
 | No extra API beyond explicit cast | Small public surface | N/A                           | Medium (intentional) | ✅         |
 
 The value object is a type, not a box. Treat it as one.
+
+The current [factory contract and migration](../en/design/value-objects.md) uses From/TryFrom, removes Validate and propagates user-hook exceptions.

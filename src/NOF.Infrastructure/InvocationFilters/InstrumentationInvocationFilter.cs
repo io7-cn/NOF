@@ -1,0 +1,40 @@
+using NOF.Application;
+using NOF.Contract;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+
+namespace NOF.Infrastructure;
+
+/// <summary>Records application execution metrics through the native Meter API.</summary>
+public sealed class InstrumentationInvocationFilter : IInvocationFilter
+{
+    private static readonly Counter<long> Count = NOFInfrastructureConstants.InboundPipeline.Meter.CreateCounter<long>(NOFInfrastructureConstants.InboundPipeline.Metrics.ExecutionCounter);
+    private static readonly Histogram<double> Duration = NOFInfrastructureConstants.InboundPipeline.Meter.CreateHistogram<double>(NOFInfrastructureConstants.InboundPipeline.Metrics.ExecutionDuration, "ms");
+    private static readonly Counter<long> Errors = NOFInfrastructureConstants.InboundPipeline.Meter.CreateCounter<long>(NOFInfrastructureConstants.InboundPipeline.Metrics.ErrorCounter);
+
+    /// <inheritdoc />
+    public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+    {
+        var tags = new TagList
+        {
+            { NOFInfrastructureConstants.InboundPipeline.Tags.HandlerType, context.HandlerType.FullName },
+            { NOFInfrastructureConstants.InboundPipeline.Tags.MessageType, context.OperationName }
+        };
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            var result = await next(context, input, cancellationToken);
+            Count.Add(1, tags);
+            return result;
+        }
+        catch
+        {
+            Errors.Add(1, tags);
+            throw;
+        }
+        finally
+        {
+            Duration.Record(Stopwatch.GetElapsedTime(start).TotalMilliseconds, tags);
+        }
+    }
+}

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NOF.Abstraction;
+using NOF.Application;
 using NOF.Contract;
 
 namespace NOF.Test;
@@ -23,7 +25,6 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
     public NOFTestScope CreateScope()
     {
         var scope = Services.CreateAsyncScope();
-        scope.ServiceProvider.ResolveDaemonServices();
         return new NOFTestScope(scope);
     }
 
@@ -54,12 +55,11 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
         return await scenario(scope);
     }
 
-    public async Task<TResult> CallAsync<TClient, TResult>(
-        Func<TClient, Context, CancellationToken, Task<TResult>> invocation,
+    public async Task<TResult> CallAsync<TResult>(
+        Func<IServiceProvider, Context, CancellationToken, Task<TResult>> invocation,
         Action<NOFTestScope>? configure = null,
         Context? context = null,
         CancellationToken cancellationToken = default)
-        where TClient : notnull
     {
         ArgumentNullException.ThrowIfNull(invocation);
 
@@ -68,31 +68,34 @@ public sealed class NOFTestHost : IAsyncDisposable, IDisposable
         return await scope.CallAsync(invocation, context, cancellationToken);
     }
 
-    public async Task SendAsync<TCommand>(TCommand command, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        using var scope = CreateScope();
-        await scope.SendAsync(command, context, cancellationToken);
-    }
-
-    public async Task PublishAsync<TNotification>(TNotification notification, Context? context = null, CancellationToken cancellationToken = default)
-    {
-        using var scope = CreateScope();
-        await scope.PublishAsync(notification, context, cancellationToken);
-    }
-
     public void Dispose()
     {
-        Host.Dispose();
+        try
+        {
+            Host.StopAsync().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            Host.Dispose();
+        }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        if (Host is IAsyncDisposable asyncDisposable)
+        try
         {
-            return asyncDisposable.DisposeAsync();
+            await Host.StopAsync().ConfigureAwait(false);
         }
-
-        Host.Dispose();
-        return ValueTask.CompletedTask;
+        finally
+        {
+            if (Host is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                Host.Dispose();
+            }
+        }
     }
 }

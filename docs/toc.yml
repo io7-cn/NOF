@@ -4,3 +4,7 @@
   href: design/
 - name: API Reference
   href: api/
+- name: Development (English)
+  href: en/README.md
+- name: 开发指南
+  href: zh-CN/README.md

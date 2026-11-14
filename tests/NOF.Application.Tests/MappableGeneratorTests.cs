@@ -25,7 +25,6 @@ public class MappableGeneratorTests
         typeof(MappingRegistration),
         typeof(MappingReference),
         typeof(Contract.Optional<>),
-        typeof(Result),
         typeof(IValueObject<>),
     ];
 
@@ -40,7 +39,7 @@ public class MappableGeneratorTests
     {
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
 
-        var driver = CSharpGeneratorDriver.Create(new MappableGenerator());
+        var driver = CSharpGeneratorDriver.Create([new MappableGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 
         var result = driver.GetRunResult();
@@ -624,195 +623,6 @@ public class MappableGeneratorTests
     }
 
     // =======================================================================
-    //  Result<T> tests (same 8-case nullable semantics as Optional<T>)
-    // =======================================================================
-
-    // -----------------------------------------------------------------------
-    // Result<T> 閳?T? : valid unwrap via .Value!
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultUnwrap_ToNullable_GeneratesDotValueBang()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public Result<string> Name { get; set; } }
-                public class OrderDto { public string? Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var result = RunGenerator(source);
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("src.Name.Value!", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // Result<T> 閳?T (non-nullable): semantic mismatch 閳?NOF022
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultUnwrap_ToNonNullable_EmitsWarningNOF022()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public Result<string> Name { get; set; } }
-                public class OrderDto { public string Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
-        Assert.Contains(diagnostics, d => d.Id == "NOF022");
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("MappingReference.Map<", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // T 閳?Result<T>  (wrap via implicit conversion)
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultWrap_ImplicitConversion()
-    {
-        const string source = """
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public string Name { get; set; } }
-                public class OrderDto { public Result<string> Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var result = RunGenerator(source);
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        // T 閳?Result<T> is ok (implicit conversion)
-        Assert.Contains("Name = src.Name", code);
-        Assert.DoesNotContain(".Value!", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // T 閳?Result<T?>  (implicit conversion 閳?direct assignment)
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultWrap_ToNullableInner_Ok()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public string Name { get; set; } }
-                public class OrderDto { public Result<string?> Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var result = RunGenerator(source);
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("Name = src.Name", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // T? 閳?Result<T> : follows C# implicit conversion rules (direct assignment)
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultWrap_NullableToNonNullableInner_ImplicitConversion()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public string? Name { get; set; } }
-                public class OrderDto { public Result<string> Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        // C# implicit operator Result<T>(T value) accepts string? 閳?Result<string>
-        // We follow C#'s own implicit conversion rules 閳?no special-casing
-        var result = RunGenerator(source);
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("Name = src.Name", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // T? 閳?Result<T?> : implicit conversion (direct assignment)
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultWrap_NullableToNullableInner_Ok()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public string? Name { get; set; } }
-                public class OrderDto { public Result<string?> Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var result = RunGenerator(source);
-        var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("Name = src.Name", code);
-    }
-
-    // -----------------------------------------------------------------------
-    // Result<T?> 閳?T? : semantic mismatch 閳?NOF022
-    // -----------------------------------------------------------------------
-
-    [Fact]
-    public void ResultUnwrap_NullableInnerToNullable_EmitsNOF022()
-    {
-        const string source = """
-            #nullable enable
-            using NOF.Application;
-            using NOF.Contract;
-            namespace Test
-            {
-                public class Order { public Result<string?> Name { get; set; } }
-                public class OrderDto { public string? Name { get; set; } }
-
-                [Mappable<Order, OrderDto>]
-                public static partial class Mappings;
-            }
-            """;
-
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
-        Assert.Contains(diagnostics, d => d.Id == "NOF022");
-    }
-
-    // =======================================================================
     //  IValueObject<T> tests
     // =======================================================================
 
@@ -824,7 +634,7 @@ public class MappableGeneratorTests
         {
             private readonly string _value;
             private OrderName(string value) { _value = value; }
-            public static OrderName Of(string value) => new(value);
+            public static OrderName From(string value) => new(value);
             public static explicit operator string(OrderName vo) => vo._value;
             public string GetUnderlyingValue() => _value;
         }
@@ -880,8 +690,8 @@ public class MappableGeneratorTests
 
         var result = RunGenerator(source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
-        // Should wrap via OrderName.Of(...)
-        Assert.Contains("OrderName.Of(src.Name)", code);
+        // Should wrap via OrderName.From(...)
+        Assert.Contains("OrderName.From(src.Name)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -928,7 +738,7 @@ public class MappableGeneratorTests
                 {
                     private readonly int _value;
                     private Score(int value) { _value = value; }
-                    public static Score Of(int value) => new(value);
+                    public static Score From(int value) => new(value);
                     public static explicit operator int(Score vo) => vo._value;
                     public int GetUnderlyingValue() => _value;
                 }
@@ -943,7 +753,7 @@ public class MappableGeneratorTests
 
         var result = RunGenerator(source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
-        Assert.Contains("Score.Of(src.Score)", code);
+        Assert.Contains("Score.From(src.Score)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -962,7 +772,7 @@ public class MappableGeneratorTests
                 {
                     private readonly string _value;
                     private FirstName(string value) { _value = value; }
-                    public static FirstName Of(string value) => new(value);
+                    public static FirstName From(string value) => new(value);
                     public static explicit operator string(FirstName vo) => vo._value;
                     public string GetUnderlyingValue() => _value;
                 }
@@ -970,7 +780,7 @@ public class MappableGeneratorTests
                 {
                     private readonly string _value;
                     private DisplayName(string value) { _value = value; }
-                    public static DisplayName Of(string value) => new(value);
+                    public static DisplayName From(string value) => new(value);
                     public static explicit operator string(DisplayName vo) => vo._value;
                     public string GetUnderlyingValue() => _value;
                 }
@@ -988,7 +798,7 @@ public class MappableGeneratorTests
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should NOT auto-unwrap and rewrap; should fall back to mapper
         Assert.Contains("MappingReference.Map<", code);
-        Assert.DoesNotContain("DisplayName.Of(", code);
+        Assert.DoesNotContain("DisplayName.From(", code);
     }
 
     // =======================================================================
@@ -1111,7 +921,7 @@ public class MappableGeneratorTests
         Assert.Contains("(string)src.Name)", code);
         // Reverse: string 閳?OrderName (wrap)
         Assert.Contains("MappingRegistration.Of<global::Test.OrderDto, global::Test.Order>", code);
-        Assert.Contains("OrderName.Of(src.Name)", code);
+        Assert.Contains("OrderName.From(src.Name)", code);
     }
 
     // -----------------------------------------------------------------------
@@ -1189,7 +999,7 @@ public class MappableGeneratorTests
                 {
                     private readonly long _value;
                     private NodeId(long value) { _value = value; }
-                    public static NodeId Of(long value) => new(value);
+                    public static NodeId From(long value) => new(value);
                     public static explicit operator long(NodeId vo) => vo._value;
                     public long GetUnderlyingValue() => _value;
                 }
@@ -1225,7 +1035,7 @@ public class MappableGeneratorTests
                 {
                     private readonly long _value;
                     private NodeId(long value) { _value = value; }
-                    public static NodeId Of(long value) => new(value);
+                    public static NodeId From(long value) => new(value);
                     public static explicit operator long(NodeId vo) => vo._value;
                     public long GetUnderlyingValue() => _value;
                 }
@@ -1242,7 +1052,7 @@ public class MappableGeneratorTests
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should unwrap Nullable<long>, then wrap via NodeId.Of
         Assert.Contains(".HasValue", code);
-        Assert.Contains("NodeId.Of(", code);
+        Assert.Contains("NodeId.From(", code);
     }
 
     // =======================================================================

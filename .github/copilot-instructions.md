@@ -10,7 +10,7 @@ You are working in the **NOF (Neat Opinionated Framework)** repository, a modula
 src/
   NOF.Abstraction/            - shared annotations and ambient event publishing primitives
   NOF.Domain/                 - value objects, failures, domain exceptions, and ID generation
-  NOF.Contract/               - RPC contracts, request/response models, and HTTP endpoint metadata
+  NOF.Contract/               - application contracts, request/response models, and business outcomes
   NOF.Application/            - RPC servers, handlers, state machines, mapping, and caching abstractions
   NOF.Hosting.Abstraction/    - builder contracts and step contracts
   NOF.Infrastructure/         - builder defaults, EF Core integration, OpenTelemetry, and runtime pipeline
@@ -32,11 +32,16 @@ sample/                       - runnable sample app demonstrating current usage
 tests/                        - unit and integration tests
 ```
 
+Follow the pinned [shared standards](../.standards/docs/en/README.md), the root
+[AGENTS.md](../AGENTS.md), and the [Result migration guide](../docs/en/design/result-unions.md).
+Use lowercase issue-linked topic branches and submit changes to `main` for required independent review.
+
 ## Key Patterns
 
-- RPC contracts are declared as `IRpcService` interfaces with one request parameter per method.
-- Application implementations use `RpcServer<TService>` and generated nested handler base classes.
-- ASP.NET Core maps endpoints explicitly with `app.MapHttpEndpoint<TRpcServer>()`.
+- Results are native `Result(Empty, Failure)` / `Result<T>(T, Failure)` unions. Match T directly. Success/Success<T> wrappers are removed; successful messages belong to business DTOs; Failure is shared in NOF.Abstraction. Streaming uses `Result<IAsyncEnumerable<T>>` and paging uses `Result<Page<T>>`.
+- Application contracts are declared as `IApplicationService` interfaces with one request parameter and a declared business response per method. DTOs, nullable values and business unions are supported; HTTP routes belong exclusively in native IHttpEndpointModule implementations; legacy HTTP RPC adapters and annotations are deleted.
+- Application implementations use `ApplicationService<TService>` and generated nested handler base classes.
+- `AddApplicationService<T>()` registers a service container; application parts automatically register operation implementations. During `BuildAsync()`, registered IHttpEndpointModule instances map explicit native routes. Contracts carry no HTTP declarations.
 - `NOFWebApplicationBuilder.Create(args)` always registers JSON, CORS, and OpenAPI services.
 - `app.MapOpenApi()` is an explicit host choice.
 - EF Core registration uses `UseDbContext<TDbContext>()` plus `WithTenantMode(...)`, `WithConnectionString(...)`, `WithOptions(...)`, and optional `MigrateOnInitialize()`.
@@ -66,3 +71,5 @@ When framework behavior changes, check all of the following and keep them consis
 - `.agents/`
 - `.github/`
 - sample usage in `sample/`
+
+- Expected application failures use Contract-owned FailureCase attributes. Error codes are opaque strings, independent of Name; multiple cases require explicit names and a single unnamed case is Failed. Generated IService.OperationResult closes the declared failures and success type. Use Match or exhaustive switches. Domain does not depend on Contract and no longer converts returned failures to DomainException.

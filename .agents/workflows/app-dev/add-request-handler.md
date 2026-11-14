@@ -1,5 +1,5 @@
 ---
-description: Add a Context-aware request/response operation with NOF RPC contracts, generated clients, and explicit server registration
+description: Add a Context-aware request/response operation with NOF application service contracts, generated server operations, and explicit service registration
 ---
 
 # Add a Request-Response Operation
@@ -9,27 +9,26 @@ description: Add a Context-aware request/response operation with NOF RPC contrac
 ```csharp
 using NOF.Contract;
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc, "api/orders")]
-public interface IOrderService : IRpcService
+public interface IOrderService : IApplicationService
 {
-    [HttpEndpoint(HttpVerb.Get, "get")]
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
+    [FailureCase("NotFound", "404")]
+    GetOrderResponse GetOrder(GetOrderRequest request);
 }
 
 public sealed record GetOrderRequest(string Id);
 public sealed record GetOrderResponse(string Id, string Name);
 ```
 
-An RPC contract must declare exactly one transport. Every method takes one reference-type request and returns a non-task type implementing `IResult`. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
+An application service contract is local by default and may opt into one transport adapter. Every method takes one reference-type request and returns its declared non-task business value, including a DTO, nullable value or union. Contract methods do not take `Context`, `CancellationToken`, or an `Async` suffix; those appear on generated asynchronous APIs.
 
-For JSON-RPC, use `[TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc/orders")]` and remove method-level `[HttpEndpoint]`. For in-process-only calls, use `[TransportOverMemory]` and remove `[HttpEndpoint]`.
+Keep HTTP routing in an ordinary feature mapping extension, outside Contract. See docs/en/design/configuration-rest.md for the complete CRUD slice.
 
-## 2. Define the RPC Server Container
+## 2. Define the Application Service Container
 
 ```csharp
 using NOF.Application;
 
-public partial class OrderService : RpcServer<IOrderService>;
+public partial class OrderService : ApplicationService<IOrderService>;
 ```
 
 The `partial` modifier is required (`NOF300`). The generator creates one nested handler base per contract operation.
@@ -39,12 +38,12 @@ The `partial` modifier is required (`NOF300`). The generator creates one nested 
 ```csharp
 public sealed class GetOrder : OrderService.GetOrder
 {
-    public override Task<Result<GetOrderResponse>> HandleAsync(
+    public override Task<Result> HandleAsync(
         GetOrderRequest request,
-        Context context,
+        InvocationContext context,
         CancellationToken cancellationToken)
     {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "demo")));
+        return Task.FromResult<Result>(new GetOrderResponse(request.Id, "demo"));
     }
 }
 ```
@@ -53,17 +52,23 @@ public sealed class GetOrder : OrderService.GetOrder
 
 ```csharp
 builder.AddApplicationPart(typeof(OrderService).Assembly);
-builder.AddRpcServer<OrderService>();
+builder.AddApplicationService<OrderService>();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseNOF();
+app.MapOrderEndpoints();
 ```
 
-`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddRpcServer<T>()` registers the server and its transport metadata. During `BuildAsync()`, ASP.NET Core automatically maps controller/JSON-RPC endpoints; memory contracts are not exposed.
+`AddApplicationPart(...)` runs source-generated initializers for handlers and other metadata. `AddApplicationService<T>()` registers the service container. After native Build(), app.MapOrderEndpoints() explicitly maps ordinary feature routes. Use group.MapGet<OrderService.GetOrder>("/{id}") with typed Request/Response rules at the HTTP boundary.
 
-## 5. Call through the Generated Client
+## 5. Invoke the Server Operation
 
 ```csharp
-var result = await orderServiceClient.GetOrderAsync(request, context, cancellationToken);
+var result = await OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken);
 ```
 
-The contract package generates `IOrderServiceClient` and, for HTTP transport, `HttpOrderServiceClient`. The infrastructure generator creates the local client for a registered server. Both implementations use the same client interface and explicit `Context`.
+The generated static entry resolves IApplicationServiceInvoker and preserves shared
+policies and the fresh inbound scope. No client interface, HTTP Client or Local Client
+is generated. Native HTTP endpoints call this entry and return ASP.NET Core results;
+remote consumers maintain their own HTTP integrations. For tests, use
+CallAsync<TResult>((services, context, ct) => OrderService.GetOrder.InvokeAsync(...)).

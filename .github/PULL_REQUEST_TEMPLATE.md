@@ -4,7 +4,7 @@
 
 ## Related Issues
 
-<!-- Link related issues: Closes #123, Fixes #456 -->
+<!-- Link related issues: Refs: #123. Close only when the agreed delivery condition is met. -->
 
 ## Type of Change
 
@@ -21,7 +21,8 @@
 
 ### Build & Quality
 
-- [ ] Branch is up-to-date with `develop`
+- [ ] Branch follows the adopted naming rules and is current with `main`
+- [ ] Standards adoption and contribution-policy checks pass
 - [ ] `dotnet format --verify-no-changes` passes
 - [ ] `dotnet build --configuration Release` succeeds with no warnings
 - [ ] `dotnet test` passes
@@ -40,3 +41,12 @@
 - [ ] `docs/` updated (if DocFX API docs affected)
 - [ ] CI/CD workflows updated (`.github/workflows/` — if new packages or test projects added)
 - [ ] AI agent instructions updated (`.agents/` rules/workflows/skills and `.github/copilot-instructions.md`)
+
+### Compatibility and review
+
+- [ ] Breaking impact and migration examples are documented where applicable
+- [ ] Verification evidence identifies the exact candidate and any unverified scope
+- [ ] Rollout and rollback implications are recorded
+- [ ] Required independent approvals and maintainer merge authorization refer to the current candidate
+
+<!-- Breaking API, authorization and other high-risk changes require two independent qualified reviewers under REV-02. Checks alone do not authorize merging. -->

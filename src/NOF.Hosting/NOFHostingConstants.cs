@@ -4,7 +4,7 @@ using System.Diagnostics.Metrics;
 namespace NOF.Hosting;
 
 /// <summary>
-/// Hosting-related constants used across layers. Placed in Abstraction to avoid cross-layer dependencies.
+/// Shared deployment configuration keys and native message-delivery diagnostic identifiers.
 /// </summary>
 public static class NOFHostingConstants
 {

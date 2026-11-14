@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using NOF.Abstraction;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
 using System.Reflection;
@@ -18,6 +19,7 @@ public class ValueObjectGeneratorTests
     private static readonly Type[] _extraRefs =
     [
         typeof(IValueObject<>),
+        typeof(Failure),
         typeof(NewableValueObjectAttribute),
         typeof(ValueObjectLengthAttribute),
         typeof(IdGenerator),
@@ -39,7 +41,7 @@ public class ValueObjectGeneratorTests
             source,
             true,
             _extraRefs);
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
         using var stream = new MemoryStream();
@@ -60,7 +62,171 @@ public class ValueObjectGeneratorTests
 
         var invalidOperationException = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("is uninitialized", invalidOperationException.Message, StringComparison.Ordinal);
-        Assert.Contains(".Of(...)", invalidOperationException.Message, StringComparison.Ordinal);
+        Assert.Contains(".From(...)", invalidOperationException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FromAndTryFrom_NormalizeOnceAndRejectExpectedInvalidInputWithoutExceptions()
+    {
+        var assembly = CompileGeneratedAssembly("""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static int NormalizeCalls;
+                public static int ValidityCalls;
+                public static string Normalize(string value)
+                {
+                    NormalizeCalls++;
+                    return value == "null!" ? null! : value.Trim().ToLowerInvariant();
+                }
+                public static bool IsValid(string value, out string? errorMessage)
+                {
+                    errorMessage = null;
+                    ValidityCalls++;
+                    return value.Length > 0 && value != "invalid";
+                }
+            }
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    var value = Name.From("  HELLO  ");
+                    if ((string)value != "hello" || Name.NormalizeCalls != 1 || Name.ValidityCalls != 1) { return false; }
+                    if (!Name.TryFrom(" WORLD ", out var result) || (string)result != "world"
+                        || Name.NormalizeCalls != 2 || Name.ValidityCalls != 2) { return false; }
+                    if (Name.TryFrom(null, out result) || Name.NormalizeCalls != 2) { return false; }
+                    if (Name.TryFrom("null!", out result) || Name.ValidityCalls != 2) { return false; }
+                    if (Name.TryFrom("invalid", out result)) { return false; }
+                    try { _ = (string)result; return false; }
+                    catch (System.InvalidOperationException) { }
+                    try { Name.From("invalid"); return false; }
+                    catch (System.ArgumentException error) { if (error.ParamName != "value") { return false; } }
+                    try { Name.From(null!); return false; }
+                    catch (System.ArgumentNullException) { }
+                    return typeof(Name).GetMethod("Of") == null;
+                }
+            }
+            """);
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
+    }
+
+    [Theory]
+    [InlineData("Name is reserved")]
+    [InlineData("名称不允许")]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ValidationMessages_AreSharedByFromAndTryFrom(string? message)
+    {
+        var literal = message is null ? "null" : Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(message, true);
+        var assembly = CompileGeneratedAssembly($$"""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static int Calls;
+                public static bool IsValid(string value, out string? errorMessage)
+                {
+                    Calls++;
+                    errorMessage = {{literal}};
+                    return value == "ok";
+                }
+            }
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    if (Name.TryFrom("invalid", out _, out var errorMessage) || string.IsNullOrWhiteSpace(errorMessage) || Name.Calls != 1) { return false; }
+                    if (!string.IsNullOrWhiteSpace({{literal}}) && errorMessage != {{literal}}) { return false; }
+                    try { Name.From("invalid"); return false; }
+                    catch (System.ArgumentException error)
+                    {
+                        if (error.GetType() != typeof(System.ArgumentException) || Name.Calls != 2
+                            || error.Message != new System.ArgumentException(errorMessage, "value").Message) { return false; }
+                    }
+                    return Name.TryFrom("ok", out _, out var successMessage) && successMessage == null && Name.Calls == 3;
+                }
+            }
+            """);
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
+    }
+
+    [Fact]
+    public void LengthConstraints_AreAppliedToNormalizedValues_BeforeCustomValidity()
+    {
+        var assembly = CompileGeneratedAssembly("""
+            using NOF.Domain;
+            [ValueObjectLength(4, MinimumLength = 2)]
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static int ValidityCalls;
+                public static string Normalize(string value) => value.Trim();
+                public static bool IsValid(string value, out string? errorMessage) {
+                    errorMessage = null; ValidityCalls++; return true; }
+            }
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    if (Name.TryFrom(" a ", out _, out var shortMessage) || !shortMessage.Contains("at least 2")
+                        || Name.TryFrom("12345", out _, out var longMessage) || !longMessage.Contains("exceed 4") || Name.ValidityCalls != 0) { return false; }
+                    if (!Name.TryFrom(" abcd ", out var name) || (string)name != "abcd" || Name.ValidityCalls != 1) { return false; }
+                    try { Name.From("abcde"); return false; }
+                    catch (System.ArgumentException) { return Name.ValidityCalls == 1; }
+                }
+            }
+            """);
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
+    }
+
+    [Theory]
+    [InlineData("Normalize", false)]
+    [InlineData("Normalize", true)]
+    [InlineData("IsValid", false)]
+    [InlineData("IsValid", true)]
+    public void UserHookExceptions_PropagateUnchanged(string hook, bool useTry)
+    {
+        var assembly = CompileGeneratedAssembly($$"""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static readonly System.Exception HookError = new System.InvalidOperationException("callback failed");
+                public static string Normalize(string value) => {{(hook == "Normalize" ? "throw HookError" : "value")}};
+                public static bool IsValid(string value, out string? errorMessage) { errorMessage = null; {{(hook == "IsValid" ? "throw HookError;" : "return true;")}} }
+            }
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    try { {{(useTry ? "Name.TryFrom(nameof(Name), out _);" : "Name.From(nameof(Name));")}} return false; }
+                    catch (System.Exception error) { return object.ReferenceEquals(Name.HookError, error); }
+                }
+            }
+            """);
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
+    }
+
+    [Fact]
+    public void NullablePrimitiveFactories_PreserveAbsenceAndResetFailedOutput()
+    {
+        var assembly = CompileGeneratedAssembly("""
+            using NOF.Domain;
+            public readonly partial struct Positive : IValueObject<int>
+            {
+                public static bool IsValid(int value, out string? errorMessage) { errorMessage = null; return value > 0; }
+            }
+            public static class Probe
+            {
+                public static bool Run()
+                {
+                    if (Positive.From((int?)null) != null || Positive.TryFrom((int?)null, out _, out var nullMessage) || string.IsNullOrWhiteSpace(nullMessage)) { return false; }
+                    if (!Positive.TryFrom((int?)42, out var value) || (int)value != 42) { return false; }
+                    if (Positive.TryFrom(-1, out value)) { return false; }
+                    try { _ = (int)value; return false; }
+                    catch (System.InvalidOperationException) { return (int)Positive.From(1) == 1; }
+                }
+            }
+            """);
+        Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
     }
 
     [Fact]
@@ -81,7 +247,7 @@ public class ValueObjectGeneratorTests
     {
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
 
-        var driver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        var driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
 
         var result = driver.GetRunResult();
@@ -174,11 +340,11 @@ public class ValueObjectGeneratorTests
         Assert.Single(result.GeneratedTrees);
         var code = GetVoCode(result);
 
-        Assert.Contains("public static Name Of(string value)", code);
+        Assert.Contains("public static Name From(string value)", code);
         Assert.Contains("private readonly bool _isInitialized;", code);
         Assert.Contains("public Name()", code);
         Assert.Contains("private void __EnsureInitialized()", code);
-        Assert.Contains("global::System.ArgumentNullException.ThrowIfNull(value)", code);
+        Assert.Contains("new global::System.ArgumentNullException(nameof(value), errorMessage)", code);
         Assert.Contains("public static explicit operator string(Name vo)", code);
         Assert.Contains("public static bool operator ==(Name left, Name right)", code);
         Assert.Contains("public static bool operator !=(Name left, Name right)", code);
@@ -187,7 +353,7 @@ public class ValueObjectGeneratorTests
         Assert.Contains("JsonSerializer.Deserialize(ref reader, __GetPrimitiveJsonTypeInfo(options))", code);
         Assert.Contains("JsonSerializer.Serialize(writer, value._value, __GetPrimitiveJsonTypeInfo(options))", code);
         Assert.Contains("public override string ToString()", code);
-        Assert.DoesNotContain("Of(string? value)", code); // no nullable overload for ref types
+        Assert.DoesNotContain("From(string? value)", code); // no nullable overload for ref types
         Assert.DoesNotContain("public static Name New()", code);
         Assert.DoesNotContain("public override string? ToString()", code);
     }
@@ -205,7 +371,7 @@ public class ValueObjectGeneratorTests
         var assembly = CompileGeneratedAssembly(source);
         var valueObjectType = Assert.IsAssignableFrom<Type>(assembly.GetType("Test.Score"));
         var factory = Assert.IsAssignableFrom<MethodInfo>(
-            valueObjectType.GetMethod("Of", BindingFlags.Public | BindingFlags.Static, [typeof(int)]));
+            valueObjectType.GetMethod("From", BindingFlags.Public | BindingFlags.Static, [typeof(int)]));
         var explicitCast = Assert.Single(
             valueObjectType.GetMethods(BindingFlags.Public | BindingFlags.Static),
             method => method.Name == "op_Explicit" && method.ReturnType == typeof(int));
@@ -264,8 +430,8 @@ public class ValueObjectGeneratorTests
         var result = RunGenerator(source);
 
         var code = GetVoCode(result);
-        Assert.Contains("public static OrderId? Of(long? value)", code);
-        Assert.Contains("value.HasValue ? Of(value.Value) : null", code);
+        Assert.Contains("public static OrderId? From(long? value)", code);
+        Assert.Contains("value.HasValue ? From(value.Value) : null", code);
         Assert.DoesNotContain("ArgumentNullException.ThrowIfNull", code);
         Assert.Contains("_value.GetHashCode()", code);   // value type 鈥?no ?.
         Assert.Contains("public override string ToString()", code);
@@ -309,9 +475,9 @@ public class ValueObjectGeneratorTests
     }
 
     [Fact]
-    public void AlwaysCallsValidateInOf()
+    public void AlwaysCallsIsValidInTryFrom()
     {
-        // Validate is a static virtual on IValueObject<T> and is always called after Normalize.
+        // IsValid is a static virtual hook called once after normalization.
         const string source = """
             using NOF.Domain;
             namespace Test
@@ -324,11 +490,11 @@ public class ValueObjectGeneratorTests
 
         var code = GetVoCode(result);
         Assert.Contains("value = __CallNormalize<OrderId>(value);", code);
-        Assert.Contains("__CallValidate<OrderId>(value);", code);
+        Assert.Contains("__CallIsValid<OrderId>(value, out errorMessage)", code);
     }
 
     [Fact]
-    public void UserOverriddenValidate_IsCalledInOf()
+    public void UserOverriddenIsValid_IsCalledInTryFrom()
     {
         const string source = """
             using NOF.Domain;
@@ -336,10 +502,7 @@ public class ValueObjectGeneratorTests
             {
                 public readonly partial struct OrderId : IValueObject<long>
                 {
-                    public static void Validate(long value)
-                    {
-                        if (value <= 0) throw new System.ArgumentException("must be positive");
-                    }
+                    public static bool IsValid(long value, out string? errorMessage) { errorMessage = null; return value > 0; }
                 }
             }
             """;
@@ -348,11 +511,11 @@ public class ValueObjectGeneratorTests
 
         var code = GetVoCode(result);
         Assert.Contains("value = __CallNormalize<OrderId>(value);", code);
-        Assert.Contains("__CallValidate<OrderId>(value);", code);
+        Assert.Contains("__CallIsValid<OrderId>(value, out errorMessage)", code);
     }
 
     [Fact]
-    public void Normalize_IsCalledBeforeValidate()
+    public void Normalize_IsCalledBeforeIsValid()
     {
         const string source = """
             #nullable enable
@@ -370,7 +533,7 @@ public class ValueObjectGeneratorTests
         var code = GetVoCode(result);
 
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
-        var validateIdx = code.IndexOf("__CallValidate<Name>(value);", StringComparison.Ordinal);
+        var validateIdx = code.IndexOf("__CallIsValid<Name>(value, out errorMessage)", StringComparison.Ordinal);
         Assert.True(normalizeIdx >= 0);
         Assert.True(validateIdx > normalizeIdx);
     }
@@ -392,13 +555,13 @@ public class ValueObjectGeneratorTests
         var code = GetVoCode(result);
         Assert.Contains("public static EntityId New(global::NOF.Domain.IIdGenerator generator)", code);
         Assert.Contains("global::System.ArgumentNullException.ThrowIfNull(generator);", code);
-        Assert.Contains("return Of(generator.NextId());", code);
+        Assert.Contains("return From(generator.NextId());", code);
         Assert.Contains("public static EntityId New()", code);
-        Assert.Contains("=> New(global::NOF.Domain.IdGenerator.Current);", code);
+        Assert.Contains("=> New(global::NOF.Domain.IdGenerator.Current ?? throw new global::System.InvalidOperationException", code);
     }
 
     [Fact]
-    public void StringVo_NullGuardBeforeValidate()
+    public void StringVo_NullGuardBeforeNormalizationAndIsValid()
     {
         const string source = """
             #nullable enable
@@ -412,10 +575,10 @@ public class ValueObjectGeneratorTests
         var result = RunGenerator(source);
         var code = GetVoCode(result);
 
-        // null guard must come before Normalize/Validate
-        var nullGuardIdx = code.IndexOf("ArgumentNullException.ThrowIfNull", StringComparison.Ordinal);
+        // null guard must come before Normalize/IsValid
+        var nullGuardIdx = code.IndexOf("if (value is null)", StringComparison.Ordinal);
         var normalizeIdx = code.IndexOf("__CallNormalize<Tag>(value);", StringComparison.Ordinal);
-        var validateIdx = code.IndexOf("__CallValidate<Tag>(value);", StringComparison.Ordinal);
+        var validateIdx = code.IndexOf("__CallIsValid<Tag>(value, out errorMessage)", StringComparison.Ordinal);
         Assert.True(nullGuardIdx < normalizeIdx);
         Assert.True(normalizeIdx < validateIdx);
     }
@@ -437,12 +600,12 @@ public class ValueObjectGeneratorTests
 
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
         var lengthIdx = code.IndexOf("if (value.Length > 100)", StringComparison.Ordinal);
-        var validateIdx = code.IndexOf("__CallValidate<Name>(value);", StringComparison.Ordinal);
+        var validateIdx = code.IndexOf("__CallIsValid<Name>(value, out errorMessage)", StringComparison.Ordinal);
 
         Assert.True(normalizeIdx >= 0);
         Assert.True(lengthIdx > normalizeIdx);
         Assert.True(validateIdx > lengthIdx);
-        Assert.Contains("Value object 'Name' cannot exceed 100 characters.", code);
+        Assert.Contains("if (value.Length > 100)", code);
     }
 
     [Fact]
@@ -463,13 +626,13 @@ public class ValueObjectGeneratorTests
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
         var minimumIdx = code.IndexOf("if (value.Length < 3)", StringComparison.Ordinal);
         var maximumIdx = code.IndexOf("if (value.Length > 100)", StringComparison.Ordinal);
-        var validateIdx = code.IndexOf("__CallValidate<Name>(value);", StringComparison.Ordinal);
+        var validateIdx = code.IndexOf("__CallIsValid<Name>(value, out errorMessage)", StringComparison.Ordinal);
 
         Assert.True(normalizeIdx >= 0);
         Assert.True(minimumIdx > normalizeIdx);
         Assert.True(maximumIdx > minimumIdx);
         Assert.True(validateIdx > maximumIdx);
-        Assert.Contains("Value object 'Name' must contain at least 3 characters.", code);
+        Assert.Contains("if (value.Length < 3)", code);
     }
 
     [Fact]

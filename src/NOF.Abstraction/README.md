@@ -7,9 +7,9 @@ Cross-cutting abstractions package for the [NOF Framework](https://github.com/Xm
 Provides shared contracts and annotations intended for use across layers:
 
 - `[AutoInject]` via `Microsoft.Extensions.DependencyInjection`
-- the foundational `NOF.Contract.Context` execution context type
+- the foundational `NOF.Abstraction.Context` execution context type
 - async-flow ambient execution context access through `Context.Current`
-- `InMemoryEventHandler<TEvent>` / `IEventPublisher`
+- `LocalEventHandler<TEvent>` / `IEventPublisher`
 - `AddNOFAbstraction()` for package-local runtime registration
 - ambient event publishing helpers via `EventPublisher` and `PublishAsEvent(...)`
 
@@ -18,7 +18,7 @@ Provides shared contracts and annotations intended for use across layers:
 NOF provides a scoped in-memory event mechanism for invoking distributed handlers within the same dependency injection scope.
 
 - Any non-null `object` can be used as an in-memory event payload
-- `InMemoryEventHandler<TEvent>` handles that payload together with its `Context`
+- `LocalEventHandler<TEvent>` handles that payload together with its `Context`
 - `IEventPublisher` dispatches the event and the same `Context` instance to all handlers resolved from the current scope
 
 This mechanism can be used by domain aggregates, application services, or any other in-scope collaboration that should remain in-process.
@@ -29,12 +29,12 @@ For convenience, NOF also exposes an ambient publisher facade:
 - `payload.PublishAsEvent(context)` explicitly overrides the context used by the ambient publisher
 - `payload.PublishAsEvent(publisher)` is the explicit alternative when ambient scope is not desired
 - `payload.PublishAsEvent(publisher, context)` keeps both the publisher and context explicit
-- `AddNOFAbstraction()` registers the scoped ambient activation service
+- `AddNOFAbstraction()` registers the scoped publisher and explicit event registry
 
-The ambient publisher and context have separate lifetimes. The daemon service binds the publisher once for the dependency injection scope, while NOF binds `Context.Current` at RPC, command, notification, and nested event-dispatch boundaries. Calls outside a bound execution context use `Context.Empty`. Ambient access is a convenience for infrastructure APIs that do not receive a context parameter; handlers should continue using their explicit `Context`, and `IEventPublisher` remains the primary event-publishing contract.
+Managed HTTP/operation/message/test entries bind and restore ambient services and Context. Ordinary DI scopes have no activation protocol. Standalone Application code uses using var binding = services.BindNOF(context); package-only callers may use EventPublisher.PushCurrent(publisher). PublishAsEvent keeps its synchronous timing and exception behavior. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
 
 ```csharp
-public sealed class OrderCreatedHandler : InMemoryEventHandler<OrderCreated>
+public sealed class OrderCreatedHandler : LocalEventHandler<OrderCreated>
 {
     public override Task HandleAsync(
         OrderCreated @event,
@@ -63,7 +63,7 @@ using Microsoft.Extensions.DependencyInjection;
 services.AddNOFAbstraction();
 ```
 
-`AddNOFAbstraction()` registers the scoped daemon service that activates the ambient event publisher. Standard NOF hosts activate daemon services automatically; custom hosts should do the equivalent when entering a scope.
+`AddNOFAbstraction()` registers explicit services; it does not activate an ambient scope merely because DI resolves a service.
 
 ## Auto Injection
 
@@ -98,3 +98,11 @@ If a type is missing JSON metadata, NOF throws an `InvalidOperationException` th
 ## License
 
 Apache-2.0
+
+`Failure(code, message)` is a shared value for policy rejection and protocol adapters.
+Predictable business failures use Contract declarations and Application-generated cases;
+Domain exceptions and the former Throw extension are removed.
+
+Semantic Context is exposed directly as NOF.Abstraction.Context. The former Contract namespace/type-forwarder is removed; execution models live in Application. See [boundaries](../../docs/en/design/contract-boundaries.md).
+
+JSON defaults are fresh instances from JsonSerializerOptions.CreateNOF(); runtime hosts configure their own serializer options. There is no process-wide mutable configuration. See [host composition](../../docs/en/design/host-composition.md).

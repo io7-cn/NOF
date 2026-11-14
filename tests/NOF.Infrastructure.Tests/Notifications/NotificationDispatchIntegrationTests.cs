@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -5,6 +6,7 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using System.Collections.Concurrent;
 using Xunit;
 
@@ -13,109 +15,91 @@ namespace NOF.Infrastructure.Tests.Notifications;
 public sealed class NotificationDispatchIntegrationTests
 {
     [Fact]
-    public async Task DeferPublishOrderedAsync_ShouldQualifyKeyAndAllocateContiguousSequences()
+    public async Task FilterFailure_DoesNotBlockOtherReceiptsOrConsumeTechnicalRetries()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
-
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services);
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        var calls = new List<int>();
+        builder.Services.AddSingleton(calls);
+        builder.Services.AddInvocationFilter<CountingDeny>();
+        var logs = new CapturingLoggerProvider();
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(logs);
         using var host = builder.Build();
-        using var scope = host.Services.CreateScope();
-        var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
-        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var rider = host.Services.GetRequiredService<MemoryMessageClient>();
+        var serializer = host.Services.GetRequiredService<IObjectSerializer>();
+        await PublishOrderedAsync(rider, serializer, new OrderedNotification(1), "Producer:42", 1, false, timeout.Token);
+        await PublishOrderedAsync(rider, serializer, new OrderedNotification(2), "Producer:42", 2, true, timeout.Token);
+        await host.StartAsync(timeout.Token);
+        try
+        {
+            await WaitUntilAsync(() => logs.Messages.Contains("Inbox batch processed: 0 processed, 2 failed"), timeout.Token);
+            using var scope = host.Services.CreateScope();
+            var session = scope.ServiceProvider.GetRequiredService<DbContext>();
+            var receipts = await session.Set<NOFInboxMessage>().AsNoTracking().OrderBy(item => item.CreatedAtUtc).ToListAsync(timeout.Token);
+            Assert.Equal(InboxMessageStatus.Failed, receipts[0].Status);
+            Assert.Equal(1, receipts[0].RetryCount);
+            Assert.Equal(InboxMessageStatus.Failed, receipts[1].Status);
+            Assert.Equal(1, receipts[1].RetryCount);
+            Assert.Null(receipts[1].ClaimedBy);
+            Assert.Equal([1, 2], calls);
+        }
+        finally
+        {
+            await host.StopAsync(CancellationToken.None);
+        }
+    }
 
-        await publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("first"),
-            "Invoice:42",
-            Context.Empty);
-        await publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("second"),
-            "Invoice:42",
-            Context.Empty,
-            completesOrderKey: true);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => publisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("after-terminal"),
-            "Invoice:42",
-            Context.Empty));
-        await publisher.DeferPublishAsync(new ConcreteNotification("unordered"), Context.Empty);
-        await dbContext.SaveChangesAsync();
-
-        var messages = await dbContext.Set<NOFOutboxMessage>()
-            .Where(static message => message.OrderKey != null)
-            .OrderBy(static message => message.Sequence)
-            .ToListAsync();
-        var allocations = await dbContext.Set<NOFOutboxOrderState>()
-            .OrderBy(static state => state.Sequence)
-            .ToListAsync();
-
-        Assert.Equal(2, messages.Count);
-        Assert.Equal([1L, 2L], messages.Select(static message => message.Sequence!.Value).ToArray());
-        Assert.All(messages, message => Assert.Equal($"{environment.ServiceName}:Invoice:42", message.OrderKey));
-        Assert.False(messages[0].CompletesOrderKey);
-        Assert.True(messages[1].CompletesOrderKey);
-        Assert.Equal([1L, 2L], allocations.Select(static state => state.Sequence).ToArray());
-
-        var unordered = await dbContext.Set<NOFOutboxMessage>()
-            .SingleAsync(static message => message.OrderKey == null);
-        Assert.Null(unordered.Sequence);
-        Assert.False(unordered.CompletesOrderKey);
-
-        using var secondScope = host.Services.CreateScope();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => secondPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("after-persisted-terminal"),
-            "Invoice:42",
-            Context.Empty));
+    public sealed class CountingDeny(List<int> calls) : IInvocationFilter
+    {
+        public static IReadOnlyList<InvocationFailureCase> FailureCases => ServiceOperationPipelineTests.Deny.FailureCases;
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        {
+            calls.Add(((OrderedNotification)input).Value);
+            return ValueTask.FromResult<object?>(new ServiceOperationPipelineTests.Denied("403"));
+        }
     }
 
     [Fact]
-    public async Task ConcurrentOrderedAllocations_ShouldConflictAndRetryWithNextSequence()
+    public async Task RejectedOperation_IsTerminalWithoutConstructingHandlerOrRetrying()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
-
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services);
+        builder.Services.AddInvocationFilter<ServiceOperationPipelineTests.Deny>();
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "rejected", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
+        // The handler is deliberately unregistered: policy rejection must precede its construction.
         using var host = builder.Build();
-        using var firstScope = host.Services.CreateScope();
-        using var secondScope = host.Services.CreateScope();
-        var firstPublisher = firstScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var secondPublisher = secondScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var firstDbContext = firstScope.ServiceProvider.GetRequiredService<IDbContext>();
-        var secondDbContext = secondScope.ServiceProvider.GetRequiredService<IDbContext>();
-
-        await firstPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("first-instance"),
-            "Invoice:99",
-            Context.Empty);
-        await secondPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("second-instance"),
-            "Invoice:99",
-            Context.Empty);
-
-        await firstDbContext.SaveChangesAsync();
-        await Assert.ThrowsAsync<DbUpdateException>(() => secondDbContext.SaveChangesAsync());
-
-        using var retryScope = host.Services.CreateScope();
-        var retryPublisher = retryScope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-        var retryDbContext = retryScope.ServiceProvider.GetRequiredService<IDbContext>();
-        await retryPublisher.DeferPublishOrderedAsync(
-            new ConcreteNotification("retry"),
-            "Invoice:99",
-            Context.Empty);
-        await retryDbContext.SaveChangesAsync();
-
-        var sequences = await retryDbContext.Set<NOFOutboxOrderState>()
-            .Where(static state => state.OrderKey.EndsWith(":Invoice:99"))
-            .OrderBy(static state => state.Sequence)
-            .Select(static state => state.Sequence)
-            .ToListAsync();
-        Assert.Equal([1L, 2L], sequences);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await host.StartAsync(timeout.Token);
+        try
+        {
+            using var scope = host.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<MemoryMessageClient>().PublishAsync("test.failing.v1", new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
+            var receipt = await WaitForInboxStatusAsync(host.Services, InboxMessageStatus.Failed, timeout.Token);
+            Assert.Equal(1, receipt.RetryCount);
+            Assert.Equal("memory:subscription:rejected", receipt.Route);
+        }
+        finally
+        {
+            await host.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
     public async Task PublishAsync_ShouldDispatchConcreteNotificationToEveryConcreteHandler_EndToEnd()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services);
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -123,27 +107,14 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
         });
 
-        var registry = builder.Services.GetOrAddSingleton<NotificationHandlerRegistry>();
-        registry.Add(new NotificationHandlerRegistration(
-            typeof(FirstConcreteNotificationHandler),
-            typeof(ConcreteNotification),
-            typeof(NotificationInboundInvoker<FirstConcreteNotificationHandler, ConcreteNotification>)));
-        registry.Add(new NotificationHandlerRegistration(
-            typeof(SecondConcreteNotificationHandler),
-            typeof(ConcreteNotification),
-            typeof(NotificationInboundInvoker<SecondConcreteNotificationHandler, ConcreteNotification>)));
-        registry.Add(new NotificationHandlerRegistration(
-            typeof(BaseNotificationHandler),
-            typeof(BaseNotification),
-            typeof(NotificationInboundInvoker<BaseNotificationHandler, BaseNotification>)));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "first", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "First")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "second", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "Second")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.base.v1", "base", new ServiceOperationDescriptor<BaseNotification, Empty>(typeof(INotificationOperations), "Base")));
 
         builder.Services.AddSingleton<NotificationDispatchProbe>();
         builder.Services.AddScoped<FirstConcreteNotificationHandler>();
         builder.Services.AddScoped<SecondConcreteNotificationHandler>();
         builder.Services.AddScoped<BaseNotificationHandler>();
-        builder.Services.AddSingleton<NotificationInboundInvoker<FirstConcreteNotificationHandler, ConcreteNotification>>();
-        builder.Services.AddSingleton<NotificationInboundInvoker<SecondConcreteNotificationHandler, ConcreteNotification>>();
-        builder.Services.AddSingleton<NotificationInboundInvoker<BaseNotificationHandler, BaseNotification>>();
 
         using var host = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -153,25 +124,22 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-                await publisher.PublishAsync(new ConcreteNotification("published"), Context.Empty, timeout.Token);
+                var publisher = scope.ServiceProvider.GetRequiredService<MemoryMessageClient>();
+                await publisher.PublishAsync("test.concrete.v1", new ConcreteNotification("published"), Context.Empty, cancellationToken: timeout.Token);
             }
 
             var probe = host.Services.GetRequiredService<NotificationDispatchProbe>();
             await WaitUntilAsync(() => probe.FirstConcreteCount == 1 && probe.SecondConcreteCount == 1, timeout.Token);
 
-            using var verificationScope = host.Services.CreateScope();
-            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IDbContext>();
-            var inboxMessages = await dbContext.Set<NOFInboxMessage>()
-                .OrderBy(static message => message.Route)
-                .ToListAsync(timeout.Token);
+            // Handler probes are signaled before the inbox transaction commits.
+            var inboxMessages = await WaitForProcessedInboxMessagesAsync(host.Services, 2, timeout.Token);
 
             Assert.Equal(2, inboxMessages.Count);
             Assert.Single(inboxMessages.Select(static message => message.Id).Distinct());
             Assert.All(inboxMessages, static message => Assert.Equal(InboxMessageStatus.Processed, message.Status));
-            Assert.Contains(inboxMessages, static message => message.Route == typeof(FirstConcreteNotificationHandler).DisplayName);
-            Assert.Contains(inboxMessages, static message => message.Route == typeof(SecondConcreteNotificationHandler).DisplayName);
-            Assert.DoesNotContain(inboxMessages, static message => message.Route == typeof(BaseNotificationHandler).DisplayName);
+            Assert.Contains(inboxMessages, static message => message.Route == "memory:subscription:first");
+            Assert.Contains(inboxMessages, static message => message.Route == "memory:subscription:second");
+            Assert.DoesNotContain(inboxMessages, static message => message.Route == "memory:subscription:base");
             Assert.Equal(0, probe.BaseCount);
         }
         finally
@@ -184,7 +152,9 @@ public sealed class NotificationDispatchIntegrationTests
     public async Task PublishAsync_WhenHandlerThrows_ShouldRetryAndMarkInboxAsFailed()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services);
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -192,14 +162,9 @@ public sealed class NotificationDispatchIntegrationTests
             options.Inbox.MaxRetryCount = 2;
         });
 
-        var registry = builder.Services.GetOrAddSingleton<NotificationHandlerRegistry>();
-        registry.Add(new NotificationHandlerRegistration(
-            typeof(FailingNotificationHandler),
-            typeof(FailingNotification),
-            typeof(NotificationInboundInvoker<FailingNotificationHandler, FailingNotification>)));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "failing", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
         builder.Services.AddSingleton<FailingNotificationProbe>();
         builder.Services.AddScoped<FailingNotificationHandler>();
-        builder.Services.AddSingleton<NotificationInboundInvoker<FailingNotificationHandler, FailingNotification>>();
 
         using var host = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -209,8 +174,8 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-                await publisher.PublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
+                var publisher = scope.ServiceProvider.GetRequiredService<MemoryMessageClient>();
+                await publisher.PublishAsync("test.failing.v1", new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
             }
 
             var probe = host.Services.GetRequiredService<FailingNotificationProbe>();
@@ -232,10 +197,12 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     [Fact]
-    public async Task DeferPublishAsync_WhenDeliveryFails_ShouldUseAllRetriesAndReportFailedBatch()
+    public async Task EnqueueAsync_WhenDeliveryFails_ShouldUseAllRetriesAndReportFailedBatch()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services, failingDelivery: true);
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -243,8 +210,8 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.MaxRetryCount = 2;
         });
 
-        var rider = new AlwaysFailingNotificationRider();
-        builder.Services.ReplaceOrAddSingleton<INotificationRider>(rider);
+        var rider = new AlwaysFailingOutboxHandler<FailingNotification>();
+        builder.Services.AddSingleton(rider);
         var loggerProvider = new CapturingLoggerProvider();
         builder.Logging.ClearProviders();
         builder.Logging.AddProvider(loggerProvider);
@@ -257,9 +224,9 @@ public sealed class NotificationDispatchIntegrationTests
         {
             using (var scope = host.Services.CreateScope())
             {
-                var publisher = scope.ServiceProvider.GetRequiredService<INotificationPublisher>();
-                var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
-                await publisher.DeferPublishAsync(new FailingNotification(), Context.Empty, timeout.Token);
+                var publisher = scope.ServiceProvider.GetRequiredService<IOutbox>();
+                var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+                await publisher.EnqueueAsync(new FailingNotification(), Context.Empty, cancellationToken: timeout.Token);
                 await dbContext.SaveChangesAsync(timeout.Token);
             }
 
@@ -284,24 +251,21 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     [Fact]
-    public async Task OrderedNotification_ShouldWaitForMissingPredecessorAndThenProcessContiguously()
+    public async Task LegacyOrderingHeaders_AreOpaque_DoNotWaitForGapsOrCloseAStream()
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.AddNOFInfrastructure();
+        builder.AddNOF();
+        builder.AddNativeTestPersistence();
+        ConfigureMessages(builder.Services);
         builder.Services.Configure<TransactionalMessageOptions>(static options =>
         {
             options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
             options.Inbox.BatchSize = 10;
         });
 
-        var registry = builder.Services.GetOrAddSingleton<NotificationHandlerRegistry>();
-        registry.Add(new NotificationHandlerRegistration(
-            typeof(OrderedNotificationHandler),
-            typeof(OrderedNotification),
-            typeof(NotificationInboundInvoker<OrderedNotificationHandler, OrderedNotification>)));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
         builder.Services.AddSingleton<OrderedNotificationProbe>();
         builder.Services.AddScoped<OrderedNotificationHandler>();
-        builder.Services.AddSingleton<NotificationInboundInvoker<OrderedNotificationHandler, OrderedNotification>>();
 
         using var host = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -309,30 +273,23 @@ public sealed class NotificationDispatchIntegrationTests
 
         try
         {
-            var rider = host.Services.GetRequiredService<INotificationRider>();
+            var rider = host.Services.GetRequiredService<MemoryMessageClient>();
             var serializer = host.Services.GetRequiredService<IObjectSerializer>();
             const string orderKey = "ProducerService:Invoice:42";
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(2), orderKey, 2, true, timeout.Token);
-            await Task.Delay(100, timeout.Token);
-            Assert.Empty(host.Services.GetRequiredService<OrderedNotificationProbe>().Values);
+            await WaitUntilAsync(() => host.Services.GetRequiredService<OrderedNotificationProbe>().Values.Count == 1, timeout.Token);
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(1), orderKey, 1, false, timeout.Token);
             var probe = host.Services.GetRequiredService<OrderedNotificationProbe>();
             await WaitUntilAsync(() => probe.Values.Count == 2, timeout.Token);
 
-            Assert.Equal([1, 2], probe.Values);
+            Assert.Equal([2, 1], probe.Values);
 
-            using var verificationScope = host.Services.CreateScope();
-            var dbContext = verificationScope.ServiceProvider.GetRequiredService<IDbContext>();
-            var state = await dbContext.Set<NOFInboxOrderState>().SingleAsync(timeout.Token);
-            Assert.Equal(3, state.NextSequence);
-            Assert.NotNull(state.CompletedAtUtc);
-            Assert.Null(state.BlockedSequence);
 
             await PublishOrderedAsync(rider, serializer, new OrderedNotification(3), orderKey, 1, false, timeout.Token);
             await WaitUntilAsync(() => probe.Values.Count == 3, timeout.Token);
-            Assert.Equal([1, 2, 3], probe.Values);
+            Assert.Equal([2, 1, 3], probe.Values);
         }
         finally
         {
@@ -341,7 +298,7 @@ public sealed class NotificationDispatchIntegrationTests
     }
 
     private static Task PublishOrderedAsync(
-        INotificationRider rider,
+        MemoryMessageClient rider,
         IObjectSerializer serializer,
         OrderedNotification notification,
         string orderKey,
@@ -352,15 +309,17 @@ public sealed class NotificationDispatchIntegrationTests
         var headers = new Dictionary<string, string?>
         {
             [NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString(),
-            [NOFAbstractionConstants.Transport.Headers.OrderKey] = orderKey,
-            [NOFAbstractionConstants.Transport.Headers.Sequence] = sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            [NOFAbstractionConstants.Transport.Headers.CompletesOrderKey] = completesOrderKey.ToString()
+            ["X-Order-Key"] = orderKey,
+            ["X-Sequence"] = sequence.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["X-Completes-Order-Key"] = completesOrderKey.ToString()
         };
-        return rider.PublishAsync(
-            serializer.Serialize(notification),
-            typeof(OrderedNotification).DisplayName,
-            headers,
-            cancellationToken);
+        return rider.PublishAsync("test.ordered.v1", notification, new OutboxDeliveryContext
+        {
+            MessageId = Guid.Parse(headers[NOFAbstractionConstants.Transport.Headers.MessageId]!),
+            Context = Context.Empty,
+            Attempt = 1,
+            Headers = headers
+        }, cancellationToken);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken cancellationToken)
@@ -368,6 +327,29 @@ public sealed class NotificationDispatchIntegrationTests
         while (!condition())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(10, cancellationToken);
+        }
+    }
+
+    private static async Task<List<NOFInboxMessage>> WaitForProcessedInboxMessagesAsync(
+        IServiceProvider services,
+        int expectedCount,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var scope = services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            var messages = await dbContext.Set<NOFInboxMessage>()
+                .AsNoTracking()
+                .OrderBy(static message => message.Route)
+                .ToListAsync(cancellationToken);
+            if (messages.Count == expectedCount && messages.All(static message => message.Status == InboxMessageStatus.Processed))
+            {
+                return messages;
+            }
+
             await Task.Delay(10, cancellationToken);
         }
     }
@@ -381,7 +363,7 @@ public sealed class NotificationDispatchIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
             var message = await dbContext.Set<NOFInboxMessage>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(cancellationToken);
@@ -403,7 +385,7 @@ public sealed class NotificationDispatchIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
             var message = await dbContext.Set<NOFOutboxMessage>()
                 .AsNoTracking()
                 .SingleOrDefaultAsync(cancellationToken);
@@ -424,17 +406,14 @@ public sealed class NotificationDispatchIntegrationTests
 
     private sealed record FailingNotification;
 
-    private sealed class AlwaysFailingNotificationRider : INotificationRider
+    public sealed class AlwaysFailingOutboxHandler<T> : OutboxHandler<T>
     {
         private int _attemptCount;
 
         public int AttemptCount => Volatile.Read(ref _attemptCount);
 
-        public Task PublishAsync(
-            ReadOnlyMemory<byte> payload,
-            string messageRoute,
-            IEnumerable<KeyValuePair<string, string?>>? headers,
-            CancellationToken cancellationToken = default)
+        public override ValueTask HandleAsync(T message, OutboxDeliveryContext context,
+            CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _attemptCount);
             throw new InvalidOperationException("Transport unavailable.");
@@ -492,30 +471,78 @@ public sealed class NotificationDispatchIntegrationTests
         public void MarkBase() => Interlocked.Increment(ref _baseCount);
     }
 
-    private sealed class FirstConcreteNotificationHandler(NotificationDispatchProbe probe) : NotificationHandler<ConcreteNotification>
+    private static void ConfigureMessages(IServiceCollection services, bool failingDelivery = false)
     {
-        public override Task HandleAsync(ConcreteNotification notification, Context context, CancellationToken cancellationToken)
+        services.AddOutbox();
+        services.AddOutboxHandler<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>("test.concrete.v1");
+        services.AddOutboxHandler<BaseNotification, NotificationOutboxHandler<BaseNotification>>("test.base.v1");
+        services.AddOutboxHandler<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>("test.ordered.v1");
+        if (failingDelivery)
+        {
+            services.AddOutboxHandler<FailingNotification, AlwaysFailingOutboxHandler<FailingNotification>>("test.failing.v1");
+        }
+        else
+        {
+            services.AddOutboxHandler<FailingNotification, NotificationOutboxHandler<FailingNotification>>("test.failing.v1");
+        }
+        var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
+        registry.Add(new(typeof(INotificationOperations), typeof(object))
+        {
+            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            {
+                ["First"] = new(typeof(FirstConcreteNotificationHandler), typeof(ConcreteNotification), typeof(Empty)),
+                ["Second"] = new(typeof(SecondConcreteNotificationHandler), typeof(ConcreteNotification), typeof(Empty)),
+                ["Base"] = new(typeof(BaseNotificationHandler), typeof(BaseNotification), typeof(Empty)),
+                ["Failing"] = new(typeof(FailingNotificationHandler), typeof(FailingNotification), typeof(Empty)),
+                ["Ordered"] = new(typeof(OrderedNotificationHandler), typeof(OrderedNotification), typeof(Empty)),
+            }
+        });
+    }
+
+    public sealed class NotificationOutboxHandler<T>(MemoryMessageClient client) : OutboxHandler<T>
+    {
+        public override async ValueTask HandleAsync(T message, OutboxDeliveryContext context, CancellationToken ct)
+        {
+            var topic = typeof(T) == typeof(ConcreteNotification) ? "test.concrete.v1"
+                : typeof(T) == typeof(BaseNotification) ? "test.base.v1"
+                : typeof(T) == typeof(OrderedNotification) ? "test.ordered.v1" : "test.failing.v1";
+            await client.PublishAsync(topic, message, context, ct);
+        }
+    }
+
+    private interface INotificationOperations : IApplicationService
+    {
+        Empty First(ConcreteNotification request);
+        Empty Second(ConcreteNotification request);
+        Empty Base(BaseNotification request);
+        Empty Failing(FailingNotification request);
+        Empty Ordered(OrderedNotification request);
+    }
+
+    private sealed class FirstConcreteNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<ConcreteNotification, Empty>
+    {
+        public override Task<Empty> HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkFirstConcrete();
-            return Task.CompletedTask;
+            return Task.FromResult(Empty.Instance);
         }
     }
 
-    private sealed class SecondConcreteNotificationHandler(NotificationDispatchProbe probe) : NotificationHandler<ConcreteNotification>
+    private sealed class SecondConcreteNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<ConcreteNotification, Empty>
     {
-        public override Task HandleAsync(ConcreteNotification notification, Context context, CancellationToken cancellationToken)
+        public override Task<Empty> HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkSecondConcrete();
-            return Task.CompletedTask;
+            return Task.FromResult(Empty.Instance);
         }
     }
 
-    private sealed class BaseNotificationHandler(NotificationDispatchProbe probe) : NotificationHandler<BaseNotification>
+    private sealed class BaseNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<BaseNotification, Empty>
     {
-        public override Task HandleAsync(BaseNotification notification, Context context, CancellationToken cancellationToken)
+        public override Task<Empty> HandleAsync(BaseNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkBase();
-            return Task.CompletedTask;
+            return Task.FromResult(Empty.Instance);
         }
     }
 
@@ -544,12 +571,12 @@ public sealed class NotificationDispatchIntegrationTests
         }
     }
 
-    private sealed class OrderedNotificationHandler(OrderedNotificationProbe probe) : NotificationHandler<OrderedNotification>
+    private sealed class OrderedNotificationHandler(OrderedNotificationProbe probe) : ServiceOperation<OrderedNotification, Empty>
     {
-        public override Task HandleAsync(OrderedNotification notification, Context context, CancellationToken cancellationToken)
+        public override Task<Empty> HandleAsync(OrderedNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.Add(notification.Value);
-            return Task.CompletedTask;
+            return Task.FromResult(Empty.Instance);
         }
     }
 
@@ -562,43 +589,13 @@ public sealed class NotificationDispatchIntegrationTests
         public void MarkAttempt() => Interlocked.Increment(ref _attemptCount);
     }
 
-    private sealed class FailingNotificationHandler(FailingNotificationProbe probe) : NotificationHandler<FailingNotification>
+    private sealed class FailingNotificationHandler(FailingNotificationProbe probe) : ServiceOperation<FailingNotification, Empty>
     {
-        public override Task HandleAsync(FailingNotification notification, Context context, CancellationToken cancellationToken)
+        public override Task<Empty> HandleAsync(FailingNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkAttempt();
             throw new InvalidOperationException("Notification failed.");
         }
     }
 
-    private sealed class NotificationInboundInvoker<THandler, TNotification> : INotificationInboundHandlerInvoker
-        where THandler : NotificationHandler<TNotification>
-    {
-        public string HandlerTypeName => typeof(THandler).DisplayName;
-
-        public Type HandlerType => typeof(THandler);
-
-        public string MessageTypeName => typeof(TNotification).DisplayName;
-
-        public Type MessageType => typeof(TNotification);
-
-        public object Bind(
-            ReadOnlyMemory<byte> payload,
-            Func<ReadOnlyMemory<byte>, Type, object?> deserialize)
-        {
-            ArgumentNullException.ThrowIfNull(deserialize);
-            return deserialize(payload, typeof(TNotification))
-                ?? throw new InvalidOperationException($"Failed to deserialize message payload as '{typeof(TNotification).DisplayName}'.");
-        }
-
-        public ValueTask InvokeAsync(
-            IServiceProvider services,
-            object message,
-            Context context,
-            CancellationToken cancellationToken)
-        {
-            var handler = services.GetRequiredService<THandler>();
-            return new ValueTask(handler.HandleAsync((TNotification)message, context, cancellationToken));
-        }
-    }
 }

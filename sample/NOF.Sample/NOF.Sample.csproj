@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
@@ -10,7 +10,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore\NOF.Hosting.AspNetCore.csproj" />
-        <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer\NOF.Hosting.AspNetCore.Extension.OidcServer.csproj" />
         <ProjectReference Include="..\..\src\NOF.Infrastructure\NOF.Infrastructure.csproj" />
         <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.EntityFrameworkCore\NOF.Infrastructure.EntityFrameworkCore.csproj" />
         <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.RabbitMQ\NOF.Infrastructure.RabbitMQ.csproj" />
@@ -22,15 +21,28 @@
         <ProjectReference Include="..\..\src\NOF.Abstraction.SourceGenerator\NOF.Abstraction.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\..\src\NOF.Application.SourceGenerator\NOF.Application.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\..\src\NOF.Infrastructure.SourceGenerator\NOF.Infrastructure.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\..\src\NOF.Hosting.SourceGenerator\NOF.Hosting.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\NOF.Sample.Wasm\NOF.Sample.Wasm.csproj" />
     </ItemGroup>
     <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NOF.Contract.SourceGenerator\NOF.Contract.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore.SourceGenerator\NOF.Hosting.AspNetCore.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 </Project>

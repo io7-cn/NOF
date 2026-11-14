@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
@@ -22,8 +22,8 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<Compile Include="..\SourceGenerator.Shared\HttpRoutePrefix.cs" Link="Shared\HttpRoutePrefix.cs" />
-		<Compile Include="..\SourceGenerator.Shared\RpcContractConventions.cs" Link="Shared\RpcContractConventions.cs" />
-	</ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\SourceGenerator.Shared\ExpectedFailureModel.cs" Link="Shared\ExpectedFailureModel.cs" />
+  </ItemGroup>
 </Project>

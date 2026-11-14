@@ -1,5 +1,7 @@
 - name: Overview
   href: index.md
+- name: .NET 11 and Union Types
+  href: net11-migration.md
 - name: Handler Registration
   href: handler-registration.md
 - name: Mapper
@@ -12,7 +14,62 @@
   href: source-generators.md
 - name: Repository & Unit of Work
   href: repository-uow.md
-- name: Step Pipeline
+- name: Native host lifecycle
   href: step.md
 - name: Value Object
   href: value-object.md
+- name: Result Union migration (English)
+  href: ../en/design/result-unions.md
+- name: Result 联合类型迁移
+  href: ../zh-CN/design/result-unions.md
+- name: Application core and adapters
+  href: ../en/design/0001-application-core-and-adapters.md
+- name: Application request guide
+  href: ../en/design/application-requests.md
+
+- name: Configuration REST implementation
+  href: ../en/design/configuration-rest.md
+- name: 配置节点 REST 实现
+  href: ../zh-CN/design/configuration-rest.md
+- name: Invocation extensions
+  href: ../en/design/invocation-extensions.md
+- name: 统一调用扩展
+  href: ../zh-CN/design/invocation-extensions.md
+- name: Native hosting migration
+  href: ../en/design/native-hosting.md
+- name: 原生宿主迁移
+  href: ../zh-CN/design/native-hosting.md
+- name: Persistence boundary migration
+  href: ../en/design/persistence-boundaries.md
+- name: 持久化边界迁移
+  href: ../zh-CN/design/persistence-boundaries.md
+
+- name: Unified operations and collections
+  href: ../en/design/unified-operations.md
+- name: 统一操作与聚合集合
+  href: ../zh-CN/design/unified-operations.md
+
+- name: Contract boundaries
+  href: ../en/design/contract-boundaries.md
+- name: Contract 分层边界
+  href: ../zh-CN/design/contract-boundaries.md
+
+- name: Generic transactional outbox
+  href: ../en/design/transactional-outbox.md
+- name: 通用事务性发件箱
+  href: ../zh-CN/design/transactional-outbox.md
+
+- name: HTTP adaptation
+  href: ../en/design/http-adaptation.md
+- name: HTTP 适配
+  href: ../zh-CN/design/http-adaptation.md
+
+- name: Ambient binding
+  href: ../en/design/ambient-binding.md
+- name: Ambient 绑定
+  href: ../zh-CN/design/ambient-binding.md
+
+- name: RabbitMQ two-service sample
+  href: ../en/design/rabbitmq-sample.md
+- name: RabbitMQ 双服务示例
+  href: ../zh-CN/design/rabbitmq-sample.md

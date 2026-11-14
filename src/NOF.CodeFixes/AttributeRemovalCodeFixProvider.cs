@@ -4,7 +4,6 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Immutable;
 using System.Composition;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,7 +12,7 @@ namespace NOF.CodeFixes;
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(AttributeRemovalCodeFixProvider)), Shared]
 public sealed class AttributeRemovalCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds => ["NOF020", "NOF211", "NOF212", "NOF213", "NOF216"];
+    public override ImmutableArray<string> FixableDiagnosticIds => ["NOF020"];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -27,51 +26,10 @@ public sealed class AttributeRemovalCodeFixProvider : CodeFixProvider
 
         var diagnostic = context.Diagnostics[0];
         var node = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true);
-        if (diagnostic.Id != "NOF212")
+        if (node.FirstAncestorOrSelf<AttributeSyntax>() is { } attribute)
         {
-            if (node.FirstAncestorOrSelf<AttributeSyntax>() is { } attribute)
-            {
-                RegisterRemoval(context, diagnostic, attribute, "Remove invalid attribute", "RemoveInvalidAttribute");
-            }
-
-            return;
+            RegisterRemoval(context, diagnostic, attribute, "Remove invalid attribute", "RemoveInvalidAttribute");
         }
-
-        if (node.FirstAncestorOrSelf<TypeDeclarationSyntax>() is not { } declaration)
-        {
-            return;
-        }
-
-        var semanticModel = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
-        if (semanticModel is null)
-        {
-            return;
-        }
-
-        foreach (var attribute in declaration.AttributeLists.SelectMany(static list => list.Attributes))
-        {
-            if (semanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol constructor
-                || !IsTransportAttribute(constructor.ContainingType))
-            {
-                continue;
-            }
-
-            var name = constructor.ContainingType.Name;
-            RegisterRemoval(context, diagnostic, attribute, $"Remove {name}", $"RemoveTransport:{name}");
-        }
-    }
-
-    private static bool IsTransportAttribute(INamedTypeSymbol? type)
-    {
-        for (var current = type; current is not null; current = current.BaseType)
-        {
-            if (current.ToDisplayString() == "NOF.Contract.TransportOverAttribute")
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static void RegisterRemoval(

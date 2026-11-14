@@ -1,121 +1,35 @@
 # NOF.Test
 
-Testing harness for applications built with the [NOF Framework](https://github.com/XmmShp/NOF).
-
-## Overview
-
-`NOF.Test` is designed for application developers using NOF who want to test Domain/Application/Infrastructure behavior with the same DI, middleware, tenant, user, and local RPC semantics used by the real app.
-
-It helps you write:
-
-- Handler and service tests with a lightweight NOF-aware host
-- Local RPC scenario tests without booting a full web server
-- Integration-style tests that exercise tenant, user, tracing, caching, persistence, and in-memory event flows
-
-## What It Provides
-
-### `NOFTestAppBuilder`
-
-Creates a lightweight host builder for tests while still going through the NOF registration pipeline.
-
-Object storage uses `MemoryObjectStorageRider` by default, with state isolated per test host. To test durable local storage, explicitly call `builder.Services.AddFileSystemObjectStorage(options => options.RootPath = testDirectory)`.
+Test hosting helpers for NOF application services, messaging and in-memory persistence.
 
 ```csharp
-var builder = NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<MyRpcServer>()
-    .AddRpcServer<MyRpcServer>()
-    .AddInMemoryPersistence()
-    .AddLocalRpcClient<IMyServiceClient, LocalMyRpcServerClient>();
+var builder = Host.CreateApplicationBuilder().AddNOFTest();
+builder.AddApplicationPartOf<OrderService>();
+builder.AddApplicationService<OrderService>();
+await using var host = builder.BuildTestHost();
+// await host.Host.StartAsync(); // when the test needs migration, bootstrap or workers
 
-await using var host = await builder.BuildTestHostAsync();
+var result = await host.CallAsync<object?>(
+    (services, context, ct) => OrderService.Get.InvokeAsync(
+        services, new GetOrderRequest(orderId), context, ct),
+    configure: scope => scope.SetTenant("tenant-a").SetUser("user-1", "Alice"));
 ```
 
-Common builder helpers:
+`CallAsync<TResult>` accepts `(IServiceProvider, Context, CancellationToken)` and
+returns the operation's task. Client generation, `AddLocalApplicationServiceClient`
+and `GetRpcClient` have been removed. Add every assembly with generated initializers
+explicitly, including test assemblies declaring mappings.
 
-- `ConfigureServices(...)`
-- `AddApplicationPartOf<TMarker>()`
-- `AddApplicationPart(Assembly)`
-- `AddRpcServer<TRpcServer>()`
-- `AddInMemoryPersistence()`
-- `AddLocalRpcClient<TService, TImplementation>()`
+`NOFTestHost` exposes CreateScope, ExecuteAsync and CallAsync; NOFTestScope.EnqueueAsync stages explicitly configured Outbox intents.
+Inside ExecuteAsync, configure the scope with SetTenant, SetUser, SetAnonymousUser,
+SetTracing, SetContext, SetContextItem, SetContextItems or RemoveContextItem; resolve
+dependencies with GetRequiredService. Scope CallAsync uses the configured Context.
+Test scopes bind and restore Context.Current and ambient conveniences through BindNOF.
+Server invocation still creates its own policy-controlled inbound scope; use explicit
+context and dependency APIs when tests need to observe those boundaries.
 
-`LocalMyRpcServerClient` is generated from `MyRpcServer : RpcServer<IMyService>`; tests do not declare a `LocalRpcClientAttribute` or an empty partial client class.
-
-### `NOFTestHost`
-
-Wraps the built `IHost` and provides convenient helpers for application tests:
-
-- `CreateScope()`
-- `CreateScope(configure => ...)`
-- `GetRequiredService<T>()`
-- `ExecuteAsync(scope => ...)`
-- `CallAsync<TClient, TResult>(...)`
-- `SendAsync<TCommand>(...)`
-- `PublishAsync<TNotification>(...)`
-
-### `NOFTestScope`
-
-Represents a scoped test execution context. It makes it easy to configure execution context before invoking application logic:
-
-- `SetTenant(...)`
-- `SetTracing(...)`
-- `SetUser(...)`
-- `SetAnonymousUser()`
-- `SetContext(...)`
-- `SetContextItem(...)`
-- `SetContextItems(...)`
-- `RemoveContextItem(...)`
-- `GetRpcClient<TClient>()`
-- `CallAsync<TClient, TResult>(...)`
-- `SendAsync(...)`
-- `PublishAsync(...)`
-
-When a test scope is configured, it binds its execution context to `Context.Current`. NOF also activates scoped daemon services so ambient conveniences such as `Mapper`, `IdGenerator`, and `EventPublisher` behave the same way they do in normal NOF execution scopes. Use explicit overloads when a test needs to provide a specific context, mapper, or publisher.
-
-```csharp
-using var scope = host.CreateScope();
-
-scope.SetTenant("tenant-a")
-    .SetUser("user-1", "Alice", ["orders.read"]);
-
-var result = await scope.CallAsync<IOrdersServiceClient, Result<GetOrderResponse>>(
-    (client, context, cancellationToken) => client.GetOrderAsync(
-        new GetOrderRequest { Id = orderId },
-        context,
-        cancellationToken));
-```
-
-You can also keep the full Arrange-Act-Assert flow inside a single scope:
-
-```csharp
-await using var host = await NOFTestAppBuilder.Create()
-    .AddApplicationPartOf<NOFSampleService>()
-    .AddRpcServer<NOFSampleService>()
-    .AddInMemoryPersistence()
-    .AddLocalRpcClient<INOFSampleServiceClient, LocalNOFSampleServiceClient>()
-    .BuildTestHostAsync();
-
-var roots = await host.ExecuteAsync(async scope =>
-{
-    scope.SetTenant("tenant-a")
-        .SetUser("user-1", "Alice")
-        .SetContextItem("case", "create-root");
-
-    await scope.CallAsync<INOFSampleServiceClient, Result>(
-        (client, context, cancellationToken) => client.CreateConfigNodeAsync(
-            new CreateConfigNodeRequest { Name = "root-a" },
-            context,
-            cancellationToken));
-
-    return await scope.CallAsync<INOFSampleServiceClient, Result<GetRootConfigNodesResponse>>(
-        (client, context, cancellationToken) => client.GetRootConfigNodesAsync(
-            new GetRootConfigNodesRequest(),
-            context,
-            cancellationToken));
-});
-```
-
-See [`sample-tests/NOF.Sample.Tests`](file:///Users/bytedance/Workspace/koala-dir/NOF/sample-tests/NOF.Sample.Tests) for a runnable sample harness project.
+See [sample harness tests](../../sample-tests/NOF.Sample.Tests/NOFSampleHarnessTests.cs)
+and the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Installation
 
@@ -126,3 +40,5 @@ dotnet add package NOF.Test
 ## License
 
 Apache-2.0
+
+BuildTestHost only builds the native host. Startup and its cancellation/failures follow the native lifecycle. See [native hosting](../../docs/en/design/native-hosting.md).

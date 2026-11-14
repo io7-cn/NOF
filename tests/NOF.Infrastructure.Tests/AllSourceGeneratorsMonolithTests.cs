@@ -6,9 +6,10 @@ using NOF.Abstraction.SourceGenerator;
 using NOF.Application;
 using NOF.Application.SourceGenerator;
 using NOF.Contract;
-using NOF.Contract.SourceGenerator;
 using NOF.Domain;
 using NOF.Domain.SourceGenerator;
+using NOF.Hosting.AspNetCore;
+using NOF.Hosting.AspNetCore.SourceGenerator;
 using NOF.Infrastructure;
 using NOF.Infrastructure.SourceGenerator;
 using Xunit;
@@ -17,6 +18,23 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class AllSourceGeneratorsMonolithTests
 {
+    [Fact]
+    public void GenericHttpMap_RejectsAnUnrelatedOperationTypeAtCompilation()
+    {
+        var compilation = CSharpCompilation.CreateCompilation("InvalidHttpOperation", """
+            using NOF.Hosting.AspNetCore;
+            public static class Routes
+            {
+                public static void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
+                    => endpoints.MapGet<object>("/invalid");
+            }
+            """, isDll: true, typeof(HttpEndpointExtensions),
+            typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
+            typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),
+            typeof(IServiceOperationDefinition));
+        Assert.Contains(compilation.GetDiagnostics(), diagnostic => diagnostic.Id == "CS0311");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -27,14 +45,13 @@ public sealed class AllSourceGeneratorsMonolithTests
             using NOF.Abstraction;
             using NOF.Application;
             using NOF.Contract;
+            using NOF.Hosting.AspNetCore;
+            using NOF.Infrastructure;
             using NOF.Domain;
             using System.Threading;
             using System.Threading.Tasks;
 
             namespace Monolith;
-
-            [Failure("Unavailable", "The operation is unavailable.", "monolith.unavailable")]
-            public partial class AppFailures;
 
             [NewableValueObject]
             public readonly partial struct UserId : IValueObject<long>;
@@ -56,34 +73,55 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed record AppEvent(string Value);
 
-            public sealed class AppEventHandler : InMemoryEventHandler<AppEvent>
+            public sealed class AppEventHandler : LocalEventHandler<AppEvent>
             {
                 public override Task HandleAsync(AppEvent @event, Context context, CancellationToken cancellationToken)
                     => Task.CompletedTask;
             }
 
+            public static class Routes
+            {
+                public static void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
+                    => endpoints.MapPost<DemoServer.Ping>("/ping")
+                        .Request(request => request.Member(value => value.Value).FromBody("payload"));
+            }
+
             public sealed record AppCommand(string Value);
 
-            public sealed class AppCommandHandler : CommandHandler<AppCommand>
+            public sealed class AppOutboxHandler : OutboxHandler<AppCommand>
             {
-                public override Task HandleAsync(AppCommand command, Context context, CancellationToken cancellationToken)
-                    => Task.CompletedTask;
+                public const string MessageType = "monolith.command";
+                public override ValueTask HandleAsync(AppCommand message, OutboxDeliveryContext context, CancellationToken ct)
+                    => ValueTask.CompletedTask;
             }
 
             public sealed record PingRequest(string Value);
 
-            [TransportOverHttp(HttpRpcStyle.JsonRpc, "/rpc")]
-            public interface IDemoService : IRpcService
+            [AutoInject(ServiceLifetime.Scoped)]
+            [FailureCase("Denied", "000403")]
+            public sealed partial class PolicyFilter : IInvocationFilter
             {
-                Result Ping(PingRequest request);
+                public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+                    => ValueTask.FromResult<object?>(new Denied("declined"));
             }
 
-            public partial class DemoServer : RpcServer<IDemoService>;
+            public interface IDemoService : IApplicationService
+            {
+                [FailureCase("Unavailable", "monolith.unavailable")]
+                Empty Ping(PingRequest request);
+            }
+
+            public partial class DemoServer : ApplicationService<IDemoService>;
 
             public sealed class PingHandler : DemoServer.Ping
             {
-                public override Task<Result> HandleAsync(PingRequest request, Context context, CancellationToken cancellationToken)
-                    => Task.FromResult(Result.Success());
+                public override Task<Result> HandleAsync(PingRequest request, InvocationContext context, CancellationToken cancellationToken)
+                    => Task.FromResult<Result>(request.Value switch
+                    {
+                        "constructor" => new Unavailable("missing"),
+                        "factory" => new Unavailable("missing"),
+                        _ => Empty.Instance
+                    });
             }
             """;
 
@@ -94,46 +132,46 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(IServiceCollection),
             typeof(AutoInjectAttribute),
             typeof(AssemblyInitializeAttribute),
-            typeof(InMemoryEventHandler<>),
-            typeof(CommandHandler<>),
+            typeof(LocalEventHandler<>),
             typeof(MappableAttribute<,>),
-            typeof(RpcServer<>),
-            typeof(IRpcService),
-            typeof(TransportOverHttpAttribute),
-            typeof(Result),
+            typeof(ApplicationService<>),
+            typeof(IApplicationService),
+            typeof(Testing.TestOutcome),
             typeof(IValueObject<>),
-            typeof(FailureAttribute),
-            typeof(RpcServerInvoker),
-            typeof(System.Text.Json.NOFAbstractionExtensions));
+            typeof(FailureCaseAttribute),
+            typeof(OperationInvoker),
+            typeof(System.Text.Json.NOFAbstractionExtensions),
+            typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
+            typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),
+            typeof(HttpEndpointExtensions));
         ISourceGenerator[] generators =
         [
             new AutoInjectGenerator().AsSourceGenerator(),
             new EventHandlerRegistrationGenerator().AsSourceGenerator(),
-            new FailureGenerator().AsSourceGenerator(),
             new ValueObjectGenerator().AsSourceGenerator(),
-            new HandlerRegistrationGenerator().AsSourceGenerator(),
             new MappableGenerator().AsSourceGenerator(),
-            new RpcServerAutoInjectGenerator().AsSourceGenerator(),
-            new RpcServerGenerator().AsSourceGenerator(),
-            new RpcServiceClientGenerator().AsSourceGenerator(),
-            new HttpRpcClientGenerator().AsSourceGenerator(),
-            new LocalRpcClientGenerator().AsSourceGenerator()
+            new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(),
+            new ApplicationServiceGenerator().AsSourceGenerator(),
+            new FilterFailureCaseGenerator().AsSourceGenerator(),
+            new OutboxHandlerRegistrationGenerator().AsSourceGenerator(),
+            new OperationRequestBindingGenerator().AsSourceGenerator()
         ];
         if (reverseOrder)
         {
             generators = [.. generators.Reverse()];
         }
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         Assert.Empty(generatorDiagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         Assert.Empty(outputCompilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
 
         var generatedCode = string.Join("\n\n", driver.GetRunResult().GeneratedTrees.Select(static tree => tree.GetRoot().ToFullString()));
-        Assert.Contains("interface IDemoServiceClient : global::NOF.Contract.IRpcClient<global::Monolith.IDemoService>", generatedCode);
-        Assert.Contains("partial class HttpDemoServiceClient : IDemoServiceClient", generatedCode);
-        Assert.Contains("class LocalDemoServerClient : global::Monolith.IDemoServiceClient", generatedCode);
+        Assert.Contains("HttpRequestBuilder<global::Monolith.PingRequest>", generatedCode);
+        Assert.DoesNotContain("ServiceClient", generatedCode);
+        Assert.Contains("public static async global::System.Threading.Tasks.Task<object?> InvokeAsync", generatedCode);
         Assert.Contains("typeof(global::Monolith.DemoServer.Ping), typeof(global::Monolith.PingHandler)", generatedCode);
+        Assert.Contains("IReadOnlyList<global::NOF.Infrastructure.InvocationFailureCase> FailureCases", generatedCode);
     }
 }

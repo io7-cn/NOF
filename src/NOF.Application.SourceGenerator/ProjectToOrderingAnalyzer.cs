@@ -22,7 +22,7 @@ public sealed class ProjectToOrderingAnalyzer : DiagnosticAnalyzer
         ImmutableHashSet.Create(
             StringComparer.Ordinal,
             "AsQueryable",
-            "AsAsyncQueryable",
+            "AsProviderQuery",
             "TagWith",
             "TagWithCallSite");
 

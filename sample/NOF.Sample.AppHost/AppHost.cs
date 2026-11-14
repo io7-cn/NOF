@@ -6,8 +6,7 @@ var rabbitMqUserName = builder.AddParameter("rabbitMqUserName", "guest");
 var rabbitMqPassword = builder.AddParameter("rabbitMqPassword", "guest");
 var rabbitMq = builder.AddRabbitMQ("rabbitmq", rabbitMqUserName, rabbitMqPassword)
     .WithManagementPlugin(15672)
-    .WithLifetime(ContainerLifetime.Persistent)
-    .PublishAsConnectionString();
+    .WithLifetime(ContainerLifetime.Persistent);
 rabbitMqUserName.WithParentRelationship(rabbitMq);
 rabbitMqPassword.WithParentRelationship(rabbitMq);
 
@@ -20,11 +19,15 @@ var postgresUserName = builder.AddParameter("postgresUserName", "postgres");
 var postgresPassword = builder.AddParameter("postgresPassword", "123456");
 var postgres = builder.AddPostgres("postgres", postgresUserName, postgresPassword)
     .WithPgAdmin(pgAdmin => pgAdmin.WithLifetime(ContainerLifetime.Persistent))
-    .WithLifetime(ContainerLifetime.Persistent)
-    .PublishAsConnectionString();
+    .WithLifetime(ContainerLifetime.Persistent);
 postgresUserName.WithParentRelationship(postgres);
 postgresPassword.WithParentRelationship(postgres);
 var database = postgres.AddDatabase("db2");
+
+var notifications = builder.AddProject<NOF_Sample_Notifications>("sample-notifications")
+    .WithReference(rabbitMq, "rabbitmq")
+    .WaitFor(rabbitMq)
+    .WithHttpHealthCheck("/health");
 
 var sample = builder.AddProject<NOF_Sample>("NOF-Sample")
     .WithReference(rabbitMq, "rabbitmq")
@@ -32,6 +35,8 @@ var sample = builder.AddProject<NOF_Sample>("NOF-Sample")
     .WithReference(database, "postgres")
     .WaitFor(database)
     .WithReference(garnet, "redis")
-    .WaitFor(garnet);
+    .WaitFor(garnet)
+    // Establish durable topic subscriptions before publishing demonstration events.
+    .WaitFor(notifications);
 
 builder.Build().Run();

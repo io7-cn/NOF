@@ -1,91 +1,13 @@
 ---
-description: Add NOF RPC, command, notification, or in-memory event handlers with the current Context-aware signatures
+description: Add a NOF application operation or current-scope domain event handler
 ---
 
-# Add a Handler or RPC Server
+# Add an application operation
 
-NOF has four handler shapes. A concrete class may inherit only one command, notification, or in-memory event handler base (`NOF001`).
+Declare one synchronous method on an IApplicationService contract. Implement its generated Service.Operation base inside the partial ApplicationService<T> container, overriding Task<TOutput> HandleAsync(TInput, InvocationContext, CancellationToken). Use invocation.Context with semantic APIs. Register the assembly and service container once; individual operations are discovered automatically.
 
-## RPC Pattern
+The same operation can serve HTTP, local invocation and messaging. The RabbitMQ adapter configures MapQueue<Service.Operation>(queue) only; native RabbitMQ owns exchange declarations and bindings via ConfigureRabbitMQ(rabbit => rabbit.MapQueue<Operation>(queue)); Memory configures its independent endpoints through AddMemoryMessaging. Async endpoints require Empty with no declared failures. Core Inbox resolves keyed IInboxHandler entries; it owns no shared MessageBinding registry. Immediate producers use concrete clients; transactional intents use IOutbox.EnqueueAsync plus host AddOutbox schemas/handlers. No outbound operation routing remains. CommandHandler/NotificationHandler and their generators/registries are removed.
 
-```csharp
-[TransportOverHttp(HttpRpcStyle.ControllerRpc)]
-public interface IOrderService : IRpcService
-{
-    [HttpEndpoint(HttpVerb.Get, "api/orders/get")]
-    Result<GetOrderResponse> GetOrder(GetOrderRequest request);
-}
+All service contracts need no partial, including FailureCase declarations; Result and cases belong to Application-generated operations. See docs/en/design/unified-operations.md and docs/en/design/expected-failures.md.
 
-public partial class OrderService : RpcServer<IOrderService>;
-
-public sealed class GetOrder : OrderService.GetOrder
-{
-    public override Task<Result<GetOrderResponse>> HandleAsync(
-        GetOrderRequest request,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.FromResult(Result.Success(new GetOrderResponse(request.Id, "demo")));
-    }
-}
-```
-
-Register the server explicitly:
-
-```csharp
-builder.AddApplicationPart(typeof(OrderService).Assembly);
-builder.AddRpcServer<OrderService>();
-```
-
-## Command Pattern
-
-```csharp
-public sealed record RebuildCacheCommand(string TenantId);
-
-public sealed class RebuildCacheHandler : CommandHandler<RebuildCacheCommand>
-{
-    public override Task HandleAsync(
-        RebuildCacheCommand command,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-## Notification Pattern
-
-```csharp
-public sealed record OrderCreatedNotification(string OrderId);
-
-public sealed class OrderCreatedHandler : NotificationHandler<OrderCreatedNotification>
-{
-    public override Task HandleAsync(
-        OrderCreatedNotification notification,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-## In-Memory Event Pattern
-
-```csharp
-public sealed record ProjectionRebuilt(string TenantId);
-
-public sealed class ProjectionRebuiltHandler : InMemoryEventHandler<ProjectionRebuilt>
-{
-    public override Task HandleAsync(
-        ProjectionRebuilt @event,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
-    }
-}
-```
-
-Command, notification, and event handlers are discovered through generated assembly initializers. Ensure the containing assembly is passed to `AddApplicationPart(...)`.
+In-memory domain events keep LocalEventHandler<T> with Task HandleAsync(T, Context, CancellationToken), executing in the publisher scope. Do not turn them into reliable asynchronous consumers unless crossing that boundary is intentional.

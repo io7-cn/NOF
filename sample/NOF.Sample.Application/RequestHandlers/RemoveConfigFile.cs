@@ -7,29 +7,33 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
-    public RemoveConfigFile(IDbContext dbContext, ICacheService cache)
+    public RemoveConfigFile(IConfigNodeRepository nodes, IUnitOfWork unitOfWork, ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(RemoveConfigFileRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var id = ConfigNodeId.Of(request.NodeId);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == id, cancellationToken);
+        var id = ConfigNodeId.From(request.NodeId);
+        var node = await _nodes.GetAsync(id, cancellationToken);
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return new NotFound("Node not found.");
         }
 
-        var fileName = ConfigFileName.Of(request.FileName);
+        if (!ConfigFileName.TryFrom(request.FileName, out var fileName, out var fileNameErrorMessage))
+        {
+            return new InvalidInput(fileNameErrorMessage);
+        }
         node.RemoveConfigFile(fileName);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(id), cancellationToken);
@@ -41,6 +45,6 @@ public class RemoveConfigFile : NOFSampleService.RemoveConfigFile
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 }

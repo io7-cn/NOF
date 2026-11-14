@@ -1,7 +1,6 @@
-using NOF.Abstraction;
 using System.Collections.ObjectModel;
 
-namespace NOF.Contract;
+namespace NOF.Abstraction;
 
 /// <summary>
 /// Immutable execution context passed explicitly across NOF execution boundaries.

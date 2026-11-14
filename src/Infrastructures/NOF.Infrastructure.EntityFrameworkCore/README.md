@@ -10,7 +10,7 @@ Entity Framework Core persistence package for the [NOF Framework](https://github
 - `UseDbContext<TDbContext>()`
 - `EFCoreSelector`
 - tenant-aware model customization and factory services
-- EF-backed `IInboxMessageStore` and `IDbContext` adapter
+- native EF `IInboxStore`/`IOutboxStore` implementations and `EfCoreUnitOfWork`
 - SQLite in-memory default persistence registration
 
 ## Installation
@@ -26,17 +26,17 @@ using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-var builder = NOFWebApplicationBuilder.Create(args);
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)
     .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
         ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
-`MigrateOnInitialize()` awaits migration of the **host** database during initialization. A host
+`MigrateOnStart()` awaits migration of the **host** database before hosted services start. A host
 migration failure prevents initialization from completing. In `DatabasePerTenant` mode, after
 `ApplicationStarted`, NOF enumerates `ITenantProvider` and migrates the other tenant databases
 sequentially in the background, using a fresh scope and tenant context for each database.
@@ -84,9 +84,9 @@ For lightweight local or test scenarios, call `AddNOFEntityFrameworkCore()` to r
 ### Sharing native operations with Application persistence
 
 `UseDbContext<AppDbContext>()` resolves `AppDbContext`, `NOFDbContext`, `DbContext`,
-and the application `IDbContext` adapter over the same scoped instance. A Host
+and the infrastructure session / application IUnitOfWork adapter over the same scoped instance. A Host
 implementation can inject `AppDbContext` to execute provider-specific SQL and join
-the transaction started through `IDbContext`. Factory-created contexts are independent.
+the transaction started through ITransactionManager. Factory-created contexts are independent.
 See [persistence boundaries](../../../docs/design/repository-uow.md) for connection,
 transaction, tenant, and retry requirements.
 
@@ -105,10 +105,10 @@ builder.UseDbContext<AppDbContext>()
         return catalog.GetConnectionString(context.DbContextType, context.TenantId);
     })
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+    .MigrateOnStart();
 ```
 
-The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because NOF's `IDbContextFactory` creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
+The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because the native tenant-aware EF context factory creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
 
 ## Custom tenant migration orchestration
 
@@ -178,7 +178,7 @@ builder.UseDbContext<AppDbContext, AppDbContextFactory>()
 
 The custom factory is registered as itself and as `NOFDbContextFactory<TDbContext>`,
 `ITenantDbContextFactory<TDbContext>`, EF Core's `IDbContextFactory<TDbContext>`, and NOF's
-provider-neutral `IDbContextFactory`. Prefer `WithConnectionStringResolver(...)` when only database
+native `IDbContextFactory<TDbContext>`. Prefer `WithConnectionStringResolver(...)` when only database
 routing differs; derive the factory when the context creation lifecycle itself must change.
 
 ## Soft delete
@@ -207,3 +207,5 @@ The entity-level setting takes precedence over the `DbContext` setting. Call `Ha
 Applications upgrading from a version where soft delete was enabled by default should add
 `WithSoftDelete(true)` before generating or applying further migrations if they intend to preserve
 their existing delete columns, indexes, filters, and behavior.
+
+Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. Infrastructure adapters use native DbContext and EF query/mapping APIs. The cross-ORM session/query/model layer is removed; EF-specific model extensions implement IEFCoreModelConfiguration with ModelBuilder. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).

@@ -14,12 +14,15 @@ public sealed class RedisServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddRedisBackplane(new ConfigurationOptions
+        services.AddBackplane().AddRedisBackplane(new ConfigurationOptions
         {
             EndPoints = { "localhost:6379" },
             AbortOnConnectFail = false
         });
 
+        services.AddSingleton(new Moq.Mock<IConnectionMultiplexer>().Object);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+        Assert.IsType<RedisBackplane>(provider.GetRequiredService<IBackplane>());
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConnectionMultiplexer));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IBackplane) &&
@@ -31,7 +34,7 @@ public sealed class RedisServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddRedisCache(
+        services.AddCacheService().AddRedisCache(
             new ConfigurationOptions
             {
                 EndPoints = { "localhost:6379" },

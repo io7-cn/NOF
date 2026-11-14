@@ -15,10 +15,6 @@ public static partial class NOFAbstractionExtensions
             services.GetOrAddSingleton<EventHandlerRegistry>();
             services.TryAddScoped<IUserContext, UserContext>();
             services.TryAddScoped<IEventPublisher, InMemoryEventPublisher>();
-            services.TryAddEnumerable(new ServiceDescriptor(
-                typeof(IDaemonService),
-                typeof(EventPublisherAmbientDaemonService),
-                ServiceLifetime.Scoped));
             return services;
         }
 

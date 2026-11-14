@@ -5,7 +5,7 @@ AWS S3 and S3-compatible object storage provider for the [NOF Framework](https:/
 ## AWS S3
 
 ```csharp
-builder.Services.AddAmazonS3ObjectStorage(options =>
+builder.Services.AddObjectStorage().AddAmazonS3ObjectStorage(options =>
 {
     options.Region = "ap-southeast-1";
 });
@@ -18,7 +18,7 @@ When credentials are not configured explicitly, the AWS SDK default credential c
 MinIO, Ceph, Cloudflare R2, and similar endpoints can be configured with a service URL and path-style addressing:
 
 ```csharp
-builder.Services.AddAmazonS3ObjectStorage(options =>
+builder.Services.AddObjectStorage().AddAmazonS3ObjectStorage(options =>
 {
     options.ServiceUrl = "https://s3.example.com";
     options.Region = "us-east-1";
@@ -36,7 +36,7 @@ Application handlers continue to inject `IObjectStorage`; the provider replaces 
 For advanced client configuration, supply an existing client or a service-provider factory:
 
 ```csharp
-builder.Services.AddAmazonS3ObjectStorage(serviceProvider =>
+builder.Services.AddObjectStorage().AddAmazonS3ObjectStorage(serviceProvider =>
     new AmazonS3Client(customCredentials, customConfig));
 ```
 

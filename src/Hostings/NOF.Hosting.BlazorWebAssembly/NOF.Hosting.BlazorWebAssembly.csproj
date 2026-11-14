@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -9,7 +9,7 @@
 
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Hosting.BlazorWebAssembly</PackageId>
-    <Description>Blazor WebAssembly hosting for the NOF Framework — adapts WebAssemblyHostBuilder to the NOF application builder pipeline.</Description>
+    <Description>NOF client registration extensions for native Blazor WebAssembly builders.</Description>
   </PropertyGroup>
 
   <ItemGroup>

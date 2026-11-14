@@ -18,10 +18,13 @@ Current runtime expectations that guidance must preserve:
 
 - application parts execute source-generated assembly initializers against `IServiceCollection`
 - handler, mapping, event, and RPC registries are DI singleton instances and freeze on first read
-- RPC contracts declare exactly one transport and RPC servers are registered explicitly with `AddRpcServer<T>()`
+- Application service contracts are local by default; HTTP requires explicit opt-in. Service containers are registered with `AddApplicationService<T>()`
+- Client generation is removed; use generated Service.Operation.InvokeAsync on the server and application-maintained HTTP integrations remotely
 - RPC, command, and notification boundaries pass `Context` explicitly
-- application persistence uses `IDbContext` and `IRepository<T>`; EF Core and NHibernate are provider packages
+- application persistence uses aggregate repositories, DTO query ports and IUnitOfWork; EF Core and NHibernate remain infrastructure implementations
 - `Mapper`, `IdGenerator`, and `EventPublisher` are async-flow conveniences with explicit dependency paths available
+
+All five inbound/outbound middleware families, delegates, outbound contexts and Add*Middleware APIs are removed. Application owns InvocationContext and typed business handlers; Infrastructure owns IInvocationFilter/InvocationDelegate/IInvocationPipeline and effective plans; AddInvocationFilter<T>(order) only declares scoped extensions. Hosts decide execution; NOF hosts select the optional Infrastructure InMemoryInvocationPipeline via UseInMemoryInvocationPipeline(). Filters resolve lazily under the current context, nested Global -> Service -> UseCase. Same-scope Use/Exclude and order writes use the last declaration; deeper scopes override outer rules; authorization/tenant checks precede handler construction. MessageDelivery directly prepares ID, tenant and producer trace metadata for immediate and outbox sends. Native ASP.NET Core owns HTTP middleware/endpoint filters/exception presentation; technical exceptions propagate to the host. Local invocation transfers Context and an isolated identity snapshot. FailureCase may annotate top-level nongeneric partial filters, generating sealed branches plus static FailureCases (no Filter.Result). Static Describe defaults to IncludeAll; Include<TFailure> selects only the owning catalog. Plans describe actual enabled filters without constructing handlers/filters. See docs/en/design/invocation-extensions.md.
 
 ## Directory Structure
 

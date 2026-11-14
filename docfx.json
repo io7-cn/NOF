@@ -1,25 +1,26 @@
 {
-  "_comment": "Using pre-built DLLs instead of .csproj due to DocFX lacking C# 14 support. See https://github.com/dotnet/docfx/issues/10808",
+  "_comment": "Using pre-built DLLs instead of .csproj due to DocFX lacking modern C# support. See https://github.com/dotnet/docfx/issues/10808",
   "metadata": [
     {
       "src": [
         {
           "files": [
-            "src/NOF.Abstraction/bin/Release/net10.0/NOF.Abstraction.dll",
-            "src/NOF.Domain/bin/Release/net10.0/NOF.Domain.dll",
-            "src/NOF.Contract/bin/Release/net10.0/NOF.Contract.dll",
-            "src/NOF.Application/bin/Release/net10.0/NOF.Application.dll",
-            "src/NOF.Hosting/bin/Release/net10.0/NOF.Hosting.dll",
-            "src/NOF.Infrastructure/bin/Release/net10.0/NOF.Infrastructure.dll",
-            "src/NOF.UI/bin/Release/net10.0/NOF.UI.dll",
-            "src/NOF.Test/bin/Release/net10.0/NOF.Test.dll",
-            "src/Hostings/NOF.Hosting.AspNetCore/bin/Release/net10.0/NOF.Hosting.AspNetCore.dll",
-            "src/Hostings/NOF.Hosting.BlazorWebAssembly/bin/Release/net10.0/NOF.Hosting.BlazorWebAssembly.dll",
-            "src/Hostings/NOF.Hosting.Console/bin/Release/net10.0/NOF.Hosting.Console.dll",
-            "src/Hostings/NOF.Hosting.Maui/bin/Release/net10.0/NOF.Hosting.Maui.dll",
-            "src/Extensions/NOF.Hosting.AspNetCore.Extension.OidcServer/bin/Release/net10.0/NOF.Hosting.AspNetCore.Extension.OidcServer.dll",
-            "src/Infrastructures/NOF.Infrastructure.RabbitMQ/bin/Release/net10.0/NOF.Infrastructure.RabbitMQ.dll",
-            "src/Infrastructures/NOF.Infrastructure.StackExchangeRedis/bin/Release/net10.0/NOF.Infrastructure.StackExchangeRedis.dll"
+            "src/Hostings/NOF.Hosting.AspNetCore/bin/Release/net11.0/NOF.Hosting.AspNetCore.dll",
+            "src/Hostings/NOF.Hosting.BlazorWebAssembly/bin/Release/net11.0/NOF.Hosting.BlazorWebAssembly.dll",
+            "src/Hostings/NOF.Hosting.Maui/bin/Release/net11.0/NOF.Hosting.Maui.dll",
+            "src/Infrastructures/NOF.Infrastructure.AmazonS3/bin/Release/net11.0/NOF.Infrastructure.AmazonS3.dll",
+            "src/Infrastructures/NOF.Infrastructure.EntityFrameworkCore/bin/Release/net11.0/NOF.Infrastructure.EntityFrameworkCore.dll",
+            "src/Infrastructures/NOF.Infrastructure.NHibernate/bin/Release/net11.0/NOF.Infrastructure.NHibernate.dll",
+            "src/Infrastructures/NOF.Infrastructure.RabbitMQ/bin/Release/net11.0/NOF.Infrastructure.RabbitMQ.dll",
+            "src/Infrastructures/NOF.Infrastructure.StackExchangeRedis/bin/Release/net11.0/NOF.Infrastructure.StackExchangeRedis.dll",
+            "src/NOF.Abstraction/bin/Release/net11.0/NOF.Abstraction.dll",
+            "src/NOF.Application/bin/Release/net11.0/NOF.Application.dll",
+            "src/NOF.Contract/bin/Release/net11.0/NOF.Contract.dll",
+            "src/NOF.Domain/bin/Release/net11.0/NOF.Domain.dll",
+            "src/NOF.Hosting/bin/Release/net11.0/NOF.Hosting.dll",
+            "src/NOF.Infrastructure/bin/Release/net11.0/NOF.Infrastructure.dll",
+            "src/NOF.Test/bin/Release/net11.0/NOF.Test.dll",
+            "src/NOF.UI/bin/Release/net11.0/NOF.UI.dll"
           ]
         }
       ],
@@ -43,6 +44,14 @@
           "api/**"
         ],
         "src": "docs/"
+      },
+      {
+        "files": [
+          "README.md",
+          "docs/**/*.md"
+        ],
+        "src": ".standards",
+        "dest": "standards"
       }
     ],
     "resource": [
@@ -51,6 +60,17 @@
           "images/**"
         ],
         "src": "docs/"
+      },
+      {
+        "files": [
+          "LICENSE",
+          "NOTICE",
+          "AGENTS.md",
+          ".ci/*.py",
+          "templates/repository/**"
+        ],
+        "src": ".standards",
+        "dest": "standards"
       }
     ],
     "output": "_site",

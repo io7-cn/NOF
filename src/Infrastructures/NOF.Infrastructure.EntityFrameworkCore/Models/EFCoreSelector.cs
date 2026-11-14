@@ -75,15 +75,18 @@ public readonly struct EFCoreSelector
     }
 
     /// <summary>
-    /// Waits for host database migration during initialization, then migrates tenant databases
+    /// Waits for host database migration before hosted services start, then migrates tenant databases
     /// supplied by <see cref="ITenantProvider"/> in the background after the application starts.
     /// </summary>
-    public EFCoreSelector MigrateOnInitialize()
+    public EFCoreSelector MigrateOnStart()
     {
         var dbContextType = DbContextType;
-        Builder.Services.RemoveInitializationStep<DbContextMigrationInitializationStep>(existing =>
-            existing.DbContextType == dbContextType);
-        Builder.Services.AddInitializationStep(new DbContextMigrationInitializationStep(dbContextType));
+        if (!Builder.Services.Any(descriptor => descriptor.ImplementationInstance is DbContextMigration migration
+            && migration.DbContextType == dbContextType))
+        {
+            Builder.Services.AddSingleton(new DbContextMigration(dbContextType));
+        }
+        Builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DatabaseMigrationHostedService>());
         Builder.Services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
         Builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, TenantDatabaseMigrationBackgroundService>());
         return this;

@@ -4,9 +4,11 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.EntityFrameworkCore;
+using NOF.Abstraction;
 using NOF.CodeFixes;
 using NOF.Contract;
 using NOF.Domain;
+using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Collections.Immutable;
 using Xunit;
@@ -18,14 +20,13 @@ public sealed class GeneralCodeFixProviderTests
     private static readonly Type[] _forceLoadedAssemblies =
     [
         typeof(IValueObject<>),
-        typeof(IRpcService),
+        typeof(IApplicationService),
         typeof(DbContext),
         typeof(NOFDbContext),
     ];
 
     [Theory]
     [InlineData("NOF010", "public readonly struct Value", "Value", "partial struct Value")]
-    [InlineData("NOF104", "public class Failures", "Failures", "partial class Failures")]
     [InlineData("NOF300", "public class Server", "Server", "partial class Server")]
     [InlineData("NOF021", "public class Mappings", "Mappings", "static partial class Mappings")]
     public async Task ModifierFixes_AddRequiredModifiers(
@@ -87,27 +88,7 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task ParameterlessConstructorFix_AddsConstructor()
-    {
-        const string source = """
-            namespace Test;
-            public class Request
-            {
-                public Request(string value) { }
-            }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF202",
-            "Request",
-            new TypeDeclarationCodeFixProvider());
-
-        Assert.Matches(@"public\s+Request\s*\(\s*\)", changed);
-    }
-
-    [Fact]
-    public async Task VoidRpcReturnFix_ReturnsNofResult()
+    public async Task VoidRpcReturnFix_ReturnsEmpty()
     {
         const string source = """
             namespace Test;
@@ -123,26 +104,7 @@ public sealed class GeneralCodeFixProviderTests
             "Execute",
             new TypeDeclarationCodeFixProvider());
 
-        Assert.Contains("global::NOF.Contract.Result Execute", changed);
-    }
-
-    [Fact]
-    public async Task TransportContractFix_AddsRpcServiceBase()
-    {
-        const string source = """
-            using NOF.Contract;
-            namespace Test;
-            [TransportOverMemory]
-            public interface IService { }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF211",
-            "TransportOverMemory",
-            new TypeDeclarationCodeFixProvider());
-
-        Assert.Contains(": global::NOF.Contract.IRpcService", changed);
+        Assert.Contains("global::NOF.Contract.Empty Execute", changed);
     }
 
     [Fact]
@@ -186,9 +148,6 @@ public sealed class GeneralCodeFixProviderTests
 
     [Theory]
     [InlineData("NOF020")]
-    [InlineData("NOF211")]
-    [InlineData("NOF213")]
-    [InlineData("NOF216")]
     public async Task AttributeRemovalFix_RemovesDiagnosedAttribute(string diagnosticId)
     {
         const string source = """
@@ -206,29 +165,9 @@ public sealed class GeneralCodeFixProviderTests
         Assert.DoesNotContain("Obsolete", changed);
     }
 
-    [Fact]
-    public async Task MultipleTransportFix_OffersOneRemovalPerTransport()
-    {
-        const string source = """
-            using NOF.Contract;
-            namespace Test;
-            [TransportOverMemory]
-            [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-            public interface IService : IRpcService { }
-            """;
-
-        var (_, actions) = await GetCodeActionsAsync(
-            source,
-            "NOF212",
-            "IService",
-            new AttributeRemovalCodeFixProvider());
-
-        Assert.Equal(2, actions.Count);
-    }
-
     [Theory]
-    [InlineData("NOF013", "Of(value);")]
-    [InlineData("NOF014", "Validate(value);")]
+    [InlineData("NOF013", "From(value);")]
+    [InlineData("NOF014", "IsValid(value, out _);")]
     public async Task NormalizeFix_RemovesStandaloneInvocation(string diagnosticId, string invocation)
     {
         var source = $$"""
@@ -240,8 +179,8 @@ public sealed class GeneralCodeFixProviderTests
                     {{invocation}}
                 }
 
-                private static void Of(string value) { }
-                private static void Validate(string value) { }
+                private static void From(string value) { }
+                private static bool IsValid(string value, out string? errorMessage) { errorMessage = null; return true; }
             }
             """;
 
@@ -261,15 +200,15 @@ public sealed class GeneralCodeFixProviderTests
             namespace Test;
             public static class Value
             {
-                public static string Normalize(string value) => Of(value);
-                private static string Of(string value) => value;
+                public static string Normalize(string value) => From(value);
+                private static string From(string value) => value;
             }
             """;
 
         var (_, actions) = await GetCodeActionsAsync(
             source,
             "NOF013",
-            "Of(value)",
+            "From(value)",
             new RemoveNormalizeInvocationCodeFixProvider());
 
         Assert.Empty(actions);
@@ -302,88 +241,6 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task DaemonResolutionFix_InsertsImmediateResolution()
-    {
-        const string source = """
-            namespace Test;
-            public static class Worker
-            {
-                public static void Run(dynamic services)
-                {
-                    using var scope = services.CreateScope();
-                    Use(scope);
-                }
-
-                private static void Use(dynamic value) { }
-            }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF040",
-            "CreateScope",
-            new DaemonServiceResolutionCodeFixProvider());
-
-        var resolutionIndex = changed.IndexOf("scope.ServiceProvider.ResolveDaemonServices();", StringComparison.Ordinal);
-        var useIndex = changed.IndexOf("Use(scope);", StringComparison.Ordinal);
-        Assert.True(resolutionIndex >= 0 && resolutionIndex < useIndex);
-    }
-
-    [Fact]
-    public async Task NativeBuildFix_UsesAwaitedNofPipeline()
-    {
-        const string source = """
-            namespace Test;
-            public static class Program
-            {
-                public static async System.Threading.Tasks.Task Run(dynamic builder)
-                {
-                    var app = builder.NativeBuilder.Build();
-                }
-            }
-            """;
-        var properties = ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync");
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF401",
-            "Build",
-            new NativeHostBuilderBuildCodeFixProvider(),
-            properties);
-
-        Assert.Contains("await builder.BuildAsync()", changed);
-        Assert.DoesNotContain("NativeBuilder.Build", changed);
-    }
-
-    [Fact]
-    public async Task NativeBuildFix_InNonAsyncLocalFunction_IsNotOffered()
-    {
-        const string source = """
-            namespace Test;
-            public static class Program
-            {
-                public static async System.Threading.Tasks.Task Run(dynamic builder)
-                {
-                    void BuildLocal()
-                    {
-                        var app = builder.NativeBuilder.Build();
-                    }
-                }
-            }
-            """;
-        var properties = ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync");
-
-        var (_, actions) = await GetCodeActionsAsync(
-            source,
-            "NOF401",
-            "Build();",
-            new NativeHostBuilderBuildCodeFixProvider(),
-            properties);
-
-        Assert.Empty(actions);
-    }
-
-    [Fact]
     public async Task BatchFixProviders_SupportFixAllInSolution()
     {
         var cases = new[]
@@ -401,7 +258,7 @@ public sealed class GeneralCodeFixProviderTests
                 static text => text.Contains("partial struct Value", StringComparison.Ordinal)),
             new SolutionFixAllCase(
                 "attribute removal",
-                "NOF213",
+                "NOF020",
                 """
                     namespace Test;
                     [System.Obsolete]
@@ -420,16 +277,16 @@ public sealed class GeneralCodeFixProviderTests
                     {
                         public static void Normalize(string value)
                         {
-                            Of(value);
+                            From(value);
                         }
 
-                        private static void Of(string value) { }
+                        private static void From(string value) { }
                     }
                     """,
-                "Of(value)",
+                "From(value)",
                 new RemoveNormalizeInvocationCodeFixProvider(),
-                "RemoveInvocationFromNormalize",
-                static text => !text.Contains("Of(value);", StringComparison.Ordinal)),
+                "RemoveInvocationFromValueObjectHook",
+                static text => !text.Contains("From(value);", StringComparison.Ordinal)),
             new SolutionFixAllCase(
                 "value object ordering",
                 "NOF015",
@@ -449,45 +306,6 @@ public sealed class GeneralCodeFixProviderTests
                 ImmutableDictionary<string, string?>.Empty
                     .Add("PrimitiveType", "global::System.String")
                     .Add("NullableKey", "false")),
-            new SolutionFixAllCase(
-                "daemon service resolution",
-                "NOF040",
-                """
-                    namespace Test;
-                    public static class Worker
-                    {
-                        public static void Run(dynamic services)
-                        {
-                            using var scope = services.CreateScope();
-                            Use(scope);
-                        }
-
-                        private static void Use(dynamic value) { }
-                    }
-                    """,
-                "CreateScope",
-                new DaemonServiceResolutionCodeFixProvider(),
-                "ResolveDaemonServices",
-                static text => text.Contains("scope.ServiceProvider.ResolveDaemonServices();", StringComparison.Ordinal)),
-            new SolutionFixAllCase(
-                "native host build",
-                "NOF401",
-                """
-                    namespace Test;
-                    public static class Program
-                    {
-                        public static async System.Threading.Tasks.Task Run(dynamic builder)
-                        {
-                            var app = builder.NativeBuilder.Build();
-                        }
-                    }
-                    """,
-                "Build",
-                new NativeHostBuilderBuildCodeFixProvider(),
-                "UseNofBuildAsync",
-                static text => text.Contains("await builder.BuildAsync()", StringComparison.Ordinal)
-                    && !text.Contains("NativeBuilder.Build", StringComparison.Ordinal),
-                ImmutableDictionary<string, string?>.Empty.Add("RecommendedMethod", "BuildAsync")),
             new SolutionFixAllCase(
                 "value object length configuration",
                 "NOF306",
@@ -519,30 +337,7 @@ public sealed class GeneralCodeFixProviderTests
         }
     }
 
-    [Fact]
-    public async Task MultipleTransportFix_FixAllRemovesOnlySelectedTransport()
-    {
-        var testCase = new SolutionFixAllCase(
-            "selected transport removal",
-            "NOF212",
-            """
-                using NOF.Contract;
-                namespace Test;
-                [TransportOverMemory]
-                [TransportOverHttp(HttpRpcStyle.JsonRpc)]
-                public interface IService : IRpcService { }
-                """,
-            "IService",
-            new AttributeRemovalCodeFixProvider(),
-            "RemoveTransport:TransportOverMemoryAttribute",
-            static text => !text.Contains("TransportOverMemory", StringComparison.Ordinal)
-                && text.Contains("TransportOverHttp", StringComparison.Ordinal));
 
-        var changedDocuments = await ApplySolutionFixAllAsync(testCase);
-
-        Assert.Equal(2, changedDocuments.Length);
-        Assert.All(changedDocuments, text => Assert.True(testCase.IsFixed(text), text));
-    }
 
     private static async Task<string> ApplyFirstFixAsync(
         string source,
