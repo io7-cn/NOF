@@ -4,6 +4,8 @@
 
 NOF owns application operations, business authorization, execution context and transactional message semantics. Native hosts own authentication protocols, telemetry and concrete infrastructure selection. AddNOF installs the operation executor, invoker, default invocation engine, instrumentation and generic authorization/tenant filters. It does not select a cache, object store, backplane, ID algorithm, message transport, database, JWT validator or telemetry exporter.
 
+The HTTP AddNOF overload also registers its adapter prerequisites: JSON, ProblemDetails and OpenAPI. Hosts do not repeat AddProblemDetails(); they may configure native ProblemDetailsOptions when customization is needed.
+
 ## Explicit capability selection
 
 ```csharp

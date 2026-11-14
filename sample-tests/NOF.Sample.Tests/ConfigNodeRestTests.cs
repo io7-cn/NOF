@@ -197,7 +197,6 @@ public sealed class ConfigNodeRestTests
         builder.AddApplicationService<PolicyProbeService>();
         builder.Services.AddSingleton<PolicyProbe>();
         builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "rest-test:{tenantId}:");
-        builder.Services.AddProblemDetails();
         builder.UseDbContext<RestConfigDbContext>()
             .WithTenantMode(TenantMode.DatabasePerTenant)
             .WithConnectionString($"Data Source=rest-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")

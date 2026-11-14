@@ -14,7 +14,7 @@ namespace NOF.Hosting.AspNetCore;
 public static class WebApplicationExtensions
 {
     private static readonly object RegistrationKey = new();
-    /// <summary>Registers server defaults and HTTP adapters without building or starting the application.</summary>
+    /// <summary>Registers execution and HTTP adapter prerequisites, including JSON, ProblemDetails and OpenAPI, without building or starting the application.</summary>
     public static WebApplicationBuilder AddNOF(this WebApplicationBuilder builder)
     {
         var properties = ((IHostApplicationBuilder)builder).Properties;

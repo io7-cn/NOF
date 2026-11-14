@@ -64,8 +64,6 @@ builder.Services.AddCacheService()
     .AddRedisCache(builder.Configuration.GetConnectionString("redis") ?? throw new InvalidOperationException("Connection string 'redis' is required."));
 builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 
-builder.Services.AddProblemDetails();
-
 builder.Services.AddSampleIdentity<ConfigurationDbContext>(new Uri(sampleIssuer + "/"), builder.Environment.IsDevelopment());
 
 builder.Services.AddRabbitMQ(options =>

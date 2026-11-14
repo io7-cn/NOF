@@ -6,6 +6,9 @@ NOF 负责应用操作、业务授权、执行上下文与事务消息语义。�
 AddNOF 安装执行器、调用器、默认执行引擎、诊断埋点与通用授权/租户 Filter；不再默认选择缓存、对象存储、
 Backplane、ID 算法、消息传输、数据库、JWT 验证器或遥测导出器。
 
+HTTP 的 AddNOF 重载还会注册适配器自身需要的 JSON、ProblemDetails 和 OpenAPI。宿主无需重复调用 AddProblemDetails()；
+需要自定义时，配置原生 ProblemDetailsOptions 即可。
+
 ## 显式选择能力
 
 ```csharp
