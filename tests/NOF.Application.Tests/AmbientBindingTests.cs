@@ -35,7 +35,7 @@ public sealed class AmbientBindingTests
             using (empty.BindNOF(Context.Empty))
             {
                 Assert.Throws<InvalidOperationException>(() => Mapper.Current);
-                Assert.Throws<InvalidOperationException>(() => IdGenerator.Current);
+                Assert.Null(IdGenerator.Current);
             }
 
             Assert.Same(mapper, Mapper.Current);
@@ -79,7 +79,7 @@ public sealed class AmbientBindingTests
             Assert.Null(observedTenant);
             using (Context.PushCurrent(Context.Current.WithTenantId("normalized")))
             {
-                Assert.Equal(42, IdGenerator.Current.NextId());
+                Assert.Equal(42, IdGenerator.Current!.NextId());
                 Assert.Equal("normalized", observedTenant);
             }
             Assert.Throws<InvalidOperationException>(() => Mapper.Current);

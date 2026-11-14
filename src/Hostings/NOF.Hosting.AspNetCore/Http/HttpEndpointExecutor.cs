@@ -225,7 +225,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         }
 
         var adapter = http.RequestServices.GetRequiredService<HttpRequestInboundAdapter>();
-        await adapter.AuthenticateAsync(http, _plan, http.RequestAborted);
+        adapter.BindIdentity(http);
         var context = Context.Empty;
         foreach (var item in _items)
         {

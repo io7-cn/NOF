@@ -40,7 +40,10 @@ public sealed record GetDemoClientTokenRequest
     public required string ClientSecret { get; init; }
 }
 
-public sealed record GetDemoUserTokenRequest;
+public sealed record GetDemoUserTokenRequest
+{
+    public string? RecipientClientId { get; init; }
+}
 
 public sealed record ExchangeDemoTokenRequest
 {

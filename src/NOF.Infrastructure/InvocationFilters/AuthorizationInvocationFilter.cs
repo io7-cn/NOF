@@ -83,7 +83,6 @@ public sealed partial class AuthorizationInvocationFilter(
 
     private InboundAuthorizationResult.Denied? ValidateRequestTenant(InvocationContext context)
     {
-        var isHostOperation = ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo);
         var isAuthenticated = userContext.User.IsAuthenticated;
         var trustedTenant = isAuthenticated ? userContext.User.TenantId : null;
         var normalizedTenant = TenantId.Normalize(trustedTenant);
@@ -94,14 +93,14 @@ public sealed partial class AuthorizationInvocationFilter(
                 return new(new Failure("401", "Please login first"), AuthorizationFailureReason.Authentication, []);
             }
 
-            if (!isHostOperation && (string.IsNullOrWhiteSpace(trustedTenant)
-                || normalizedTenant == NOFAbstractionConstants.Tenant.HostId))
+            if (string.IsNullOrWhiteSpace(trustedTenant)
+                || normalizedTenant == NOFAbstractionConstants.Tenant.HostId)
             {
                 return new(new Failure("403", "An authenticated tenant is required"), AuthorizationFailureReason.Authorization, []);
             }
         }
 
-        if (_tenantOptions.RejectMismatchedTenant && !isHostOperation
+        if (_tenantOptions.RejectMismatchedTenant
             && !string.IsNullOrWhiteSpace(trustedTenant)
             && context.TenantId != NOFAbstractionConstants.Tenant.HostId
             && !string.Equals(context.TenantId, normalizedTenant, StringComparison.Ordinal))

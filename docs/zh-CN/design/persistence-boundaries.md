@@ -53,26 +53,14 @@ EF 模型扩展在 EF Provider 包中实现 IEFCoreModelConfiguration.Configure(
 NHibernate 扩展注册 Action<ModelMapper> 回调，直接使用原生 Mapping By Code。值对象转换，以及 EF 的长度、集合、
 租户和软删除约定继续由 Provider 提供。Application 不注入模型配置或原生会话。
 
-## OIDC 持久化
+## 身份持久化
 
-OIDC 扩展保留共享协议、客户端管理和密钥轮换规则。存储边界为 IOAuthClientStore、ISigningKeyStore、
-IRevokedRefreshTokenStore，只提供该功能需要的操作和跟踪状态，不暴露通用查询或 ORM 建模 API。
-
-选择匹配的可选集成包并注册到宿主服务：
-
-```csharp
-// 包 NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore
-builder.Services.AddOidcEntityFrameworkCore();
-// 或包 NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate
-builder.Services.AddOidcNHibernate();
-```
-
-同时按原有方式选择原生 Provider 并配置 AddOidcServer。OIDC Store 共用其作用域工作单元。基础 OIDC 包不依赖
-EF/NHibernate，通用 Provider 包也不依赖可选 OIDC 功能。自定义存储可以实现这三个窄端口及相同的工作单元边界。
+OIDC 协议与存储集成包已移除，宿主直接使用上游方案。Sample 将 OpenIddict 模型并入现有 ConfigurationDbContext 与迁移链，
+为其关闭业务软删除约定。新迁移保留旧身份表，凭据与会话过渡须显式审查。参见[宿主装配与身份迁移](host-composition.md)。
 
 ## 内存消息与测试
 
-AddNOF 保留开发用内存消息后端。AddInMemoryMessagingPersistence 注册宿主内、按租户分区的状态和作用域消息工作单元；
+消息能力在未选择原生 Provider 时使用开发用内存后端。AddInMemoryMessagingPersistence 注册宿主内、按租户分区的状态和作用域消息工作单元；
 AddInbox/AddOutbox 在未选择原生 Provider 或自定义 Store 时使用它。消息能力及 Worker 仍按需开启，
 原生 Provider、自定义 Store 与能力装配的前后顺序均受支持。
 
@@ -83,7 +71,7 @@ ORM API。业务持久化测试应选择真实 Provider，例如 UseDbContext �
 ## 迁移
 
 基础设施适配器将被移除的协作接口依赖改为原生 DbContext/ISession，业务端口保持不变；注册原生模型配置与可选
-OIDC 集成。AddInMemoryPersistence/AddPersistenceServices 改为明确选择原生 Provider；消息专用内存默认实现无需 ORM 包。
+原生身份集成。AddInMemoryPersistence/AddPersistenceServices 改为明确选择原生 Provider；消息专用内存默认实现无需 ORM 包。
 
 Inbox 不再保存 Command/Notification 分类，身份仍为 MessageId 与不透明 Route，按 Route 选择 Keyed Handler。
 MemoryMessageClient 直接接收队列或订阅回执；删除 MemoryCommandRider、MemoryNotificationRider、InboxMessageType。

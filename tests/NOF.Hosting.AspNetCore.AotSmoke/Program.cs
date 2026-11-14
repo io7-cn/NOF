@@ -13,16 +13,18 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(static options =>
-    options.TypeInfoResolverChain.Add(SmokeJsonContext.Default));
+var smokeJson = JsonSerializerOptions.CreateNOF();
+smokeJson.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default);
 Expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
 Expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
 Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
     "Custom IsValid message was lost by TryFrom");
-var nameJson = JsonSerializer.Serialize(nodeName, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
-Expect((string)JsonSerializer.Deserialize(nameJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
+var nameJson = JsonSerializer.Serialize(nodeName, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
+Expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");
 var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
@@ -97,31 +99,31 @@ var conflictData = new OrderConflict(id);
 Expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
     "Inherited constructor replaced error data");
 Expect(new ExpectedOrderService.Evaluate.Missing().Title == "404", "Inherited failure lost its declared Title");
-var savedJson = JsonSerializer.Serialize(Empty.Instance, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>());
+var savedJson = JsonSerializer.Serialize(Empty.Instance, smokeJson.GetRequiredTypeInfo<Empty>());
 Expect(savedJson == "{}", "Payload-free success serialized metadata");
-Expect(JsonSerializer.Deserialize(savedJson, JsonSerializerOptions.NOF.GetRequiredTypeInfo<Empty>()) is Empty,
+Expect(JsonSerializer.Deserialize(savedJson, smokeJson.GetRequiredTypeInfo<Empty>()) is Empty,
     "Payload-free union did not round-trip without reflection");
 using var update = await http.PutAsync($"/native/orders/{id}", new StringContent(
     $$"""{"id":"{{Guid.NewGuid()}}","state":"shipped"}""", Encoding.UTF8, "application/json"));
 update.EnsureSuccessStatusCode();
-var updated = await update.Content.ReadFromJsonAsync(JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
+var updated = await update.Content.ReadFromJsonAsync(smokeJson.GetRequiredTypeInfo<OrderDto>());
 Expect(updated == new OrderDto(id, "shipped", "default"), "Path identity/body binding did not survive AOT");
-var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderDto>());
+var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", smokeJson.GetRequiredTypeInfo<OrderDto>());
 Expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
 using var nullable = await http.GetAsync($"/native/nullable/{id}");
 Expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
 using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
 Expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
-var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", JsonSerializerOptions.NOF.GetRequiredTypeInfo<OrderReadReceipt>());
+var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", smokeJson.GetRequiredTypeInfo<OrderReadReceipt>());
 Expect(withMessage!.Order.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
 using var denied = await http.GetAsync($"/native/protected/{id}");
-Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count > 0,
-    "Native endpoint lost application authorization");
+Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count == 0,
+    "Application authorization must not invent an unconfigured authentication challenge");
 using var invalid = await http.GetAsync($"/native/orders/{id}?page=-1");
 Expect(invalid.StatusCode == HttpStatusCode.BadRequest, "Inbound policy rejection was lost");
 using var problem = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
 Expect(problem.RootElement.GetProperty("title").GetString() == "order.page", "Policy rejection details were lost");
-using var failure = await http.PutAsJsonAsync($"/native/orders/{id}", new UpdateBody { State = "fail" }, JsonSerializerOptions.NOF.GetRequiredTypeInfo<UpdateBody>());
+using var failure = await http.PutAsJsonAsync($"/native/orders/{id}", new UpdateBody { State = "fail" }, smokeJson.GetRequiredTypeInfo<UpdateBody>());
 Expect(failure.StatusCode == HttpStatusCode.BadRequest, "Business failure was not mapped");
 using var badBody = await http.PutAsync($"/native/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
 Expect(badBody.StatusCode == HttpStatusCode.BadRequest, "Required body member was omitted");
@@ -139,16 +141,16 @@ Expect(expectedConflict.StatusCode == HttpStatusCode.Conflict, "Declared typed c
 NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result deleteOutcome =
     new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.HasChildren(new NOF.Sample.NodeHasChildrenError(42));
 var deleteJson = JsonSerializer.Serialize(deleteOutcome,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredDelete = JsonSerializer.Deserialize(deleteJson,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 Expect(restoredDelete.Match(_ => 0L, _ => -1L, error => error.Error.NodeId) == 42,
     "Source-generated expected-outcome metadata did not round-trip custom failure data without reflection");
 deleteOutcome = new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.NotFound("Missing node");
 var missingJson = JsonSerializer.Serialize(deleteOutcome,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredMissing = JsonSerializer.Deserialize(missingJson,
-    JsonSerializerOptions.NOF.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 Expect(restoredMissing.Match(_ => "success", error => error.Detail, _ => "children") == "Missing node",
     "Source-generated expected-outcome metadata lost default Error data");
 using var openApi = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));

@@ -57,4 +57,17 @@ public sealed class GenericOutboxMigrationTests
         Assert.Throws<NotSupportedException>(() => migration.DownOperations);
     }
 
+    [Fact]
+    public void IdentityMigration_AddsNativeTablesWithoutDroppingLegacyCredentialsOrMessageHistory()
+    {
+        var migration = new UseOpenIddict();
+        var tables = migration.UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.CreateTableOperation>().ToArray();
+        Assert.Equal(4, tables.Length);
+        Assert.All(tables, table => Assert.StartsWith("OpenIddict", table.Name));
+        Assert.DoesNotContain(migration.UpOperations, operation => operation is Microsoft.EntityFrameworkCore.Migrations.Operations.DropTableOperation
+            or Microsoft.EntityFrameworkCore.Migrations.Operations.DropColumnOperation);
+        Assert.All(tables, table => Assert.DoesNotContain(table.Columns, column => column.Name == "__DeletedAtUnixTime"));
+        Assert.Throws<NotSupportedException>(() => migration.DownOperations);
+    }
+
 }

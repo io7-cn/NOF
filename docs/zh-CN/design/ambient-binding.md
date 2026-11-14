@@ -24,3 +24,5 @@ BindNOF 不创建/释放 DI scope，不启动 worker，不发布事件。先释�
 PublishAsEvent 保留同步等待发布的时机与异常语义，不改成记录事件/延迟派发，不改变工作单元。已有异步执行位置继续优先 await publisher.PublishAsync。
 
 破坏性迁移：删除 ResolveDaemonServices、IDaemonService 实现及 ambient daemon 注册。NOF040 与修复已删除。独立激活改为 using var binding = services.BindNOF(context)，框架管理入口无需额外调用。自定义作用域资源使用普通 DI 生命周期/释放，不再使用标记接口；宿主和测试辅助一起升级。
+
+IdGenerator.Current 返回 IIdGenerator?，未绑定或被内层 null 遮蔽时返回 null。生成的值对象 New() 在必须取得生成器时自行抛出异常，其他调用方可以选择不同策略。Snowflake 由 Infrastructure 提供，Domain 无需注册。

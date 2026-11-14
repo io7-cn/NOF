@@ -225,13 +225,13 @@ public class SnowflakeIdGeneratorTests
     public void IdGenerator_PushCurrent_Null_ShadowsAndRestoresOuterBinding()
     {
         var services = new ServiceCollection();
-        services.AddNOFDomain();
+        services.AddIdGenerator().AddSnowflakeIdGenerator();
         using var provider = services.BuildServiceProvider();
         using var outer = IdGenerator.PushCurrent(provider.GetRequiredService<IIdGenerator>());
         var generator = IdGenerator.Current;
         using (IdGenerator.PushCurrent((IIdGenerator?)null))
         {
-            Assert.Throws<InvalidOperationException>(() => IdGenerator.Current);
+            Assert.Null(IdGenerator.Current);
         }
         Assert.Same(generator, IdGenerator.Current);
     }

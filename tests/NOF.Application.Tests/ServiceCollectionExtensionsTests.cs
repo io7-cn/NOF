@@ -24,10 +24,7 @@ public class ServiceCollectionExtensionsTests
             descriptor.ServiceType == typeof(IMapper) &&
             descriptor.ImplementationType == typeof(ExpressionMapper) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IIdGenerator) &&
-            descriptor.ImplementationType == typeof(SnowflakeIdGenerator) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
 
 
     }
@@ -88,7 +85,7 @@ public class ServiceCollectionExtensionsTests
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(MappingRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ApplicationServiceRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IMapper));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
 
 
     }

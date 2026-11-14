@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample.Application.Entities;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace NOF.Sample;
 
@@ -16,6 +18,12 @@ public class ConfigurationDbContext : NOFDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.UseOpenIddict();
+        // OpenIddict owns physical token pruning and revocation; business soft-delete conventions do not apply.
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreApplication>().HasSoftDelete(false);
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreAuthorization>().HasSoftDelete(false);
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreScope>().HasSoftDelete(false);
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreToken>().HasSoftDelete(false);
 
         modelBuilder.Entity<ConfigNode>(entity =>
         {

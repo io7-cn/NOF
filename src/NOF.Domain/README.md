@@ -12,7 +12,6 @@ Domain primitives package for the [NOF Framework](https://github.com/XmmShp/NOF)
 - Domain-owned business values for predictable rule outcomes
 - Standard .NET argument exceptions for invalid construction
 - `IIdGenerator` and the ambient `IdGenerator` facade
-- `AddNOFDomain()` for package-local runtime registration
 
 Domain applications declare aggregate-specific repository interfaces. NOF.Domain provides no generic repository, query executor or update-expression DSL. Application coordinates commits through IUnitOfWork; see [persistence boundaries](../../docs/en/design/persistence-boundaries.md).
 
@@ -88,24 +87,14 @@ using NOF.Domain;
 public readonly partial struct OrderId : IValueObject<long>;
 ```
 
-Before using `New()`, register NOF.Domain and bind ambient conveniences at the execution boundary:
+Domain requires no registration entry. Hosts explicitly select a concrete generator:
 
 ```csharp
-using Microsoft.Extensions.DependencyInjection;
-
-services.AddNOFDomain();
+using NOF.Infrastructure;
+services.AddIdGenerator().AddSnowflakeIdGenerator();
 ```
 
-`New()` is a convenience API over the ambient `IdGenerator`. Use `New(IIdGenerator)` when you want an explicit dependency instead of relying on ambient scope.
-NOF-managed entries bind and restore conveniences automatically. Standalone Application code uses services.BindNOF(context); package-only callers can use IdGenerator.PushCurrent(generator). Ordinary DI scopes need no activation. See [ambient binding](../../docs/en/design/ambient-binding.md) ([简体中文](../../docs/zh-CN/design/ambient-binding.md)).
-
-`AddNOFDomain()` registers the default `SnowflakeIdGenerator`.
-If you want a different generator, register your own `IIdGenerator` in the container and let your host/container policy decide how it overrides the default:
-
-```csharp
-services.AddNOFDomain();
-services.AddSingleton<IIdGenerator, MyIdGenerator>();
-```
+Snowflake and its options belong to Infrastructure. Domain only owns IIdGenerator and IdGenerator.Current, which returns null when no provider is bound. Generated New() throws at its call site when an ID is required; New(IIdGenerator) accepts an explicit implementation. Managed entries bind/restore ambient accessors; standalone code can use IdGenerator.PushCurrent(generator). Custom generators use ordinary DI.
 
 ### Expected failures and invariant exceptions
 

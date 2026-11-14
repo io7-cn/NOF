@@ -102,7 +102,7 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [Fact]
-    public async Task InvokeAsync_StrictTenantPolicy_HostOperationStillRequiresPlatformPermission()
+    public async Task InvokeAsync_StrictTenantPolicy_PlatformPermissionDoesNotSelectAnotherTenant()
     {
         var userContext = new UserContext();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity());
@@ -117,7 +117,7 @@ public sealed class AuthorizationInvocationFilterTests
         Assert.Equal("Permission denied", AsFailure(deniedOutcome).Title);
 
         userContext.Logout();
-        userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage"));
+        userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage", ClaimTypes.TenantId, "tenant-a"));
         var nextCalled = false;
         await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.HostMethod)), new TestRequest(), (_, _, _) =>
         {
@@ -446,7 +446,6 @@ public sealed class AuthorizationInvocationFilterTests
     [RequirePermission("input-type")]
     private sealed class TestService
     {
-        [UseHostTenant]
         [RequirePermission("platform.manage")]
         public void HostMethod(TestRequest request) { }
 

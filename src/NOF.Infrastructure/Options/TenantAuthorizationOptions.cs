@@ -4,9 +4,7 @@ namespace NOF.Infrastructure;
 public class TenantAuthorizationOptions
 {
     /// <summary>
-    /// Requires an authenticated identity with a non-host tenant for ordinary application operations.
-    /// Host-tenant operations require authentication but may omit an identity tenant;
-    /// they must declare their own platform permission requirements.
+    /// Requires an authenticated identity with a non-host tenant for application operations.
     /// Defaults to false for compatibility with single-tenant and header-based hosts.
     /// Applies to local, HTTP and message origins alike.
     /// </summary>
@@ -15,8 +13,7 @@ public class TenantAuthorizationOptions
     /// <summary>
     /// Rejects a non-host request tenant that differs from the authenticated identity tenant.
     /// Missing or host tenant headers allow selection from the verified identity.
-    /// Explicit host-tenant operations are exempt because they intentionally change tenancy.
-    /// Defaults to false. Does not apply to command or notification consumers.
+    /// Defaults to false. Applies to every invocation origin.
     /// </summary>
     public bool RejectMismatchedTenant { get; set; }
 }

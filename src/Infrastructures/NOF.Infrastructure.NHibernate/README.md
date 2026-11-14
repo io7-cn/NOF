@@ -46,4 +46,4 @@ builder.UseNHibernate()
     .BuildSchemaOnInitialize();
 ```
 
-Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. Infrastructure uses native ISession/LINQ DML and mapping APIs. No cross-ORM session, query executor or model builder remains. Optional OIDC storage is supplied by NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate with AddOidcNHibernate. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).
+OIDC protocols are host-owned; use an upstream identity provider directly.

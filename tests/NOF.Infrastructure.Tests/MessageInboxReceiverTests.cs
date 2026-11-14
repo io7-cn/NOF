@@ -3,6 +3,7 @@ using Moq;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using System.Text.Json;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests;
@@ -21,7 +22,7 @@ public sealed class MessageInboxReceiverTests
         var services = new ServiceCollection();
         services.AddScoped(_ => { constructorTenant = Context.Current.TenantId; return store.Object; });
         await using var provider = services.BuildServiceProvider();
-        var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer());
+        var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer(System.Text.Json.JsonSerializerOptions.CreateNOF()));
         await receiver.ReceiveAsync(Guid.NewGuid(), new byte[] { 1 }, "queue:work.v1",
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "delivery")], default);
         Assert.Equal("delivery", constructorTenant);
@@ -41,7 +42,7 @@ public sealed class MessageInboxReceiverTests
         store.Setup(value => value.ExistsAsync(id, "subscription:audit", It.IsAny<CancellationToken>())).ReturnsAsync(exists);
         var services = new ServiceCollection().AddScoped(_ => store.Object);
         await using var provider = services.BuildServiceProvider();
-        var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer());
+        var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer(System.Text.Json.JsonSerializerOptions.CreateNOF()));
         var action = () => receiver.ReceiveAsync(id, new byte[] { 1 }, "subscription:audit", null, default);
         if (exists)
         {

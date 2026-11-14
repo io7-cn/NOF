@@ -11,10 +11,10 @@ Provides Redis-backed infrastructure for NOF using StackExchange.Redis, includin
 ```csharp
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
+builder.Services.AddCacheService().AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
 
-builder.Services.AddRedisBackplane(builder.Configuration.GetConnectionString("redis")
+builder.Services.AddBackplane().AddRedisBackplane(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
 ```
 

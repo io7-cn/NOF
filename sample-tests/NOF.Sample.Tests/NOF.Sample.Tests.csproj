@@ -11,6 +11,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
@@ -37,11 +40,14 @@
     <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore\NOF.Hosting.AspNetCore.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.UI\NOF.Sample.UI.csproj" />
     <ProjectReference Include="..\..\src\NOF.Abstraction.SourceGenerator\NOF.Abstraction.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <Compile Include="..\..\sample\NOF.Sample\Identity\*.cs" Link="Identity\%(Filename)%(Extension)" />
     <Compile Include="..\..\sample\NOF.Sample\Persistence\ConfigNodePersistence.cs" Link="Persistence\ConfigNodePersistence.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Endpoints\ConfigNodeEndpoints.cs" Link="Endpoints\ConfigNodeEndpoints.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Endpoints\MessageDispatchEndpoints.cs" Link="Endpoints\MessageDispatchEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\OAuthChainDemoBackend.cs" Link="Services\OAuthChainDemoBackend.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Services\RabbitMQMessageClient.cs" Link="Services\RabbitMQMessageClient.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Services\MessageOutboxHandler.cs" Link="Services\MessageOutboxHandler.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114200000_UseOpenIddict.cs" Link="Migrations\UseOpenIddict.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114170000_RemoveInboxClassification.cs" Link="Migrations\RemoveInboxClassification.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Migrations\20261113130000_GenericOutbox.cs" Link="Migrations\GenericOutbox.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114090000_RemoveMessageOrdering.cs" Link="Migrations\RemoveMessageOrdering.cs" />

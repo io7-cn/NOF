@@ -37,20 +37,12 @@ public sealed class ExecutionBoundaryTests
         Assert.False(ServiceOperationInspector.CanSubmit(new ServiceOperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.MayFail))));
     }
 
-    [Fact]
-    public void PolicyMetadata_IsInterpretedByApplication()
-    {
-        Assert.True(ServiceOperationInspector.RequiresHostTenant(typeof(IService).GetMethod(nameof(IService.Host))));
-        Assert.False(ServiceOperationInspector.RequiresHostTenant(typeof(IService).GetMethod(nameof(IService.Run))));
-    }
-
     public sealed record Query;
     public interface IService : IApplicationService
     {
         Empty Run(Query input);
         [FailureCase("Rejected")]
         Empty MayFail(Query input);
-        [UseHostTenant]
         Empty Host(Query input);
     }
 }

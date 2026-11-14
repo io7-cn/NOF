@@ -6,12 +6,12 @@ namespace NOF.Hosting;
 
 public static partial class NOFInfrastructureExtensions
 {
-    extension(IServiceCollection services)
+    extension(ObjectStorageSelector selector)
     {
         /// <summary>Uses durable local object storage with an optional custom directory.</summary>
-        public IServiceCollection AddFileSystemObjectStorage(Action<FileSystemObjectStorageOptions>? configureOptions = null)
+        public ObjectStorageSelector AddFileSystemObjectStorage(Action<FileSystemObjectStorageOptions>? configureOptions = null)
         {
-            ArgumentNullException.ThrowIfNull(services);
+            var services = selector.Services;
             services.AddOptions<FileSystemObjectStorageOptions>();
             if (configureOptions is not null)
             {
@@ -19,17 +19,17 @@ public static partial class NOFInfrastructureExtensions
             }
 
             services.ReplaceOrAddScoped<IObjectStorageRider, FileSystemObjectStorageRider>();
-            return services;
+            return selector;
         }
 
         /// <summary>Uses host-isolated, in-memory object storage, primarily for tests.</summary>
-        public IServiceCollection AddMemoryObjectStorage()
+        public ObjectStorageSelector AddMemoryObjectStorage()
         {
-            ArgumentNullException.ThrowIfNull(services);
+            var services = selector.Services;
             services.TryAddSingleton<MemoryObjectStorageRiderState>();
             services.ReplaceOrAddScoped<IObjectStorageRider>(sp => new MemoryObjectStorageRider(
                 sp.GetRequiredService<MemoryObjectStorageRiderState>()));
-            return services;
+            return selector;
         }
     }
 }

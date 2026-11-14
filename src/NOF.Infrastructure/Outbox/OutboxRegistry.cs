@@ -79,7 +79,7 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddScoped<IOutbox, TransactionalOutbox>();
         services.AddLogging();
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
-        services.TryAddSingleton<IObjectSerializer, JsonObjectSerializer>();
+        services.AddNOFJson();
         services.AddOptions<TransactionalMessageOptions>()
             .Validate(options => !options.Outbox.RunWorkers ||
                 options.Outbox.PollingInterval > TimeSpan.Zero && options.Outbox.BatchSize > 0

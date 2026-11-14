@@ -46,9 +46,6 @@
     <Project Path="src/Hostings/NOF.Hosting.Maui/NOF.Hosting.Maui.csproj" Id="b7c3d4e5-f6a7-4890-abcd-1234567890ef" />
   </Folder>
   <Folder Name="/src/Extensions/">
-    <Project Path="src/Extensions/NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore/NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore.csproj" />
-    <Project Path="src/Extensions/NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate/NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate.csproj" />
-    <Project Path="src/Extensions/NOF.Hosting.AspNetCore.Extension.OidcServer/NOF.Hosting.AspNetCore.Extension.OidcServer.csproj" />
   </Folder>
   <Folder Name="/src/Infrastructures/">
     <Project Path="src/Infrastructures/NOF.Infrastructure.AmazonS3/NOF.Infrastructure.AmazonS3.csproj" />

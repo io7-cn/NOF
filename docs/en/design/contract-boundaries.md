@@ -35,7 +35,7 @@ FailureCase stays on the non-partial Contract interface method; concrete Result 
 
 ServiceOperationDescriptor is the sole operation identity/input/output model. Input-only ServiceOperationReference and Descriptor.Reference are removed. Concrete clients name destinations and generic Outbox handlers interpret durable intents. See [transactional outbox](transactional-outbox.md).
 
-NodeService.Read.Descriptor supplies the complete response type and resolved method metadata. Its identity metadata is independent of transport destinations. Validation is centralized in ServiceOperationInspector.ValidateReference; CanSubmit checks for an Empty return with no declared FailureCase, and RequiresHostTenant interprets equivalent policy metadata. Default bindings and dispatch routes invoke these checks. Moving the logic does not bypass authorization or permit discarded business failures.
+NodeService.Read.Descriptor supplies the complete response type and resolved method metadata. Its identity metadata is independent of transport destinations. Descriptor construction validates input; CanSubmit checks for an Empty return with no declared FailureCase. Default bindings and dispatch routes invoke these checks. Moving the logic does not bypass authorization or permit discarded business failures.
 
 ## Migration
 
@@ -43,7 +43,7 @@ NodeService.Read.Descriptor supplies the complete response type and resolved met
 - Import NOF.Abstraction for Context and replace explicit NOF.Contract.Context references. Its semantic behavior and ambient async-flow restoration stay the same. The obsolete Contract TypeForwardedTo entry is removed intentionally.
 - Remove generated IServiceOperations.Method producer routing. Immediate calls use concrete clients; transactional messages use IOutbox.EnqueueAsync with infrastructure handlers. Inbound consumers retain full operation descriptors.
 - Replace reference.MethodInfo/CanSubmit with Application-owned ServiceOperationInspector calls where direct inspection is needed. Normal application invocation and message binding APIs already validate; business handlers do not need to repeat it.
-- Replace UseHostTenantAttribute.IsRequired(method) with ServiceOperationInspector.RequiresHostTenant(method). The annotation itself remains in Contract.
+- Remove UseHostTenant annotations; applications own explicit tenant selection through ordinary filters or entry context.
 - Keep clients dependent on Contract and foundation services only. The sample HTTP client uses HttpRequestException/status codes for transport errors, instead of importing Application's execution rejection exception.
 
 Update runtime, providers, hosts and source-generator packages together. Contract DTOs and failure declarations, generated Application branch names and optional JSON union discriminators remain unchanged. No database or stored message-route migration is needed for this layer/namespace change.

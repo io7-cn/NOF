@@ -67,25 +67,9 @@ callbacks and configure native mapping-by-code. Value-object conversion and EF l
 tenant and soft-delete conventions remain provider features. Application code injects neither model
 configuration nor native sessions.
 
-## OIDC persistence
+## Identity persistence
 
-The OIDC extension retains shared protocol/client-management/signing-key rules. Its storage boundary
-is IOAuthClientStore, ISigningKeyStore and IRevokedRefreshTokenStore: feature operations and tracked
-state, with no generic query or ORM model API.
-
-Choose the matching optional integration package and register it on the host's services:
-
-```csharp
-// Package NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore
-builder.Services.AddOidcEntityFrameworkCore();
-// Or package NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate
-builder.Services.AddOidcNHibernate();
-```
-
-Configure the corresponding native persistence provider and AddOidcServer as usual. Native OIDC stores
-share its scoped unit of work. The base OIDC package has no EF/NHibernate dependency; neither generic
-provider package depends on the optional OIDC feature. Custom storage can implement the three narrow
-ports and supply the same unit-of-work boundary.
+The OIDC protocol and store integration packages are removed. Hosts use upstream providers directly. The Sample adds OpenIddict models to its existing ConfigurationDbContext and migration chain, disabling business soft deletion for those entities. Its new migration preserves legacy identity tables for an explicitly reviewed transition. See [host composition and identity migration](host-composition.md).
 
 ## Memory messages and tests
 
@@ -104,7 +88,7 @@ pretend that arbitrary domain objects have automatically become persistent.
 
 Replace native adapter dependencies on the removed collaboration interfaces with DbContext/ISession
 inside infrastructure, leaving business-owned ports unchanged. Register native model configuration
-and optional OIDC integration. Replace AddInMemoryPersistence/AddPersistenceServices with a selected
+and the host's native identity integration. Replace AddInMemoryPersistence/AddPersistenceServices with a selected
 native provider; the message-only memory default remains available without either ORM package.
 
 Inbox no longer stores a Command/Notification classification: identity is MessageId plus the opaque

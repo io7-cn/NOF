@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -31,23 +32,35 @@ public sealed class TenantRequestAuthorizationTests
     [InlineData("tenanta", null, true, "/tenant", false, 200, "tenanta")]
     [InlineData("tenanta", "tenanta", true, "/tenant", false, 200, "tenanta")]
     [InlineData(null, "host", true, "/host", false, 403, null)]
-    [InlineData(null, "host", true, "/host", true, 200, "host")]
+    [InlineData(null, "host", true, "/host", true, 403, null)]
+    [InlineData("tenanta", null, true, "/host", true, 200, "tenanta")]
     [InlineData(null, null, false, "/stream", false, 401, null)]
+    [InlineData("tenanta", null, true, "/tenant", false, 401, null, "issuer")]
+    [InlineData("tenanta", null, true, "/tenant", false, 401, null, "audience")]
+    [InlineData("tenanta", null, true, "/tenant", false, 401, null, "expired")]
+    [InlineData("tenanta", null, true, "/tenant", false, 401, null, "signature")]
+    [InlineData("tenanta", null, true, "/tenant", false, 401, null, "malformed")]
+    [InlineData("tenanta", null, false, "/tenant", false, 401, null, "injected")]
     public async Task HttpRequests_ShouldAuthorizeBeforeResolvingTenantServices(
         string? identityTenant, string? headerTenant, bool sendToken, string path,
-        bool platformPermission, int expectedStatus, string? expectedTenant)
+        bool platformPermission, int expectedStatus, string? expectedTenant, string? tokenError = null)
     {
         using var rsa = RSA.Create(2048);
         var key = new RsaSecurityKey(rsa) { KeyId = "test-key" };
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
-        builder.Services.AddAuthenticationResourceServer(options =>
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
-            options.AuthorizationServerIssuer = "https://identity.local";
-            options.ExpectedIssuer = "https://identity.local";
-            options.Audience = "tenant-api";
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidIssuer = "https://identity.local",
+                ValidAudience = "tenant-api",
+                IssuerSigningKey = key,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
         });
-        builder.Services.AddSingleton<IJwksService>(new TestJwksService(rsa.ExportParameters(false)));
         builder.Services.Configure<TenantAuthorizationOptions>(options =>
         {
             options.RequireAuthenticatedTenant = true;
@@ -65,6 +78,16 @@ public sealed class TenantRequestAuthorizationTests
         builder.Services.AddTransient<StreamHandler>();
         builder.AddApplicationService<TenantServer>();
         await using var app = builder.Build();
+        if (tokenError == "injected")
+        {
+            app.Use(async (http, next) =>
+            {
+                http.RequestServices.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.TenantId, "tenanta")], "untrusted-scoped-state"));
+                await next(http);
+            });
+        }
+        app.UseAuthentication();
         app.UseNOF();
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive");
@@ -86,10 +109,12 @@ public sealed class TenantRequestAuthorizationTests
             {
                 claims.Add(new Claim(ClaimTypes.Permission, "platform.manage"));
             }
-            var token = new JwtSecurityToken("https://identity.local", "tenant-api", claims,
-                DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(5),
-                new SigningCredentials(key, SecurityAlgorithms.RsaSha256));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(token));
+            using var otherRsa = RSA.Create(2048);
+            var token = new JwtSecurityToken(tokenError == "issuer" ? "https://forged.local" : "https://identity.local",
+                tokenError == "audience" ? "another-api" : "tenant-api", claims,
+                DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow.AddMinutes(tokenError == "expired" ? -5 : 5),
+                new SigningCredentials(tokenError == "signature" ? new RsaSecurityKey(otherRsa) : key, SecurityAlgorithms.RsaSha256));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenError == "malformed" ? "untrusted" : new JwtSecurityTokenHandler().WriteToken(token));
         }
         if (headerTenant is not null)
         {
@@ -130,7 +155,6 @@ public sealed class TenantRequestAuthorizationTests
         [RequirePermission]
         Testing.TestOutcome<string> Tenant(Empty request);
 
-        [UseHostTenant]
         [RequirePermission("platform.manage")]
         Testing.TestOutcome<string> Host(Empty request);
 
@@ -167,8 +191,7 @@ public sealed class TenantRequestAuthorizationTests
         public async ValueTask<InboundAuthorizationResult> AuthorizeAsync(InboundAuthorizationContext context, CancellationToken cancellationToken)
         {
             var result = await defaultHandler.AuthorizeAsync(context, cancellationToken);
-            if (result is InboundAuthorizationResult.Denied || !context.User.IsAuthenticated
-                || ServiceOperationInspector.RequiresHostTenant(context.ServiceMethodInfo))
+            if (result is InboundAuthorizationResult.Denied || !context.User.IsAuthenticated)
             {
                 return result;
             }
@@ -179,16 +202,4 @@ public sealed class TenantRequestAuthorizationTests
         }
     }
 
-    public sealed class TestJwksService(RSAParameters parameters) : IJwksService
-    {
-        public Task<JwksDocument> GetJwksAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new JwksDocument
-            {
-                Keys = [new JwkKeyDocument
-                {
-                    Kid = "test-key", Kty = "RSA", Use = "sig", Alg = SecurityAlgorithms.RsaSha256,
-                    N = Base64UrlEncoder.Encode(parameters.Modulus!), E = Base64UrlEncoder.Encode(parameters.Exponent!)
-                }]
-            });
-    }
 }

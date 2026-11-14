@@ -26,7 +26,7 @@
             <section class="sample-card">
                 <h2>Step 3. User 获取 Token</h2>
                 <p>通过授权码和 PKCE 为 demo-user 获取 Token。</p>
-                <button type="button" class="sample-primary" @onclick="GetUserTokenAsync">获取 User Token</button>
+                <button type="button" class="sample-primary" disabled="@string.IsNullOrWhiteSpace(_clientId)" @onclick="GetUserTokenAsync">获取 User Token</button>
                 <pre>@_step3Result</pre>
             </section>
             <section class="sample-card">
@@ -121,7 +121,7 @@
     {
         await ExecuteStepAsync("正在模拟用户授权并获取 Token...", async () =>
         {
-            var result = await OAuthDemoService.GetUserTokenAsync(new GetDemoUserTokenRequest(), Context.Empty);
+            var result = await OAuthDemoService.GetUserTokenAsync(new GetDemoUserTokenRequest { RecipientClientId = _clientId }, Context.Empty);
             if (result.Value is not DemoTokenResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());

@@ -114,7 +114,7 @@ public class OptionalTests
 
 public class OptionalJsonTests
 {
-    private static JsonSerializerOptions Options() => JsonSerializerOptions.NOF;
+    private static JsonSerializerOptions Options() => JsonSerializerOptions.CreateNOF();
 
     // -----------------------------------------------------------------------
     // Serialization 鈥?Optional<T> present

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Hosting;
+using NOF.Infrastructure;
 
 namespace NOF.Test;
 
@@ -11,7 +12,9 @@ public static class NOFTestHostExtensions
     public static HostApplicationBuilder AddNOFTest(this HostApplicationBuilder builder)
     {
         builder.AddNOF();
-        builder.Services.AddMemoryObjectStorage();
+        builder.Services.AddObjectStorage().AddMemoryObjectStorage();
+        builder.Services.AddCacheService().AddMemoryCacheService();
+        builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
         return builder;
     }
 

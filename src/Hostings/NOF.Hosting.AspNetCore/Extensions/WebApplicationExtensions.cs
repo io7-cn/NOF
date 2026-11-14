@@ -6,8 +6,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 using NOF.Abstraction;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 using System.Text.Json;
 
 namespace NOF.Hosting.AspNetCore;
@@ -27,31 +25,12 @@ public static class WebApplicationExtensions
         properties[RegistrationKey] = true;
         ((IHostApplicationBuilder)builder).AddNOF();
         builder.Services.ConfigureHttpJsonOptions(options =>
-        {
-            var nof = JsonSerializerOptions.NOF;
-            options.SerializerOptions.PropertyNameCaseInsensitive = nof.PropertyNameCaseInsensitive;
-            options.SerializerOptions.DefaultIgnoreCondition = nof.DefaultIgnoreCondition;
-            options.SerializerOptions.ReferenceHandler = nof.ReferenceHandler;
-            options.SerializerOptions.PropertyNamingPolicy = nof.PropertyNamingPolicy;
-
-            foreach (var converter in nof.Converters)
-            {
-                options.SerializerOptions.Converters.Add(converter);
-            }
-
-            options.SerializerOptions.TypeInfoResolver = nof.TypeInfoResolver;
-        });
+            options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFJsonSerializerContext.Default));
         builder.Services.AddHealthChecks().AddCheck("self", static () => HealthCheckResult.Healthy(), ["live"]);
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<HttpRequestInboundAdapter>();
         builder.Services.AddProblemDetails();
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddAspNetCoreInstrumentation());
-        builder.Services.ConfigureOpenTelemetryTracerProvider(tracing =>
-            tracing.AddAspNetCoreInstrumentation(options =>
-                options.Filter = context =>
-                    !context.Request.Path.StartsWithSegments("/health")
-                    && !context.Request.Path.StartsWithSegments("/alive")));
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFHttpJsonContext.Default));
         builder.Services.AddOpenApi(options => options.AddOperationTransformer<HttpBindingOpenApiTransformer>());
         return builder;

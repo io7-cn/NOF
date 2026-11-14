@@ -38,6 +38,6 @@ public sealed class HostEnvironmentRegistrationTests
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive");
 
-        Assert.NotNull(app.Services.GetRequiredService<Application.IUnitOfWork>());
+        Assert.Null(app.Services.GetService<Application.IUnitOfWork>());
     }
 }

@@ -12,22 +12,6 @@ public static partial class NOFInfrastructureExtensions
     /// <param name="services">The <see cref="IServiceCollection"/> to add the service to.</param>
     extension(IServiceCollection services)
     {
-        public IServiceCollection AddAuthenticationResourceServer(Action<AuthenticationResourceServerOptions> configureOptions)
-        {
-            ArgumentNullException.ThrowIfNull(configureOptions);
-
-            services.Configure(configureOptions);
-            services.AddHttpClient<HttpAuthorizationServerService>();
-            services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
-            services.TryAddScoped<IJwksService>(static serviceProvider =>
-                serviceProvider.GetRequiredService<HttpAuthorizationServerService>());
-            services.TryAddScoped<IAuthorizationServerMetadataService>(static serviceProvider =>
-                serviceProvider.GetRequiredService<HttpAuthorizationServerService>());
-            services.ReplaceOrAddSingleton<ResourceServerJwksCacheService, ResourceServerJwksCacheService>();
-            services.AddInvocationFilter<AuthenticationInvocationFilter>(-200);
-            return services;
-        }
-
         /// <summary>Registers the default message-only memory unit of work; business ports select their own persistence.</summary>
         public IServiceCollection AddInMemoryMessagingPersistence()
         {

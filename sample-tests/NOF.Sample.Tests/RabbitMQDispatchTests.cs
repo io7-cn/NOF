@@ -215,6 +215,7 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
         builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
+        builder.Services.AddScoped<MessageDelivery>();
         builder.Services.AddOutbox(outbox =>
         {
             outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);

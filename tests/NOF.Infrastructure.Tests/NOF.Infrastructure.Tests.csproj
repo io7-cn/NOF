@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore\NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate\NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate.csproj" />
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore\NOF.Hosting.AspNetCore.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
@@ -43,7 +43,6 @@
     <ProjectReference Include="..\..\src\NOF.Contract\NOF.Contract.csproj" />
     <ProjectReference Include="..\..\src\NOF.Hosting\NOF.Hosting.csproj" />
     <ProjectReference Include="..\..\src\NOF.Test\NOF.Test.csproj" />
-    <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer\NOF.Hosting.AspNetCore.Extension.OidcServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

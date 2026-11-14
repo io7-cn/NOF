@@ -53,7 +53,7 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
 
 OutboxDeliveryContext exposes MessageId, Context, Attempt and Headers. It is delivery metadata, not InvocationContext; an intent need not execute a NOF operation. The normal return from a handler must mean that the configured client has met its acceptance contract. Retryable exceptions follow MaxRetryCount and optional RetryDelay; OutboxPermanentFailureException terminates an unrecoverable delivery immediately. Unknown schema IDs/versions and malformed registered JSON also fail permanently, rather than dynamically loading CLR types or guessing an adapter.
 
-A CLR message type and a stable (MessageType, SchemaVersion) pair each have exactly one handler per host. Registrations are DI-local and freeze on first use. Represent independently retryable channels with distinct intent types. Preserve old schema registrations or explicitly migrate their records before deploying changed schemas. Register the payload's generated JsonSerializerContext in JsonSerializerOptions.NOF for Native AOT; registry delegates remain statically typed and use IObjectSerializer without runtime CLR-name lookup.
+A CLR message type and a stable (MessageType, SchemaVersion) pair each have exactly one handler per host. Registrations are DI-local and freeze on first use. Represent independently retryable channels with distinct intent types. Preserve old schema registrations or explicitly migrate their records before deploying changed schemas. Register the payload's generated JsonSerializerContext in host-owned JSON options through AddNOFJson for Native AOT; registry delegates remain statically typed and use IObjectSerializer without runtime CLR-name lookup.
 
 ## Concrete transport clients and inbound bindings
 

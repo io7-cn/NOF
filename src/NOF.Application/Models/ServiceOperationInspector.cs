@@ -12,9 +12,4 @@ public static class ServiceOperationInspector
             && operation.MethodInfo.ReturnType == typeof(Empty)
             && !operation.MethodInfo.IsDefined(typeof(FailureCaseAttribute), inherit: false);
 
-    /// <summary>Reads host-tenant selection without embedding policy interpretation in Contract attributes.</summary>
-    public static bool RequiresHostTenant(MemberInfo? method)
-        => method?.GetCustomAttributes<MetadataAttribute>(inherit: true)
-            .Any(static attribute => string.Equals(attribute.Key, UseHostTenantAttribute.MetadataKey, StringComparison.OrdinalIgnoreCase)
-                && bool.TryParse(attribute.Value, out var enabled) && enabled) == true;
 }

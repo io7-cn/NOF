@@ -21,7 +21,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="11.0.0" />
     <!-- EF design tooling brings Pkcs transitively; retain its major version with security fixes. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="[9.0.21,10.0.0)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="11.0.0" />
     <PackageVersion Update="Microsoft.Extensions.*" Version="[11.0.0,11.1.0)" />

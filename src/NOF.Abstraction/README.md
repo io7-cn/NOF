@@ -7,7 +7,7 @@ Cross-cutting abstractions package for the [NOF Framework](https://github.com/Xm
 Provides shared contracts and annotations intended for use across layers:
 
 - `[AutoInject]` via `Microsoft.Extensions.DependencyInjection`
-- the foundational `NOF.Contract.Context` execution context type
+- the foundational `NOF.Abstraction.Context` execution context type
 - async-flow ambient execution context access through `Context.Current`
 - `LocalEventHandler<TEvent>` / `IEventPublisher`
 - `AddNOFAbstraction()` for package-local runtime registration
@@ -104,3 +104,5 @@ Predictable business failures use Contract declarations and Application-generate
 Domain exceptions and the former Throw extension are removed.
 
 Semantic Context is exposed directly as NOF.Abstraction.Context. The former Contract namespace/type-forwarder is removed; execution models live in Application. See [boundaries](../../docs/en/design/contract-boundaries.md).
+
+JSON defaults are fresh instances from JsonSerializerOptions.CreateNOF(); runtime hosts configure their own serializer options. There is no process-wide mutable configuration. See [host composition](../../docs/en/design/host-composition.md).

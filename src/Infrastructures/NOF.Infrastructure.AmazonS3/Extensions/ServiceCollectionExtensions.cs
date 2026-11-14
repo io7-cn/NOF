@@ -11,15 +11,15 @@ namespace NOF.Hosting;
 /// </summary>
 public static partial class NOFInfrastructureExtensions
 {
-    extension(IServiceCollection services)
+    extension(ObjectStorageSelector selector)
     {
         /// <summary>
         /// Replaces the default object storage rider with an AWS S3 or S3-compatible provider.
         /// </summary>
-        public IServiceCollection AddAmazonS3ObjectStorage(
+        public ObjectStorageSelector AddAmazonS3ObjectStorage(
             Action<AmazonS3ObjectStorageOptions> configureOptions)
         {
-            ArgumentNullException.ThrowIfNull(services);
+            var services = selector.Services;
             ArgumentNullException.ThrowIfNull(configureOptions);
 
             ConfigureProvider(services, configureOptions);
@@ -29,39 +29,39 @@ public static partial class NOFInfrastructureExtensions
                         .GetRequiredService<IOptions<AmazonS3ObjectStorageOptions>>()
                         .Value));
             RegisterRider(services);
-            return services;
+            return selector;
         }
 
         /// <summary>
         /// Replaces the default object storage rider and uses the supplied S3 client factory.
         /// </summary>
-        public IServiceCollection AddAmazonS3ObjectStorage(
+        public ObjectStorageSelector AddAmazonS3ObjectStorage(
             Func<IServiceProvider, IAmazonS3> clientFactory,
             Action<AmazonS3ObjectStorageOptions>? configureOptions = null)
         {
-            ArgumentNullException.ThrowIfNull(services);
+            var services = selector.Services;
             ArgumentNullException.ThrowIfNull(clientFactory);
 
             ConfigureProvider(services, configureOptions);
             services.ReplaceOrAddSingleton(clientFactory);
             RegisterRider(services);
-            return services;
+            return selector;
         }
 
         /// <summary>
         /// Replaces the default object storage rider and uses an existing S3 client.
         /// </summary>
-        public IServiceCollection AddAmazonS3ObjectStorage(
+        public ObjectStorageSelector AddAmazonS3ObjectStorage(
             IAmazonS3 client,
             Action<AmazonS3ObjectStorageOptions>? configureOptions = null)
         {
-            ArgumentNullException.ThrowIfNull(services);
+            var services = selector.Services;
             ArgumentNullException.ThrowIfNull(client);
 
             ConfigureProvider(services, configureOptions);
             services.ReplaceOrAddSingleton(client);
             RegisterRider(services);
-            return services;
+            return selector;
         }
     }
 

@@ -64,7 +64,7 @@ public abstract class SampleHttpApi(HttpClient httpClient)
             var failure = await ReadProblemAsync(response, ct);
             throw new HttpRequestException(failure.Detail, null, response.StatusCode);
         }
-        return await response.Content.ReadFromJsonAsync(JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>(), ct)
+        return await response.Content.ReadFromJsonAsync(JsonSerializerOptions.CreateNOF().GetRequiredTypeInfo<T>(), ct)
             ?? throw new InvalidOperationException("The resource response was empty.");
     }
 
@@ -101,7 +101,7 @@ public abstract class SampleHttpApi(HttpClient httpClient)
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             await foreach (var item in SseParser.Create(stream).EnumerateAsync(ct))
             {
-                yield return JsonSerializer.Deserialize(item.Data, JsonSerializerOptions.NOF.GetRequiredTypeInfo<T>())
+                yield return JsonSerializer.Deserialize(item.Data, JsonSerializerOptions.CreateNOF().GetRequiredTypeInfo<T>())
                     ?? throw new InvalidOperationException("The event payload was null.");
             }
         }
@@ -120,7 +120,7 @@ public abstract class SampleHttpApi(HttpClient httpClient)
             NOF.Abstraction.NOFAbstractionConstants.Transport.Headers.TenantId, tenantContext.TenantId);
         if (method != HttpMethod.Get && method != HttpMethod.Delete)
         {
-            message.Content = JsonContent.Create(request, JsonSerializerOptions.NOF.GetRequiredTypeInfo<TRequest>());
+            message.Content = JsonContent.Create(request, JsonSerializerOptions.CreateNOF().GetRequiredTypeInfo<TRequest>());
         }
         if (streaming)
         {

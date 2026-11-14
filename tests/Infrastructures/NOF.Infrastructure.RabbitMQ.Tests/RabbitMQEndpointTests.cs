@@ -28,10 +28,10 @@ public sealed class RabbitMQEndpointTests
         builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
         builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue("work", First));
         using var host = builder.Build();
-        Assert.Empty(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
+        Assert.Null(host.Services.GetService<MemoryEndpointRegistry>());
+        Assert.Null(host.Services.GetService<MemoryMessageClient>());
         Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Services.GetRequiredService<MemoryMessageClient>()
-            .SendAsync("work", new Input("value"), NOF.Abstraction.Context.Empty));
+        await Task.CompletedTask;
     }
 
     [Fact]

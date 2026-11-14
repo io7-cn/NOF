@@ -53,7 +53,7 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
 
 OutboxDeliveryContext 提供 MessageId、Context、Attempt 和 Headers。它是投递元数据，不是 InvocationContext；意图不一定执行 NOF 操作。处理器正常返回前，应达到具体客户端约定的接受条件。可重试异常遵循 MaxRetryCount 与可选 RetryDelay；OutboxPermanentFailureException 表示无法通过重试恢复，立即终止。未知标识/版本和与注册 JSON 结构不符的内容也永久失败，不根据持久化 CLR 名称加载类型或猜测适配器。
 
-一个 CLR 消息类型和一个稳定的 (MessageType, SchemaVersion) 在每个宿主都只能绑定一个处理器。注册表属于 DI，首次使用即冻结。需要独立重试的渠道使用不同意图类型。升级结构时保留旧版本注册，或显式迁移存量记录。Native AOT 中通过 JsonSerializerOptions.NOF 注册消息的源生成 JsonSerializerContext；注册表使用静态强类型委托和 IObjectSerializer，无需 CLR 名称查找。
+一个 CLR 消息类型和一个稳定的 (MessageType, SchemaVersion) 在每个宿主都只能绑定一个处理器。注册表属于 DI，首次使用即冻结。需要独立重试的渠道使用不同意图类型。升级结构时保留旧版本注册，或显式迁移存量记录。Native AOT 中通过 AddNOFJson 的宿主 Options 注册消息的源生成 JsonSerializerContext；注册表使用静态强类型委托和 IObjectSerializer，无需 CLR 名称查找。
 
 ## 具体客户端与入站绑定
 

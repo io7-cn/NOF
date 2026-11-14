@@ -557,7 +557,7 @@ public class ValueObjectGeneratorTests
         Assert.Contains("global::System.ArgumentNullException.ThrowIfNull(generator);", code);
         Assert.Contains("return From(generator.NextId());", code);
         Assert.Contains("public static EntityId New()", code);
-        Assert.Contains("=> New(global::NOF.Domain.IdGenerator.Current);", code);
+        Assert.Contains("=> New(global::NOF.Domain.IdGenerator.Current ?? throw new global::System.InvalidOperationException", code);
     }
 
     [Fact]

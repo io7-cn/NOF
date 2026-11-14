@@ -11,7 +11,7 @@ orders.MapGet<OrderService.Find>("/{id}")
 Operation bases implement static IServiceOperationDefinition. Typed Request/Response
 rules replace complete exact-type mappings on native groups/endpoints; no endpoint-module registration or
 client generation is required. AddNOF registers JSON, ProblemDetails and OpenAPI services.
-Call UseNOF, ordinary feature extensions, native health checks, MapOidcServer (when used)
+Call UseNOF, ordinary feature extensions, native health checks and host-owned identity endpoints
 and MapOpenApi explicitly. Native middleware and protocols remain host responsibilities.
 
 Failure cases implement IFailure with Title/Detail, optionally typed Error. Map concrete

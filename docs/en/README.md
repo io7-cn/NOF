@@ -70,3 +70,5 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 - [RabbitMQ two-service routing sample](design/rabbitmq-sample.md)
 
 The shared Sample UI uses native Blazor event binding and HTML controls, with no third-party component library. Configuration editing, streaming, OIDC and OAuth chain demos share the same UI in server and WebAssembly rendering modes. Start the AppHost as described in the [RabbitMQ sample](design/rabbitmq-sample.md).
+
+- [Host composition and identity ownership](design/host-composition.md)

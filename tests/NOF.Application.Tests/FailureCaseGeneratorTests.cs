@@ -116,7 +116,7 @@ public sealed class FailureCaseGeneratorTests
             {
                 public static string Run()
                 {
-                    var options = System.Text.Json.JsonSerializerOptions.NOF;
+                    var options = System.Text.Json.JsonSerializerOptions.CreateNOF();
                     Service.Delete.Result failure = new Service.Delete.CanNotDeleteNode(new ConflictDetails(42));
                     var json = System.Text.Json.JsonSerializer.Serialize(failure, options);
                     var restored = System.Text.Json.JsonSerializer.Deserialize<Service.Delete.Result>(json, options);
@@ -158,7 +158,7 @@ public sealed class FailureCaseGeneratorTests
             {
                 public static bool Run()
                 {
-                    var options = System.Text.Json.JsonSerializerOptions.NOF;
+                    var options = System.Text.Json.JsonSerializerOptions.CreateNOF();
                     Service.Run.Result missing = new Service.Run.Missing("missing");
                     var json = System.Text.Json.JsonSerializer.Serialize(missing, options);
                     var restored = System.Text.Json.JsonSerializer.Deserialize<Service.Run.Result>(json, options);

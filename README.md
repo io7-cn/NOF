@@ -41,17 +41,16 @@ Persistence uses application-owned aggregate repositories, DTO query ports and I
 | Package                                                                                                                           | Description                                                                                                             |
 | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [`NOF.Abstraction`](https://www.nuget.org/packages/NOF.Abstraction)                                                               | Shared annotations, user context, ambient headers, and in-memory event primitives                                       |
-| [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, validation and ID generation                                       |
+| [`NOF.Domain`](https://www.nuget.org/packages/NOF.Domain)                                                                         | Domain primitives - value objects, validation and ID generator contract                                       |
 | [`NOF.Contract`](https://www.nuget.org/packages/NOF.Contract)                                                                     | Contract layer - application service contracts, DTOs and declared operation outcomes |
-| [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - RPC servers, handlers, state machines, mapping, caching, and object-storage contracts              |
+| [`NOF.Application`](https://www.nuget.org/packages/NOF.Application)                                                               | Application layer - application operations, handlers, mapping, caching and object-storage contracts              |
 | [`NOF.Hosting`](https://www.nuget.org/packages/NOF.Hosting)                                               | Native host integration - application-part registration, deployment options, and JWT identity primitives             |
-| [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - runtime defaults, object storage, transactional messaging, OpenTelemetry, auth resource server, and service wiring |
+| [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)                                                         | Core infrastructure - operation execution, explicit optional capabilities and transactional messaging |
 | [`NOF.Infrastructure.AmazonS3`](https://www.nuget.org/packages/NOF.Infrastructure.AmazonS3)                                       | AWS S3 and S3-compatible object-storage rider                                                                           |
 | [`NOF.UI`](https://www.nuget.org/packages/NOF.UI)                                                                                 | Reusable UI primitives - authorization components, browser storage, browser info, and Blazor client helpers             |
 | [`NOF.Hosting.AspNetCore`](https://www.nuget.org/packages/NOF.Hosting.AspNetCore)                                                 | ASP.NET Core hosting - middleware, OpenAPI registration, service endpoint mapping, JSON configuration, and SSE streaming |
 | [`NOF.Hosting.BlazorWebAssembly`](https://www.nuget.org/packages/NOF.Hosting.BlazorWebAssembly)                                   | Blazor WebAssembly hosting - host builder integration for browser apps                                                  |
 | [`NOF.Hosting.Maui`](https://www.nuget.org/packages/NOF.Hosting.Maui)                                                             | .NET MAUI hosting - MAUI app builder integration for cross-platform applications                                        |
-| [`NOF.Hosting.AspNetCore.Extension.OidcServer`](https://www.nuget.org/packages/NOF.Hosting.AspNetCore.Extension.OidcServer) | OIDC service definitions and ASP.NET Core endpoints for the authentication authority                                   |
 | [`NOF.Infrastructure.RabbitMQ`](https://www.nuget.org/packages/NOF.Infrastructure.RabbitMQ)                                       | RabbitMQ transport for NOF command and notification dispatch                                                            |
 | [`NOF.Infrastructure.StackExchangeRedis`](https://www.nuget.org/packages/NOF.Infrastructure.StackExchangeRedis)                   | Redis-backed cache infrastructure via StackExchange.Redis                                                               |
 | [`NOF.Test`](https://www.nuget.org/packages/NOF.Test)                                                                             | Test host helpers for NOF applications                                                                                  |
@@ -69,7 +68,7 @@ var builder = WebApplication.CreateBuilder(args).AddNOF();
 
 builder.AddApplicationPart(typeof(MyAppService).Assembly);
 
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
+builder.Services.AddCacheService().AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
 builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(
     builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Missing RabbitMQ connection.")));
@@ -147,27 +146,18 @@ NOF.Infrastructure.*           <- Messaging and caching providers
 
 Visit the [NOF homepage](https://nof.io-vii.com/) for an overview and quick start. Full generated API documentation is available in the [API Reference](https://nof.io-vii.com/api/).
 
-## JSON And AOT
+## JSON and host composition
 
-NOF supports both regular JIT execution and Native AOT-oriented setups.
-
-- Framework-managed HTTP JSON paths use `JsonTypeInfo`/`JsonSerializerContext`-based APIs where possible.
-- `JsonSerializerOptions.NOF` ships with built-in metadata for NOF's common primitive needs and value-object primitives.
-- Application DTOs still need source-generated metadata in AOT scenarios.
-
-Register your app context before the type is first serialized or deserialized:
+Configure generated metadata independently for each host:
 
 ```csharp
-using System.Text.Json;
-using MyApp;
-
-JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(options =>
-{
-    options.TypeInfoResolverChain.Add(MyAppJsonSerializerContext.Default);
-});
+builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, MyAppJsonSerializerContext.Default));
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, MyAppJsonSerializerContext.Default));
 ```
 
-If metadata is missing, NOF now throws a framework-specific error that includes the concrete runtime type name to make AOT failures easier to locate.
+Standalone JsonSerializerOptions.CreateNOF() returns fresh defaults. No mutable process-wide JSON configuration remains. Native AOT requires generated metadata for application DTOs; missing metadata reports its runtime type.
+
+AddNOF selects execution only. Select concrete cache, object storage, backplane and ID providers through typed Selectors, such as services.AddCacheService().AddMemoryCacheService(). Snowflake belongs to Infrastructure; IdGenerator.Current returns null when absent. Native hosts own JwtBearer, endpoint authorization, telemetry and identity-provider integration. NOF no longer maintains an OIDC protocol package; Sample uses OpenIddict directly in its existing database and migration chain. See [host composition and migration](docs/en/design/host-composition.md) ([简体中文](docs/zh-CN/design/host-composition.md)).
 
 ## Testing
 

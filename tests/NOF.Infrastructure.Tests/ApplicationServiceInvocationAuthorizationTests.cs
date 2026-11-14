@@ -76,10 +76,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
     [InlineData(false)]
     public async Task LocalInvocation_ShouldUseScopedIdentityInsteadOfAuthenticatingContextHeaders(bool authenticated)
     {
-        var authorityScopes = new Mock<IServiceScopeFactory>(MockBehavior.Strict);
-        using var cache = new ResourceServerJwksCacheService(authorityScopes.Object,
-            Options.Create(new AuthenticationResourceServerOptions()));
-        await using var provider = BuildServiceProvider(cache);
+        await using var provider = BuildServiceProvider();
         await using var callerScope = provider.CreateAsyncScope();
         if (authenticated)
         {
@@ -97,7 +94,6 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         {
             Assert.Equal("Authentication required", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(execution).Title);
         }
-        authorityScopes.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -128,7 +124,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         Assert.Equal(2, probe.ScopedServiceAsyncDisposals);
     }
 
-    private static ServiceProvider BuildServiceProvider(ResourceServerJwksCacheService? authenticationCache = null)
+    private static ServiceProvider BuildServiceProvider()
     {
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddLogging();
@@ -147,11 +143,6 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         services.AddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
         services.AddTransient<AuthorizationInvocationFilter>();
         services.AddInvocationFilter<AuthorizationInvocationFilter>();
-        if (authenticationCache is not null)
-        {
-            services.AddSingleton(authenticationCache);
-            services.AddInvocationFilter<AuthenticationInvocationFilter>();
-        }
         services.AddScoped<IEventPublisher, InMemoryEventPublisher>();
         services.AddScoped<ScopeLifecycleProbeService>();
 

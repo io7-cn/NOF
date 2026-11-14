@@ -35,15 +35,15 @@ FailureCase 仍标在无需 partial 的 Contract 接口方法上；Result 与具
 
 ServiceOperationDescriptor 是唯一的操作身份、输入和输出元数据，删除仅含输入的 ServiceOperationReference 与 Descriptor.Reference。具体客户端指定目标，通用 Outbox 处理器解释持久意图。参见[事务性发件箱](transactional-outbox.md)。
 
-NodeService.Read.Descriptor 提供完整返回类型和解析后的方法元数据，其操作身份元数据不负责指定传输目标。ServiceOperationInspector.ValidateReference 集中校验引用；CanSubmit 检查是否返回 Empty 且没有 FailureCase；RequiresHostTenant 解释特性及等价策略元数据。默认消息绑定和路由调用这些检查，逻辑迁移不会绕过授权或允许丢弃业务失败。
+删除 UseHostTenant 注解；应用通过普通 Filter 或入口 Context 明确选择执行租户。
 
 ## 迁移
 
 - 为 ServiceOperation、InvocationContext、完整描述符、执行结果及拒绝类型引入 NOF.Application；Contract 不保留旧类型别名或转发。
 - 为 Context 引入 NOF.Abstraction，并替换显式 NOF.Contract.Context 引用。其不可变语义和异步流恢复行为不变；Contract 中旧 TypeForwardedTo 转发入口此次明确删除。
 - 移除生成的 IServiceOperations.Method 生产者路由。即时调用使用具体客户端，事务性消息通过 IOutbox.EnqueueAsync 与基础设施处理器执行；入站消费者保留完整描述符。
-- 需要直接检查引用时，用 Application 的 ServiceOperationInspector 替代 reference.MethodInfo/CanSubmit。正常调用和消息绑定 API 已自动检查，业务 Handler 无需重复校验。
-- 将 UseHostTenantAttribute.IsRequired(method) 改为 ServiceOperationInspector.RequiresHostTenant(method)，特性声明本身仍在 Contract。
+- 需要检查消息适用性时使用 ServiceOperationInspector.CanSubmit。正常调用和消息绑定已自动检查，Handler 无需重复校验。
+- 删除 UseHostTenant 注解；应用通过普通 Filter 或入口 Context 明确选择执行租户。
 - 客户端继续只依赖 Contract 和基础能力。示例 HTTP 客户端改用原生 HttpRequestException/HTTP 状态码处理传输失败，不引用 Application 的执行拒绝异常。
 
 同步更新运行时、Provider、宿主与生成器包。Contract DTO、失败声明、Application 分支名及可选 JSON union 判别格式不变；本次分层和命名空间调整不需要迁移数据库或已存储消息路由。

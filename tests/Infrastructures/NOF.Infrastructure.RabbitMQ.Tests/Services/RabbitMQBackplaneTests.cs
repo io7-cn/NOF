@@ -22,7 +22,10 @@ public sealed class RabbitMQBackplaneTests
         var services = new ServiceCollection();
 
         services.AddRabbitMQ(factory => factory.Uri = new Uri("amqp://guest:guest@localhost:5672/"));
-        services.AddRabbitMQBackplane();
+        services.AddBackplane().AddRabbitMQBackplane();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+        Assert.IsType<RabbitMQBackplane>(provider.GetRequiredService<IBackplane>());
 
         Assert.Contains(
             services,

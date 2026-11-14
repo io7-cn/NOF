@@ -127,7 +127,7 @@ public sealed class FileSystemObjectStorageRiderTests : IDisposable
         using var otherScope = other.CreateScope();
         Assert.False(await otherScope.ServiceProvider.GetRequiredService<IObjectStorageRider>().ExistsAsync("bucket", "key"));
         var services = new ServiceCollection();
-        services.AddMemoryObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = _root);
+        services.AddObjectStorage().AddMemoryObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = _root);
         using var fileProvider = services.BuildServiceProvider();
         using var fileScope = fileProvider.CreateScope();
         Assert.IsType<FileSystemObjectStorageRider>(fileScope.ServiceProvider.GetRequiredService<IObjectStorageRider>());

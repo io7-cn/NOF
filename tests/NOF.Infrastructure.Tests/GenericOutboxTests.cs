@@ -266,6 +266,7 @@ public sealed class GenericOutboxTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
+        builder.Services.AddScoped<MessageDelivery>();
         builder.Services.AddSingleton<Probe>();
         builder.Services.AddOutbox(outbox => outbox.Add<Work, Handler>("work", 2));
         builder.Services.Configure<TransactionalMessageOptions>(options =>

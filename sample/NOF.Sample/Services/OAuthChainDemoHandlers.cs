@@ -2,11 +2,11 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
 using NOF.Sample.UI.Services;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace NOF.Sample.Services;
 
@@ -64,7 +64,7 @@ public sealed class GetUserTokenHandler(OAuthChainDemoBackend backend) : OAuthCh
     {
         _ = request;
         _ = context;
-        return (await backend.GetUserTokenAsync(cancellationToken)).Value switch
+        return (await backend.GetUserTokenAsync(request, cancellationToken)).Value switch
         {
             DemoTokenResponse value => value,
             HttpTransportFailure { StatusCode: HttpStatusCode.Unauthorized } failure => new Unauthorized(failure.Detail),
@@ -149,7 +149,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
     private static (string? Subject, string Json)? ResolveActor(ClaimsPrincipal user)
     {
-        var actorJson = user.FindFirst(OAuthClaimTypes.Actor)?.Value;
+        var actorJson = user.FindFirst(Claims.Actor)?.Value;
         if (string.IsNullOrWhiteSpace(actorJson))
         {
             return null;
@@ -157,7 +157,7 @@ public sealed class InspectAccessTokenHandler(IUserContext userContext) : DemoDo
 
         using var document = JsonDocument.Parse(actorJson);
         var root = document.RootElement;
-        var subject = root.TryGetProperty(OAuthClaimTypes.Subject, out var subjectElement)
+        var subject = root.TryGetProperty(Claims.Subject, out var subjectElement)
             ? subjectElement.GetString()
             : null;
 

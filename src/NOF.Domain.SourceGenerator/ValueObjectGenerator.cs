@@ -439,7 +439,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
             sb.AppendLine($"        public static {info.TypeName} New()");
-            sb.AppendLine($"            => New(global::NOF.Domain.IdGenerator.Current);");
+            sb.AppendLine($"            => New(global::NOF.Domain.IdGenerator.Current ?? throw new global::System.InvalidOperationException(\"No ambient IIdGenerator is available. Supply a generator explicitly or configure the host's ID provider.\"));");
             sb.AppendLine();
         }
 

@@ -4,7 +4,6 @@ using NHibernate.Dialect;
 using NHibernate.Driver;
 using NOF.Application;
 using NOF.Hosting;
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Infrastructure.NHibernate;
 using Xunit;
@@ -23,7 +22,6 @@ public sealed class NHibernateNativeStoreTests
             builder.AddNOF();
             builder.Services.AddOutbox(_ => { });
             builder.Services.AddInbox();
-            builder.Services.AddOidcNHibernate();
             builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")
                 .WithOptions((configuration, _) =>
                 {
@@ -52,11 +50,6 @@ public sealed class NHibernateNativeStoreTests
             Assert.Equal(2, claimed.Count);
             Assert.Equal(2, claimed.Select(row => row.Route).Distinct().Count());
             Assert.All(claimed, row => Assert.Equal(1, row.RetryCount));
-            var clients = scope.ServiceProvider.GetRequiredService<IOAuthClientStore>();
-            clients.Add(new OAuthClient { ClientId = "native-client", DisplayName = "Native", CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow });
-            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-            using var verification = host.Services.CreateScope();
-            Assert.Equal("Native", (await verification.ServiceProvider.GetRequiredService<IOAuthClientStore>().FindAsync("native-client", default))!.DisplayName);
 
         }
         finally

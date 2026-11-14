@@ -122,7 +122,7 @@ public sealed class ConfigNodeRestTests
         using var http = app.GetTestClient();
         using var protectedResponse = await http.GetAsync("/policy-probe");
         Assert.Equal(HttpStatusCode.Unauthorized, protectedResponse.StatusCode);
-        Assert.NotEmpty(protectedResponse.Headers.WwwAuthenticate);
+        Assert.Empty(protectedResponse.Headers.WwwAuthenticate); // No native authentication scheme was selected by this host.
         Assert.Equal(0, app.Services.GetRequiredService<PolicyProbe>().Constructed);
         using var document = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
         var paths = document.RootElement.GetProperty("paths");
@@ -188,6 +188,8 @@ public sealed class ConfigNodeRestTests
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
+        builder.Services.AddCacheService().AddMemoryCacheService();
+        builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
         builder.AddApplicationPart(typeof(Persistence.ConfigNodePersistence).Assembly);

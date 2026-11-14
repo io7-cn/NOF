@@ -27,7 +27,7 @@ Application parts are explicit; both builder.AddApplicationPart and
 services.AddApplicationPart apply an assembly's generated registrations once per collection.
 There is no caller-assembly discovery. Add the assemblies that own operation implementations and generated registrations. Ordinary HTTP mapping extensions do not require application-part registration.
 
-UseNOF binds and restores scoped ambient conveniences for each native HTTP request; ordinary DI scopes need no activation protocol. See [ambient binding](ambient-binding.md). Call ordinary MapFeatureEndpoints extensions, native MapHealthChecks and MapOidcServer explicitly; no endpoint discovery or DI module registration remains. AddNOF includes ProblemDetails, JSON and OpenAPI services, while MapOpenApi is a host choice. Native authentication, exception handling, antiforgery and protocols remain host responsibilities. See [HTTP adaptation](http-adaptation.md).
+UseNOF binds and restores scoped ambient conveniences for each native HTTP request; ordinary DI scopes need no activation protocol. See [ambient binding](ambient-binding.md). Call ordinary MapFeatureEndpoints extensions, native MapHealthChecks and host-owned identity endpoints explicitly; no endpoint discovery or DI module registration remains. AddNOF includes ProblemDetails, JSON and OpenAPI services, while MapOpenApi is a host choice. Native authentication, exception handling, antiforgery and protocols remain host responsibilities. See [HTTP adaptation](http-adaptation.md).
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);

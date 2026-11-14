@@ -15,7 +15,7 @@ dotnet add package NOF.Infrastructure.StackExchangeRedis
 ## 2. Register Redis
 
 ```csharp
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
+builder.Services.AddCacheService().AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
 ```
 
@@ -75,4 +75,4 @@ public sealed class GetOrder(IDbContext dbContext, ICacheService cache)
 
 `ICacheService` also implements `IDistributedCache` and supports multi-key operations, atomic counters, TTL operations, and distributed locks. Cache keys are tenant-prefixed by default; use `IgnoreQueryFilters()` only for deliberate cross-tenant/host access.
 
-Use `builder.Services.AddRedisBackplane(...)` separately when `IBackplane` should use Redis as well.
+Use `builder.Services.AddBackplane().AddRedisBackplane(...)` separately when `IBackplane` should use Redis as well.

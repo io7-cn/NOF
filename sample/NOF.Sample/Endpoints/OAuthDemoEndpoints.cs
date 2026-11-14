@@ -36,6 +36,7 @@ public static class OAuthDemoEndpoints
             .Response<OAuthChainDemoService.CallDownstream.Forbidden>(403)
             .Response<OAuthChainDemoService.CallDownstream.ServerError>(500);
         endpoints.MapPost<DemoDownstreamService.InspectAccessToken>("/api/downstream/access-token-inspections")
+            .RequireAuthorization()
             .Response<DemoDownstreamService.InspectAccessToken.Rejected>(400)
             .Response<DemoDownstreamService.InspectAccessToken.Unauthorized>(401)
             .Response<DemoDownstreamService.InspectAccessToken.Forbidden>(403)

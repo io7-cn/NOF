@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using NOF.Application;
+using NOF.Infrastructure;
 using NOF.Infrastructure.RabbitMQ;
 using RabbitMQ.Client;
 
@@ -38,12 +39,18 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             return services;
         }
 
+    }
+
+    extension(BackplaneSelector selector)
+    {
         /// <summary>Registers the independent transient backplane using the same native connection registration.</summary>
-        public IServiceCollection AddRabbitMQBackplane()
+        public BackplaneSelector AddRabbitMQBackplane()
         {
+            var services = selector.Services;
             services.AddRabbitMQ();
+            services.AddNOFJson();
             services.ReplaceOrAddSingleton<IBackplane, RabbitMQBackplane>();
-            return services;
+            return selector;
         }
     }
 }

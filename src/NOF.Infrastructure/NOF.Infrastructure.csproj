@@ -8,16 +8,11 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>NOF.Infrastructure</PackageId>
-    <Description>Unified infrastructure package for the NOF Framework — abstractions, core pipeline, OpenTelemetry integration, and service wiring.</Description>
+    <Description>Unified infrastructure package for the NOF Framework — operation execution, explicit capability composition and message persistence.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>

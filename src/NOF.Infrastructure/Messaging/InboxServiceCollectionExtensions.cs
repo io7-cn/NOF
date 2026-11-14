@@ -14,7 +14,7 @@ public static class InboxServiceCollectionExtensions
     {
         services.AddLogging();
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
-        services.TryAddSingleton<IObjectSerializer, JsonObjectSerializer>();
+        services.AddNOFJson();
         services.AddOptions<TransactionalMessageOptions>()
             .Validate(options => !options.Inbox.RunWorkers ||
                 options.Inbox.PollingInterval > TimeSpan.Zero && options.Inbox.BatchSize > 0

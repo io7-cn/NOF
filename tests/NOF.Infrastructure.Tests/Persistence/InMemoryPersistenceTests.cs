@@ -11,7 +11,6 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Domain;
 using NOF.Hosting;
-using NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore;
 using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Linq.Expressions;

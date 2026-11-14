@@ -319,7 +319,7 @@ public sealed class AmazonS3ObjectStorageRiderTests
         var client = new Mock<IAmazonS3>();
         var services = new ServiceCollection();
 
-        services.AddAmazonS3ObjectStorage(
+        services.AddObjectStorage().AddAmazonS3ObjectStorage(
             client.Object,
             options => options.UseChunkEncoding = false);
 
@@ -338,7 +338,7 @@ public sealed class AmazonS3ObjectStorageRiderTests
     public void AddAmazonS3ObjectStorage_ShouldBuildAClientForCompatibleEndpoints()
     {
         var services = new ServiceCollection();
-        services.AddAmazonS3ObjectStorage(options =>
+        services.AddObjectStorage().AddAmazonS3ObjectStorage(options =>
         {
             options.ServiceUrl = "http://127.0.0.1:9000";
             options.ForcePathStyle = true;
@@ -355,7 +355,7 @@ public sealed class AmazonS3ObjectStorageRiderTests
     public void AddAmazonS3ObjectStorage_ShouldRejectIncompleteEndpointConfiguration()
     {
         var services = new ServiceCollection();
-        services.AddAmazonS3ObjectStorage(options =>
+        services.AddObjectStorage().AddAmazonS3ObjectStorage(options =>
             options.AccessKeyId = "access-key-without-a-secret");
         using var provider = services.BuildServiceProvider();
 

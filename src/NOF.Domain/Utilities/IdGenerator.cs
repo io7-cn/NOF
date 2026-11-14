@@ -12,13 +12,9 @@ public static class IdGenerator
     private static readonly AsyncLocal<Func<IIdGenerator?>?> _currentGenerator = new();
 
     /// <summary>
-    /// Gets the ambient <see cref="IIdGenerator"/> instance for the current async flow.
+    /// Gets the ambient <see cref="IIdGenerator"/> for the current async flow, or null when none is bound.
     /// </summary>
-    public static IIdGenerator Current
-    {
-        get => _currentGenerator.Value?.Invoke() ?? throw new InvalidOperationException(
-            "No ambient IIdGenerator is available for the current async flow.");
-    }
+    public static IIdGenerator? Current => _currentGenerator.Value?.Invoke();
 
     /// <summary>
     /// Pushes an ambient <see cref="IIdGenerator"/> into the current async flow for convenience API usage.

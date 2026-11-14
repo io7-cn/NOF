@@ -25,7 +25,7 @@ Web Builder 的 AddNOF 注册默认服务端基础设施及 HTTP 适配器；Wor
 builder.AddApplicationPart 与 services.AddApplicationPart 在同一容器中共享去重记录。
 加入操作实现及生成注册所在程序集；普通 HTTP 映射扩展不需要 ApplicationPart 注册。
 
-UseNOF 为每个原生 HTTP 请求成对绑定、恢复作用域便捷服务；普通 DI scope 无激活协议，参见 [Ambient 绑定](ambient-binding.md)。显式调用普通 MapFeatureEndpoints 扩展、原生 MapHealthChecks 和 MapOidcServer，不再发现或注册 DI 端点模块。AddNOF 注册 ProblemDetails、JSON 和 OpenAPI，MapOpenApi 由宿主选择。认证、异常处理、防伪和协议仍由原生宿主负责。参见 [HTTP 适配](http-adaptation.md)。
+UseNOF 为每个原生 HTTP 请求成对绑定、恢复作用域便捷服务；普通 DI scope 无激活协议，参见 [Ambient 绑定](ambient-binding.md)。显式调用普通 MapFeatureEndpoints 扩展、原生 MapHealthChecks 和宿主自己的身份端点，不再发现或注册 DI 端点模块。AddNOF 注册 ProblemDetails、JSON 和 OpenAPI，MapOpenApi 由宿主选择。认证、异常处理、防伪和协议仍由原生宿主负责。参见 [HTTP 适配](http-adaptation.md)。
 
 ```csharp
 var builder = Host.CreateApplicationBuilder(args);

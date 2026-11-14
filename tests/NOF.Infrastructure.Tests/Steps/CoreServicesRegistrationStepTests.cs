@@ -21,7 +21,7 @@ namespace NOF.Infrastructure.Tests.Steps;
 public class NOFInfrastructureTests
 {
     [Fact]
-    public void AddNOF_ShouldRegisterInMemoryPersistenceByDefault()
+    public void AddNOF_ShouldLeaveConcreteInfrastructureToTheHost()
     {
         var builder = new TestServiceRegistrationContext();
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
@@ -32,12 +32,10 @@ public class NOFInfrastructureTests
         using var provider = BuildServiceProvider(builder);
         using var scope = provider.CreateScope();
         Assert.Null(scope.ServiceProvider.GetService<DbContext>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
-        Assert.Null(scope.ServiceProvider.GetService<DbContext>());
-        Assert.IsType<CacheService>(scope.ServiceProvider.GetRequiredService<ICacheService>());
-        Assert.IsType<MemoryCacheServiceRider>(scope.ServiceProvider.GetRequiredService<ICacheServiceRider>());
-        Assert.IsType<ObjectStorageService>(scope.ServiceProvider.GetRequiredService<IObjectStorage>());
-        Assert.IsType<FileSystemObjectStorageRider>(scope.ServiceProvider.GetRequiredService<IObjectStorageRider>());
+        Assert.Null(scope.ServiceProvider.GetService<IUnitOfWork>());
+        Assert.Null(scope.ServiceProvider.GetService<ICacheService>());
+        Assert.Null(scope.ServiceProvider.GetService<IObjectStorage>());
+        Assert.IsType<TestIdGenerator>(scope.ServiceProvider.GetRequiredService<IIdGenerator>());
     }
 
     [Fact]
@@ -62,9 +60,10 @@ public class NOFInfrastructureTests
             service.ImplementationType == typeof(OutboxCleanupBackgroundService));
         Assert.NotNull(provider.GetRequiredService<IOptions<TransactionalMessageOptions>>());
         Assert.Equal(TenantMode.DatabasePerTenant, provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value.TenantMode);
-        Assert.IsType<MemoryBackplane>(provider.GetRequiredService<IBackplane>());
+        Assert.Null(provider.GetService<IBackplane>());
         Assert.IsType<InMemoryEventPublisher>(provider.GetRequiredService<IEventPublisher>());
-        Assert.IsType<HttpAuthorizationServerService>(provider.GetRequiredService<HttpAuthorizationServerService>());
+        Assert.Null(provider.GetService<MemoryMessageClient>());
+        Assert.Null(provider.GetService<IObjectSerializer>());
     }
 
     [Fact]
@@ -196,7 +195,7 @@ public class NOFInfrastructureTests
     public void AddNOF_ShouldValidateSnowflakeOptions()
     {
         var builder = new TestServiceRegistrationContext();
-        builder.Services.Configure<SnowflakeIdGeneratorOptions>(options => options.ApplicationIdBits = 0);
+        builder.Services.AddIdGenerator().AddSnowflakeIdGenerator(options => options.ApplicationIdBits = 0);
         builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
