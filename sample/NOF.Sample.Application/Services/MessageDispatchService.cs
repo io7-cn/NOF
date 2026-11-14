@@ -1,5 +1,4 @@
 using NOF.Application;
-using NOF.Sample.Application.Integration;
 using System.Net.Mail;
 
 namespace NOF.Sample.Application;
@@ -16,7 +15,9 @@ public sealed class SubmitDemoOrder(IUnitOfWork unitOfWork, IOutbox outbox) : Me
             return new InvalidRecipient("Provide a valid demonstration email address.");
         }
         var orderId = Guid.NewGuid();
-        await TransactionalMessages.StageAsync(unitOfWork, outbox, orderId, request.Email, context.Context, cancellationToken);
+        await outbox.EnqueueAsync(new OrderCreated(orderId), context.Context, cancellationToken: cancellationToken);
+        await outbox.EnqueueAsync(new SendEmail(request.Email, "Created", "Order created.", OrderId: orderId), context.Context, cancellationToken: cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         return new SubmittedDemoOrder(orderId);
     }
 }

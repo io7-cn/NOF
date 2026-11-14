@@ -13,15 +13,15 @@ using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Infrastructure.RabbitMQ;
 using NOF.Sample.Application;
 using NOF.Sample.Endpoints;
-using NOF.Sample.Messaging;
 using NOF.Sample.Notifications;
 using NOF.Sample.Notifications.Persistence;
+using NOF.Sample.Services;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using System.Net;
 using System.Net.Http.Json;
 using Xunit;
-using ConsumerService = NOF.Sample.Notifications.Application.MessageDemoService;
+using ConsumerService = NOF.Sample.Notifications.MessageDemoService;
 using Ef = Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions;
 
 namespace NOF.Sample.Tests;
@@ -104,10 +104,10 @@ public sealed class RabbitMQDispatchTests
         await using var producer = CreateProducer(connection, MemoryDatabase());
         await producer.StartAsync();
         using var scope = producer.Services.CreateScope();
-        var publisher = scope.ServiceProvider.GetRequiredService<RabbitMQDemoPublisher>();
-        var context = new OutboxDeliveryContext { MessageId = Guid.NewGuid(), Context = Context.Empty, Attempt = 1 };
+        var publisher = scope.ServiceProvider.GetRequiredService<IMessageClient>();
+        var headers = new Dictionary<string, string?> { [NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString() };
         var error = await Assert.ThrowsAsync<PublishException>(() => publisher.PublishAsync(string.Empty,
-            "sample.unroutable." + Guid.NewGuid().ToString("N"), new SendEmail("demo@example.test", "Test", "Test"), context, default).AsTask());
+            "sample.unroutable." + Guid.NewGuid().ToString("N"), new SendEmail("demo@example.test", "Test", "Test"), headers, default).AsTask());
         Assert.True(error.IsReturn);
     }
 
@@ -172,10 +172,11 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
+        builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
         builder.Services.AddOutbox(outbox =>
         {
-            outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
-            outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
+            outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
+            outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
         });
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
@@ -190,7 +191,7 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(ConsumerService).Assembly);
         builder.AddApplicationService<ConsumerService>();
-        builder.Services.AddScoped<NOF.Sample.Notifications.Application.INotificationReceipts, NotificationReceipts>();
+        builder.Services.AddScoped<NOF.Sample.Notifications.INotificationReceipts, NotificationReceipts>();
         if (missingQueue is null)
         {
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));

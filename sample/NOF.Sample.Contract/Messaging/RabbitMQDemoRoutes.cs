@@ -1,4 +1,4 @@
-namespace NOF.Sample.Messaging;
+namespace NOF.Sample;
 
 /// <summary>Application-owned physical RabbitMQ names; NOF has no topic/subscription convention.</summary>
 public static class RabbitMQDemoRoutes

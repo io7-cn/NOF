@@ -64,7 +64,7 @@ services.AddMemoryMessaging(endpoints =>
 
 AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有 ConfigureRabbitMQ 映射队列端点才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
 
-示例 TransactionalMessages 暂存 SendEmail 和 OrderCreated；NOF.Sample.Messaging 适配器选择 RabbitMQ 和实际路由，独立 NOF.Sample.Notifications 服务把队列和两个 Topic 订阅绑定到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递客户端只修改基础设施，无需改变 Application 入队 API。
+示例 SubmitDemoOrder 处理器直接暂存 SendEmail 和 OrderCreated，最后保存同一工作单元一次。NOF.Sample 宿主适配器选择原生 RabbitMQ 目的地，NOF.Sample.Notifications 将接收队列映射到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递方式只修改基础设施，无需改变 Application 入队 API。
 
 ## 可靠处理与迁移
 

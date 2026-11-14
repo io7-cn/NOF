@@ -1,6 +1,4 @@
 using NOF.Infrastructure.RabbitMQ;
-using NOF.Sample.Messaging;
-using NOF.Sample.Notifications.Application;
 using RabbitMQ.Client;
 
 namespace NOF.Sample.Notifications;

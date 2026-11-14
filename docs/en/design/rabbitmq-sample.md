@@ -40,21 +40,22 @@ await unitOfWork.SaveChangesAsync(ct);
 The producer explicitly selects scoped infrastructure adapters and stable logical schemas:
 
 ```csharp
+builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.Services.AddOutbox(outbox =>
 {
-    outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
-    outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
+    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
+    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
 });
 ```
 
-`NOF.Sample.Messaging/RabbitMQDemoPublisher.cs` directly implements both typed Outbox handlers and chooses native exchange/routing-key pairs. No forwarding handler classes or extra publisher registration are needed:
+`NOF.Sample/Services/MessageOutboxHandler.cs` implements both typed Outbox handlers, preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
 
 ```csharp
-await publisher.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
-await publisher.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext, ct);
+await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
+await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
 ```
 
-The sample publisher uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. `MessageDelivery.ExecuteAsync(..., deliveryContext)` supplies the original Outbox ID, tenant/trace and ordering headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
+The host client implementation uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. The Outbox handler uses `MessageDelivery.ExecuteAsync(..., deliveryContext)` to supply the original Outbox ID, tenant/trace and ordering headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
 
 The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure routes to operations:
 
@@ -121,3 +122,12 @@ The common Inbox still resolves scoped IInboxHandler entries through native keye
 Before upgrading, stop/drain old consumers and Inbox work and back up data. Map old `queue:`/`subscription:` (including the previous `rabbitmq:subscription:`) receipt keys to the selected queue key, updating Inbox.Route and InboxOrderState.Route together. Retain IDs, completed deduplication history and stream progress. Drain or explicitly move deliveries from old subscription queues to the new order queues before retiring topology. Old queues may carry NOF-installed dead-letter arguments: compare declarations and intentionally retain/recreate them through native RabbitMQ setup while offline. NOF performs no automatic remapping, deletion, replay or topology repair. Outbox schemas stay v1; old payloads are not reinterpreted.
 
 The builder is also the host-local configuration owner: RabbitMQConfiguration and RabbitMQConfigurationSnapshot are removed. Read-only views become fixed when startup freezes declarations. Consumer startup/delivery code is inline, while connection ownership remains separate because its lifetime differs from channels and message scopes.
+
+## Sample project boundaries
+
+- NOF.Sample.Contract owns message payloads, service declarations and Messaging/RabbitMQDemoRoutes.cs constants. It has no broker dependency.
+- NOF.Sample.Application owns IMessageClient and the producer use case. SubmitDemoOrder directly enqueues both intents and saves once; TransactionalMessages is removed. IMessageClient uses plain message/header values, without RabbitMQ types or OutboxDeliveryContext.
+- NOF.Sample owns Services/RabbitMQMessageClient.cs and MessageOutboxHandler.cs. The handler converts trusted Outbox metadata into headers; the client serializes and publishes natively.
+- NOF.Sample.Notifications is one executable project containing its operations, receipt port, persistence and native topology/endpoint module. There is no separate Notifications.Application project or shared Messaging implementation project. The receiving host registers its own assembly as an application part.
+
+Project consolidation changes no queue names, payload schemas, receipt keys or SQLite entity mappings. The sample tests use the merged receiver and link the producer's actual client/handler files; they verify the full metadata path and assembly dependency boundaries.

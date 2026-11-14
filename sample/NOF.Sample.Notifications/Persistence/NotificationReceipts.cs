@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using NOF.Sample.Notifications.Application;
 
 namespace NOF.Sample.Notifications.Persistence;
 

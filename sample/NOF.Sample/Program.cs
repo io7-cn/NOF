@@ -8,7 +8,6 @@ using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
 using NOF.Sample.Endpoints;
-using NOF.Sample.Messaging;
 using NOF.Sample.Services;
 using NOF.Sample.UI.Services;
 
@@ -20,10 +19,11 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
+builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.Services.AddOutbox(outbox =>
 {
-    outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
-    outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
+    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
+    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
 });
 // Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
 builder.Services.AddInbox();

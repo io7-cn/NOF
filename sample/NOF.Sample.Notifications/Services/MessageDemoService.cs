@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using NOF.Application;
 using NOF.Contract;
 
-namespace NOF.Sample.Notifications.Application;
+namespace NOF.Sample.Notifications;
 
 public partial class MessageDemoService : ApplicationService<IMessageDemoService>;
 

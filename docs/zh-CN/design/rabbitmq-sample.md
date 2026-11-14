@@ -40,21 +40,22 @@ await unitOfWork.SaveChangesAsync(ct);
 生产者明确选择基础设施适配器，以及稳定的逻辑消息标识和版本：
 
 ```csharp
+builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.Services.AddOutbox(outbox =>
 {
-    outbox.Add<SendEmail, RabbitMQDemoPublisher>("sample.send-email", 1);
-    outbox.Add<OrderCreated, RabbitMQDemoPublisher>("sample.order-created", 1);
+    outbox.Add<SendEmail, MessageOutboxHandler>("sample.send-email", 1);
+    outbox.Add<OrderCreated, MessageOutboxHandler>("sample.order-created", 1);
 });
 ```
 
-`NOF.Sample.Messaging/RabbitMQDemoPublisher.cs` 直接实现两种强类型 Outbox 处理入口并选择 Exchange 和 routing key，不再经过转发处理器，也无需额外注册 Publisher：
+`NOF.Sample/Services/MessageOutboxHandler.cs` 实现两种强类型 Outbox 入口，通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
 
 ```csharp
-await publisher.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
-await publisher.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext, ct);
+await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
+await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
 ```
 
-示例发送器使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。`MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和顺序 Header，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
+宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 通过 `MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和顺序 Header，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
 
 接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
 
@@ -121,3 +122,12 @@ MapQueue 可指定 `configureChannel: async (channel, ct) => await channel.Basic
 升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，同步修改 Inbox.Route 与 InboxOrderState.Route，保留 ID、已完成去重历史和顺序进度。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。
 
 Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConfigurationSnapshot。只读视图在启动冻结后保持不变。消费者启动及接收处理逻辑直接内联；连接持有器因生命周期不同于 Channel 和消息作用域而保留。
+
+## 示例项目边界
+
+- NOF.Sample.Contract 保存消息负载、服务声明和 Messaging/RabbitMQDemoRoutes.cs 常量，不依赖 Broker。
+- NOF.Sample.Application 保存 IMessageClient 和生产者用例。SubmitDemoOrder 直接暂存两条意图并保存一次，删除 TransactionalMessages。客户端接口只使用普通消息和 Header 值，不依赖 RabbitMQ 类型或 OutboxDeliveryContext。
+- NOF.Sample 保存 Services/RabbitMQMessageClient.cs 与 MessageOutboxHandler.cs；Handler 将可信 Outbox 元数据转换为 Header，客户端完成序列化和原生发布。
+- NOF.Sample.Notifications 是单个可执行项目，包含操作、回执端口、持久化与原生拓扑/端点模块，不再有独立 Notifications.Application 或共享 Messaging 实现项目。接收宿主将自身程序集注册为 Application Part。
+
+合并不改变队列名、负载 Schema、回执键或 SQLite 实体映射。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。

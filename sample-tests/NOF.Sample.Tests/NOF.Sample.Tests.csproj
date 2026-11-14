@@ -22,7 +22,6 @@
     <ProjectReference Include="..\..\src\NOF.Test\NOF.Test.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Application\NOF.Sample.Application.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Notifications\NOF.Sample.Notifications.csproj" />
-    <ProjectReference Include="..\..\sample\NOF.Sample.Messaging\NOF.Sample.Messaging.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Domain\NOF.Sample.Domain.csproj" />
     <ProjectReference Include="..\..\src\NOF.Application.SourceGenerator\NOF.Application.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
@@ -41,6 +40,8 @@
     <Compile Include="..\..\sample\NOF.Sample\Persistence\ConfigNodePersistence.cs" Link="Persistence\ConfigNodePersistence.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Endpoints\ConfigNodeEndpoints.cs" Link="Endpoints\ConfigNodeEndpoints.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Endpoints\MessageDispatchEndpoints.cs" Link="Endpoints\MessageDispatchEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\RabbitMQMessageClient.cs" Link="Services\RabbitMQMessageClient.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\MessageOutboxHandler.cs" Link="Services\MessageOutboxHandler.cs" />
     <Compile Include="..\..\sample\NOF.Sample\Migrations\20261113130000_GenericOutbox.cs" Link="Migrations\GenericOutbox.cs" />
   </ItemGroup>
   <ItemGroup>

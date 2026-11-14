@@ -4,7 +4,6 @@ using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample.Notifications;
-using NOF.Sample.Notifications.Application;
 using NOF.Sample.Notifications.Persistence;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();

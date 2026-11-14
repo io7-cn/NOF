@@ -90,7 +90,7 @@ await outbox.EnqueueAsync(new OrderCreated(order.Id), invocation.Context, cancel
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-The host registers stable message IDs/versions and IOutboxHandler<T> adapters. Enqueue snapshots without sending or saving; the returned Guid is an intent ID. OutboxEnqueueOptions carries optional stream ordering. No IMessageDispatcher, deferred Send/Publish family or operation-based producer routing remains. See [transactional outbox](../../docs/en/design/transactional-outbox.md) and the [compiled sample](../../sample/NOF.Sample.Application/Integration/TransactionalMessages.cs).
+The host registers stable message IDs/versions and IOutboxHandler<T> adapters. Enqueue snapshots without sending or saving; the returned Guid is an intent ID. OutboxEnqueueOptions carries optional stream ordering. No IMessageDispatcher, deferred Send/Publish family or operation-based producer routing remains. See [transactional outbox](../../docs/en/design/transactional-outbox.md) and the [compiled sample](../../sample/NOF.Sample.Application/Services/MessageDispatchService.cs).
 
 ### Persistence boundaries
 

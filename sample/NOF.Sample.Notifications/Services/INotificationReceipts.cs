@@ -1,4 +1,4 @@
-namespace NOF.Sample.Notifications.Application;
+namespace NOF.Sample.Notifications;
 
 /// <summary>Application-owned port: writes are staged in the inbox's existing unit of work.</summary>
 public interface INotificationReceipts
