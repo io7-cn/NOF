@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -23,11 +24,11 @@ public static partial class NOFInfrastructureExtensions
             ArgumentNullException.ThrowIfNull(configureOptions);
 
             ConfigureProvider(services, configureOptions);
-            services.ReplaceOrAddSingleton(static serviceProvider =>
+            services.Replace(ServiceDescriptor.Singleton(static serviceProvider =>
                 AmazonS3ClientFactory.Create(
                     serviceProvider
                         .GetRequiredService<IOptions<AmazonS3ObjectStorageOptions>>()
-                        .Value));
+                        .Value)));
             RegisterRider(services);
             return selector;
         }
@@ -43,7 +44,7 @@ public static partial class NOFInfrastructureExtensions
             ArgumentNullException.ThrowIfNull(clientFactory);
 
             ConfigureProvider(services, configureOptions);
-            services.ReplaceOrAddSingleton(clientFactory);
+            services.Replace(ServiceDescriptor.Singleton(clientFactory));
             RegisterRider(services);
             return selector;
         }
@@ -59,7 +60,7 @@ public static partial class NOFInfrastructureExtensions
             ArgumentNullException.ThrowIfNull(client);
 
             ConfigureProvider(services, configureOptions);
-            services.ReplaceOrAddSingleton(client);
+            services.Replace(ServiceDescriptor.Singleton(client));
             RegisterRider(services);
             return selector;
         }
@@ -77,5 +78,5 @@ public static partial class NOFInfrastructureExtensions
     }
 
     private static void RegisterRider(IServiceCollection services)
-        => services.ReplaceOrAddScoped<IObjectStorageRider, AmazonS3ObjectStorageRider>();
+        => services.Replace(ServiceDescriptor.Scoped<IObjectStorageRider, AmazonS3ObjectStorageRider>());
 }

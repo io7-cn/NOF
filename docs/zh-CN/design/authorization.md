@@ -2,11 +2,14 @@
 
 [English](../../en/design/authorization.md) · [宿主装配](host-composition.md)
 
-NOF 负责权限声明、检查语义与执行拦截；原生认证验证凭证并建立可信 ClaimsPrincipal。NOF.Authorization 提供共享运行时，不引用 Application、Domain 或 ASP.NET Core。Contract 继续只含声明与数据模型，不依赖其他 NOF 运行时包。
+NOF 负责权限声明、检查语义与执行拦截；原生认证验证凭证并建立可信 ClaimsPrincipal。NOF.Abstraction 提供共享权限模型、不可变策略、目录和默认检查实现，不引用 Contract、Application、Domain 或 ASP.NET Core。Contract 为复用这些模型仅引用 Abstraction，继续保留声明 Attribute；Application 负责 AuthorizationPolicyResolver。UI 直接引用 Abstraction，不依赖 Contract 或 UseCase。不再单独维护授权包。
 
 ## 权限只声明在 Contract 接口上
 
 ```csharp
+using NOF.Abstraction;
+using NOF.Contract;
+
 [RequireAuthenticated]
 public interface IConfigService : IApplicationService
 {
@@ -74,3 +77,5 @@ UI 与服务端复用目录和判断语义，但身份状态可能不同；UI �
 SamplePermissions 提供共享目录；IPermissionDemoService.GetOverview 在 Contract 声明 Any 权限组，PermissionDemoService 的 Handler 保持普通实现。HTTP 映射 `/api/permissions/overview`，原生 JWT 集成测试覆盖 401、403 和两个允许分支。`/permissions-demo` 展示目录，并按权限标识直接使用 AuthGuard。现有 CRUD 访问规则不变；示例不会把 OAuth scope 自动兑换成业务权限，也不额外创造 UI 登录流程。
 
 将裸/空 RequirePermission 改成 RequireAuthenticated；原 Handler 权限迁到对应 Contract 方法，并审查预期访问规则。移除 MetadataAttribute 及字符串键；自定义元数据用普通 Attribute 与专用消费者。SummaryAttribute 直接继承 Attribute，BCL Description/Category 仍可用。页面权限 Attribute 改成显式 UI 检查；PermissionRouteView 传入 Policy，或改用原生 RouteView。无需数据库结构变更。
+
+权限模型、策略、目录和检查服务改用 NOF.Abstraction 命名空间；AuthorizationPolicyResolver 使用 NOF.Application。删除单独授权包的引用，改为引用对应现有包。旧 ClaimsPrincipal.HasPermission 入口删除，统一使用 IPermissionChecker，以保持权限目录校验和认证语义一致。

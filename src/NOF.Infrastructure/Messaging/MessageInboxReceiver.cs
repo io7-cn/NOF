@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
 using NOF.Application;
@@ -25,7 +26,7 @@ public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSeria
         {
             await store.ReceiveAsync(message, cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException)
+        catch (DataException)
         {
             await using var verification = services.CreateAsyncScope();
             using var verificationBinding = verification.ServiceProvider.BindNOF(Context.Current);

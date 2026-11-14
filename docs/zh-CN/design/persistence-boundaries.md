@@ -80,3 +80,7 @@ ID、租约与去重历史。应用迁移前停止旧程序。Down 拒绝猜测�
 需要显式等价迁移；EnsureCreated 不会升级结构。
 
 原生查询与建模 API 改造本身不重命名表或重新解释数据。部署前审查 Provider 迁移，并明确升级每个租户数据库。
+
+## 持久化异常
+
+Application 不再定义数据库异常层级。Provider 将乐观并发保存冲突转为 System.Data.DBConcurrencyException，原生数据保存错误转为 System.Data.DataException，并保留原始原因。事务、取消与非预期异常保持原样。Inbox 仍在新作用域确认同一收据已持久化后才允许重复确认。迁移见[框架边界](framework-simplification.md)。

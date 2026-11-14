@@ -2,13 +2,13 @@
 
 [简体中文](../../zh-CN/design/contract-boundaries.md) · [Expected failures](expected-failures.md) · [Unified operations](unified-operations.md)
 
-NOF.Contract contains declarations and data models only. Its runtime assembly references no other NOF assembly, exposes no forwarded runtime types and needs no Application dependency. NOF.Contract.SourceGenerator keeps its existing name and ships declaration analyzers only: service signatures and FailureCase declarations are checked during Contract compilation, but no code is generated.
+NOF.Contract contains declarations and data models only. Its runtime assembly references only NOF.Abstraction for shared permission models, exposes no forwarded runtime types and needs no Application/Domain/Infrastructure dependency. NOF.Contract.SourceGenerator keeps its existing name and ships declaration analyzers only: service signatures and FailureCase declarations are checked during Contract compilation, but no code is generated.
 
 | Owner | Types and responsibilities |
 |---|---|
 | Contract | IApplicationService, FailureCase/policy metadata attributes, requests, successful DTOs, custom error data, Empty/Optional/Page |
-| Application | ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata and invocation interfaces |
-| Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure and other foundation services |
+| Application | ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata, invocation interfaces and Contract authorization resolution |
+| Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure, permission models/policies/checks/catalog and other foundation services |
 | Host/infrastructure | IInvocationFilter/InvocationDelegate/IInvocationPipeline, effective plans/catalogs, transport adaptation, identity establishment, selected invocation engine, HTTP presentation, queue routing and durable receipt/retry behavior |
 
 ## Declaring versus executing
@@ -48,4 +48,4 @@ NodeService.Read.Descriptor supplies the complete response type and resolved met
 
 Update runtime, providers, hosts and source-generator packages together. Contract DTOs and failure declarations, generated Application branch names and optional JSON union discriminators remain unchanged. No database or stored message-route migration is needed for this layer/namespace change.
 
-Boundary tests verify that Contract depends on no NOF runtime assembly, has no forwarded execution types or generated operation references, and that interpretation, execution models and semantic Context have their intended owners. Existing execution, authorization, messaging, HTTP and source-generator isolation regressions remain in the suite.
+Boundary tests verify that Contract references only Abstraction among NOF runtime assemblies, has no forwarded execution types or generated operation references, and that interpretation, execution models and semantic Context have their intended owners. Existing execution, authorization, messaging, HTTP and source-generator isolation regressions remain in the suite.

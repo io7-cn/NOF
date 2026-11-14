@@ -50,7 +50,7 @@ public static class CapabilityServiceCollectionExtensions
     {
         var services = selector.Services;
         services.TryAddSingleton<MemoryCacheServiceRiderState>();
-        services.ReplaceOrAddScoped<ICacheServiceRider, MemoryCacheServiceRider>();
+        services.Replace(ServiceDescriptor.Scoped<ICacheServiceRider, MemoryCacheServiceRider>());
         if (configure is not null)
         {
             services.Configure(configure);
@@ -63,7 +63,7 @@ public static class CapabilityServiceCollectionExtensions
     {
         var services = selector.Services;
         services.TryAddSingleton<MemoryBackplaneState>();
-        services.ReplaceOrAddSingleton<IBackplane, MemoryBackplane>();
+        services.Replace(ServiceDescriptor.Singleton<IBackplane, MemoryBackplane>());
         return selector;
     }
 

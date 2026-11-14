@@ -31,21 +31,21 @@ public static partial class NOFInfrastructureExtensions
         {
             builder.Services.AddOptions<DbContextConfigurationOptions>();
             builder.Services.TryAddSingleton<SqliteInMemoryConnectionKeeper>();
-            builder.Services.ReplaceOrAdd(ServiceDescriptor.Scoped<NOFDbContextFactory<TDbContext>, NOFDbContextFactory<TDbContext>>());
-            builder.Services.ReplaceOrAddScoped<ITenantDbContextFactory<TDbContext>>(sp =>
-                sp.GetRequiredService<NOFDbContextFactory<TDbContext>>());
-            builder.Services.ReplaceOrAddScoped<IDbContextFactory<TDbContext>>(sp =>
-                sp.GetRequiredService<ITenantDbContextFactory<TDbContext>>());
-            builder.Services.ReplaceOrAddScoped<NOFDbContext>(sp => sp.GetRequiredService<NOFDbContextFactory<TDbContext>>().CreateDbContext());
-            builder.Services.ReplaceOrAddScoped<DbContext>(sp => sp.GetRequiredService<NOFDbContext>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<NOFDbContextFactory<TDbContext>, NOFDbContextFactory<TDbContext>>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<ITenantDbContextFactory<TDbContext>>(sp =>
+                sp.GetRequiredService<NOFDbContextFactory<TDbContext>>()));
+            builder.Services.Replace(ServiceDescriptor.Scoped<IDbContextFactory<TDbContext>>(sp =>
+                sp.GetRequiredService<ITenantDbContextFactory<TDbContext>>()));
+            builder.Services.Replace(ServiceDescriptor.Scoped<NOFDbContext>(sp => sp.GetRequiredService<NOFDbContextFactory<TDbContext>>().CreateDbContext()));
+            builder.Services.Replace(ServiceDescriptor.Scoped<DbContext>(sp => sp.GetRequiredService<NOFDbContext>()));
             builder.Services.AddScoped<EfCoreUnitOfWork>();
-            builder.Services.ReplaceOrAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<EfCoreUnitOfWork>());
-            builder.Services.ReplaceOrAddScoped<ITransactionManager>(sp => sp.GetRequiredService<EfCoreUnitOfWork>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<IUnitOfWork>(sp => sp.GetRequiredService<EfCoreUnitOfWork>()));
+            builder.Services.Replace(ServiceDescriptor.Scoped<ITransactionManager>(sp => sp.GetRequiredService<EfCoreUnitOfWork>()));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IInboxStore, EfCoreInboxStore>(typeof(IInboxStore)));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IOutboxStore, EfCoreOutboxStore>(typeof(IOutboxStore)));
             if (typeof(TDbContext) != typeof(NOFDbContext))
             {
-                builder.Services.ReplaceOrAddScoped(sp => (TDbContext)sp.GetRequiredService<NOFDbContext>());
+                builder.Services.Replace(ServiceDescriptor.Scoped(sp => (TDbContext)sp.GetRequiredService<NOFDbContext>()));
             }
 
             return new EFCoreSelector(builder, typeof(TDbContext));
@@ -63,9 +63,9 @@ public static partial class NOFInfrastructureExtensions
                 return selector;
             }
 
-            builder.Services.ReplaceOrAdd(ServiceDescriptor.Scoped<TDbContextFactory, TDbContextFactory>());
-            builder.Services.ReplaceOrAddScoped<NOFDbContextFactory<TDbContext>>(sp =>
-                sp.GetRequiredService<TDbContextFactory>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<TDbContextFactory, TDbContextFactory>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<NOFDbContextFactory<TDbContext>>(sp =>
+                sp.GetRequiredService<TDbContextFactory>()));
             return selector;
         }
 

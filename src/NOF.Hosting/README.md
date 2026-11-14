@@ -1,7 +1,7 @@
 # NOF.Hosting
 
 Thin integration with native Microsoft.Extensions.Hosting abstractions: application-part
-registration, DeploymentOptions, lazy service resolution and JWT identity primitives.
+registration, DeploymentOptions, scoped lazy service resolution. Hosting references only NOF.Abstraction among NOF runtime packages; authentication stays with native host libraries.
 
 There are no NOF host implementations, build wrappers or initialization step pipelines.
 Use native builders, Build and platform lifecycle. Register application parts explicitly;

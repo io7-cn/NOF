@@ -33,7 +33,6 @@
     <PackageVersion Include="Microsoft.JSInterop" Version="[11.0.0,11.1.0)" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="[1.15.0,1.16.0)" />
     <!-- Extensions -->
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="[8.19.2,8.20.0)" />
     <!-- Infrastructure: retain EF Core 10 until the PostgreSQL provider has a stable 11.x release. -->
     <PackageVersion Include="AWSSDK.S3" Version="[4.0.102.4,4.1.0)" />
     <PackageVersion Include="RabbitMQ.Client" Version="[7.1.2,7.2.0)" />

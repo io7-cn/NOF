@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
-using NOF.Authorization;
 using NOF.Contract;
 using NOF.Hosting;
 using System.Diagnostics;

@@ -102,3 +102,7 @@ EnsureCreated does not upgrade them.
 
 The native query/model API change itself does not rename tables or reinterpret data. Review generated
 provider migrations before deployment and migrate every tenant database deliberately.
+
+## Persistence errors
+
+Application has no database exception hierarchy. Providers translate optimistic save conflicts to System.Data.DBConcurrencyException and native data-save errors to System.Data.DataException, preserving the original cause. Transactions, cancellation and unexpected errors propagate unchanged. Inbox duplicate confirmation still verifies the exact durable receipt in a fresh scope. See [framework boundaries](framework-simplification.md) for migration.

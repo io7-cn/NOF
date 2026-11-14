@@ -1,4 +1,5 @@
 using NOF.Application;
+using System.Data;
 
 namespace NOF.Infrastructure.NHibernate;
 
@@ -10,11 +11,15 @@ public sealed class NHibernateUnitOfWork(global::NHibernate.ISession session) : 
     {
         try
         {
-            await session.FlushAsync(cancellationToken);
+            await session.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception error)
+        catch (global::NHibernate.StaleStateException error)
         {
-            throw NHibernateExceptionTranslator.TranslateSaveChangesException(error);
+            throw new DBConcurrencyException(error.Message, error);
+        }
+        catch (global::NHibernate.ADOException error)
+        {
+            throw new DataException(error.Message, error);
         }
     }
     /// <inheritdoc />
@@ -24,33 +29,18 @@ public sealed class NHibernateUnitOfWork(global::NHibernate.ISession session) : 
         return Task.FromResult<ITransaction>(new NHibernateApplicationTransaction(session.BeginTransaction()));
     }
 }
-/// <summary>Projects a native transaction onto the application transaction boundary.</summary>
+
+/// <summary>Projects a native transaction onto the application transaction boundary without wrapping failures.</summary>
 public sealed class NHibernateApplicationTransaction(global::NHibernate.ITransaction transaction) : ITransaction
 {
     /// <inheritdoc />
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch (Exception error)
-        {
-            throw NHibernateExceptionTranslator.TranslateCommitException(error);
-        }
-    }
+    public Task CommitAsync(CancellationToken cancellationToken = default) => transaction.CommitAsync(cancellationToken);
     /// <inheritdoc />
-    public async Task RollbackAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await transaction.RollbackAsync(cancellationToken);
-        }
-        catch (Exception error)
-        {
-            throw NHibernateExceptionTranslator.TranslateTransactionException(error, "Failed to roll back the database transaction.");
-        }
-    }
+    public Task RollbackAsync(CancellationToken cancellationToken = default) => transaction.RollbackAsync(cancellationToken);
     /// <inheritdoc />
-    public ValueTask DisposeAsync() { transaction.Dispose(); return ValueTask.CompletedTask; }
+    public ValueTask DisposeAsync()
+    {
+        transaction.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }

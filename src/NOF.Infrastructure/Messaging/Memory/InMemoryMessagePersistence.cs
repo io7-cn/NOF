@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
@@ -42,13 +43,13 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
         {
             if (staged.Select(row => row.Id).Distinct().Count() != staged.Length || staged.Any(row => _state.Outbox.ContainsKey(row.Id)))
             {
-                throw new DbUpdateException("A message with the same identity already exists.");
+                throw new DataException("A message with the same identity already exists.");
             }
             foreach (var (row, owner) in receipts)
             {
                 if (!_state.Inbox.TryGetValue((row.Id, row.Route), out var current) || current.Status != InboxMessageStatus.Pending || owner is null || current.ClaimedBy != owner)
                 {
-                    throw new DbUpdateConcurrencyException("The receipt claim is no longer owned by this scope.");
+                    throw new DBConcurrencyException("The receipt claim is no longer owned by this scope.");
                 }
             }
             foreach (var row in staged)
@@ -113,7 +114,7 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
         {
             if (!_state.Inbox.TryAdd((message.Id, message.Route), Copy(message)))
             {
-                throw new DbUpdateException("Duplicate receipt.");
+                throw new DataException("Duplicate receipt.");
             }
         }
         return Task.CompletedTask;

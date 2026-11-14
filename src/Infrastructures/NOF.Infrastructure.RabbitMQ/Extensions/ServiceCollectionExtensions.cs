@@ -49,7 +49,7 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             var services = selector.Services;
             services.AddRabbitMQ();
             services.AddNOFJson();
-            services.ReplaceOrAddSingleton<IBackplane, RabbitMQBackplane>();
+            services.Replace(ServiceDescriptor.Singleton<IBackplane, RabbitMQBackplane>());
             return selector;
         }
     }

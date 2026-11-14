@@ -1,5 +1,5 @@
 using NOF.Application;
-using NOF.Authorization;
+using NOF.Abstraction;
 using System.Collections.Concurrent;
 
 namespace NOF.Infrastructure;

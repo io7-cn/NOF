@@ -1,8 +1,9 @@
+using NOF.Abstraction;
 using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
-namespace NOF.Authorization;
+namespace NOF.Application;
 
 /// <summary>Resolves Contract method/interface defaults and rejects conflicting declarations deterministically.</summary>
 public static class AuthorizationPolicyResolver

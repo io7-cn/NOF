@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
@@ -78,8 +80,8 @@ builder.UseDbContext<ConfigurationDbContext>()
     .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
     .MigrateOnStart();
 
-builder.Services.ReplaceOrAddScoped<ISampleApi, ServerSampleApi>();
-builder.Services.ReplaceOrAddScoped<IOAuthDemoApi, ServerOAuthDemoApi>();
+builder.Services.Replace(ServiceDescriptor.Scoped<ISampleApi, ServerSampleApi>());
+builder.Services.Replace(ServiceDescriptor.Scoped<IOAuthDemoApi, ServerOAuthDemoApi>());
 
 builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });

@@ -2,13 +2,13 @@
 
 [English](../../en/design/contract-boundaries.md) · [预期失败](expected-failures.md) · [统一操作](unified-operations.md)
 
-NOF.Contract 只包含声明和数据模型。其运行时程序集不引用其他 NOF 程序集，不转发执行类型，也不依赖 Application。NOF.Contract.SourceGenerator 保留原名，只承载声明分析器：在 Contract 编译时检查服务签名与 FailureCase 声明，不再生成任何代码。
+NOF.Contract 只包含声明和数据模型。其运行时程序集为复用共享权限模型仅引用 NOF.Abstraction，不转发执行类型，也不依赖 Application、Domain 或 Infrastructure。NOF.Contract.SourceGenerator 保留原名，只承载声明分析器：在 Contract 编译时检查服务签名与 FailureCase 声明，不再生成任何代码。
 
 | 归属 | 类型与职责 |
 |---|---|
 | Contract | IApplicationService、FailureCase/策略元数据特性、请求、成功 DTO、自定义错误数据、Empty/Optional/Page |
-| Application | ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据与调用接口 |
-| Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure 等基础能力 |
+| Application | ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据、调用接口和 Contract 授权解析 |
+| Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure、权限模型/策略/检查/目录等基础能力 |
 | 宿主/基础设施 | IInvocationFilter/InvocationDelegate/IInvocationPipeline、有效计划与失败目录、传输适配、身份建立、所选执行引擎、HTTP 表达、消息路由与可靠接收/重试 |
 
 ## 声明与执行
@@ -48,4 +48,4 @@ ServiceOperationDescriptor 是唯一的操作身份、输入和输出元数据�
 
 同步更新运行时、Provider、宿主与生成器包。Contract DTO、失败声明、Application 分支名及可选 JSON union 判别格式不变；本次分层和命名空间调整不需要迁移数据库或已存储消息路由。
 
-边界测试验证 Contract 没有其他 NOF 运行时程序集依赖、没有转发执行类型或生成操作引用，并检查解释逻辑、执行模型和语义 Context 的正确归属。原有执行、授权、消息、HTTP 与生成器隔离回归继续保留。
+边界测试验证 Contract 在 NOF 运行时中仅依赖 Abstraction、没有转发执行类型或生成操作引用，并检查解释逻辑、执行模型和语义 Context 的正确归属。原有执行、授权、消息、HTTP 与生成器隔离回归继续保留。

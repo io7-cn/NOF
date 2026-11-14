@@ -31,7 +31,6 @@ public static class WebApplicationExtensions
             options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFJsonSerializerContext.Default));
         builder.Services.AddHealthChecks().AddCheck("self", static () => HealthCheckResult.Healthy(), ["live"]);
         builder.Services.AddHttpContextAccessor();
-        builder.Services.AddScoped<HttpRequestInboundAdapter>();
         builder.Services.AddProblemDetails();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFHttpJsonContext.Default));

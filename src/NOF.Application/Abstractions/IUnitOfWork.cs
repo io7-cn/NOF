@@ -4,6 +4,8 @@ namespace NOF.Application;
 public interface IUnitOfWork
 {
     /// <summary>Flushes changes; an explicit surrounding transaction is committed separately.</summary>
+    /// <exception cref="System.Data.DBConcurrencyException">A native optimistic-lock check failed; discard the scope before retrying.</exception>
+    /// <exception cref="System.Data.DataException">The provider could not save data; the native cause is retained as InnerException.</exception>
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 
@@ -17,7 +19,7 @@ public interface ITransactionManager
 /// <summary>Controls an explicit application transaction; disposal releases uncommitted work.</summary>
 public interface ITransaction : IAsyncDisposable
 {
-    /// <summary>Commits flushed business changes and staged integration messages.</summary>
+    /// <summary>Commits flushed business changes and staged integration messages; native errors and cancellation propagate.</summary>
     Task CommitAsync(CancellationToken cancellationToken = default);
     /// <summary>Rolls back database writes; callers discard the scope before retrying.</summary>
     Task RollbackAsync(CancellationToken cancellationToken = default);

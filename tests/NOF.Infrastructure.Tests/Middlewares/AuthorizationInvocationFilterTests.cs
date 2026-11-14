@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
-using NOF.Authorization;
 using NOF.Contract;
 using System.Security.Claims;
 using Xunit;

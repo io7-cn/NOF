@@ -59,11 +59,6 @@ public static class InboundContextReflection
         => headers?.Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
             .ToDictionary(pair => (object)pair.Key, pair => (object?)pair.Value) ?? [];
 
-    /// <summary>Resolves contract policy metadata.</summary>
-    public static MethodInfo ResolveServiceMethodInfo(
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] Type serviceType, string name)
-        => serviceType.GetMethod(name) ?? throw new InvalidOperationException($"Unknown operation '{name}'.");
-
     /// <summary>Resolves the typed implementation method for policy metadata.</summary>
     public static MethodInfo ResolveHandlerMethodInfo(
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] Type handlerType,

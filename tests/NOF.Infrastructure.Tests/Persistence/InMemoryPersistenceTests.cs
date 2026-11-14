@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Configuration;
@@ -2134,14 +2135,14 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddInbox();
         if (messageTenantProvider is not null)
         {
-            builder.Services.ReplaceOrAddSingleton(_ => messageTenantProvider);
+            builder.Services.Replace(ServiceDescriptor.Singleton(_ => messageTenantProvider));
         }
         ConfigureSqliteInMemory(
             builder.UseDbContext<TestDbContext>()
                 .WithTenantMode(tenantMode)
                 .WithSoftDelete(softDeleteEnabled),
             $"nof-tests-{Guid.NewGuid():N}");
-        builder.Services.ReplaceOrAddSingleton<IEventPublisher>(sp => sp.GetRequiredService<TestEventPublisher>());
+        builder.Services.Replace(ServiceDescriptor.Singleton<IEventPublisher>(sp => sp.GetRequiredService<TestEventPublisher>()));
 
         if (transactionalMessageOptions is not null)
         {
@@ -2178,7 +2179,7 @@ public class SqliteInMemoryPersistenceTests
             .WithSoftDelete(softDeleteEnabled)
             .WithConnectionString($"Data Source={databaseName};Mode=Memory;Cache=Shared")
             .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString));
-        builder.Services.ReplaceOrAddSingleton<IEventPublisher>(sp => sp.GetRequiredService<TestEventPublisher>());
+        builder.Services.Replace(ServiceDescriptor.Singleton<IEventPublisher>(sp => sp.GetRequiredService<TestEventPublisher>()));
 
         var provider = BuildServiceProvider(builder);
         EnsureCreated(provider, NOFAbstractionConstants.Tenant.HostId);

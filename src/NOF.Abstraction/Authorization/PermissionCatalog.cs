@@ -1,6 +1,5 @@
-using NOF.Contract;
 
-namespace NOF.Authorization;
+namespace NOF.Abstraction;
 
 /// <summary>Host-owned permission definitions, frozen on first use; definitions never imply grants.</summary>
 public sealed class PermissionCatalog

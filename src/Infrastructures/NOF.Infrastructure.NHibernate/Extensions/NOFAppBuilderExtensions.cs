@@ -17,12 +17,12 @@ public static partial class NOFInfrastructureExtensions
         {
             builder.Services.AddOptions<NHibernateConfigurationOptions>();
             builder.Services.TryAddSingleton<NHibernateSessionFactoryRegistry>();
-            builder.Services.ReplaceOrAddScoped(sp =>
+            builder.Services.Replace(ServiceDescriptor.Scoped(sp =>
                 sp.GetRequiredService<NHibernateSessionFactoryRegistry>()
-                    .OpenSession(TenantId.Normalize(Context.Current.TenantId)));
+                    .OpenSession(TenantId.Normalize(Context.Current.TenantId))));
             builder.Services.AddScoped<NHibernateUnitOfWork>();
-            builder.Services.ReplaceOrAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<NHibernateUnitOfWork>());
-            builder.Services.ReplaceOrAddScoped<ITransactionManager>(sp => sp.GetRequiredService<NHibernateUnitOfWork>());
+            builder.Services.Replace(ServiceDescriptor.Scoped<IUnitOfWork>(sp => sp.GetRequiredService<NHibernateUnitOfWork>()));
+            builder.Services.Replace(ServiceDescriptor.Scoped<ITransactionManager>(sp => sp.GetRequiredService<NHibernateUnitOfWork>()));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IInboxStore, NHibernateInboxStore>(typeof(IInboxStore)));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IOutboxStore, NHibernateOutboxStore>(typeof(IOutboxStore)));
 

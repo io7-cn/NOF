@@ -28,7 +28,7 @@ public sealed class ContractFailureOwnershipTests
         // Compile Contract independently, even if other tests loaded runtime assemblies first.
         contract = contract.RemoveReferences(contract.References.Where(reference =>
             Path.GetFileNameWithoutExtension(reference.Display) is { } name
-            && name.StartsWith("NOF.", StringComparison.Ordinal) && name != "NOF.Contract"));
+            && name.StartsWith("NOF.", StringComparison.Ordinal) && name is not ("NOF.Contract" or "NOF.Abstraction")));
         using var image = new MemoryStream();
         var contractEmit = contract.Emit(image);
         Assert.True(contractEmit.Success, string.Join("\n", contractEmit.Diagnostics));

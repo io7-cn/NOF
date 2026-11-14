@@ -1,70 +1,33 @@
 using Microsoft.Extensions.DependencyInjection;
-using NOF.Abstraction;
-using NOF.Contract;
 using System.Security.Claims;
 using Xunit;
 
-namespace NOF.Authorization.Tests;
+namespace NOF.Abstraction.Tests;
 
-public sealed class AuthorizationTests
+public sealed class PermissionCheckerTests
 {
     [Fact]
     public void SharedRuntime_DoesNotDependOnApplicationDomainInfrastructureOrAspNetCore()
     {
+        foreach (var type in new[] { typeof(PermissionDefinition), typeof(PermissionMatch), typeof(IPermissionMetadata),
+            typeof(AuthorizationPolicy), typeof(PermissionCatalog), typeof(IPermissionChecker) })
+        {
+            Assert.Equal(typeof(Context).Assembly, type.Assembly);
+        }
         var references = typeof(PermissionChecker).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name!).ToArray();
-        Assert.DoesNotContain(references, name => name is "NOF.Application" or "NOF.Domain" or "NOF.Infrastructure"
+        Assert.DoesNotContain(references, name => name is "NOF.Contract" or "NOF.Application" or "NOF.Domain" or "NOF.Infrastructure"
             || name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
     }
     [Fact]
-    public void ContractMethods_OverrideInterfaceDefaults_AndKeepDeclarationSources()
-    {
-        var policy = AuthorizationPolicyResolver.Resolve(typeof(IContract), typeof(IContract).GetMethod(nameof(IContract.Read)));
-        Assert.True(policy.RequiresAuthentication);
-        Assert.Equal("read", Assert.Single(Assert.Single(policy.Requirements).Permissions));
-        Assert.Single(policy.Sources);
-        var anonymousContract = AuthorizationPolicyResolver.Resolve(typeof(IContract), typeof(IContract).GetMethod(nameof(IContract.Public)));
-        Assert.False(anonymousContract.RequiresAuthentication);
-        Assert.Empty(anonymousContract.Requirements);
-        var login = AuthorizationPolicyResolver.Resolve(typeof(IContract), typeof(IContract).GetMethod(nameof(IContract.Login)));
-        Assert.True(login.RequiresAuthentication);
-        Assert.Empty(login.Requirements);
-    }
-
-    [Fact]
-    public void InheritedInterfaceConflicts_AreRejected_WhileIdenticalDiamondDefaultsAgree()
-    {
-        Assert.Throws<InvalidOperationException>(() => AuthorizationPolicyResolver.Resolve(typeof(IAmbiguous)));
-        Assert.Throws<InvalidOperationException>(() => AuthorizationPolicyResolver.Resolve(typeof(IUnevenBranches)));
-        var shared = AuthorizationPolicyResolver.Resolve(typeof(IDiamond));
-        Assert.Equal("read", Assert.Single(Assert.Single(shared.Requirements).Permissions));
-        var overridden = AuthorizationPolicyResolver.Resolve(typeof(IOverride));
-        Assert.False(overridden.RequiresAuthentication);
-    }
-
-    [Fact]
-    public void InheritedOperationDeclarations_RejectAmbiguity_AndExplicitMethodCanResolveIt()
-    {
-        var operation = typeof(IRead).GetMethod(nameof(IRead.Execute))!;
-        Assert.Throws<InvalidOperationException>(() => AuthorizationPolicyResolver.Resolve(typeof(IConflictingOperations), operation));
-        var policy = AuthorizationPolicyResolver.Resolve(typeof(IResolvedOperation), typeof(IResolvedOperation).GetMethod(nameof(IResolvedOperation.Execute)));
-        Assert.False(policy.RequiresAuthentication);
-    }
-
-    [Fact]
-    public void Snapshots_RecognizeSemanticInterfaces_RejectConflicts_AndDoNotRetainMutableCollections()
+    public void Snapshots_DoNotRetainMutableCollections()
     {
         string[] ids = ["read", "write"];
-        var declaration = new RequirePermissionAttribute(ids) { Match = PermissionMatch.Any };
+        var requirement = new PermissionRequirement(ids, PermissionMatch.Any);
         ids[0] = "changed";
-        var policy = new AuthorizationPolicy(true, [new(declaration.Permissions, declaration.Match)]);
-        declaration.Match = PermissionMatch.All;
+        var policy = new AuthorizationPolicy(true, [requirement]);
         Assert.Equal(PermissionMatch.Any, Assert.Single(policy.Requirements).Match);
         Assert.Equal("read", policy.Requirements[0].Permissions[0]);
         Assert.Throws<NotSupportedException>(() => ((IList<string>)policy.Requirements[0].Permissions)[0] = "changed");
-        var custom = AuthorizationPolicyResolver.Resolve(typeof(ICustom));
-        Assert.Equal("read", Assert.Single(Assert.Single(custom.Requirements).Permissions));
-        Assert.Throws<ArgumentException>(() => AuthorizationPolicyResolver.Resolve(typeof(AuthorizationTests)));
-        Assert.Throws<ArgumentException>(() => new RequirePermissionAttribute());
         Assert.Throws<ArgumentException>(() => new PermissionRequirement(["read"], (PermissionMatch)42));
     }
 
@@ -163,39 +126,6 @@ public sealed class AuthorizationTests
         Assert.Equal("outside", Context.Current.TenantId);
     }
 
-    [RequirePermission("write")]
-    public interface IContract
-    {
-        [RequirePermission("read")]
-        void Read();
-        [AllowAnonymous]
-        void Public();
-        [RequireAuthenticated]
-        void Login();
-    }
-    [RequirePermission("read")]
-    public interface ILeft;
-    [RequirePermission("write")]
-    public interface IRight;
-    public interface IAmbiguous : ILeft, IRight;
-    public interface ILongBranch : IRight;
-    public interface IUnevenBranches : ILeft, ILongBranch;
-    public interface IFirst : ILeft;
-    public interface ISecond : ILeft;
-    public interface IDiamond : IFirst, ISecond;
-    [AllowAnonymous]
-    public interface IOverride : ILeft, IRight;
-    public interface IRead { [RequirePermission("read")] void Execute(); }
-    public interface IWrite { [RequirePermission("write")] void Execute(); }
-    public interface IConflictingOperations : IRead, IWrite;
-    public interface IResolvedOperation : IRead, IWrite { [AllowAnonymous] new void Execute(); }
-    [CustomPermission]
-    public interface ICustom;
-    public sealed class CustomPermissionAttribute : Attribute, IPermissionMetadata
-    {
-        public IReadOnlyList<string> Permissions => ["read"];
-        public new PermissionMatch Match => PermissionMatch.All;
-    }
     public sealed class GrantProbe : IPermissionGrantProvider
     {
         public Context? Context { get; private set; }

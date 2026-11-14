@@ -1,4 +1,4 @@
-namespace NOF.Contract;
+namespace NOF.Abstraction;
 
 /// <summary>Combines the permissions inside one declaration; separate declarations always combine with AND.</summary>
 public enum PermissionMatch

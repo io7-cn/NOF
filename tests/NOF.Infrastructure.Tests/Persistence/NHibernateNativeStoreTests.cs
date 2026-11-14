@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NHibernate.Dialect;
@@ -96,7 +97,7 @@ public sealed class NHibernateNativeStoreTests
             pending!.Status = InboxMessageStatus.Processed;
             pending.ClaimedBy = null;
             pending.ClaimExpiresAtUtc = null;
-            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => firstScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync());
+            await Assert.ThrowsAsync<DBConcurrencyException>(() => firstScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync());
             using var verification = host.Services.CreateScope();
             Assert.NotNull(await verification.ServiceProvider.GetRequiredService<IInboxStore>().FindPendingAsync(second, default));
         }

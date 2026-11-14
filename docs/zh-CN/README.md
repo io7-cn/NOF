@@ -66,3 +66,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [宿主装配与身份职责](design/host-composition.md)
 
 - [契约授权与权限目录](design/authorization.md)
+
+- [框架边界与原生平台 API](design/framework-simplification.md)

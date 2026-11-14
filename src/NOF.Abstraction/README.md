@@ -78,7 +78,7 @@ public sealed class MyService : IMyService;
 
 ## JSON And AOT
 
-`NOF.Abstraction` exposes the shared `JsonSerializerOptions.NOF` instance used across the framework.
+`NOF.Abstraction` provides standalone `JsonSerializerOptions.CreateNOF()` defaults. Server hosts register their own options with `AddNOFJson()`; HTTP uses native `JsonOptions`. No mutable global serializer options remain.
 
 - It includes `NOFJsonSerializerContext` for common primitive and framework-adjacent types.
 - It stays compatible with normal JIT execution.
@@ -106,3 +106,9 @@ Domain exceptions and the former Throw extension are removed.
 Semantic Context is exposed directly as NOF.Abstraction.Context. The former Contract namespace/type-forwarder is removed; execution models live in Application. See [boundaries](../../docs/en/design/contract-boundaries.md).
 
 JSON defaults are fresh instances from JsonSerializerOptions.CreateNOF(); runtime hosts configure their own serializer options. There is no process-wide mutable configuration. See [host composition](../../docs/en/design/host-composition.md).
+
+## Permission checks
+
+Foundational permission models (PermissionDefinition, PermissionMatch, IPermissionMetadata), immutable AuthorizationPolicy/PermissionRequirement, PermissionCatalog and IPermissionChecker live here. AddPermissions installs the scoped checker and the default authenticated-claim grant provider. Replace IPermissionGrantProvider through ordinary DI for application-owned grants. This package depends on no Contract, Application, Domain or HTTP runtime; UI can check identifiers directly.
+
+Contract owns declaration attributes and references these shared models. Application owns AuthorizationPolicyResolver and resolves those declarations for server execution; UI does not inspect UseCases. See [authorization](../../docs/en/design/authorization.md) ([简体中文](../../docs/zh-CN/design/authorization.md)).

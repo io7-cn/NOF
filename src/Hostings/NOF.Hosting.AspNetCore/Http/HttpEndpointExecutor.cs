@@ -217,15 +217,14 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         {
             input = await ReadAsync(new(http, _json));
         }
-        catch (Exception exception) when (exception is BadHttpRequestException)
+        catch (BadHttpRequestException exception)
         {
-            var status = exception is BadHttpRequestException bad ? bad.StatusCode : 400;
+            var status = exception.StatusCode;
             await TypedResults.Problem(statusCode: status, type: "about:blank", title: "Invalid request", detail: exception.Message).ExecuteAsync(http);
             return;
         }
 
-        var adapter = http.RequestServices.GetRequiredService<HttpRequestInboundAdapter>();
-        adapter.BindIdentity(http);
+        http.BindIdentity();
         var context = Context.Empty;
         foreach (var item in _items)
         {
@@ -237,7 +236,8 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             context = context.WithTenantId(_tenant(http));
         }
 
-        var result = InvocationResult.Value(await adapter.ExecuteAsync(Binding.Operation, input!, http, context, http.RequestAborted));
+        var result = InvocationResult.Value(await http.RequestServices.GetRequiredService<IOperationExecutor>()
+            .ExecuteAsync(Binding.Operation, input!, context, InvocationOrigin.Http, http.RequestAborted));
         var source = result is null ? typeof(void) : _responses.Keys.OrderBy(type => type == result.GetType() ? 0 : 1)
             .FirstOrDefault(type => type.IsInstanceOfType(result)) ?? result.GetType();
         var response = _responses.GetValueOrDefault(source) ?? new HttpResponseMapping(source, null, null, null, false);

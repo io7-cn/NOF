@@ -1,7 +1,6 @@
-using NOF.Contract;
 using System.Reflection;
 
-namespace NOF.Authorization;
+namespace NOF.Abstraction;
 
 /// <summary>A defensive snapshot of one permission group and its declaration source.</summary>
 public sealed class PermissionRequirement : IPermissionMetadata

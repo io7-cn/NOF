@@ -11,11 +11,11 @@
 - **Transactional Outbox** - Reliable message delivery with inbox/outbox pattern built into EF Core infrastructure.
 - **State Machines** - Declarative, event-driven state machine builder with persistent context.
 - **Multi-Tenancy** - Tenant-aware `DbContext` with database-per-tenant and shared-database modes.
-- **Modular Pipeline** - Dependency-aware registration and initialization steps.
+- **UseCase Filters** - Host-selected execution with shared policy enforcement.
 - **OpenTelemetry** - Built-in tracing, metrics, and logging integration.
 - **Redis Cache** - Optional Redis-backed `ICacheService` via `NOF.Infrastructure.StackExchangeRedis`.
 - **RabbitMQ Transport** - Optional command and notification transport via `NOF.Infrastructure.RabbitMQ`.
-- **OIDC Server** - Optional authorization server endpoints with authorization code, refresh token, and client credentials grants.
+- **Native Identity** - Host-owned OpenIddict or an external identity provider.
 - **UI & Test Helpers** - Blazor UI primitives and test-host utilities for application integration tests.
 
 ## Getting Started
@@ -31,7 +31,6 @@ dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL
 Optional packages include:
 
 ```bash
-dotnet add package NOF.Hosting.AspNetCore.Extension.OidcServer
 dotnet add package NOF.Infrastructure.RabbitMQ
 dotnet add package NOF.Infrastructure.StackExchangeRedis
 dotnet add package NOF.UI

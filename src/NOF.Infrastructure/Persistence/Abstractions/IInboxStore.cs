@@ -4,6 +4,7 @@ namespace NOF.Infrastructure;
 public interface IInboxStore
 {
     /// <summary>Persists a received message; callers reconcile duplicate failures in a fresh scope.</summary>
+    /// <exception cref="System.Data.DataException">Saving failed; a duplicate is acknowledged only after verifying the exact durable receipt.</exception>
     Task ReceiveAsync(NOFInboxMessage message, CancellationToken cancellationToken);
     /// <summary>Checks durable receipt identity for duplicate reconciliation.</summary>
     Task<bool> ExistsAsync(Guid messageId, string route, CancellationToken cancellationToken);

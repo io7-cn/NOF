@@ -6,13 +6,21 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using NOF.Abstraction;
-using NOF.Contract;
 using Xunit;
 
 namespace NOF.Hosting.Tests;
 
 public class HostingRegistrationTests
 {
+    [Fact]
+    public void Hosting_ReferencesOnlyFoundation_AndLeavesIdentityProtocolsToTheHost()
+    {
+        var references = typeof(DeploymentOptions).Assembly.GetReferencedAssemblies();
+        Assert.Equal(["NOF.Abstraction"], references
+            .Where(assembly => assembly.Name!.StartsWith("NOF.", StringComparison.Ordinal)).Select(assembly => assembly.Name));
+        Assert.DoesNotContain(references, assembly => assembly.Name == "System.IdentityModel.Tokens.Jwt");
+    }
+
     [Fact]
     public async Task AddNOFHosting_OnServices_ShouldRegisterScopedEventPublisher()
     {

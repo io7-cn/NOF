@@ -43,7 +43,7 @@ public static partial class NOFInfrastructureMyProviderExtensions
         public IServiceCollection AddMyProvider(Action<MyProviderOptions> configure)
         {
             services.Configure(configure);
-            services.ReplaceOrAddSingleton<IMyRuntime, MyRuntime>();
+            services.Replace(ServiceDescriptor.Singleton<IMyRuntime, MyRuntime>());
             return services;
         }
     }
@@ -52,7 +52,7 @@ public static partial class NOFInfrastructureMyProviderExtensions
 
 Use an `IHostApplicationBuilder` extension when registration needs environment data or returns a fluent selector, as the EF Core and NHibernate providers do.
 
-Use `ReplaceOrAdd*` when the provider intentionally replaces a NOF default. Use `TryAdd*` / `TryAddEnumerable` when user overrides or multiple implementations must be preserved.
+Use native `Replace(ServiceDescriptor...)` when the provider intentionally replaces a NOF default. Use `TryAdd*` / `TryAddEnumerable` when user overrides or multiple implementations must be preserved.
 
 ## 3. Add Initialization Only When Necessary
 

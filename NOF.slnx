@@ -24,7 +24,6 @@
     <File Path="nuget.config" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/NOF.Authorization/NOF.Authorization.csproj" />
     <Project Path="src/NOF.Abstraction.SourceGenerator/NOF.Abstraction.SourceGenerator.csproj" />
     <Project Path="src/NOF.Abstraction/NOF.Abstraction.csproj" />
     <Project Path="src/NOF.Application/NOF.Application.csproj" />
@@ -57,7 +56,6 @@
     <Project Path="src/Infrastructures/NOF.Infrastructure.StackExchangeRedis/NOF.Infrastructure.StackExchangeRedis.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/NOF.Authorization.Tests/NOF.Authorization.Tests.csproj" />
     <Project Path="tests/NOF.Abstraction.Tests/NOF.Abstraction.Tests.csproj" />
     <Project Path="tests/NOF.Contract.Tests/NOF.Contract.Tests.csproj" Id="a4d4d1a7-24e1-4c7e-a368-8db0063b737a" />
     <Project Path="tests/NOF.Application.Tests/NOF.Application.Tests.csproj" />

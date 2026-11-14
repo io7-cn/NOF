@@ -56,43 +56,5 @@ public static partial class NOFAbstractionExtensions
         /// </summary>
         public string? TenantId => user.FindFirst(ClaimTypes.TenantId)?.Value;
 
-        /// <summary>
-        /// Determines whether the current user has the specified permission.
-        /// Supports exact match and wildcard patterns (for example: "order.*").
-        /// </summary>
-        public bool HasPermission(string permission, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
-        {
-            if (string.IsNullOrEmpty(permission))
-            {
-                return false;
-            }
-
-            var permissions = user.Permissions;
-            var comparer = StringComparer.FromComparison(comparison);
-            if (permissions.Contains(permission, comparer))
-            {
-                return true;
-            }
-
-            return permissions
-                .Where(pattern => pattern.Contains('*'))
-                .Any(pattern => permission.MatchWildcard(pattern, comparison));
-        }
-
-        /// <summary>
-        /// Gets the first identity of the specified type from the current user.
-        /// </summary>
-        public TIdentity? GetIdentity<TIdentity>() where TIdentity : ClaimsIdentity
-        {
-            return user.Identities.OfType<TIdentity>().FirstOrDefault();
-        }
-
-        /// <summary>
-        /// Gets all identities of the specified type from the current user.
-        /// </summary>
-        public IReadOnlyList<TIdentity> GetIdentities<TIdentity>() where TIdentity : ClaimsIdentity
-        {
-            return user.Identities.OfType<TIdentity>().ToList().AsReadOnly();
-        }
     }
 }

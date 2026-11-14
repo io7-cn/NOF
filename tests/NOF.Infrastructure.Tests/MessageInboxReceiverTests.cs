@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NOF.Abstraction;
@@ -37,7 +38,7 @@ public sealed class MessageInboxReceiverTests
     {
         var id = Guid.NewGuid();
         var store = new Mock<IInboxStore>();
-        var error = new DbUpdateException("storage failure");
+        var error = new DataException("storage failure");
         store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<CancellationToken>())).ThrowsAsync(error);
         store.Setup(value => value.ExistsAsync(id, "subscription:audit", It.IsAny<CancellationToken>())).ReturnsAsync(exists);
         var services = new ServiceCollection().AddScoped(_ => store.Object);
@@ -50,8 +51,23 @@ public sealed class MessageInboxReceiverTests
         }
         else
         {
-            Assert.Same(error, await Assert.ThrowsAsync<DbUpdateException>(action));
+            Assert.Same(error, await Assert.ThrowsAsync<DataException>(action));
         }
         store.Verify(value => value.ExistsAsync(id, "subscription:audit", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnexpectedErrorsAndCancellation_AreNeverAcknowledgedAsDuplicates(bool cancelled)
+    {
+        var store = new Mock<IInboxStore>();
+        Exception error = cancelled ? new OperationCanceledException() : new InvalidOperationException("adapter bug");
+        store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<CancellationToken>())).ThrowsAsync(error);
+        store.Setup(value => value.ExistsAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        await using var provider = new ServiceCollection().AddScoped(_ => store.Object).BuildServiceProvider();
+        var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer(JsonSerializerOptions.CreateNOF()));
+        Assert.Same(error, await Record.ExceptionAsync(() => receiver.ReceiveAsync(Guid.NewGuid(), new byte[] { 1 }, "queue", null, default)));
+        store.Verify(value => value.ExistsAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

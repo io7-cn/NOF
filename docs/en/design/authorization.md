@@ -2,11 +2,14 @@
 
 [简体中文](../../zh-CN/design/authorization.md) · [Host composition](host-composition.md)
 
-NOF owns permission declarations, checking semantics and execution enforcement. Native authentication validates credentials and creates the trusted ClaimsPrincipal. NOF.Authorization provides the shared runtime without referencing Application, Domain or ASP.NET Core. Contract remains a dependency-free declarations/data package.
+NOF owns permission declarations, checking semantics and execution enforcement. Native authentication validates credentials and creates the trusted ClaimsPrincipal. NOF.Abstraction provides shared permission models, immutable policies, catalogs and default checking without referencing Contract, Application, Domain or ASP.NET Core. Contract references Abstraction only for these shared models and retains declaration attributes; Application owns AuthorizationPolicyResolver. UI references Abstraction directly and has no Contract or UseCase dependency. There is no standalone authorization package.
 
 ## Declare permissions only on Contract interfaces
 
 ```csharp
+using NOF.Abstraction;
+using NOF.Contract;
+
 [RequireAuthenticated]
 public interface IConfigService : IApplicationService
 {
@@ -74,3 +77,5 @@ UI and server use the same catalog/checking semantics, but may have different id
 SamplePermissions defines the shared catalog. IPermissionDemoService.GetOverview declares its Any group in Contract; PermissionDemoService has an ordinary handler. The HTTP adapter exposes `/api/permissions/overview`; native JWT tests cover 401, 403 and both allowed alternatives. `/permissions-demo` displays the catalog and uses AuthGuard directly by permission ID. Existing CRUD access rules remain unchanged. The sample does not mint business grants from OAuth scopes or invent a UI login flow.
 
 Replace bare/empty RequirePermission with RequireAuthenticated. Move former handler permissions to the appropriate Contract method and review the intended access policy. Remove MetadataAttribute and its string keys; custom metadata uses ordinary Attributes and purpose-specific consumers. SummaryAttribute now directly inherits Attribute; BCL Description/Category remain usable. Replace page permission Attributes with explicit UI checks and pass Policy to PermissionRouteView, or use native RouteView. No database schema change is required.
+
+Import NOF.Abstraction for permission models, policies, catalogs and checks, and NOF.Application for AuthorizationPolicyResolver. Replace any standalone authorization package reference with the owning existing package. The old ClaimsPrincipal.HasPermission path is removed; use IPermissionChecker so catalog validation and authentication semantics stay consistent.

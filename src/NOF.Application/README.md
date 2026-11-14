@@ -8,9 +8,9 @@ Contains the application service abstractions used to implement NOF applications
 
 This package does not define runtime outbound authentication directives.
 
-`AddNOFApplication()` registers the package-local application defaults, including expression-based mapping and the package-local Domain defaults.
+`AddNOFApplication()` registers the package-local application defaults, including expression-based mapping, permission checking and registries. Domain has no runtime registration.
 
-All consumers implement generated ApplicationService operations. The host binds stable queues/subscriptions to Empty-returning operation descriptors. Plain contracts need no partial modifier; descriptors are generated in a separate Contract class.
+All consumers implement generated ApplicationService operations. The host binds stable queues/subscriptions to Empty-returning operation descriptors. Plain contracts need no partial modifier; operation bases and descriptors are generated in Application.
 
 ## Application services
 
@@ -202,3 +202,9 @@ Apache-2.0
 FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Application owns the single complete operation descriptor. See [expected failures](../../docs/en/design/expected-failures.md).
 
 Execution models, descriptors and policy interpretation belong to this package. ServiceOperationDescriptor is the sole operation metadata model; input-only Reference and instance mapping/resolver fallbacks are removed; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).
+
+## Authorization and persistence boundaries
+
+AuthorizationPolicyResolver interprets Contract interface/method declarations into immutable Abstraction policies; shared checks/catalogs live in Abstraction. Handlers are never declaration sources and UI has no Application dependency.
+
+Application has no custom database exceptions. Providers report failed optimistic-lock saves with System.Data.DBConcurrencyException and data-save failures with System.Data.DataException, retaining native causes. Transaction failures and cancellation propagate unchanged. See [persistence boundaries](../../docs/en/design/persistence-boundaries.md) and [framework simplification](../../docs/en/design/framework-simplification.md), each with a Chinese edition.

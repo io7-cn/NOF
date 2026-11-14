@@ -78,20 +78,6 @@ public class NOFInfrastructureTests
     }
 
     [Fact]
-    public void AddHostedService_WithDelegate_ShouldRegisterDelegateBackgroundService()
-    {
-        var services = new ServiceCollection();
-
-        services.AddHostedService((_, _) => Task.CompletedTask);
-
-        var descriptor = Assert.Single(services, service => service.ServiceType == typeof(IHostedService));
-        Assert.NotNull(descriptor.ImplementationFactory);
-
-        using var provider = services.BuildServiceProvider();
-        Assert.IsType<DelegateBackgroundService>(provider.GetRequiredService<IEnumerable<IHostedService>>().Single());
-    }
-
-    [Fact]
     public void UseDbContext_WithTenantMode_ShouldSwitchTenantMode()
     {
         var builder = new TestServiceRegistrationContext();

@@ -18,7 +18,7 @@ public static partial class NOFInfrastructureExtensions
                 services.Configure(configureOptions);
             }
 
-            services.ReplaceOrAddScoped<IObjectStorageRider, FileSystemObjectStorageRider>();
+            services.Replace(ServiceDescriptor.Scoped<IObjectStorageRider, FileSystemObjectStorageRider>());
             return selector;
         }
 
@@ -27,8 +27,8 @@ public static partial class NOFInfrastructureExtensions
         {
             var services = selector.Services;
             services.TryAddSingleton<MemoryObjectStorageRiderState>();
-            services.ReplaceOrAddScoped<IObjectStorageRider>(sp => new MemoryObjectStorageRider(
-                sp.GetRequiredService<MemoryObjectStorageRiderState>()));
+            services.Replace(ServiceDescriptor.Scoped<IObjectStorageRider>(sp => new MemoryObjectStorageRider(
+                sp.GetRequiredService<MemoryObjectStorageRiderState>())));
             return selector;
         }
     }

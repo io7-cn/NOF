@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Application;
 using NOF.Infrastructure;
@@ -15,9 +16,9 @@ public static partial class NOFInfrastructureExtensions
             var services = selector.Services;
             ArgumentNullException.ThrowIfNull(connectionOptions);
 
-            services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionOptions));
+            services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionOptions)));
             services.AddNOFJson();
-            services.ReplaceOrAddSingleton<IBackplane, RedisBackplane>();
+            services.Replace(ServiceDescriptor.Singleton<IBackplane, RedisBackplane>());
             return selector;
         }
 
@@ -26,15 +27,15 @@ public static partial class NOFInfrastructureExtensions
             var services = selector.Services;
             if (configureConnectionOptions is not null)
             {
-                services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration, configureConnectionOptions));
+                services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration, configureConnectionOptions)));
             }
             else
             {
-                services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration));
+                services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration)));
             }
 
             services.AddNOFJson();
-            services.ReplaceOrAddSingleton<IBackplane, RedisBackplane>();
+            services.Replace(ServiceDescriptor.Singleton<IBackplane, RedisBackplane>());
             return selector;
         }
 
@@ -52,8 +53,8 @@ public static partial class NOFInfrastructureExtensions
                 services.Configure(configureCacheOptions);
             }
 
-            services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionOptions));
-            services.ReplaceOrAddScoped<ICacheServiceRider, RedisCacheServiceRider>();
+            services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionOptions)));
+            services.Replace(ServiceDescriptor.Scoped<ICacheServiceRider, RedisCacheServiceRider>());
             return selector;
         }
 
@@ -67,14 +68,14 @@ public static partial class NOFInfrastructureExtensions
 
             if (configureConnectionOptions is not null)
             {
-                services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration, configureConnectionOptions));
+                services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration, configureConnectionOptions)));
             }
             else
             {
-                services.ReplaceOrAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration));
+                services.Replace(ServiceDescriptor.Singleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configuration)));
             }
 
-            services.ReplaceOrAddScoped<ICacheServiceRider, RedisCacheServiceRider>();
+            services.Replace(ServiceDescriptor.Scoped<ICacheServiceRider, RedisCacheServiceRider>());
             return selector;
         }
     }

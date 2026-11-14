@@ -8,18 +8,16 @@
     <IsAotCompatible>true</IsAotCompatible>
 
     <PackageId>NOF.Hosting</PackageId>
-    <Description>Native host integration for NOF — application parts, deployment options, lazy services, and JWT identity primitives.</Description>
+    <Description>Native host integration for NOF — application parts, deployment options, and lazy services.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="NOF.Infrastructure" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
-    <ProjectReference Include="..\NOF.Contract\NOF.Contract.csproj" />
   </ItemGroup>
 
 

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using NOF.Application;
-using NOF.Authorization;
+using NOF.Abstraction;
 
 namespace NOF.Infrastructure;
 

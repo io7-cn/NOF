@@ -15,7 +15,6 @@
             "src/Infrastructures/NOF.Infrastructure.StackExchangeRedis/bin/Release/net11.0/NOF.Infrastructure.StackExchangeRedis.dll",
             "src/NOF.Abstraction/bin/Release/net11.0/NOF.Abstraction.dll",
             "src/NOF.Application/bin/Release/net11.0/NOF.Application.dll",
-            "src/NOF.Authorization/bin/Release/net11.0/NOF.Authorization.dll",
             "src/NOF.Contract/bin/Release/net11.0/NOF.Contract.dll",
             "src/NOF.Domain/bin/Release/net11.0/NOF.Domain.dll",
             "src/NOF.Hosting/bin/Release/net11.0/NOF.Hosting.dll",

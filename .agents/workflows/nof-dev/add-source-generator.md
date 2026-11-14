@@ -39,7 +39,6 @@ Keep the runtime package as the public NuGet boundary; generator projects are no
 - `NOF.Domain.SourceGenerator` -> `tests/NOF.Domain.Tests`
 - `NOF.Contract.SourceGenerator` -> `tests/NOF.Contract.Tests`
 - `NOF.Application.SourceGenerator` -> `tests/NOF.Application.Tests`
-- `NOF.Hosting.SourceGenerator` -> `tests/NOF.Hosting.Tests`
 - `NOF.Infrastructure.SourceGenerator` and the EF Core provider analyzers -> `tests/NOF.Infrastructure.Tests`
 
 Reuse `tests/Common/SourceGenerator/*`. Reference the generator project normally from the test project so tests can instantiate it.

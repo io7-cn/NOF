@@ -18,7 +18,7 @@ public sealed class PermissionDeclarationAnalyzerTests
     [InlineData("[AllowAnonymous, RequirePermission(\"read\")]", "NOF241")]
     public async Task InvalidDeclarations_ReportCompileTimeErrors(string attributes, string id)
     {
-        var diagnostics = await Analyze($"using NOF.Contract; {attributes} public interface IService;");
+        var diagnostics = await Analyze($"using NOF.Abstraction; using NOF.Contract; {attributes} public interface IService;");
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == id && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
@@ -26,7 +26,7 @@ public sealed class PermissionDeclarationAnalyzerTests
     public async Task ValidGroupsAndBranchLocalAnonymous_DoNotConflict()
     {
         var diagnostics = await Analyze("""
-            using NOF.Contract;
+            using NOF.Abstraction; using NOF.Contract;
             [RequirePermission("read")]
             public interface IService
             {
@@ -42,11 +42,11 @@ public sealed class PermissionDeclarationAnalyzerTests
     [Fact]
     public async Task ImplementationMethod_IsRejectedEvenWhenAttributeTargetAllowsMethods()
     {
-        var diagnostics = await Analyze("using NOF.Contract; public sealed class Handler { [RequireAuthenticated] public void Handle() {} }");
+        var diagnostics = await Analyze("using NOF.Abstraction; using NOF.Contract; public sealed class Handler { [RequireAuthenticated] public void Handle() {} }");
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF242");
     }
 
     private static Task<ImmutableArray<Diagnostic>> Analyze(string source)
-        => CSharpCompilation.CreateCompilation("Permissions", source, true, typeof(RequirePermissionAttribute))
+        => CSharpCompilation.CreateCompilation("Permissions", source, true, typeof(RequirePermissionAttribute), typeof(Abstraction.PermissionMatch))
             .WithAnalyzers([new PermissionDeclarationAnalyzer()]).GetAnalyzerDiagnosticsAsync();
 }

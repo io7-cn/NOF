@@ -1,8 +1,6 @@
-using NOF.Abstraction;
-using NOF.Contract;
 using System.Security.Claims;
 
-namespace NOF.Authorization;
+namespace NOF.Abstraction;
 
 /// <summary>Supplies grants for an authenticated identity in an explicit semantic context.</summary>
 public interface IPermissionGrantProvider
