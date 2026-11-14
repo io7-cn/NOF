@@ -1,68 +1,46 @@
 # NOF.Infrastructure.RabbitMQ
 
-RabbitMQ integration for the NOF Framework - transport adapters for NOF command/notification dispatch and a dedicated `IBackplane` implementation using the official RabbitMQ client.
+A thin adapter from existing RabbitMQ queues to NOF application operations, plus native connection access and an optional IBackplane implementation.
 
-## Installation
-
-```bash
-dotnet add package NOF.Infrastructure.RabbitMQ
-```
-
-## Usage
+## Queue consumers
 
 ```csharp
+using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure.RabbitMQ;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
-
 builder.Services.AddRabbitMQ(options =>
 {
     options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
     options.PrefetchCount = 8;
     options.RequeueOnConsumerFailure = true;
-});
-
-builder.Services.AddRabbitMQBackplane(options =>
+}, endpoints =>
 {
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
+    endpoints.MapQueue<MailService.Send>("mail.send.v1");
+    endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");
 });
 ```
 
-You can configure RabbitMQ either through `ConnectionString` or the individual `HostName`, `Port`, `UserName`, `Password`, and `VirtualHost` properties on `RabbitMQOptions`.
+MapQueue selects one Empty-returning operation without declared failures. The queue must already exist. NOF consumes it, durably accepts deliveries into Inbox, and acknowledges acceptance; the Inbox worker later executes the operation through the shared policies and transaction. Missing queues fail startup. Technical receipt-storage failures requeue by default. Payload validation and business execution failures follow the Inbox processing policy.
 
-Command exchanges, queues, and routing keys all use the command route name. Both producers and consumers declare this topology idempotently, so commands can wait in the durable queue while no consumer instance is running; multiple consumer instances compete on the same queue.
+Connection-only AddRabbitMQ(options) enables no consumers or Inbox workers. Memory endpoints are separate. Core Inbox resolves scoped keyed IInboxHandler entries using opaque queue receipt keys; it has no shared MessageBinding or topology registry.
 
-All command and notification publishes are mandatory. NOF declares two shared failure topologies in the current RabbitMQ virtual host:
+## Native topology and publishing
 
-- `nof.io-vii.com.unroutable.exchange` routes messages without a matching business queue to `nof.io-vii.com.unroutable.queue`.
-- `nof.io-vii.com.dead-letter.exchange` receives rejected, expired, length-limited, and delivery-limited messages from business queues in `nof.io-vii.com.dead-letter.queue`.
+Application infrastructure or broker provisioning owns ExchangeDeclareAsync, QueueDeclareAsync, QueueBindAsync, broker policies, DLX and replay. The operation adapter declares no topology and offers no MapSubscription, topic convention, forwarding exchange or original-route headers.
 
-Both shared exchanges are topic exchanges with a `#` binding. Messages include `nof-original-exchange` and `nof-original-routing-key` headers for operational replay. A message routed through the alternate exchange counts as a successful mandatory publish; if neither the business topology nor the alternate topology can route it, the publish fails and the NOF outbox retries it.
+RabbitMQConnectionManager.GetConnectionAsync returns the shared native connection (do not dispose it); CreateChannelAsync returns a caller-owned IChannel and accepts native CreateChannelOptions plus cancellation. Use BasicPublishAsync directly. For confirmed Outbox delivery, configure publisher confirmations/tracking natively, use mandatory publishing, and wrap dispatch in MessageDelivery.ExecuteAsync with the original OutboxDeliveryContext. Set native MessageId from that same ID. Exceptions must propagate to the Outbox retry policy. RabbitMQMessageClient and command/notification Riders are removed.
 
-The alternate-exchange and dead-letter-exchange names are fixed NOF topology invariants rather than application options. Existing exchanges and queues declared without these arguments must be drained and recreated during the upgrade because RabbitMQ does not permit redeclaration with different arguments.
+ConnectionString accepts AMQP URI or key/value form. Individual HostName, Port, UserName, Password and VirtualHost remain available. Publisher settings and topology durability/auto-delete flags are no longer duplicated in NOF options; native RabbitMQ calls specify them.
 
-When upgrading from a version that named command queues after handler types, drain and remove the old handler queue bindings before enabling the route-named queue. Keeping both bindings active causes RabbitMQ to route one command to both queues.
+## Optional backplane
 
-Consumer failures caused by transient infrastructure errors are requeued by default. Poison messages that cannot be routed by NOF, such as messages missing type metadata, are rejected without requeueing.
+AddRabbitMQBackplane configures the separate transient IBackplane capability. It owns dedicated nof.backplane.* fanout exchanges and exclusive auto-delete subscriber queues; it is independent of application queue-to-operation mapping and is not used by the sample's order workflow.
 
-The backplane implementation uses dedicated `nof.backplane.*` fanout exchanges and exclusive auto-delete queues per subscriber. It does not reuse the existing command or notification task distribution topology.
+See the [complete two-service sample and explicit migration](../../../docs/en/design/rabbitmq-sample.md) ([简体中文](../../../docs/zh-CN/design/rabbitmq-sample.md)). Upgrades must explicitly drain/move old subscription queues, migrate Inbox/order-state keys while preserving deduplication history, and reconcile old queue arguments. NOF never deletes or silently repairs broker or database state.
 
 ## Dependencies
 
-- [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)
-- [`RabbitMQ.Client`](https://www.nuget.org/packages/RabbitMQ.Client)
-
-Immediate messages use concrete MemoryMessageClient/RabbitMQMessageClient with explicit destinations. Generic IOutbox intents are interpreted by host-registered IOutboxHandler<T> adapters; AddRabbitMQ does not replace the memory client. Inbound Queue/Subscription bindings remain separate. See [transactional outbox](../../../docs/en/design/transactional-outbox.md).
-
-## Operation endpoints
-
-```csharp
-builder.Services.AddRabbitMQ(options => options.ConnectionString = connectionString, endpoints =>
-{
-    endpoints.MapQueue<MailService.Send>("mail.send.v1");
-    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "order-audit");
-});
-```
-
-The optional endpoint callback enables RabbitMQ consumers and durable Inbox processing. Client-only registration enables neither. These endpoints belong solely to RabbitMQ; Memory endpoints are configured separately with AddMemoryMessaging. There is no shared MessageBinding API. The common Inbox executes scoped keyed IInboxHandler entries and never interprets topology. Operations must return Empty without declared failures. See the [runnable sample and receipt-key migration](../../../docs/en/design/rabbitmq-sample.md).
+- [NOF.Infrastructure](https://www.nuget.org/packages/NOF.Infrastructure)
+- [RabbitMQ.Client](https://www.nuget.org/packages/RabbitMQ.Client)

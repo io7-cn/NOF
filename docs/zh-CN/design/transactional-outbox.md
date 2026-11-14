@@ -2,7 +2,7 @@
 
 [English](../../en/design/transactional-outbox.md) · [统一操作](unified-operations.md) · [持久化边界](persistence-boundaries.md)
 
-Application 通过 IOutbox 暂存可靠执行意图。即时调用直接使用具体 HTTP 客户端、SDK、MemoryMessageClient 或 RabbitMQMessageClient。基础设施定义每种意图如何处理，以及什么条件代表投递成功。移除 IMessageDispatcher、出站操作路由、ICommandRider/INotificationRider 接口，以及 Outbox 引擎中的 Command/Notification 分支。
+Application 通过 IOutbox 暂存可靠执行意图。即时调用直接使用具体 HTTP 客户端、SDK、MemoryMessageClient 或原生 RabbitMQ IChannel。基础设施定义每种意图如何处理，以及什么条件代表投递成功。移除 IMessageDispatcher、出站操作路由、ICommandRider/INotificationRider 接口，以及 Outbox 引擎中的 Command/Notification 分支。
 
 ## Application API
 
@@ -52,7 +52,7 @@ OutboxDeliveryContext 提供 MessageId、Context、Attempt、OrderKey、Sequence
 ```csharp
 // 即时等待传输接受，调用方明确指定实际队列/主题。
 await memoryClient.SendAsync("mail.send.v1", message, context, ct);
-await rabbitClient.PublishAsync("orders.created.v1", orderCreated, context, ct);
+await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, payload, ct);
 
 // Outbox 适配器通过此重载传递原始 ID 和顺序元数据。
 await memoryClient.SendAsync("mail.send.v1", message, deliveryContext, ct);
@@ -62,7 +62,7 @@ services.AddMemoryMessaging(endpoints =>
     endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-AddNOF 注册 MemoryMessageClient；AddRabbitMQ 额外注册 RabbitMQMessageClient，不再静默替换内存客户端，只有传入端点配置才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
+AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有传入端点配置才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
 
 示例 TransactionalMessages 暂存 SendEmail 和 OrderCreated；NOF.Sample.Messaging 适配器选择 RabbitMQ 和实际路由，独立 NOF.Sample.Notifications 服务把队列和两个 Topic 订阅绑定到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递客户端只修改基础设施，无需改变 Application 入队 API。
 
@@ -97,4 +97,4 @@ builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbo
 
 能力配置不会修改既有模型快照或执行删表。共享数据库的迁移宿主应保留该库完整的能力模型，不要为了关闭某个进程的 Worker 生成破坏性删表迁移；RunWorkers=false 保留模型及持久化进度。
 
-端点映射现由具体传输适配器负责。调整已有 Inbox 和顺序状态路由前，参见[适配器边界与回执键迁移](rabbitmq-sample.md#适配器边界与回执键迁移)。
+端点映射现由具体传输适配器负责。调整已有 Inbox 和顺序状态路由前，参见[适配器边界与回执键迁移](rabbitmq-sample.md#适配器边界与迁移)。

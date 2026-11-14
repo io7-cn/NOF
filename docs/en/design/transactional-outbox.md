@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/design/transactional-outbox.md) · [Unified operations](unified-operations.md) · [Persistence boundaries](persistence-boundaries.md)
 
-Application stages durable intents through IOutbox. Immediate calls use a concrete HTTP client, SDK, MemoryMessageClient or RabbitMQMessageClient. Infrastructure decides what each intent means and when delivery has succeeded. There is no IMessageDispatcher, outbound operation routing, ICommandRider/INotificationRider interface, or Command/Notification branch in the outbox engine.
+Application stages durable intents through IOutbox. Immediate calls use a concrete HTTP client, SDK, MemoryMessageClient or native RabbitMQ IChannel. Infrastructure decides what each intent means and when delivery has succeeded. There is no IMessageDispatcher, outbound operation routing, ICommandRider/INotificationRider interface, or Command/Notification branch in the outbox engine.
 
 ## Application API
 
@@ -52,7 +52,7 @@ A CLR message type and a stable (MessageType, SchemaVersion) pair each have exac
 ```csharp
 // Immediate transport acceptance; the caller names the actual queue/topic.
 await memoryClient.SendAsync("mail.send.v1", message, context, ct);
-await rabbitClient.PublishAsync("orders.created.v1", orderCreated, context, ct);
+await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, payload, ct);
 
 // An outbox adapter forwards stable ID and ordering metadata with this overload.
 await memoryClient.SendAsync("mail.send.v1", message, deliveryContext, ct);
@@ -62,7 +62,7 @@ services.AddMemoryMessaging(endpoints =>
     endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-MemoryMessageClient is registered by AddNOF; AddRabbitMQ additionally registers RabbitMQMessageClient without silently replacing the memory client. Only AddRabbitMQ with an endpoint callback enables inbound broker consumers. Adapter-owned queue/subscription endpoints still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
+MemoryMessageClient is registered by AddNOF; AddRabbitMQ provides native connection access and optional queue consumers. Only AddRabbitMQ with an endpoint callback enables inbound broker consumers. Adapter-owned queue/subscription endpoints still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
 
 The sample's TransactionalMessages stages SendEmail and OrderCreated. NOF.Sample.Messaging adapters choose RabbitMQ and physical destinations; a separate NOF.Sample.Notifications service explicitly binds the queue and two topic subscriptions to operations. See the [two-service routing sample](rabbitmq-sample.md). Changing the delivery client affects infrastructure without changing Application's enqueue API.
 
@@ -97,4 +97,4 @@ Custom IOutboxStore implementations remain usable without an ORM or transport un
 
 Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.
 
-Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-receipt-key-migration) before changing existing Inbox and order-state routes.
+Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-migration) before changing existing Inbox and order-state routes.

@@ -25,7 +25,7 @@ curl "$RECEIVER/api/messages/receipts?orderId=<generated-guid>"
 
 Poll the second endpoint until its `items` contains three receipts: mail (kind 0), order audit (kind 1), and order metrics (kind 2). Without `orderId`, it returns the latest 100 receipts. Invalid email returns 400 and stages no messages. The demo accepts anonymous, host-tenant requests; it simulates an order submission and mail processing without persisting an order aggregate or sending real email.
 
-Stop `sample-notifications` in the dashboard, submit another order, then restart it. After its durable subscriptions have been established at least once, RabbitMQ retains queued work while it is offline. Poll the receipts endpoint again to see processing resume. A completely new subscription cannot receive events published before its queue existed; the initial AppHost dependency prevents that race in this demo.
+Stop `sample-notifications` in the dashboard, submit another order, then restart it. After its native durable queue/exchange bindings have been established at least once, RabbitMQ retains queued work while it is offline. Poll the receipts endpoint again to see processing resume. A completely new queue cannot receive events published before it was bound; the initial AppHost dependency prevents that race in this demo.
 
 ## Where routing lives
 
@@ -47,14 +47,14 @@ builder.Services.AddOutbox(outbox =>
 });
 ```
 
-`NOF.Sample.Messaging/MessageOutboxHandlers.cs` chooses the RabbitMQ client and physical destination. These calls run in separate adapters:
+`NOF.Sample.Messaging/MessageOutboxHandlers.cs` chooses native exchange/routing-key pairs through the sample-owned RabbitMQDemoPublisher. These calls run in separate adapters:
 
 ```csharp
-await client.SendAsync(RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
-await client.PublishAsync(RabbitMQDemoRoutes.OrderCreatedTopic, message, deliveryContext, ct);
+await publisher.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
+await publisher.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext, ct);
 ```
 
-Forward the entire `OutboxDeliveryContext`: its overload preserves the original message ID, trace and ordering metadata across retries. Passing only its semantic `Context` would create a new delivery identity. Logical schema IDs are not queue names; changing a physical destination does not require changing Application's enqueue calls.
+The sample publisher uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. `MessageDelivery.ExecuteAsync(..., deliveryContext)` supplies the original Outbox ID, tenant/trace and ordering headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
 
 The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure routes to operations:
 
@@ -62,18 +62,26 @@ The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure 
 builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
     endpoints.MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue);
-    endpoints.MapSubscription<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderCreatedTopic, RabbitMQDemoRoutes.AuditSubscription);
-    endpoints.MapSubscription<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderCreatedTopic, RabbitMQDemoRoutes.MetricsSubscription);
+    endpoints.MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue);
+    endpoints.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
 });
 ```
 
 | Intent | Physical destination | Consumer operation |
 |---|---|---|
 | `SendEmail` | queue `sample.mail.v1` | `SendMail` |
-| `OrderCreated` | topic `sample.orders.created.v1`, subscription `sample-order-audit` | `RecordOrder` |
-| `OrderCreated` | same topic, subscription `sample-order-metrics` | `CountOrder` |
+| `OrderCreated` | queue `sample.order-audit.v1` | `RecordOrder` |
+| `OrderCreated` | queue `sample.order-metrics.v1` | `CountOrder` |
 
-A queue distributes commands among competing consumers; each independently named topic subscription receives its own event copy. Scaling a subscription with the same name adds competing workers, not another event recipient. The adapter declares direct/fanout exchanges and durable queues. Routing constants, bindings, broker configuration and clients stay in infrastructure; Contract declares payloads/operations and Application contains handlers plus a receipt port.
+A queue distributes deliveries among competing consumers. `RabbitMQDemoTopology` is application infrastructure, running as a native IHostedLifecycleService before consumers start. It declares the durable `sample.orders.v1` topic exchange and all three queues with RabbitMQ.Client, then binds both order queues with routing key `order.created`. The mail adapter publishes to the default exchange (`exchange: ""`) using the mail queue name as routing key. NOF knows none of these exchange relationships.
+
+```csharp
+await channel.ExchangeDeclareAsync(RabbitMQDemoRoutes.OrderEventsExchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
+await channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: ct);
+await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "order.created", cancellationToken: ct);
+```
+
+Each bound order queue receives its own copy. Scaling consumers of the same queue adds competing workers, not additional recipients. Contract/Application remain transport independent. Routing, topology, serialization and native publish properties stay in sample infrastructure.
 
 Both hosts call `AddRabbitMQ` with the `rabbitmq` connection string injected by Aspire. The receiver enables Inbox by configuring RabbitMQ endpoints. The producer has no consumers; it retains an inactive Inbox capability (`AddInbox`, `Inbox.RunWorkers=false`) solely to preserve its existing PostgreSQL migration model alongside Outbox. Receiver handlers stage projections through `INotificationReceipts`; they do not save independently. The Inbox worker commits those changes with its processed receipt in the same SQLite unit of work. Acknowledgement at the broker means durable Inbox acceptance, not completion of the business handler.
 
@@ -91,8 +99,10 @@ dotnet test sample-tests/NOF.Sample.Tests -c Release --filter FullyQualifiedName
 
 The test starts independent producer/receiver hosts and databases, exercises real RabbitMQ queue delivery and fanout, stops/restarts the receiver, and compares Inbox IDs with Outbox IDs. An explicitly configured but unavailable broker fails the test. CI runs it in a dedicated job with a disposable RabbitMQ service. PostgreSQL upgrade validation remains a separate deployment concern.
 
-## Adapter boundary and receipt-key migration
+## Adapter boundary and migration
 
-MessageBinding, MessageBindingRegistry and AddMessageBindings are removed. The RabbitMQ endpoint registry belongs to the RabbitMQ package; Memory has its own independent endpoint registry. The common Inbox has no queue/topic/subscription lookup. It resolves a scoped `IInboxHandler` through native keyed DI using the receipt's opaque Route, then processes it in the existing tenant scope and transaction. `OperationInboxHandler` invokes the selected operation through the shared authorization/filter boundary. Custom adapters can register their own handler without any service operation or topology registry.
+MessageBinding, MessageBindingRegistry and AddMessageBindings are removed. RabbitMQ exposes only MapQueue<Operation>: no topic/subscription DSL, automatic exchange/queue/binding declaration, alternate/dead-letter forwarding convention or original-route replay headers. RabbitMQMessageClient and command/notification Riders are removed; use native channels. Publisher confirmations are native CreateChannelOptions, not duplicate NOF options. A missing queue fails startup. An unroutable mandatory publish fails the delivery attempt. Broker policies, retries through DLX, exchange bindings and replay are application/operator responsibilities.
 
-New Inbox keys include the transport: `rabbitmq:queue:<queue>`, `rabbitmq:subscription:<subscription>`, and corresponding `memory:` keys. Physical broker queue/exchange names and Outbox schema IDs remain unchanged. Before upgrading, stop and drain old consumers and Inbox work, back up Inbox and order-state data, and preserve deduplication history. Existing `queue:`/`subscription:` receipts and order-state routes require an explicit mapping to the chosen transport, updating both Inbox.Route and InboxOrderState.Route together while offline. Retain message IDs, ordering state and completed history; resolve conflicts and competing-consumer deployments before resuming. There is no automatic remapping, deletion or table migration in this change. Replaying previously processed messages without their mapped history can repeat business effects.
+The common Inbox still resolves scoped IInboxHandler entries through native keyed DI using opaque receipt Route values. It persists/deduplicates and executes in the existing tenant scope and transaction; it never interprets topology. RabbitMQ queue keys are `rabbitmq:queue:<queue>`; Memory has its own independent endpoints and keys. Native GUID MessageId is preferred, with the NOF envelope header as fallback.
+
+Before upgrading, stop/drain old consumers and Inbox work and back up data. Map old `queue:`/`subscription:` (including the previous `rabbitmq:subscription:`) receipt keys to the selected queue key, updating Inbox.Route and InboxOrderState.Route together. Retain IDs, completed deduplication history and stream progress. Drain or explicitly move deliveries from old subscription queues to the new order queues before retiring topology. Old queues may carry NOF-installed dead-letter arguments: compare declarations and intentionally retain/recreate them through native RabbitMQ setup while offline. NOF performs no automatic remapping, deletion, replay or topology repair. Outbox schemas stay v1; old payloads are not reinterpreted.

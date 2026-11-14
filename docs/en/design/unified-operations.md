@@ -36,12 +36,12 @@ builder.AddApplicationService<MailService>();
 builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
     endpoints.MapQueue<MailService.Send>("mail.send.v1");
-    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "orders-audit");
-    endpoints.MapSubscription<OrderProjection.Apply>("orders.created.v1", "orders-projection");
+    endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");
+    endpoints.MapQueue<OrderProjection.Apply>("orders.projection.v1");
 });
 ```
 
-RabbitMQ and Memory adapters expose their own MapQueue/MapSubscription APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
+RabbitMQ maps existing queues only, while Memory owns its independent endpoint API. Exchange topology and publishing use native RabbitMQ APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key, ordered stream progress and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
 
 ## Calls and durable intents
 
@@ -101,3 +101,5 @@ The EF Core adapter applies field access only to relationships explicitly mapped
 [Application-owned failure results and descriptor migration](expected-failures.md).
 
 [Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
+
+RabbitMQ maps operations only to existing queues; see the [native topology sample](rabbitmq-sample.md).

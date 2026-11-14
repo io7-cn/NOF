@@ -36,12 +36,12 @@ builder.AddApplicationService<MailService>();
 builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
     endpoints.MapQueue<MailService.Send>("mail.send.v1");
-    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "orders-audit");
-    endpoints.MapSubscription<OrderProjection.Apply>("orders.created.v1", "orders-projection");
+    endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");
+    endpoints.MapQueue<OrderProjection.Apply>("orders.projection.v1");
 });
 ```
 
-RabbitMQ 和 Memory 适配器各自提供 MapQueue/MapSubscription；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
+RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；Memory 使用独立端点 API；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键、顺序进度和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
 
 ## 调用与可靠意图
 
@@ -101,3 +101,5 @@ EF Core 在应用完成关系配置后，仅为已明确声明的 OwnsMany 自�
 [Application 结果归属及描述符迁移](expected-failures.md)。
 
 [当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。
+
+RabbitMQ 仅将操作映射到已有队列，参见[原生拓扑示例](rabbitmq-sample.md)。

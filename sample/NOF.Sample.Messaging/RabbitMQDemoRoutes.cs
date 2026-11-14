@@ -1,10 +1,11 @@
 namespace NOF.Sample.Messaging;
 
-/// <summary>Physical routes agreed by the infrastructure adapters of these two sample hosts.</summary>
+/// <summary>Application-owned physical RabbitMQ names; NOF has no topic/subscription convention.</summary>
 public static class RabbitMQDemoRoutes
 {
     public const string MailQueue = "sample.mail.v1";
-    public const string OrderCreatedTopic = "sample.orders.created.v1";
-    public const string AuditSubscription = "sample-order-audit";
-    public const string MetricsSubscription = "sample-order-metrics";
+    public const string OrderAuditQueue = "sample.order-audit.v1";
+    public const string OrderMetricsQueue = "sample.order-metrics.v1";
+    public const string OrderEventsExchange = "sample.orders.v1";
+    public const string OrderCreatedRoutingKey = "order.created";
 }

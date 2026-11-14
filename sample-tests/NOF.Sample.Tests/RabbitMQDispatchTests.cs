@@ -4,16 +4,19 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
+using NOF.Infrastructure.RabbitMQ;
 using NOF.Sample.Application;
 using NOF.Sample.Endpoints;
 using NOF.Sample.Messaging;
 using NOF.Sample.Notifications;
 using NOF.Sample.Notifications.Persistence;
+using RabbitMQ.Client.Exceptions;
 using System.Net;
 using System.Net.Http.Json;
 using Xunit;
@@ -79,6 +82,33 @@ public sealed class RabbitMQDispatchTests
         Assert.Equal(ids.Order(), receivedIds.Order()); // The outbox identity is preserved, including fanout copies.
     }
 
+    [RabbitMQSampleFact]
+    public async Task QueueOnlyAdapter_DoesNotCreateAMissingQueue()
+    {
+        var connection = Environment.GetEnvironmentVariable("NOF_SAMPLE_RABBITMQ")!;
+        var queue = "sample.missing." + Guid.NewGuid().ToString("N");
+        await using var consumer = CreateConsumer(connection, MemoryDatabase(), queue);
+        var error = await Assert.ThrowsAsync<OperationInterruptedException>(() => consumer.StartAsync());
+        Assert.Equal<ushort?>(404, error.ShutdownReason?.ReplyCode);
+        await using var channel = await consumer.Services.GetRequiredService<RabbitMQConnectionManager>().CreateChannelAsync();
+        var missing = await Assert.ThrowsAsync<OperationInterruptedException>(() => channel.QueueDeclarePassiveAsync(queue));
+        Assert.Equal<ushort?>(404, missing.ShutdownReason?.ReplyCode);
+    }
+
+    [RabbitMQSampleFact]
+    public async Task NativeMandatoryPublish_RejectsUnroutableMessages()
+    {
+        var connection = Environment.GetEnvironmentVariable("NOF_SAMPLE_RABBITMQ")!;
+        await using var producer = CreateProducer(connection, MemoryDatabase());
+        await producer.StartAsync();
+        using var scope = producer.Services.CreateScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<RabbitMQDemoPublisher>();
+        var context = new OutboxDeliveryContext { MessageId = Guid.NewGuid(), Context = Context.Empty, Attempt = 1 };
+        var error = await Assert.ThrowsAsync<PublishException>(() => publisher.PublishAsync(string.Empty,
+            "sample.unroutable." + Guid.NewGuid().ToString("N"), new SendEmail("demo@example.test", "Test", "Test"), context, default).AsTask());
+        Assert.True(error.IsReturn);
+    }
+
     private static WebApplicationBuilder Builder()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production }).AddNOF();
@@ -97,6 +127,7 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
+        builder.Services.AddScoped<RabbitMQDemoPublisher>();
         builder.Services.AddOutbox(outbox =>
         {
             outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
@@ -110,13 +141,22 @@ public sealed class RabbitMQDispatchTests
         return app;
     }
 
-    private static WebApplication CreateConsumer(string connection, string database)
+    private static WebApplication CreateConsumer(string connection, string database, string? missingQueue = null)
     {
         var builder = Builder();
         builder.AddApplicationPart(typeof(ConsumerService).Assembly);
         builder.AddApplicationService<ConsumerService>();
         builder.Services.AddScoped<NOF.Sample.Notifications.Application.INotificationReceipts, NotificationReceipts>();
-        builder.Services.AddRabbitMQ(options => options.ConnectionString = connection, NotificationMessaging.Configure);
+        if (missingQueue is null)
+        {
+            builder.Services.AddHostedService<RabbitMQDemoTopology>();
+            builder.Services.AddRabbitMQ(options => options.ConnectionString = connection, NotificationMessaging.Configure);
+        }
+        else
+        {
+            builder.Services.AddRabbitMQ(options => options.ConnectionString = connection,
+                endpoints => endpoints.MapQueue<ConsumerService.SendMail>(missingQueue));
+        }
         builder.UseDbContext<NotificationsDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
         var app = builder.Build();
         app.UseNOF();
@@ -156,8 +196,8 @@ public sealed class RabbitMQDispatchTests
         Assert.Equal(expectedIds, records.Select(item => item.Id).Distinct().Count());
         Assert.All(records, record => Assert.Equal(InboxMessageStatus.Processed, record.Status));
         Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.MailQueue);
-        Assert.Contains(records, record => record.Route == "rabbitmq:subscription:" + RabbitMQDemoRoutes.AuditSubscription);
-        Assert.Contains(records, record => record.Route == "rabbitmq:subscription:" + RabbitMQDemoRoutes.MetricsSubscription);
+        Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.OrderAuditQueue);
+        Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.OrderMetricsQueue);
     }
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)

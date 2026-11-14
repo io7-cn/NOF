@@ -126,7 +126,7 @@ await foreach (var item in events.WithCancellation(cancellationToken))
 
 HTTP endpoint modules in `NOF.Hosting.AspNetCore` use native ASP.NET Core server-sent events. HTTP route declarations stay outside Contract; `IRpcResponse` has been removed. See the [complete configuration REST example](docs/en/design/configuration-rest.md) ([简体中文](docs/zh-CN/design/configuration-rest.md)).
 
-The [RabbitMQ sample](docs/en/design/rabbitmq-sample.md) ([简体中文](docs/zh-CN/design/rabbitmq-sample.md)) runs two NOF services through Aspire: infrastructure adapters route commands to a queue and events to independent subscriptions, with durable Inbox receipts available over HTTP.
+The [RabbitMQ sample](docs/en/design/rabbitmq-sample.md) ([简体中文](docs/zh-CN/design/rabbitmq-sample.md)) runs two NOF services through Aspire: infrastructure adapters publish through native RabbitMQ exchanges and bind existing queues to operations, with durable Inbox receipts available over HTTP.
 
 ## Architecture
 

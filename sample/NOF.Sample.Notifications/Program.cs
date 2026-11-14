@@ -3,6 +3,7 @@ using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
+using NOF.Sample.Messaging;
 using NOF.Sample.Notifications;
 using NOF.Sample.Notifications.Application;
 using NOF.Sample.Notifications.Persistence;
@@ -12,6 +13,7 @@ builder.AddApplicationPart(typeof(MessageDemoService).Assembly);
 builder.AddApplicationService<MessageDemoService>();
 builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(500));
+builder.Services.AddHostedService<RabbitMQDemoTopology>();
 builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq")
     ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."), NotificationMessaging.Configure);
 // The NOF SQLite factory initializes the fresh demo schema on first use. It persists receipts across restarts.

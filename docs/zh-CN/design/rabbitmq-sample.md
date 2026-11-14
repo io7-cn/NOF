@@ -25,7 +25,7 @@ curl "$RECEIVER/api/messages/receipts?orderId=<generated-guid>"
 
 轮询第二个端点，直到 `items` 出现三条回执：邮件（kind 0）、订单审计（kind 1）、订单统计（kind 2）。不传 `orderId` 返回最近 100 条。无效邮件地址返回 400，不暂存消息。此演示允许匿名、宿主租户请求；它模拟提交订单和邮件处理，不保存订单聚合，也不会真正发邮件。
 
-在 Dashboard 中停止 `sample-notifications`，再次提交，再重启接收服务，查询回执即可观察补收。持久订阅至少建立一次后，离线期间的消息会保留在 RabbitMQ。全新订阅无法收到其队列创建前发布的事件，因此 AppHost 首次启动时先等待接收服务，避免这类竞态。
+在 Dashboard 中停止 `sample-notifications`，再次提交，再重启接收服务，查询回执即可观察补收。原生持久队列与 Exchange 绑定至少建立一次后，离线期间的消息会保留在 RabbitMQ。全新队列无法收到其绑定建立前发布的事件，因此 AppHost 首次启动时先等待接收服务，避免这类竞态。
 
 ## 基础设施层手动路由
 
@@ -47,14 +47,14 @@ builder.Services.AddOutbox(outbox =>
 });
 ```
 
-`NOF.Sample.Messaging/MessageOutboxHandlers.cs` 中的两个适配器分别选择 RabbitMQ 客户端和物理目的地：
+`NOF.Sample.Messaging/MessageOutboxHandlers.cs` 明确选择 Exchange 和 routing key，通过示例自己的 RabbitMQDemoPublisher 调用原生发送：
 
 ```csharp
-await client.SendAsync(RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
-await client.PublishAsync(RabbitMQDemoRoutes.OrderCreatedTopic, message, deliveryContext, ct);
+await publisher.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext, ct);
+await publisher.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext, ct);
 ```
 
-这里必须转发完整的 `OutboxDeliveryContext`，以便重试时保留原始消息 ID、追踪和顺序元数据。只转发其语义 `Context` 会创建新的投递 ID。逻辑消息 Schema 与物理队列名各自独立，调整物理目的地无需修改 Application 的入队调用。
+示例发送器使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。`MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和顺序 Header，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
 
 接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
 
@@ -62,18 +62,26 @@ await client.PublishAsync(RabbitMQDemoRoutes.OrderCreatedTopic, message, deliver
 builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
 {
     endpoints.MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue);
-    endpoints.MapSubscription<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderCreatedTopic, RabbitMQDemoRoutes.AuditSubscription);
-    endpoints.MapSubscription<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderCreatedTopic, RabbitMQDemoRoutes.MetricsSubscription);
+    endpoints.MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue);
+    endpoints.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
 });
 ```
 
 | 意图 | 物理目的地 | 消费操作 |
 |---|---|---|
 | `SendEmail` | 队列 `sample.mail.v1` | `SendMail` |
-| `OrderCreated` | Topic `sample.orders.created.v1`，订阅 `sample-order-audit` | `RecordOrder` |
-| `OrderCreated` | 同一 Topic，订阅 `sample-order-metrics` | `CountOrder` |
+| `OrderCreated` | 队列 `sample.order-audit.v1` | `RecordOrder` |
+| `OrderCreated` | 队列 `sample.order-metrics.v1` | `CountOrder` |
 
-队列让多个消费者竞争处理命令；同一 Topic 的不同命名订阅各获得一份事件。使用相同订阅名扩容时是竞争处理，不会增加事件副本。适配器负责声明 direct/fanout exchange 与持久队列。路由常量、绑定、Broker 配置、客户端都在基础设施层；Contract 只声明负载和操作，Application 只实现处理器和回执读写端口。
+队列中的多个消费者竞争处理。示例自己的 `RabbitMQDemoTopology` 实现原生 IHostedLifecycleService，在消费者启动前用 RabbitMQ.Client 声明持久的 `sample.orders.v1` Topic Exchange 和三个队列，再以 `order.created` 为 routing key 将两个订单队列绑定到 Exchange。邮件通过默认 Exchange（`exchange: ""`）发布，以邮件队列名作为 routing key。NOF 不解释这些拓扑关系。
+
+```csharp
+await channel.ExchangeDeclareAsync(RabbitMQDemoRoutes.OrderEventsExchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
+await channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: ct);
+await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "order.created", cancellationToken: ct);
+```
+
+两个绑定的订单队列各收到一份消息；扩容同一队列的消费者只会竞争处理。Contract/Application 仍保持传输无关，路由、拓扑、序列化和原生发布属性都属于示例基础设施。
 
 两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者通过配置 RabbitMQ 端点开启 Inbox。生产者不配置消费者；它在 Outbox 之外保留停用的 Inbox 能力（`AddInbox` 加 `Inbox.RunWorkers=false`），仅用于保持已有 PostgreSQL 迁移模型一致。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
 
@@ -91,8 +99,10 @@ dotnet test sample-tests/NOF.Sample.Tests -c Release --filter FullyQualifiedName
 
 测试使用独立生产/接收宿主与数据库，验证真实 RabbitMQ 队列、事件分发、接收端离线与重启补收，并比对 Inbox 与 Outbox ID。显式配置的 Broker 不可用时测试失败。CI 在独立 Job 中提供临时 RabbitMQ 执行验证。真实 PostgreSQL 升级仍属于单独部署验证。
 
-## 适配器边界与回执键迁移
+## 适配器边界与迁移
 
-删除 MessageBinding、MessageBindingRegistry 和 AddMessageBindings。RabbitMQ 的端点注册表属于 RabbitMQ 包，Memory 有独立端点注册表。通用 Inbox 不查找队列、Topic 或订阅，只把回执 Route 当作不透明标识，通过原生 keyed DI 解析 scoped `IInboxHandler`，在现有租户作用域和事务中处理。`OperationInboxHandler` 经统一授权和 Filter 边界调用已选定操作。自定义适配器可以直接注册处理器，无需操作或拓扑注册表。
+删除 MessageBinding、MessageBindingRegistry 和 AddMessageBindings。RabbitMQ 只提供 MapQueue<Operation>：没有 Topic/Subscription DSL，不自动声明 Exchange、队列或绑定，也不安装统一的 Alternate/Dead-letter 转发拓扑或原始路由重放 Header。RabbitMQMessageClient 和命令/通知 Rider 均移除，发送直接使用原生 Channel；publisher confirms 直接使用 CreateChannelOptions，不再重复提供 NOF 配置。队列不存在则启动失败，mandatory 消息无法路由则投递失败；Broker Policy、DLX 重试、Exchange 绑定及重放由应用或运维负责。
 
-新 Inbox 键包含传输：`rabbitmq:queue:<queue>`、`rabbitmq:subscription:<subscription>`，内存端使用对应 `memory:` 前缀。Broker 物理队列/Exchange 名和 Outbox Schema 标识不变。升级前停止并排空旧消费者和 Inbox 工作，备份 Inbox 与顺序状态，保留去重历史。旧 `queue:`/`subscription:` 回执和顺序状态的路由需要显式映射到选定传输，在停机期间同步更新 Inbox.Route 和 InboxOrderState.Route。保留消息 ID、顺序进度和已完成历史，先处理键冲突及竞争消费者部署再恢复。本次不自动重映射、删数据或执行表迁移；缺少映射后的历史直接重放已处理消息，可能重复业务副作用。
+通用 Inbox 仍把 Route 当作不透明键，通过原生 keyed DI 解析 scoped IInboxHandler，在现有租户作用域和事务内持久化、去重和执行，不理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
+
+升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，同步修改 Inbox.Route 与 InboxOrderState.Route，保留 ID、已完成去重历史和顺序进度。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。

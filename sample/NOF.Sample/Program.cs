@@ -20,6 +20,7 @@ var sampleIssuer = $"{sampleOrigin}/oauth2";
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
+builder.Services.AddScoped<RabbitMQDemoPublisher>();
 builder.Services.AddOutbox(outbox =>
 {
     outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);

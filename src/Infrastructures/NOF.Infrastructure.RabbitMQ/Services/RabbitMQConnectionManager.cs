@@ -24,7 +24,8 @@ public class RabbitMQConnectionManager : IDisposable, IAsyncDisposable
         };
     }
 
-    internal async Task<IConnection> GetConnectionAsync()
+    /// <summary>Gets the shared native connection; callers must not dispose it.</summary>
+    public async Task<IConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
     {
         if (_disposed)
         {
@@ -36,7 +37,7 @@ public class RabbitMQConnectionManager : IDisposable, IAsyncDisposable
             return _connection;
         }
 
-        await _connectionSemaphore.WaitAsync();
+        await _connectionSemaphore.WaitAsync(cancellationToken);
         try
         {
             if (_connection != null && _connection.IsOpen)
@@ -45,7 +46,7 @@ public class RabbitMQConnectionManager : IDisposable, IAsyncDisposable
             }
 
             _connection?.Dispose();
-            _connection = await _connectionFactory.CreateConnectionAsync();
+            _connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
             return _connection;
         }
         finally
@@ -54,19 +55,11 @@ public class RabbitMQConnectionManager : IDisposable, IAsyncDisposable
         }
     }
 
-    internal async Task<IChannel> CreateChannelAsync()
+    /// <summary>Creates a caller-owned native channel with the supplied RabbitMQ channel options.</summary>
+    public async Task<IChannel> CreateChannelAsync(CreateChannelOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var connection = await GetConnectionAsync();
-        return await connection.CreateChannelAsync();
-    }
-
-    internal async Task<IChannel> CreatePublisherChannelAsync()
-    {
-        var connection = await GetConnectionAsync();
-        var options = new CreateChannelOptions(
-            publisherConfirmationsEnabled: _options.PublisherConfirmationsEnabled,
-            publisherConfirmationTrackingEnabled: _options.PublisherConfirmationTrackingEnabled);
-        return await connection.CreateChannelAsync(options);
+        var connection = await GetConnectionAsync(cancellationToken);
+        return await connection.CreateChannelAsync(options, cancellationToken);
     }
 
     public void Dispose()

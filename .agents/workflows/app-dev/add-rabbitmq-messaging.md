@@ -25,7 +25,7 @@ builder.Services.AddRabbitMQ(options =>
 builder.Services.AddRabbitMQ(options => options.ConnectionString = connectionString, endpoints =>
 {
     endpoints.MapQueue<MailService.Send>("mail.send.v1");
-    endpoints.MapSubscription<OrderAudit.Record>("orders.created.v1", "order-audit");
+    endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");
 });
 ```
 
@@ -43,18 +43,17 @@ The callback enables Inbox and RabbitMQ consumers. It does not replace MemoryMes
 }
 ```
 
-The options also expose durability, auto-delete, prefetch, requeue, and publisher-confirmation settings.
+Connection options also expose consumer prefetch and requeue behavior. Topology belongs to native RabbitMQ setup, and publisher confirms use native CreateChannelOptions.
 
 ## 4. Use the Concrete Client or Generic Outbox
 
 ```csharp
-await rabbitClient.SendAsync("mail.send.v1", command, context, cancellationToken);
-await rabbitClient.PublishAsync("orders.created.v1", notification, context, cancellationToken);
+await channel.BasicPublishAsync(exchange, routingKey, mandatory: true, properties, payload, cancellationToken);
 await outbox.EnqueueAsync(notification, context, cancellationToken: cancellationToken);
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-The host registers AddOutbox stable schemas and IOutboxHandler<T> adapters using RabbitMQMessageClient. Use its OutboxDeliveryContext overload to retain message ID and ordering. Inbound RabbitMQ endpoints are adapter-owned and independent from Memory endpoints. See docs/en/design/transactional-outbox.md.
+The host registers AddOutbox stable schemas and IOutboxHandler<T> adapters using native IChannel.BasicPublishAsync. Wrap dispatch with MessageDelivery.ExecuteAsync(..., deliveryContext) to preserve message ID and ordering; configure publisher confirms through native CreateChannelOptions. Inbound RabbitMQ endpoints are adapter-owned and independent from Memory endpoints. See docs/en/design/transactional-outbox.md.
 
 ## 5. Optional RabbitMQ Backplane
 

@@ -4,33 +4,25 @@ using NOF.Contract;
 
 namespace NOF.Infrastructure.RabbitMQ;
 
-/// <summary>One RabbitMQ adapter endpoint targeting an Empty operation.</summary>
-public sealed record RabbitMQEndpoint(string Route, string ConsumerId, string QueueName, Type MessageType,
-    ServiceOperationDescriptor Operation, bool IsSubscription);
+/// <summary>Maps one existing RabbitMQ queue to an application operation.</summary>
+public sealed record RabbitMQEndpoint(string QueueName, string ConsumerId, ServiceOperationDescriptor Operation);
 
-/// <summary>Owns only RabbitMQ endpoint topology; entries freeze on first use.</summary>
+/// <summary>Owns RabbitMQ queue consumers only; exchange topology belongs to the application.</summary>
 public sealed class RabbitMQEndpointRegistry : Registry<RabbitMQEndpoint>
 {
-    /// <summary>Gets validated, frozen durable bindings.</summary>
+    /// <summary>Gets validated queue endpoints, frozen on first use.</summary>
     public IReadOnlyList<RabbitMQEndpoint> Endpoints
     {
         get
         {
-            var bindings = Freeze().ToArray();
-            if (bindings.Any(queue => !queue.IsSubscription && bindings.Any(subscription => subscription.IsSubscription && subscription.Route == queue.Route))
-                || bindings.GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Select(binding => binding.MessageType).Distinct().Count() != 1)
-                || bindings.Any(binding => !ServiceOperationInspector.CanSubmit(binding.Operation) || binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
-                || bindings.GroupBy(binding => binding.ConsumerId, StringComparer.Ordinal).Any(group => group.Count() != 1)
-                || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Count() != 1))
+            var endpoints = Freeze().ToArray();
+            if (endpoints.GroupBy(endpoint => endpoint.QueueName, StringComparer.Ordinal).Any(group => group.Count() != 1)
+                || endpoints.GroupBy(endpoint => endpoint.ConsumerId, StringComparer.Ordinal).Any(group => group.Count() != 1)
+                || endpoints.Any(endpoint => endpoint.Operation.ResponseType != typeof(Empty) || !ServiceOperationInspector.CanSubmit(endpoint.Operation)))
             {
-                throw new InvalidOperationException("Queue, subscription and target bindings must have unambiguous stable identities.");
+                throw new InvalidOperationException("Each RabbitMQ queue must select exactly one Empty operation without declared failures.");
             }
-            return bindings;
+            return endpoints;
         }
     }
-
-    /// <summary>Resolves one durable consumer independently of its current implementation type.</summary>
-    public RabbitMQEndpoint GetConsumer(string consumerId)
-        => Endpoints.SingleOrDefault(binding => binding.ConsumerId == consumerId)
-            ?? throw new InvalidOperationException($"No message binding for '{consumerId}'. Drain or migrate old inbox records before upgrading.");
 }

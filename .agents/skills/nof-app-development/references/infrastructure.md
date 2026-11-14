@@ -97,9 +97,9 @@ builder.Services.AddRabbitMQ(options =>
 });
 ```
 
-This registers the concrete RabbitMQMessageClient alongside MemoryMessageClient. Pass an optional second callback to configure RabbitMQ-owned MapQueue<Operation>/MapSubscription<Operation> endpoints and enable the inbound consumer hosted service plus Inbox. Outbox adapters explicitly choose their client; no default transport interface is replaced. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
+This registers native RabbitMQConnectionManager access alongside MemoryMessageClient. Pass an optional second callback to configure RabbitMQ-owned MapQueue<Operation> endpoints and enable the inbound consumer hosted service plus Inbox. Outbox adapters explicitly choose their client; no default transport interface is replaced. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
 
-See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition) for the runnable two-service Aspire sample: infrastructure Outbox adapters pass the full OutboxDeliveryContext to RabbitMQMessageClient.SendAsync/PublishAsync, and the receiving host uses AddRabbitMQ(options, endpoints) to map operations to a queue and independent subscriptions; Memory endpoints are separate. Application depends only on IOutbox and owned receipt ports.
+See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition) for the runnable two-service Aspire sample: infrastructure Outbox adapters use MessageDelivery.ExecuteAsync with the full OutboxDeliveryContext around native BasicPublishAsync, and the receiving host uses AddRabbitMQ(options, endpoints) to map operations to existing queues; sample infrastructure declares exchange bindings natively; Memory endpoints are separate. Application depends only on IOutbox and owned receipt ports.
 
 ## OAuth/OIDC Authority
 

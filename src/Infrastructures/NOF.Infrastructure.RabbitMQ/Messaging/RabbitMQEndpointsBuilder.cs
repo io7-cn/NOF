@@ -5,34 +5,21 @@ using NOF.Infrastructure;
 
 namespace NOF.Infrastructure.RabbitMQ;
 
-/// <summary>Maps operations to RabbitMQ-owned queue and subscription endpoints.</summary>
+/// <summary>Maps operations to RabbitMQ-owned existing queues.</summary>
 public sealed class RabbitMQEndpointsBuilder(IServiceCollection services, RabbitMQEndpointRegistry registry)
 {
     /// <summary>Maps a statically selected operation to a competing-consumer queue.</summary>
     public void MapQueue<TOperation>(string queue) where TOperation : IServiceOperationDefinition
-        => Add(queue, "rabbitmq:queue:" + queue, TOperation.Descriptor, false, queue);
+        => Add(queue, TOperation.Descriptor);
 
     /// <summary>Maps an explicitly typed Empty operation to a queue.</summary>
     public void MapQueue<T>(string queue, ServiceOperationDescriptor<T, Empty> operation)
-        => Add(queue, "rabbitmq:queue:" + queue, operation, false, queue);
+        => Add(queue, operation);
 
-    /// <summary>Maps a statically selected operation to an independent durable topic subscription.</summary>
-    public void MapSubscription<TOperation>(string topic, string subscription) where TOperation : IServiceOperationDefinition
-        => AddSubscription(topic, subscription, TOperation.Descriptor);
-
-    /// <summary>Maps an explicitly typed Empty operation to a topic subscription.</summary>
-    public void MapSubscription<T>(string topic, string subscription, ServiceOperationDescriptor<T, Empty> operation)
-        => AddSubscription(topic, subscription, operation);
-
-    private void AddSubscription(string topic, string subscription, ServiceOperationDescriptor operation)
+    private void Add(string queueName, ServiceOperationDescriptor operation)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(subscription);
-        Add(topic, "rabbitmq:subscription:" + subscription, operation, true, "subscription:" + subscription);
-    }
-
-    private void Add(string route, string consumerId, ServiceOperationDescriptor operation, bool subscription, string queueName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+        ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
+        var consumerId = "rabbitmq:queue:" + queueName;
         ArgumentNullException.ThrowIfNull(operation);
         if (operation.ResponseType != typeof(Empty) || !ServiceOperationInspector.CanSubmit(operation))
         {
@@ -42,7 +29,7 @@ public sealed class RabbitMQEndpointsBuilder(IServiceCollection services, Rabbit
         {
             throw new InvalidOperationException($"Inbox endpoint '{consumerId}' has already been mapped.");
         }
-        registry.Add(new(route, consumerId, queueName, operation.RequestType, operation, subscription));
+        registry.Add(new(queueName, consumerId, operation));
         services.AddKeyedScoped<IInboxHandler>(consumerId, (provider, _) => new OperationInboxHandler(operation,
             provider.GetRequiredService<IObjectSerializer>(), provider.GetRequiredService<IOperationExecutor>()));
     }

@@ -24,7 +24,7 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             return services.AddRabbitMQBackplane();
         }
 
-        /// <summary>Registers RabbitMQ clients and, when configured, adapter-owned endpoints with durable Inbox processing.</summary>
+        /// <summary>Registers native connection access and optional queue consumers with durable Inbox processing.</summary>
         public IServiceCollection AddRabbitMQ(Action<RabbitMQOptions> configureOptions, Action<RabbitMQEndpointsBuilder>? configureEndpoints = null)
         {
             ArgumentNullException.ThrowIfNull(configureOptions);
@@ -40,14 +40,8 @@ public static partial class NOFInfrastructureRabbitMQExtensions
                 .Validate(
                     static options => options.PrefetchCount > 0,
                     "RabbitMQ PrefetchCount must be greater than zero.")
-                .Validate(
-                    static options => !options.PublisherConfirmationsEnabled || options.PublisherConfirmationTrackingEnabled,
-                    "RabbitMQ publisher confirmation tracking must be enabled when publisher confirmations are enabled.")
                 .ValidateOnStart();
             services.ReplaceOrAddSingleton<RabbitMQConnectionManager, RabbitMQConnectionManager>();
-            services.ReplaceOrAddSingleton<RabbitMQCommandRider, RabbitMQCommandRider>();
-            services.ReplaceOrAddSingleton<RabbitMQNotificationRider, RabbitMQNotificationRider>();
-            services.ReplaceOrAddScoped<RabbitMQMessageClient, RabbitMQMessageClient>();
             if (configureEndpoints is not null)
             {
                 services.AddInbox();

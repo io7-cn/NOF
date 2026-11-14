@@ -54,12 +54,8 @@ public class RabbitMQOptions
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string VirtualHost { get; set; } = "/";
-    public bool Durable { get; set; } = true;
-    public bool AutoDelete { get; set; } = false;
     public ushort PrefetchCount { get; set; } = 1;
     public bool RequeueOnConsumerFailure { get; set; } = true;
-    public bool PublisherConfirmationsEnabled { get; set; } = true;
-    public bool PublisherConfirmationTrackingEnabled { get; set; } = true;
 
     private void ParseConnectionString(string connectionString)
     {

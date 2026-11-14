@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using NOF.Application;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -12,16 +11,13 @@ public sealed class RabbitMQBackplane : IBackplane
 {
     private const string ExchangePrefix = "nof.backplane.";
     private readonly RabbitMQConnectionManager _connectionManager;
-    private readonly IOptions<RabbitMQOptions> _options;
     private readonly IObjectSerializer _serializer;
 
     public RabbitMQBackplane(
         RabbitMQConnectionManager connectionManager,
-        IOptions<RabbitMQOptions> options,
         IObjectSerializer serializer)
     {
         _connectionManager = connectionManager;
-        _options = options;
         _serializer = serializer;
     }
 
@@ -39,8 +35,8 @@ public sealed class RabbitMQBackplane : IBackplane
         await rabbitChannel.ExchangeDeclareAsync(
             exchange: exchangeName,
             type: ExchangeType.Fanout,
-            durable: _options.Value.Durable,
-            autoDelete: _options.Value.AutoDelete,
+            durable: true,
+            autoDelete: false,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var properties = new BasicProperties
@@ -74,8 +70,8 @@ public sealed class RabbitMQBackplane : IBackplane
         await rabbitChannel.ExchangeDeclareAsync(
             exchange: exchangeName,
             type: ExchangeType.Fanout,
-            durable: _options.Value.Durable,
-            autoDelete: _options.Value.AutoDelete,
+            durable: true,
+            autoDelete: false,
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var queue = await rabbitChannel.QueueDeclareAsync(
