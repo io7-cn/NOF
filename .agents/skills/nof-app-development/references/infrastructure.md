@@ -91,15 +91,12 @@ dotnet add package NOF.Infrastructure.RabbitMQ
 Registration:
 
 ```csharp
-builder.Services.AddRabbitMQ(options =>
-{
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
-});
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")!));
 ```
 
-This registers native RabbitMQConnectionManager access alongside MemoryMessageClient. Pass an optional second callback to configure RabbitMQ-owned MapQueue<Operation> endpoints and enable the inbound consumer hosted service plus Inbox. Outbox adapters explicitly choose their client; no default transport interface is replaced. `AddRabbitMQBackplane(...)` is independent and replaces only `IBackplane`.
+This registers native ConnectionFactory/IConnectionFactory and lazy RabbitMQConnection access only. Configure native TLS, AMQP URI, authentication, timeouts and recovery through ConnectionFactory. RabbitMQOptions and RabbitMQConnectionManager are removed. ConfigureRabbitMQ may be called repeatedly before Build; its fluent Topology callbacks and MapQueue endpoints compose. Framework StartingAsync executes every native topology callback in registration order before consumers start. Mapping a queue enables Inbox; topology-only configuration does not. Each MapQueue can configure its native channel (for example BasicQosAsync) and receipt-failure requeue policy. Backplane registration remains independent through AddRabbitMQBackplane().
 
-See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition) for the runnable two-service Aspire sample: infrastructure Outbox adapters use MessageDelivery.ExecuteAsync with the full OutboxDeliveryContext around native BasicPublishAsync, and the receiving host uses AddRabbitMQ(options, endpoints) to map operations to existing queues; sample infrastructure declares exchange bindings natively; Memory endpoints are separate. Application depends only on IOutbox and owned receipt ports.
+See `docs/en/design/rabbitmq-sample.md` (and its Chinese edition): sample topology is a static native declaration method, with no application IHostedLifecycleService. Infrastructure uses MessageDelivery with full OutboxDeliveryContext around native BasicPublishAsync. Native channels are caller-owned; RabbitMQConnection.GetAsync returns a shared connection that callers must not dispose.
 
 ## OAuth/OIDC Authority
 
@@ -165,7 +162,7 @@ credentials can expire sooner. Presigned PUT uploads raw content; it is not a mu
   "ConnectionStrings": {
     "postgres": "Host=localhost;Database=myapp;Username=postgres;Password=postgres",
     "redis": "localhost:6379",
-    "rabbitmq": "Host=localhost;Port=5672;UserName=guest;Password=guest;VirtualHost=/"
+    "rabbitmq": "amqp://guest:guest@localhost:5672/"
   },
   "NOF": {
     "OidcServer": {

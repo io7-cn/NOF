@@ -10,14 +10,14 @@ namespace NOF.Infrastructure.RabbitMQ;
 public sealed class RabbitMQBackplane : IBackplane
 {
     private const string ExchangePrefix = "nof.backplane.";
-    private readonly RabbitMQConnectionManager _connectionManager;
+    private readonly RabbitMQConnection _connection;
     private readonly IObjectSerializer _serializer;
 
     public RabbitMQBackplane(
-        RabbitMQConnectionManager connectionManager,
+        RabbitMQConnection connection,
         IObjectSerializer serializer)
     {
-        _connectionManager = connectionManager;
+        _connection = connection;
         _serializer = serializer;
     }
 
@@ -30,7 +30,8 @@ public sealed class RabbitMQBackplane : IBackplane
         var payloadTypeName = typeof(TPayload).AssemblyQualifiedName ?? typeof(TPayload).FullName ?? typeof(TPayload).Name;
         var payloadBytes = _serializer.Serialize(payload, typeof(TPayload));
 
-        await using var rabbitChannel = await _connectionManager.CreateChannelAsync().ConfigureAwait(false);
+        var connection = await _connection.GetAsync(cancellationToken).ConfigureAwait(false);
+        await using var rabbitChannel = await connection.CreateChannelAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await rabbitChannel.ExchangeDeclareAsync(
             exchange: exchangeName,
@@ -65,7 +66,7 @@ public sealed class RabbitMQBackplane : IBackplane
 
         var exchangeName = BuildExchangeName(channel);
         var expectedPayloadTypeName = typeof(TPayload).AssemblyQualifiedName ?? typeof(TPayload).FullName ?? typeof(TPayload).Name;
-        var rabbitChannel = await _connectionManager.CreateChannelAsync().ConfigureAwait(false);
+        var rabbitChannel = await (await _connection.GetAsync(cancellationToken).ConfigureAwait(false)).CreateChannelAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await rabbitChannel.ExchangeDeclareAsync(
             exchange: exchangeName,

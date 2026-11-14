@@ -62,7 +62,7 @@ services.AddMemoryMessaging(endpoints =>
     endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-MemoryMessageClient is registered by AddNOF; AddRabbitMQ provides native connection access and optional queue consumers. Only AddRabbitMQ with an endpoint callback enables inbound broker consumers. Adapter-owned queue/subscription endpoints still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
+MemoryMessageClient is registered by AddNOF; AddRabbitMQ provides native connection access and optional queue consumers. Only ConfigureRabbitMQ with queue mappings enables inbound broker consumers. Adapter-owned queue/subscription endpoints still pass through the common execution policies and reject non-Empty results or declared failures. One operation can now receive several explicit queues because there is no outbound operation-to-queue lookup. RouteToQueue, Topic and GetQueue/GetTopic APIs are removed.
 
 The sample's TransactionalMessages stages SendEmail and OrderCreated. NOF.Sample.Messaging adapters choose RabbitMQ and physical destinations; a separate NOF.Sample.Notifications service explicitly binds the queue and two topic subscriptions to operations. See the [two-service routing sample](rabbitmq-sample.md). Changing the delivery client affects infrastructure without changing Application's enqueue API.
 

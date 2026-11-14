@@ -56,7 +56,7 @@ Use `ReplaceOrAdd*` when the provider intentionally replaces a NOF default. Use 
 
 ## 3. Add Initialization Only When Necessary
 
-Use native IHostedService/IHostedLifecycleService for startup work. Database migration uses StartingAsync before consumers and HTTP start. HTTP composition is explicit after Build(). Do not reintroduce initialization steps or topology APIs; see docs/en/design/native-hosting.md.
+Use native IHostedService/IHostedLifecycleService for startup work. Database migration uses StartingAsync before consumers and HTTP start. HTTP composition is explicit after Build(). Do not reintroduce the framework initialization graph/topology scheduler. Transport-specific native topology callbacks may use a provider-owned lifecycle; see docs/en/design/native-hosting.md.
 
 ## 4. Wire Repository Metadata
 

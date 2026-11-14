@@ -62,7 +62,7 @@ services.AddMemoryMessaging(endpoints =>
     endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有传入端点配置才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
+AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有 ConfigureRabbitMQ 映射队列端点才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
 
 示例 TransactionalMessages 暂存 SendEmail 和 OrderCreated；NOF.Sample.Messaging 适配器选择 RabbitMQ 和实际路由，独立 NOF.Sample.Notifications 服务把队列和两个 Topic 订阅绑定到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递客户端只修改基础设施，无需改变 Application 入队 API。
 
@@ -84,7 +84,7 @@ AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可�
 
 ## 按能力装配与独立 Worker 宿主
 
-仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddInbox 完整装配传输无关的 Inbox 能力。AddMemoryMessaging 和配置端点的 AddRabbitMQ 自动调用 AddInbox；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
+仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddInbox 完整装配传输无关的 Inbox 能力。AddMemoryMessaging 和配置队列端点的 ConfigureRabbitMQ 自动调用 AddInbox；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
 
 ```csharp
 builder.Services.AddOutbox(outbox => outbox.Add<OrderCreated, DeliverOrderCreated>("order.created", 1));

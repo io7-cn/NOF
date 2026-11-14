@@ -59,12 +59,14 @@ The sample publisher uses native `IChannel.BasicPublishAsync`, not a NOF send/pu
 The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure routes to operations:
 
 ```csharp
-builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
-{
-    endpoints.MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue);
-    endpoints.MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue);
-    endpoints.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
-});
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
+
+// Separate feature modules can append configuration before Build().
+builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(RabbitMQDemoTopology.DeclareAsync));
+builder.Services.ConfigureRabbitMQ(rabbit => rabbit
+    .MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue)
+    .MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue)
+    .MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue));
 ```
 
 | Intent | Physical destination | Consumer operation |
@@ -73,7 +75,7 @@ builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Confi
 | `OrderCreated` | queue `sample.order-audit.v1` | `RecordOrder` |
 | `OrderCreated` | queue `sample.order-metrics.v1` | `CountOrder` |
 
-A queue distributes deliveries among competing consumers. `RabbitMQDemoTopology` is application infrastructure, running as a native IHostedLifecycleService before consumers start. It declares the durable `sample.orders.v1` topic exchange and all three queues with RabbitMQ.Client, then binds both order queues with routing key `order.created`. The mail adapter publishes to the default exchange (`exchange: ""`) using the mail queue name as routing key. NOF knows none of these exchange relationships.
+A queue distributes deliveries among competing consumers. `RabbitMQDemoTopology` is now a static native declaration method. ConfigureRabbitMQ owns startup timing; applications implement no IHostedLifecycleService. It declares the durable `sample.orders.v1` topic exchange and all three queues with RabbitMQ.Client, then binds both order queues with routing key `order.created`. The mail adapter publishes to the default exchange (`exchange: ""`) using the mail queue name as routing key. NOF knows none of these exchange relationships.
 
 ```csharp
 await channel.ExchangeDeclareAsync(RabbitMQDemoRoutes.OrderEventsExchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
@@ -102,6 +104,12 @@ The test starts independent producer/receiver hosts and databases, exercises rea
 ## Adapter boundary and migration
 
 MessageBinding, MessageBindingRegistry and AddMessageBindings are removed. RabbitMQ exposes only MapQueue<Operation>: no topic/subscription DSL, automatic exchange/queue/binding declaration, alternate/dead-letter forwarding convention or original-route replay headers. RabbitMQMessageClient and command/notification Riders are removed; use native channels. Publisher confirmations are native CreateChannelOptions, not duplicate NOF options. A missing queue fails startup. An unroutable mandatory publish fails the delivery attempt. Broker policies, retries through DLX, exchange bindings and replay are application/operator responsibilities.
+
+RabbitMQOptions and RabbitMQConnectionManager are removed. AddRabbitMQ accepts native ConnectionFactory configuration; use an AMQP/AMQPS URI (`factory.Uri`) or native fields rather than the old key/value ConnectionString parser. TLS, timeouts and automatic recovery remain native. RabbitMQConnection.GetAsync owns only lazy shared connection lifetime: callers create/dispose native channels, never the shared connection. Failed initial connects can retry; caller cancellation does not cancel other waiters; established connections retain native recovery.
+
+ConfigureRabbitMQ is independent, fluent and repeatable before Build. Callbacks append in declaration order, queue identities must be unique, and startup freezes the complete snapshot. Framework StartingAsync awaits every topology callback before starting consumers, even when a later module supplies topology for earlier endpoints. A failed/canceled topology aborts startup; no automatic rollback is attempted. Startup failures release opened consumer channels. Topology-only configuration enables no Inbox storage/model/workers. Empty configuration performs no network I/O. AddRabbitMQ alone remains lazy and enables no lifecycle or durable workers.
+
+MapQueue optionally accepts `configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)` and `requeueOnFailure`; default consumer prefetch is 1 and receipt-storage failures requeue. These settings belong to the selected endpoint.
 
 The common Inbox still resolves scoped IInboxHandler entries through native keyed DI using opaque receipt Route values. It persists/deduplicates and executes in the existing tenant scope and transaction; it never interprets topology. RabbitMQ queue keys are `rabbitmq:queue:<queue>`; Memory has its own independent endpoints and keys. Native GUID MessageId is preferred, with the NOF envelope header as fallback.
 

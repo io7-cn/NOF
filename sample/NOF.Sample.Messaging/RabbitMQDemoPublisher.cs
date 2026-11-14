@@ -5,12 +5,13 @@ using RabbitMQ.Client;
 namespace NOF.Sample.Messaging;
 
 /// <summary>Sample infrastructure combines NOF delivery metadata with native RabbitMQ publishing.</summary>
-public sealed class RabbitMQDemoPublisher(RabbitMQConnectionManager connection, IObjectSerializer serializer, MessageDelivery delivery)
+public sealed class RabbitMQDemoPublisher(RabbitMQConnection connection, IObjectSerializer serializer, MessageDelivery delivery)
 {
     public ValueTask PublishAsync<T>(string exchange, string routingKey, T message, OutboxDeliveryContext context, CancellationToken cancellationToken)
         => delivery.ExecuteAsync(message!, context.Context, async (headers, ct) =>
         {
-            await using var channel = await connection.CreateChannelAsync(
+            var nativeConnection = await connection.GetAsync(ct);
+            await using var channel = await nativeConnection.CreateChannelAsync(
                 new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), ct);
             var properties = new BasicProperties
             {

@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using NOF.Application;
-using NOF.Infrastructure;
 using NOF.Infrastructure.RabbitMQ;
+using RabbitMQ.Client;
 
 namespace NOF.Hosting;
 
@@ -9,45 +11,38 @@ public static partial class NOFInfrastructureRabbitMQExtensions
 {
     extension(IServiceCollection services)
     {
-        public IServiceCollection AddRabbitMQBackplane()
+        /// <summary>Registers lazy native connection access; no topology, Inbox or consumers are enabled.</summary>
+        public IServiceCollection AddRabbitMQ(Action<ConnectionFactory>? configureConnection = null)
         {
-            services.ReplaceOrAddSingleton<RabbitMQConnectionManager, RabbitMQConnectionManager>();
-            services.ReplaceOrAddSingleton<IBackplane, RabbitMQBackplane>();
+            var options = services.AddOptions<ConnectionFactory>();
+            if (configureConnection is not null)
+            {
+                options.Configure(configureConnection);
+            }
+            services.TryAddSingleton<IConnectionFactory>(provider => provider.GetRequiredService<IOptions<ConnectionFactory>>().Value);
+            services.TryAddSingleton<RabbitMQConnection>();
             return services;
         }
 
-        public IServiceCollection AddRabbitMQBackplane(Action<RabbitMQOptions> configureOptions)
+        /// <summary>Appends fluent native topology and queue declarations; repeated calls compose before startup.</summary>
+        public IServiceCollection ConfigureRabbitMQ(Action<RabbitMQBuilder> configure)
         {
-            ArgumentNullException.ThrowIfNull(configureOptions);
-
-            services.Configure(configureOptions);
-            return services.AddRabbitMQBackplane();
+            ArgumentNullException.ThrowIfNull(configure);
+            if (services.IsReadOnly)
+            {
+                throw new InvalidOperationException("Configure RabbitMQ before building the host.");
+            }
+            services.AddLogging();
+            configure(new(services, services.GetOrAddSingleton<RabbitMQConfiguration>()));
+            services.AddHostedService<RabbitMQConsumerHostedService>();
+            return services;
         }
 
-        /// <summary>Registers native connection access and optional queue consumers with durable Inbox processing.</summary>
-        public IServiceCollection AddRabbitMQ(Action<RabbitMQOptions> configureOptions, Action<RabbitMQEndpointsBuilder>? configureEndpoints = null)
+        /// <summary>Registers the independent transient backplane using the same native connection registration.</summary>
+        public IServiceCollection AddRabbitMQBackplane()
         {
-            ArgumentNullException.ThrowIfNull(configureOptions);
-
-            services.Configure(configureOptions);
-            services.AddOptions<RabbitMQOptions>()
-                .Validate(
-                    static options => !string.IsNullOrWhiteSpace(options.HostName),
-                    "RabbitMQ HostName must be configured.")
-                .Validate(
-                    static options => options.Port >= 0,
-                    "RabbitMQ Port must be greater than or equal to zero.")
-                .Validate(
-                    static options => options.PrefetchCount > 0,
-                    "RabbitMQ PrefetchCount must be greater than zero.")
-                .ValidateOnStart();
-            services.ReplaceOrAddSingleton<RabbitMQConnectionManager, RabbitMQConnectionManager>();
-            if (configureEndpoints is not null)
-            {
-                services.AddInbox();
-                configureEndpoints(new(services, services.GetOrAddSingleton<RabbitMQEndpointRegistry>()));
-                services.AddHostedService<RabbitMQConsumerHostedService>();
-            }
+            services.AddRabbitMQ();
+            services.ReplaceOrAddSingleton<IBackplane, RabbitMQBackplane>();
             return services;
         }
     }

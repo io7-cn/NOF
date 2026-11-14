@@ -1,46 +1,29 @@
 # NOF.Infrastructure.RabbitMQ
 
-A thin adapter from existing RabbitMQ queues to NOF application operations, plus native connection access and an optional IBackplane implementation.
-
-## Queue consumers
+Thin RabbitMQ queue-to-operation consumers with native connection/channel APIs and an optional transient backplane.
 
 ```csharp
-using NOF.Hosting;
-using NOF.Hosting.AspNetCore;
-using NOF.Infrastructure.RabbitMQ;
+services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
 
-var builder = WebApplication.CreateBuilder(args).AddNOF();
-builder.Services.AddRabbitMQ(options =>
+services.ConfigureRabbitMQ(rabbit => rabbit.Topology(async (channel, ct) =>
 {
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
-    options.PrefetchCount = 8;
-    options.RequeueOnConsumerFailure = true;
-}, endpoints =>
-{
-    endpoints.MapQueue<MailService.Send>("mail.send.v1");
-    endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");
-});
+    await channel.ExchangeDeclareAsync("orders", ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
+    await channel.QueueDeclareAsync("orders.audit", durable: true, exclusive: false, autoDelete: false, cancellationToken: ct);
+    await channel.QueueBindAsync("orders.audit", "orders", "order.created", cancellationToken: ct);
+}));
+
+services.ConfigureRabbitMQ(rabbit => rabbit
+    .MapQueue<OrderAudit.Record>("orders.audit", configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)));
 ```
 
-MapQueue selects one Empty-returning operation without declared failures. The queue must already exist. NOF consumes it, durably accepts deliveries into Inbox, and acknowledges acceptance; the Inbox worker later executes the operation through the shared policies and transaction. Missing queues fail startup. Technical receipt-storage failures requeue by default. Payload validation and business execution failures follow the Inbox processing policy.
+AddRabbitMQ registers native ConnectionFactory/IConnectionFactory and RabbitMQConnection only. Native configuration supports TLS, AMQP/AMQPS URI, credentials, timeouts and recovery without duplicate NOF options or a connection-string parser. Repeated Add calls retain one connection owner and compose native configuration.
 
-Connection-only AddRabbitMQ(options) enables no consumers or Inbox workers. Memory endpoints are separate. Core Inbox resolves scoped keyed IInboxHandler entries using opaque queue receipt keys; it has no shared MessageBinding or topology registry.
+ConfigureRabbitMQ can be called by multiple modules before Build. Fluent Topology callbacks append in registration order; MapQueue selects unique existing queues and Empty operations without declared failures. Startup freezes the snapshot, runs all native topology callbacks before any consumer, then starts consumers. A topology failure aborts startup. Applications write no host lifecycle service. Consumers infer no topology; a missing queue still fails startup. Topology-only configuration installs no Inbox models/stores/workers. Native topology is not automatically rolled back on startup failure.
 
-## Native topology and publishing
+Native channel setup and receipt-failure requeue behavior can be specified per MapQueue; default prefetch is 1 and requeue is true. Broker policies, bindings, DLX, publisher confirms and replay remain native. There is no MapSubscription, topic DSL, implicit forwarding topology or RabbitMQMessageClient. Inbox acknowledgement means durable acceptance, with business processing committed later by the shared Inbox worker.
 
-Application infrastructure or broker provisioning owns ExchangeDeclareAsync, QueueDeclareAsync, QueueBindAsync, broker policies, DLX and replay. The operation adapter declares no topology and offers no MapSubscription, topic convention, forwarding exchange or original-route headers.
+RabbitMQConnection.GetAsync returns a shared native IConnection; callers must not dispose it. Create/dispose native channels with IConnection.CreateChannelAsync and native CreateChannelOptions. The owner is lazy, shares in-flight connections, retries failed initial connects, isolates caller cancellation and cancels/disposes during host disposal. Established connections use native recovery. Use IChannel.BasicPublishAsync and MessageDelivery.ExecuteAsync with the full OutboxDeliveryContext for confirmed Outbox publication.
 
-RabbitMQConnectionManager.GetConnectionAsync returns the shared native connection (do not dispose it); CreateChannelAsync returns a caller-owned IChannel and accepts native CreateChannelOptions plus cancellation. Use BasicPublishAsync directly. For confirmed Outbox delivery, configure publisher confirmations/tracking natively, use mandatory publishing, and wrap dispatch in MessageDelivery.ExecuteAsync with the original OutboxDeliveryContext. Set native MessageId from that same ID. Exceptions must propagate to the Outbox retry policy. RabbitMQMessageClient and command/notification Riders are removed.
+AddRabbitMQBackplane() registers only the independent transient IBackplane capability using the same connection. It retains dedicated nof.backplane.* fanout exchanges and exclusive subscriber queues, independent of operation consumers.
 
-ConnectionString accepts AMQP URI or key/value form. Individual HostName, Port, UserName, Password and VirtualHost remain available. Publisher settings and topology durability/auto-delete flags are no longer duplicated in NOF options; native RabbitMQ calls specify them.
-
-## Optional backplane
-
-AddRabbitMQBackplane configures the separate transient IBackplane capability. It owns dedicated nof.backplane.* fanout exchanges and exclusive auto-delete subscriber queues; it is independent of application queue-to-operation mapping and is not used by the sample's order workflow.
-
-See the [complete two-service sample and explicit migration](../../../docs/en/design/rabbitmq-sample.md) ([简体中文](../../../docs/zh-CN/design/rabbitmq-sample.md)). Upgrades must explicitly drain/move old subscription queues, migrate Inbox/order-state keys while preserving deduplication history, and reconcile old queue arguments. NOF never deletes or silently repairs broker or database state.
-
-## Dependencies
-
-- [NOF.Infrastructure](https://www.nuget.org/packages/NOF.Infrastructure)
-- [RabbitMQ.Client](https://www.nuget.org/packages/RabbitMQ.Client)
+Migration: replace RabbitMQOptions/ConnectionString with native ConnectionFactory.Uri or fields; replace RabbitMQConnectionManager with RabbitMQConnection.GetAsync plus native channel calls; split old AddRabbitMQ(options, endpoints) into AddRabbitMQ and repeatable ConfigureRabbitMQ calls. Move application lifecycle methods into Topology callbacks. Existing queue names and Inbox keys do not change in this configuration refinement; earlier subscription/forwarding upgrades still require the explicit data/topology migration in the [sample guide](../../../docs/en/design/rabbitmq-sample.md) ([简体中文](../../../docs/zh-CN/design/rabbitmq-sample.md)).

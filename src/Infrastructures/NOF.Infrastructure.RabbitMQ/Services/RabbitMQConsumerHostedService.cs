@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Hosting;
@@ -11,29 +10,49 @@ using RabbitMQ.Client.Events;
 
 namespace NOF.Infrastructure.RabbitMQ;
 
-public class RabbitMQConsumerHostedService : IHostedService, IDisposable
+public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposable
 {
-    private readonly RabbitMQConnectionManager _connectionManager;
-    private readonly IOptions<RabbitMQOptions> _options;
-    private readonly RabbitMQEndpointRegistry _bindings;
+    private readonly RabbitMQConnection _connection;
+    private readonly RabbitMQConfiguration _configuration;
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
-    private readonly MessageInboxReceiver _receiver;
+    private readonly IServiceProvider _services;
     private readonly List<IChannel> _channels = [];
     private bool _disposed;
 
     public RabbitMQConsumerHostedService(
-        RabbitMQConnectionManager connectionManager,
-        IOptions<RabbitMQOptions> options,
-        RabbitMQEndpointRegistry bindings,
-        MessageInboxReceiver receiver,
+        RabbitMQConnection connection,
+        RabbitMQConfiguration configuration,
+        IServiceProvider services,
         ILogger<RabbitMQConsumerHostedService> logger)
     {
-        _connectionManager = connectionManager;
-        _options = options;
-        _bindings = bindings;
-        _receiver = receiver;
+        _connection = connection;
+        _configuration = configuration;
+        _services = services;
         _logger = logger;
     }
+
+    /// <summary>Executes all user topology callbacks before native host StartAsync starts consumers.</summary>
+    public async Task StartingAsync(CancellationToken cancellationToken)
+    {
+        var configuration = _configuration.Freeze();
+        if (configuration.Topologies.Count == 0)
+        {
+            return;
+        }
+        var connection = await _connection.GetAsync(cancellationToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        foreach (var configure in configuration.Topologies)
+        {
+            await configure(channel, cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <inheritdoc />
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -45,6 +64,7 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize RabbitMQ consumers");
+            Dispose();
             throw;
         }
     }
@@ -57,19 +77,24 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
 
     private async Task RegisterConsumersFromRegistryAsync(CancellationToken cancellationToken)
     {
-        foreach (var endpoint in _bindings.Endpoints)
+        foreach (var endpoint in _configuration.Freeze().Endpoints)
         {
-            var channel = await _connectionManager.CreateChannelAsync(cancellationToken: cancellationToken);
+            var connection = await _connection.GetAsync(cancellationToken);
+            var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
             _channels.Add(channel);
-            await channel.BasicQosAsync(0, _options.Value.PrefetchCount, false, cancellationToken);
+            await channel.BasicQosAsync(0, 1, false, cancellationToken);
+            if (endpoint.ConfigureChannel is not null)
+            {
+                await endpoint.ConfigureChannel(channel, cancellationToken);
+            }
             var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.ReceivedAsync += async (_, args) => await HandleMessageAsync(endpoint.ConsumerId, consumer, args);
-            // BasicConsume fails if the queue does not exist. NOF never declares or binds broker topology.
+            consumer.ReceivedAsync += async (_, args) => await HandleMessageAsync(endpoint, consumer, args);
+            // BasicConsume fails if the queue does not exist. The consumer never infers broker topology.
             await channel.BasicConsumeAsync(endpoint.QueueName, autoAck: false, consumer: consumer, cancellationToken: cancellationToken);
         }
     }
 
-    private async Task HandleMessageAsync(string consumerId, AsyncEventingBasicConsumer consumer, BasicDeliverEventArgs args)
+    private async Task HandleMessageAsync(RabbitMQEndpoint endpoint, AsyncEventingBasicConsumer consumer, BasicDeliverEventArgs args)
     {
         try
         {
@@ -89,17 +114,17 @@ public class RabbitMQConsumerHostedService : IHostedService, IDisposable
             }
 
             var messageId = ResolveMessageId(args.BasicProperties.MessageId, headers);
-            await _receiver.ReceiveAsync(messageId, InboxMessageType.Command, payload, consumerId, headers, CancellationToken.None);
+            await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, InboxMessageType.Command, payload, endpoint.ConsumerId, headers, CancellationToken.None);
 
             await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
         }
         catch (Exception ex)
         {
-            var requeue = _options.Value.RequeueOnConsumerFailure;
+            var requeue = endpoint.RequeueOnFailure;
             _logger.LogError(
                 ex,
                 "Error handling message from queue {QueueName}. Requeue: {Requeue}",
-                consumerId,
+                endpoint.QueueName,
                 requeue);
             try
             {

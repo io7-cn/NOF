@@ -64,7 +64,8 @@ builder.Services.AddAuthenticationResourceServer(o =>
 
 builder.Services.AddRabbitMQ(options =>
 {
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
+    options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")
+        ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
 });
 
 builder.UseDbContext<ConfigurationDbContext>()

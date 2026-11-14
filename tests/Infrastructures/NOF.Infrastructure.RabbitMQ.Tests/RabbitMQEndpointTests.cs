@@ -13,11 +13,11 @@ public sealed class RabbitMQEndpointTests
     public void ClientOnlyRegistration_DoesNotEnableInboxOrBrokerConsumers()
     {
         var services = new ServiceCollection();
-        services.AddRabbitMQ(options => options.HostName = "localhost");
+        services.AddRabbitMQ(factory => factory.HostName = "localhost");
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(IInboxStore));
         Assert.DoesNotContain(services, item => item.ImplementationType == typeof(RabbitMQConsumerHostedService));
         Assert.DoesNotContain(services, item => item.ImplementationType == typeof(InboxMessageBackgroundService));
-        Assert.DoesNotContain(services, item => item.ServiceType == typeof(RabbitMQEndpointRegistry));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(RabbitMQConfiguration));
     }
 
     [Fact]
@@ -25,11 +25,11 @@ public sealed class RabbitMQEndpointTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        builder.Services.AddRabbitMQ(options => options.HostName = "localhost", endpoints =>
-            endpoints.MapQueue<Input>("work", First));
+        builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
+        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", First));
         using var host = builder.Build();
         Assert.Empty(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
-        Assert.Single(host.Services.GetRequiredService<RabbitMQEndpointRegistry>().Endpoints);
+        Assert.Single(host.Services.GetRequiredService<RabbitMQConfiguration>().Freeze().Endpoints);
         await Assert.ThrowsAsync<InvalidOperationException>(() => host.Services.GetRequiredService<MemoryCommandRider>()
             .SendAsync(new byte[] { 1 }, "work", null));
     }
@@ -40,10 +40,11 @@ public sealed class RabbitMQEndpointTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<Input>("work", First));
-        builder.Services.AddRabbitMQ(options => options.HostName = "localhost", endpoints => endpoints.MapQueue<Input>("work", Second));
+        builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
+        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", Second));
         using var host = builder.Build();
         var memory = Assert.Single(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
-        var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQEndpointRegistry>().Endpoints);
+        var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQConfiguration>().Freeze().Endpoints);
         Assert.Equal(First.Id, memory.Operation.Id);
         Assert.Equal(Second.Id, rabbit.Operation.Id);
         Assert.NotEqual(memory.ConsumerId, rabbit.ConsumerId);
@@ -56,7 +57,7 @@ public sealed class RabbitMQEndpointTests
     public void DuplicateEndpointAndForgedFailureOperation_AreRejectedAtRegistration()
     {
         var services = new ServiceCollection();
-        var endpoints = new RabbitMQEndpointsBuilder(services, new RabbitMQEndpointRegistry());
+        var endpoints = new RabbitMQBuilder(services, new RabbitMQConfiguration());
         endpoints.MapQueue<Input>("work", First);
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("work", Second));
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("invalid",

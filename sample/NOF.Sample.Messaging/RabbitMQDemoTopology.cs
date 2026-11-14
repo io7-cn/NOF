@@ -1,15 +1,12 @@
-using Microsoft.Extensions.Hosting;
-using NOF.Infrastructure.RabbitMQ;
 using RabbitMQ.Client;
 
 namespace NOF.Sample.Messaging;
 
-/// <summary>Application infrastructure declares native topology before any queue consumers start.</summary>
-public sealed class RabbitMQDemoTopology(RabbitMQConnectionManager connection) : IHostedLifecycleService
+/// <summary>Application-owned native declarations; ConfigureRabbitMQ provides their startup lifecycle.</summary>
+public static class RabbitMQDemoTopology
 {
-    public async Task StartingAsync(CancellationToken cancellationToken)
+    public static async Task DeclareAsync(IChannel channel, CancellationToken cancellationToken)
     {
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
         await channel.ExchangeDeclareAsync(RabbitMQDemoRoutes.OrderEventsExchange, ExchangeType.Topic,
             durable: true, autoDelete: false, cancellationToken: cancellationToken);
         foreach (var queue in new[] { RabbitMQDemoRoutes.MailQueue, RabbitMQDemoRoutes.OrderAuditQueue, RabbitMQDemoRoutes.OrderMetricsQueue })
@@ -22,10 +19,4 @@ public sealed class RabbitMQDemoTopology(RabbitMQConnectionManager connection) :
                 cancellationToken: cancellationToken);
         }
     }
-
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

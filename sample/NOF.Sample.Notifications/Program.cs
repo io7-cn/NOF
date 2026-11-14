@@ -13,9 +13,11 @@ builder.AddApplicationPart(typeof(MessageDemoService).Assembly);
 builder.AddApplicationService<MessageDemoService>();
 builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(500));
-builder.Services.AddHostedService<RabbitMQDemoTopology>();
-builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq")
-    ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."), NotificationMessaging.Configure);
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")
+    ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required.")));
+// Independent feature modules append configuration; all topology callbacks run before any consumer.
+builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(RabbitMQDemoTopology.DeclareAsync));
+builder.Services.ConfigureRabbitMQ(NotificationMessaging.Configure);
 // The NOF SQLite factory initializes the fresh demo schema on first use. It persists receipts across restarts.
 builder.UseDbContext<NotificationsDbContext>().WithTenantMode(TenantMode.SharedDatabase)
     .WithConnectionString(builder.Configuration.GetConnectionString("notifications") ?? "Data Source=notifications.db")

@@ -59,12 +59,14 @@ await publisher.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDem
 接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
 
 ```csharp
-builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
-{
-    endpoints.MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue);
-    endpoints.MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue);
-    endpoints.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
-});
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
+
+// Separate feature modules can append configuration before Build().
+builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(RabbitMQDemoTopology.DeclareAsync));
+builder.Services.ConfigureRabbitMQ(rabbit => rabbit
+    .MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue)
+    .MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue)
+    .MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue));
 ```
 
 | 意图 | 物理目的地 | 消费操作 |
@@ -73,7 +75,7 @@ builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Confi
 | `OrderCreated` | 队列 `sample.order-audit.v1` | `RecordOrder` |
 | `OrderCreated` | 队列 `sample.order-metrics.v1` | `CountOrder` |
 
-队列中的多个消费者竞争处理。示例自己的 `RabbitMQDemoTopology` 实现原生 IHostedLifecycleService，在消费者启动前用 RabbitMQ.Client 声明持久的 `sample.orders.v1` Topic Exchange 和三个队列，再以 `order.created` 为 routing key 将两个订单队列绑定到 Exchange。邮件通过默认 Exchange（`exchange: ""`）发布，以邮件队列名作为 routing key。NOF 不解释这些拓扑关系。
+队列中的多个消费者竞争处理。`RabbitMQDemoTopology` 现在只是普通静态声明方法，ConfigureRabbitMQ 负责启动时序，用户无需实现 IHostedLifecycleService。它用 RabbitMQ.Client 声明持久的 `sample.orders.v1` Topic Exchange 和三个队列，再以 `order.created` 为 routing key 将两个订单队列绑定到 Exchange。邮件通过默认 Exchange（`exchange: ""`）发布，以邮件队列名作为 routing key。NOF 不解释这些拓扑关系。
 
 ```csharp
 await channel.ExchangeDeclareAsync(RabbitMQDemoRoutes.OrderEventsExchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
@@ -102,6 +104,12 @@ dotnet test sample-tests/NOF.Sample.Tests -c Release --filter FullyQualifiedName
 ## 适配器边界与迁移
 
 删除 MessageBinding、MessageBindingRegistry 和 AddMessageBindings。RabbitMQ 只提供 MapQueue<Operation>：没有 Topic/Subscription DSL，不自动声明 Exchange、队列或绑定，也不安装统一的 Alternate/Dead-letter 转发拓扑或原始路由重放 Header。RabbitMQMessageClient 和命令/通知 Rider 均移除，发送直接使用原生 Channel；publisher confirms 直接使用 CreateChannelOptions，不再重复提供 NOF 配置。队列不存在则启动失败，mandatory 消息无法路由则投递失败；Broker Policy、DLX 重试、Exchange 绑定及重放由应用或运维负责。
+
+RabbitMQOptions 和 RabbitMQConnectionManager 已删除。AddRabbitMQ 接受原生 ConnectionFactory 配置，使用 AMQP/AMQPS URI（factory.Uri）或原生字段，不再解析旧的 key/value ConnectionString。TLS、超时及自动恢复直接使用原生设置。RabbitMQConnection.GetAsync 只负责惰性共享连接的生命周期；调用方创建和释放原生 Channel，不释放共享连接。首次连接失败允许重试；单个等待者取消不影响其他调用方；已建立连接交由原生机制恢复。
+
+ConfigureRabbitMQ 独立、支持 Fluent API，可在 Build 前多次调用。拓扑回调按声明顺序追加，队列标识必须唯一，启动时冻结完整快照。即使先配置端点、后由另一个模块补充拓扑，框架 StartingAsync 仍会先等待全部拓扑回调，再启动消费者。拓扑失败或取消将中止启动，不自动回滚 Broker 修改；消费者启动失败会释放已打开的 Channel。只配置拓扑不启用 Inbox 存储、模型或 Worker，空配置不触发网络调用；仅 AddRabbitMQ 仍为惰性连接，不注册生命周期或可靠消息 Worker。
+
+MapQueue 可指定 `configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)` 和 `requeueOnFailure`；默认 prefetch 为 1，回执持久化失败时重新入队。设置属于当前端点。
 
 通用 Inbox 仍把 Route 当作不透明键，通过原生 keyed DI 解析 scoped IInboxHandler，在现有租户作用域和事务内持久化、去重和执行，不理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
 

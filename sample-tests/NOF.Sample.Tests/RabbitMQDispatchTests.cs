@@ -30,7 +30,7 @@ public sealed class RabbitMQDispatchTests
     [Fact]
     public async Task InvalidRecipient_DoesNotStageOrDispatchMessages()
     {
-        await using var producer = CreateProducer("Host=127.0.0.1;Port=1;UserName=unused;Password=unused", MemoryDatabase());
+        await using var producer = CreateProducer("amqp://unused:unused@127.0.0.1:1/", MemoryDatabase());
         await producer.StartAsync();
         using var client = producer.GetTestClient();
         using var response = await client.PostAsJsonAsync("/api/messages/orders", new SubmitDemoOrderRequest("not-an-email"));
@@ -90,7 +90,8 @@ public sealed class RabbitMQDispatchTests
         await using var consumer = CreateConsumer(connection, MemoryDatabase(), queue);
         var error = await Assert.ThrowsAsync<OperationInterruptedException>(() => consumer.StartAsync());
         Assert.Equal<ushort?>(404, error.ShutdownReason?.ReplyCode);
-        await using var channel = await consumer.Services.GetRequiredService<RabbitMQConnectionManager>().CreateChannelAsync();
+        var nativeConnection = await consumer.Services.GetRequiredService<RabbitMQConnection>().GetAsync();
+        await using var channel = await nativeConnection.CreateChannelAsync();
         var missing = await Assert.ThrowsAsync<OperationInterruptedException>(() => channel.QueueDeclarePassiveAsync(queue));
         Assert.Equal<ushort?>(404, missing.ShutdownReason?.ReplyCode);
     }
@@ -133,7 +134,7 @@ public sealed class RabbitMQDispatchTests
             outbox.Add<SendEmail, SendEmailOutboxHandler>("sample.send-email", 1);
             outbox.Add<OrderCreated, OrderCreatedOutboxHandler>("sample.order-created", 1);
         });
-        builder.Services.AddRabbitMQ(options => options.ConnectionString = connection);
+        builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
         var app = builder.Build();
         app.UseNOF();
@@ -149,13 +150,15 @@ public sealed class RabbitMQDispatchTests
         builder.Services.AddScoped<NOF.Sample.Notifications.Application.INotificationReceipts, NotificationReceipts>();
         if (missingQueue is null)
         {
-            builder.Services.AddHostedService<RabbitMQDemoTopology>();
-            builder.Services.AddRabbitMQ(options => options.ConnectionString = connection, NotificationMessaging.Configure);
+            builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
+            // Register endpoints first to verify later topology modules still execute before consumers.
+            builder.Services.ConfigureRabbitMQ(NotificationMessaging.Configure);
+            builder.Services.ConfigureRabbitMQ(rabbit => rabbit.Topology(RabbitMQDemoTopology.DeclareAsync));
         }
         else
         {
-            builder.Services.AddRabbitMQ(options => options.ConnectionString = connection,
-                endpoints => endpoints.MapQueue<ConsumerService.SendMail>(missingQueue));
+            builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
+            builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<ConsumerService.SendMail>(missingQueue));
         }
         builder.UseDbContext<NotificationsDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
         var app = builder.Build();

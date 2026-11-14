@@ -13,26 +13,26 @@ public class RabbitMQConsumerHostedServiceTests
     [Fact]
     public void QueueRegistrations_SelectOperationsWithoutAnyExchangeTopology()
     {
-        var registry = new RabbitMQEndpointRegistry();
-        var endpoints = new RabbitMQEndpointsBuilder(new ServiceCollection(), registry);
+        var registry = new RabbitMQConfiguration();
+        var endpoints = new RabbitMQBuilder(new ServiceCollection(), registry);
         var descriptor = new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply));
         endpoints.MapQueue<TestCommand>("work.v1", descriptor);
         endpoints.MapQueue<TestCommand>("audit.v1", descriptor);
-        Assert.Equal(new[] { "work.v1", "audit.v1" }, registry.Endpoints.Select(endpoint => endpoint.QueueName));
-        Assert.Equal(new[] { "rabbitmq:queue:work.v1", "rabbitmq:queue:audit.v1" }, registry.Endpoints.Select(endpoint => endpoint.ConsumerId));
+        Assert.Equal(new[] { "work.v1", "audit.v1" }, registry.Freeze().Endpoints.Select(endpoint => endpoint.QueueName));
+        Assert.Equal(new[] { "rabbitmq:queue:work.v1", "rabbitmq:queue:audit.v1" }, registry.Freeze().Endpoints.Select(endpoint => endpoint.ConsumerId));
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<TestCommand>("late.v1", descriptor));
     }
 
     [Fact]
     public async Task StartAsync_ShouldThrow_WhenConsumerInitializationFails()
     {
-        var manager = new RabbitMQConnectionManager(Options.Create(new RabbitMQOptions { HostName = "localhost" }));
+        var manager = new RabbitMQConnection(new global::RabbitMQ.Client.ConnectionFactory { HostName = "localhost" });
         manager.Dispose();
-        var registry = new RabbitMQEndpointRegistry();
-        new RabbitMQEndpointsBuilder(new ServiceCollection(), registry).MapQueue<TestCommand>("work.v1",
+        var registry = new RabbitMQConfiguration();
+        new RabbitMQBuilder(new ServiceCollection(), registry).MapQueue<TestCommand>("work.v1",
             new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply)));
-        using var service = new RabbitMQConsumerHostedService(manager, Options.Create(new RabbitMQOptions()), registry,
-            new MessageInboxReceiver(null!, new JsonObjectSerializer()), NullLogger<RabbitMQConsumerHostedService>.Instance);
+        using var service = new RabbitMQConsumerHostedService(manager, registry,
+            new ServiceCollection().BuildServiceProvider(), NullLogger<RabbitMQConsumerHostedService>.Instance);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.StartAsync(CancellationToken.None));
     }
 

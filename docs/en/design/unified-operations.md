@@ -33,7 +33,8 @@ Register the application assembly and each service container once. Individual op
 ```csharp
 builder.AddApplicationPart(typeof(MailService).Assembly);
 builder.AddApplicationService<MailService>();
-builder.Services.AddRabbitMQ(options => options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq"), endpoints =>
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")!));
+builder.Services.ConfigureRabbitMQ(endpoints =>
 {
     endpoints.MapQueue<MailService.Send>("mail.send.v1");
     endpoints.MapQueue<OrderAudit.Record>("orders.audit.v1");

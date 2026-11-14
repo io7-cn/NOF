@@ -71,10 +71,8 @@ builder.AddApplicationPart(typeof(MyAppService).Assembly);
 
 builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis")
     ?? throw new InvalidOperationException("Connection string 'redis' not found."));
-builder.Services.AddRabbitMQ(options =>
-{
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
-});
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(
+    builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Missing RabbitMQ connection.")));
 
 builder.UseDbContext<AppDbContext>()
     .WithTenantMode(TenantMode.DatabasePerTenant)

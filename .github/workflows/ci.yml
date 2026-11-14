@@ -103,5 +103,5 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Verify real RabbitMQ queue, fanout and offline recovery
       env:
-        NOF_SAMPLE_RABBITMQ: Host=localhost;Port=5672;UserName=nof-demo;Password=nof-demo-local;VirtualHost=/
+        NOF_SAMPLE_RABBITMQ: amqp://nof-demo:nof-demo-local@localhost:5672/
       run: dotnet test sample-tests/NOF.Sample.Tests/NOF.Sample.Tests.csproj --configuration ${{ env.CONFIGURATION }} --filter FullyQualifiedName~RabbitMQDispatchTests --logger "trx;LogFileName=rabbitmq-live.trx" --results-directory artifacts/rabbitmq-tests
