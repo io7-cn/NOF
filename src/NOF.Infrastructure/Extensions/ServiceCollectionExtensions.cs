@@ -28,23 +28,16 @@ public static partial class NOFInfrastructureExtensions
             return services;
         }
 
-        [RequiresDynamicCode("The in-memory persistence provider exposes LINQ IQueryable over in-memory collections and is intended for tests/development, not Native AOT.")]
-        [RequiresUnreferencedCode("The in-memory persistence provider snapshots arbitrary entity types via reflection and is intended for tests/development, not trimmed applications.")]
-        public IServiceCollection AddInMemoryPersistence()
-        {
-            services.ReplaceOrAddSingleton<InMemoryPersistenceStore, InMemoryPersistenceStore>();
-            services.ReplaceOrAddScoped<IPersistenceSession, InMemoryDbContext>();
-            services.AddPersistenceServices();
-            return services;
-        }
-
-        public IServiceCollection AddPersistenceServices()
+        /// <summary>Registers the default message-only memory unit of work; business ports select their own persistence.</summary>
+        public IServiceCollection AddInMemoryMessagingPersistence()
         {
             services.AddOptions<TransactionalMessageOptions>();
-            services.AddLogging();
-            services.TryAddScoped<PersistenceUnitOfWork>();
-            services.TryAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
-            services.TryAddScoped<ITransactionManager>(sp => sp.GetRequiredService<PersistenceUnitOfWork>());
+            services.TryAddSingleton<InMemoryMessageDatabase>();
+            services.TryAddScoped<InMemoryMessagePersistence>();
+            services.TryAddScoped<IUnitOfWork>(sp => sp.GetRequiredService<InMemoryMessagePersistence>());
+            services.TryAddScoped<ITransactionManager>(sp => sp.GetRequiredService<InMemoryMessagePersistence>());
+            services.TryAddKeyedScoped<IInboxStore>(typeof(IInboxStore), (sp, _) => sp.GetRequiredService<InMemoryMessagePersistence>());
+            services.TryAddKeyedScoped<IOutboxStore>(typeof(IOutboxStore), (sp, _) => sp.GetRequiredService<InMemoryMessagePersistence>());
             return services;
         }
 

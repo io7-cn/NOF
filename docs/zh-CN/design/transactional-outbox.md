@@ -108,3 +108,5 @@ builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbo
 能力配置不会修改既有模型快照或执行删表。共享数据库的迁移宿主应保留该库完整的能力模型，不要为了关闭某个进程的 Worker 生成破坏性删表迁移；RunWorkers=false 保留模型及持久化进度。
 
 端点映射现由具体传输适配器负责。调整已有 Inbox 回执路由前，参见[适配器边界与回执键迁移](rabbitmq-sample.md#适配器边界与迁移)。
+
+Inbox 回执只按 ID 与不透明 Route 标识，删除未使用的 Command/Notification 标签和 Memory Rider 包装。分类列迁移及原生持久化配置见[持久化边界](persistence-boundaries.md)。默认内存后端只保存消息状态。

@@ -8,7 +8,7 @@ public sealed class DefaultOAuthDeviceVerificationEndpoint : IOAuthDeviceVerific
     public Task<IResult> HandleAsync(HttpRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult<IResult>(OidcRoutes.CreateOAuthErrorResult(
+        return Task.FromResult(OidcRoutes.CreateOAuthErrorResult(
             "server_error",
             "OAuth device verification endpoint is not configured. Replace IOAuthDeviceVerificationEndpoint to implement user interaction.",
             StatusCodes.Status501NotImplemented));

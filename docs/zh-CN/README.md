@@ -60,3 +60,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [Ambient 绑定](design/ambient-binding.md)
 
 - [RabbitMQ 双服务手动路由示例](design/rabbitmq-sample.md)
+
+共享 Sample UI 使用原生 Blazor 事件绑定和 HTML 控件，不依赖第三方组件库。配置编辑、流式传输、OIDC 和 OAuth 链路演示在服务端及 WebAssembly 渲染模式下共享同一套 UI。按 [RabbitMQ 示例](design/rabbitmq-sample.md)中的说明启动 AppHost。

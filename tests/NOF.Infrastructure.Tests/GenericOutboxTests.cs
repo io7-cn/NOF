@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
@@ -25,7 +26,7 @@ public sealed class GenericOutboxTests
         using var scope = provider.CreateScope();
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work(), Context.Empty);
         store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.Id == id && record.MessageType == "custom.work")), Moq.Times.Once);
-        Assert.Null(scope.ServiceProvider.GetService<IPersistenceSession>());
+        Assert.Null(scope.ServiceProvider.GetService<DbContext>());
     }
 
     [Fact]
@@ -41,7 +42,7 @@ public sealed class GenericOutboxTests
         value.Value = "after";
         using (var observer = host.Services.CreateScope())
         {
-            Assert.False(await observer.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().AnyAsync());
+            Assert.False(await observer.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>().AnyAsync());
         }
         Assert.Empty(host.Services.GetRequiredService<Probe>().Attempts);
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
@@ -111,7 +112,7 @@ public sealed class GenericOutboxTests
         }
         using (var scope = host.Services.CreateScope())
         {
-            await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>()
+            await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
                 .Where(record => record.Id == unknown).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.SchemaVersion, 999));
         }
         var independent = await StageAsync(host, new Work { Value = "independent" });
@@ -163,7 +164,7 @@ public sealed class GenericOutboxTests
         await store.AtomicReleaseClaimsAsync([unclaimed]);
         await store.AtomicRecordDeliveryFailureAsync(unclaimed, "not an owner", permanent: true);
         var first = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
-        await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>()
+        await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
             .Where(record => record.Id == id).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.ClaimExpiresAtUtc, DateTime.UtcNow.AddSeconds(-1)));
         var second = Assert.Single(await store.AtomicClaimPendingMessagesAsync().ToListAsync());
         Assert.NotEqual(first.ClaimedBy, second.ClaimedBy);
@@ -197,7 +198,7 @@ public sealed class GenericOutboxTests
         var second = await StageAsync(host, new Work { Value = "unstarted" });
         using (var scope = host.Services.CreateScope())
         {
-            await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>()
+            await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
                 .Where(record => record.Id == first).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.CreatedAtUtc, DateTime.UtcNow.AddMinutes(-1)));
         }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -229,7 +230,7 @@ public sealed class GenericOutboxTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.EnqueueAsync(new Work(), Context.Empty.WithTenantId("other")).AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => outbox.EnqueueAsync("unregistered", Context.Empty).AsTask());
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-        Assert.False(await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().AnyAsync());
+        Assert.False(await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>().AnyAsync());
     }
 
     [Theory]
@@ -244,7 +245,7 @@ public sealed class GenericOutboxTests
         await Assert.ThrowsAsync<ArgumentException>(() => outbox.EnqueueAsync(new Work(), Context.Empty,
             new Dictionary<string, string?> { [name] = "override" }).AsTask());
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-        Assert.False(await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().AnyAsync());
+        Assert.False(await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>().AnyAsync());
     }
 
     [Fact]
@@ -264,6 +265,7 @@ public sealed class GenericOutboxTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddSingleton<Probe>();
         builder.Services.AddOutbox(outbox => outbox.Add<Work, Handler>("work", 2));
         builder.Services.Configure<TransactionalMessageOptions>(options =>
@@ -285,7 +287,7 @@ public sealed class GenericOutboxTests
     private static async Task<NOFOutboxMessage> ReadAsync(IHost host, Guid id)
     {
         using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>()
+        return await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
             .AsNoTracking().SingleAsync(record => record.Id == id);
     }
 

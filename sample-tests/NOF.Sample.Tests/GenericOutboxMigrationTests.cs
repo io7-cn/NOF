@@ -47,4 +47,14 @@ public sealed class GenericOutboxMigrationTests
         Assert.Throws<NotSupportedException>(() => migration.DownOperations);
     }
 
+    [Fact]
+    public void ClassificationRemoval_DropsOnlyTheUnusedLabel_WithoutChangingReceiptsOrHeaders()
+    {
+        var migration = new RemoveInboxClassification();
+        var operation = Assert.IsType<Microsoft.EntityFrameworkCore.Migrations.Operations.DropColumnOperation>(Assert.Single(migration.UpOperations));
+        Assert.Equal("NOFInboxMessage", operation.Table);
+        Assert.Equal("MessageType", operation.Name);
+        Assert.Throws<NotSupportedException>(() => migration.DownOperations);
+    }
+
 }

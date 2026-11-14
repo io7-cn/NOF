@@ -1,8 +1,7 @@
 # Infrastructure integration
 
 Business code depends on domain aggregate repositories, Application DTO query ports and
-IUnitOfWork. Infrastructure-only IPersistenceSession/IEntitySet/IProviderQuery are provider
-collaboration for shared stores, never a replacement business facade. See
+IUnitOfWork. Infrastructure adapters use native DbContext/ISession; the cross-ORM session, entity-set, query and model facades are removed. See
 `docs/en/design/persistence-boundaries.md` and its Chinese edition.
 
 
@@ -40,7 +39,7 @@ tenant database. Their schemas are identical, so tenant databases must accept ta
 host-level features as a potentially empty schema superset. Inbox and outbox tables can contain
 tenant-scoped transactional messages and are not guaranteed to be empty.
 
-`NOFDbContext` applies the registered model contributors for inbox and outbox entities. It also supplies value-object conversion/length conventions, multi-tenancy, and opt-in soft delete. Soft delete is disabled by default; use `.WithSoftDelete(true)` for a context-wide opt-in or `HasSoftDelete()` in EF model configuration for an entity-level opt-in.
+`NOFDbContext` applies the native model configurations for enabled inbox/outbox capabilities. It also supplies value-object conversion/length conventions, multi-tenancy, and opt-in soft delete. Soft delete is disabled by default; use `.WithSoftDelete(true)` for a context-wide opt-in or `HasSoftDelete()` in EF model configuration for an entity-level opt-in.
 
 The host may inject EF `DbContext` or the concrete context, but application handlers use owned aggregate/read ports and IUnitOfWork.
 

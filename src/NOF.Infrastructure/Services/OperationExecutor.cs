@@ -8,7 +8,7 @@ using System.Reflection;
 namespace NOF.Infrastructure;
 
 /// <summary>The single execution boundary for local calls, HTTP and reliable message consumers.</summary>
-public sealed class OperationExecutor(IServiceProvider services, ApplicationServiceInvocationResolver resolver) : IOperationExecutor
+public sealed class OperationExecutor(IServiceProvider services, ApplicationServiceRegistry registry) : IOperationExecutor
 {
     /// <inheritdoc />
     public async Task<object?> ExecuteAsync(ServiceOperationDescriptor operation, object input,
@@ -19,7 +19,8 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
         using var binding = services.BindNOF(context);
-        var mapping = resolver.Resolve(operation.ServiceType, operation.OperationName).HandlerMapping;
+        var mapping = registry.GetRegistration(operation.ServiceType).HandlerMappings.GetValueOrDefault(operation.OperationName)
+            ?? throw new InvalidOperationException($"No handler mapping for '{operation.Id}'.");
         if (mapping.RequestType != operation.RequestType || mapping.ReturnType != operation.ResponseType
             || !operation.RequestType.IsInstanceOfType(input))
         {

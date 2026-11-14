@@ -1016,7 +1016,7 @@ public static partial class NOFOidcServerExtensions
             statusCode: statusCode);
 
     internal static OAuthTokenGrant Fail(string code, string message)
-        => new global::NOF.Abstraction.Failure(code, message);
+        => new Failure(code, message);
 
     private static TService? ResolveService<TService>(IServiceProvider serviceProvider)
     {

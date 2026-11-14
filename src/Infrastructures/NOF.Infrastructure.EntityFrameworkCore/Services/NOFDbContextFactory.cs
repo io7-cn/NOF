@@ -19,7 +19,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 /// </summary>
 /// <typeparam name="TDbContext">The concrete NOF database context type.</typeparam>
 public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)] TDbContext>
-    : ITenantDbContextFactory<TDbContext>, IPersistenceSessionFactory
+    : ITenantDbContextFactory<TDbContext>
     where TDbContext : NOFDbContext
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> MigrationLocks = new(StringComparer.Ordinal);
@@ -33,7 +33,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         : this(
             serviceProvider,
             serviceProvider.GetRequiredService<IOptions<DbContextConfigurationOptions>>(),
-            serviceProvider.GetServices<IDbContextModelCreatingContributor>(),
+            serviceProvider.GetServices<IEFCoreModelConfiguration>(),
             serviceProvider.GetRequiredService<ILogger<NOFDbContextFactory<TDbContext>>>())
     {
     }
@@ -48,7 +48,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     public NOFDbContextFactory(
         IServiceProvider serviceProvider,
         IOptions<DbContextConfigurationOptions> dbContextConfigurationOptions,
-        IEnumerable<IDbContextModelCreatingContributor> modelCreatingContributors,
+        IEnumerable<IEFCoreModelConfiguration> modelCreatingContributors,
         ILogger<NOFDbContextFactory<TDbContext>> logger)
     {
         ServiceProvider = serviceProvider;
@@ -70,7 +70,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// <summary>
     /// Gets the model contributors applied to created contexts.
     /// </summary>
-    protected IEnumerable<IDbContextModelCreatingContributor> ModelCreatingContributors { get; }
+    protected IEnumerable<IEFCoreModelConfiguration> ModelCreatingContributors { get; }
 
     /// <summary>
     /// Gets the factory logger.
@@ -104,7 +104,11 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
 
         var modelCreatingExtension = new NOFModelCreatingDbContextOptionsExtension
         {
-            Contributors = [.. ModelCreatingContributors]
+            Contributors = [.. ModelCreatingContributors,
+                .. (ServiceProvider.GetService<IServiceProviderIsService>()!.IsService(typeof(IInboxStore))
+                    ? new IEFCoreModelConfiguration[] { new NOFInboxMessageModelCreatingContributor() } : []),
+                .. (ServiceProvider.GetService<IServiceProviderIsService>()!.IsService(typeof(IOutboxStore))
+                    ? new IEFCoreModelConfiguration[] { new NOFOutboxMessageModelCreatingContributor() } : [])]
         };
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(modelCreatingExtension);
 
@@ -140,11 +144,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         return dbContext;
     }
 
-    IPersistenceSession IPersistenceSessionFactory.CreateDbContext()
-        => new EfCoreDbContextAdapter(CreateDbContext());
 
-    IPersistenceSession IPersistenceSessionFactory.CreateDbContext(string tenantId)
-        => new EfCoreDbContextAdapter(CreateDbContext(tenantId));
 
     private void EnsureSqliteSchemaInitialized(TDbContext dbContext, string contextType)
     {

@@ -26,12 +26,12 @@ public sealed class RabbitMQEndpointTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
-        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", First));
+        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue("work", First));
         using var host = builder.Build();
         Assert.Empty(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
         Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Services.GetRequiredService<MemoryCommandRider>()
-            .SendAsync(new byte[] { 1 }, "work", null));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Services.GetRequiredService<MemoryMessageClient>()
+            .SendAsync("work", new Input("value"), NOF.Abstraction.Context.Empty));
     }
 
     [Fact]
@@ -39,9 +39,9 @@ public sealed class RabbitMQEndpointTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<Input>("work", First));
+        builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue("work", First));
         builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
-        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<Input>("work", Second));
+        builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue("work", Second));
         using var host = builder.Build();
         var memory = Assert.Single(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
         var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
@@ -58,8 +58,8 @@ public sealed class RabbitMQEndpointTests
     {
         var services = new ServiceCollection();
         var endpoints = new RabbitMQBuilder(services);
-        endpoints.MapQueue<Input>("work", First);
-        Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("work", Second));
+        endpoints.MapQueue("work", First);
+        Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue("work", Second));
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("invalid",
             new(typeof(IWork), nameof(IWork.MayFail))));
     }

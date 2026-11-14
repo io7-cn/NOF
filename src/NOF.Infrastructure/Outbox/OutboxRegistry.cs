@@ -87,10 +87,10 @@ public static class OutboxServiceCollectionExtensions
                 && options.Outbox.ClaimTimeout > TimeSpan.Zero && options.Outbox.CleanupInterval > TimeSpan.Zero
                 && options.Outbox.RetentionPeriod > TimeSpan.Zero, "Outbox transactional message options are invalid.")
             .ValidateOnStart();
-        services.TryAddScoped<IOutboxStore, PersistenceOutboxStore>();
+        services.AddInMemoryMessagingPersistence();
+        services.TryAddScoped<IOutboxStore>(sp => sp.GetRequiredKeyedService<IOutboxStore>(typeof(IOutboxStore)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFOutboxMessageModelCreatingContributor>());
         configure(new(services, registry));
         return services;
     }

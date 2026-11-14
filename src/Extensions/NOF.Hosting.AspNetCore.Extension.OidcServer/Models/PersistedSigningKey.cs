@@ -26,23 +26,3 @@ public sealed class PersistedSigningKey
 
     public DateTime? InvalidatedAtUtc { get; set; }
 }
-
-public sealed class PersistedSigningKeyModelCreatingContributor : IDbContextModelCreatingContributor
-{
-    public void Configure(IDbModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<PersistedSigningKey>(entity =>
-        {
-            entity.ToTable(nameof(PersistedSigningKey));
-            entity.HasKey(e => e.Kid);
-            entity.HasIndex(e => new { e.Status, e.CreatedAtUtc });
-            entity.HasIndex(e => new { e.Status, e.InvalidatedAtUtc });
-            entity.Property(e => e.Kid).HasMaxLength(64).IsRequired();
-            entity.Property(e => e.EncryptedPrivateKey).IsRequired();
-            entity.Property(e => e.PublicKey).IsRequired();
-            entity.Property(e => e.Status).IsRequired();
-            entity.Property(e => e.CreatedAtUtc).IsRequired();
-            entity.Property(e => e.UpdatedAtUtc).IsRequired();
-        });
-    }
-}

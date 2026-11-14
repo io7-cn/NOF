@@ -196,6 +196,7 @@ namespace NOF.Sample.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ClaimedBy")
+                        .IsConcurrencyToken()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
@@ -212,9 +213,6 @@ namespace NOF.Sample.Migrations
                     b.Property<string>("Headers")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int>("MessageType")
-                        .HasColumnType("integer");
 
                     b.Property<byte[]>("Payload")
                         .IsRequired()

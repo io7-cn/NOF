@@ -13,12 +13,12 @@ public class ClientGenerationRemovalTests
     [Fact]
     public void HostingAnalyzerAssembly_ShouldContainNoHttpRouteGeneratorsOrTransportDiagnostics()
     {
-        var types = typeof(ValueObjectLengthConfigurationAnalyzer).Assembly.GetTypes();
+        var types = typeof(FilterFailureCaseGenerator).Assembly.GetTypes();
         Assert.Equal(["FilterFailureCaseGenerator"], types.Where(type => typeof(IIncrementalGenerator).IsAssignableFrom(type)).Select(type => type.Name));
         Assert.DoesNotContain(types, type => type.Name == "HttpApplicationServiceAnalyzer");
-        Assert.DoesNotContain(new NOF.CodeFixes.AttributeRemovalCodeFixProvider().FixableDiagnosticIds,
+        Assert.DoesNotContain(new CodeFixes.AttributeRemovalCodeFixProvider().FixableDiagnosticIds,
             id => id != "NOF020");
-        Assert.DoesNotContain(new NOF.CodeFixes.TypeDeclarationCodeFixProvider().FixableDiagnosticIds,
+        Assert.DoesNotContain(new CodeFixes.TypeDeclarationCodeFixProvider().FixableDiagnosticIds,
             id => id is "NOF202" or "NOF211");
     }
 
@@ -28,9 +28,9 @@ public class ClientGenerationRemovalTests
         var assemblies = new[]
         {
             typeof(ApplicationServiceGenerator).Assembly,
-            typeof(NOF.Contract.SourceGenerator.ApplicationServiceAnalyzer).Assembly,
-            typeof(ValueObjectLengthConfigurationAnalyzer).Assembly,
-            typeof(ValueObjectLengthConfigurationAnalyzer).Assembly
+            typeof(Contract.SourceGenerator.ApplicationServiceAnalyzer).Assembly,
+            typeof(FilterFailureCaseGenerator).Assembly,
+            typeof(FilterFailureCaseGenerator).Assembly
         };
         foreach (var assembly in assemblies.Distinct())
         {

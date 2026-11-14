@@ -69,7 +69,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
         sb.AppendLine($"partial class {classSymbol.Name} : global::NOF.Application.IApplicationServiceImplementation");
         sb.AppendLine("{");
 
-        sb.AppendLine("    private static readonly global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> __rpcHandlerMappings =");
+        sb.AppendLine("    private static readonly global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> __handlerMappings =");
         sb.AppendLine("        new global::System.Collections.Generic.Dictionary<string, global::NOF.Application.ServiceOperationMapping>");
         sb.AppendLine("        {");
 
@@ -89,10 +89,8 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
         }
         sb.AppendLine("        };");
         sb.AppendLine();
-        sb.AppendLine("    public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __rpcHandlerMappings;");
+        sb.AppendLine("    public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __handlerMappings;");
         sb.AppendLine();
-        sb.AppendLine("    protected override global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> GetHandlerMappings()");
-        sb.AppendLine("        => __rpcHandlerMappings;");
         sb.AppendLine();
 
         foreach (var method in serviceMethods)

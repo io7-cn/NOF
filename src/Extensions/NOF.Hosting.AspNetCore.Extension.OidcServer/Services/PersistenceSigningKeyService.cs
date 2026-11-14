@@ -16,7 +16,8 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 public sealed class PersistenceSigningKeyService : ISigningKeyService
 {
     private readonly OAuthAuthorizationServerOptions _options;
-    private readonly IPersistenceSession _dbContext;
+    private readonly ISigningKeyStore _keys;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<PersistenceSigningKeyService> _logger;
     private readonly IHostEnvironment _hostEnvironment;
     private readonly DeploymentOptions _deployment;
@@ -24,13 +25,15 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
 
     public PersistenceSigningKeyService(
         IOptions<OAuthAuthorizationServerOptions> options,
-        IPersistenceSession dbContext,
+        ISigningKeyStore keys,
+        IUnitOfWork unitOfWork,
         IHostEnvironment hostEnvironment,
         IOptions<DeploymentOptions> deployment,
         ILogger<PersistenceSigningKeyService> logger)
     {
         _options = options.Value;
-        _dbContext = dbContext;
+        _keys = keys;
+        _unitOfWork = unitOfWork;
         _hostEnvironment = hostEnvironment;
         _deployment = deployment.Value;
         _logger = logger;
@@ -60,25 +63,14 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
     public async Task RotateKeyAsync(CancellationToken cancellationToken = default)
     {
         var cutoff = DateTime.UtcNow - _options.RevokedSigningKeyRetention;
-        var revokedKeys = _dbContext.Set<PersistedSigningKey>()
-            .Where(key => key.Status == PersistedSigningKeyStatus.Revoked
-                && key.InvalidatedAtUtc != null
-                && key.InvalidatedAtUtc <= cutoff)
-            ;
-        await revokedKeys.ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _keys.DeleteRevokedAsync(cutoff, cancellationToken).ConfigureAwait(false);
 
         await EnsurePrimaryKeysPersistedAsync(cancellationToken).ConfigureAwait(false);
         var newKey = GenerateNewKey();
         EnsureEncryptionKeyInitialized();
 
         var now = DateTime.UtcNow;
-        var activeAndPublishedQuery = _dbContext.Set<PersistedSigningKey>()
-            .Where(key => key.Status == PersistedSigningKeyStatus.Active
-                || key.Status == PersistedSigningKeyStatus.NextActive
-                || key.Status == PersistedSigningKeyStatus.Retired)
-            .OrderByDescending(key => key.CreatedAtUtc)
-            ;
-        var activeAndPublished = await activeAndPublishedQuery.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var activeAndPublished = await _keys.ListPublishedAsync(cancellationToken).ConfigureAwait(false);
 
         EnsurePrimaryKeys(activeAndPublished, now);
 
@@ -100,12 +92,12 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
         nextActiveKey.Status = PersistedSigningKeyStatus.Active;
         nextActiveKey.UpdatedAtUtc = now;
 
-        _dbContext.Set<PersistedSigningKey>().Add(ToPersistedSigningKey(newKey, PersistedSigningKeyStatus.NextActive, now));
+        _keys.Add(ToPersistedSigningKey(newKey, PersistedSigningKeyStatus.NextActive, now));
         ApplyRetiredRetention(activeAndPublished, now);
 
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateException)
         {
@@ -117,23 +109,14 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
     {
         EnsureEncryptionKeyInitialized();
 
-        var persistedKeysQuery = _dbContext.Set<PersistedSigningKey>()
-            .AsNoTracking()
-            .Where(key => key.Status == PersistedSigningKeyStatus.Active
-                || key.Status == PersistedSigningKeyStatus.NextActive
-                || key.Status == PersistedSigningKeyStatus.Retired)
-            .OrderBy(key => key.Status == PersistedSigningKeyStatus.Active ? 0 :
-                key.Status == PersistedSigningKeyStatus.NextActive ? 1 : 2)
-            .ThenByDescending(key => key.CreatedAtUtc)
-            ;
-        var persistedKeys = await persistedKeysQuery.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var persistedKeys = await _keys.ListPublishedAsync(cancellationToken).ConfigureAwait(false);
 
         if (persistedKeys.Count == 0)
         {
             return null;
         }
 
-        var keys = persistedKeys.Select(ToManagedSigningKey).ToList();
+        var keys = persistedKeys.OrderBy(key => key.Status == PersistedSigningKeyStatus.Active ? 0 : key.Status == PersistedSigningKeyStatus.NextActive ? 1 : 2).ThenByDescending(key => key.CreatedAtUtc).Select(ToManagedSigningKey).ToList();
         if (keys.Count == 0)
         {
             throw new InvalidOperationException("No usable signing keys were loaded from persistence.");
@@ -147,13 +130,7 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
         EnsureEncryptionKeyInitialized();
 
         var now = DateTime.UtcNow;
-        var keysQuery = _dbContext.Set<PersistedSigningKey>()
-            .Where(key => key.Status == PersistedSigningKeyStatus.Active
-                || key.Status == PersistedSigningKeyStatus.NextActive
-                || key.Status == PersistedSigningKeyStatus.Retired)
-            .OrderByDescending(key => key.CreatedAtUtc)
-            ;
-        var keys = await keysQuery.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var keys = await _keys.ListPublishedAsync(cancellationToken).ConfigureAwait(false);
         var hasChanges = EnsurePrimaryKeys(keys, now);
         if (!hasChanges)
         {
@@ -162,20 +139,12 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
 
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateException)
         {
-            var initializedQuery = _dbContext.Set<PersistedSigningKey>()
-                .AsNoTracking()
-                .Where(key => key.Status == PersistedSigningKeyStatus.Active)
-                ;
-            var initialized = await initializedQuery.AnyAsync(cancellationToken).ConfigureAwait(false);
-            var preparedQuery = _dbContext.Set<PersistedSigningKey>()
-                .AsNoTracking()
-                .Where(key => key.Status == PersistedSigningKeyStatus.NextActive)
-                ;
-            var prepared = await preparedQuery.AnyAsync(cancellationToken).ConfigureAwait(false);
+            var initialized = await _keys.HasStatusAsync(PersistedSigningKeyStatus.Active, cancellationToken).ConfigureAwait(false);
+            var prepared = await _keys.HasStatusAsync(PersistedSigningKeyStatus.NextActive, cancellationToken).ConfigureAwait(false);
             if (initialized && prepared)
             {
                 return;
@@ -225,7 +194,7 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
             else
             {
                 var generatedActive = ToPersistedSigningKey(GenerateNewKey(), PersistedSigningKeyStatus.Active, now);
-                _dbContext.Set<PersistedSigningKey>().Add(generatedActive);
+                _keys.Add(generatedActive);
                 keys.Add(generatedActive);
                 currentActive = generatedActive;
                 hasChanges = true;
@@ -235,7 +204,7 @@ public sealed class PersistenceSigningKeyService : ISigningKeyService
         if (nextActive is null)
         {
             var generatedNextActive = ToPersistedSigningKey(GenerateNewKey(), PersistedSigningKeyStatus.NextActive, now);
-            _dbContext.Set<PersistedSigningKey>().Add(generatedNextActive);
+            _keys.Add(generatedNextActive);
             keys.Add(generatedNextActive);
             hasChanges = true;
         }

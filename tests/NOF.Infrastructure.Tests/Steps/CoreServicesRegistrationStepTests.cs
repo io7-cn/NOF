@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics;
@@ -30,8 +31,9 @@ public class NOFInfrastructureTests
 
         using var provider = BuildServiceProvider(builder);
         using var scope = provider.CreateScope();
-        Assert.Null(scope.ServiceProvider.GetService<Microsoft.EntityFrameworkCore.DbContext>());
-        Assert.Equal("InMemoryDbContext", scope.ServiceProvider.GetRequiredService<IPersistenceSession>().GetType().Name);
+        Assert.Null(scope.ServiceProvider.GetService<DbContext>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        Assert.Null(scope.ServiceProvider.GetService<DbContext>());
         Assert.IsType<CacheService>(scope.ServiceProvider.GetRequiredService<ICacheService>());
         Assert.IsType<MemoryCacheServiceRider>(scope.ServiceProvider.GetRequiredService<ICacheServiceRider>());
         Assert.IsType<ObjectStorageService>(scope.ServiceProvider.GetRequiredService<IObjectStorage>());
@@ -160,7 +162,7 @@ public class NOFInfrastructureTests
         using var scope = provider.CreateScope();
 
         var tenantFactory = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory<NOFDbContext>>();
-        var efFactory = scope.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<NOFDbContext>>();
+        var efFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<NOFDbContext>>();
 
         Assert.Same(tenantFactory, efFactory);
     }
@@ -178,8 +180,8 @@ public class NOFInfrastructureTests
         var customFactory = scope.ServiceProvider.GetRequiredService<OverriddenDbContextFactory>();
         var baseFactory = scope.ServiceProvider.GetRequiredService<NOFDbContextFactory<NOFDbContext>>();
         var tenantFactory = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory<NOFDbContext>>();
-        var efFactory = scope.ServiceProvider.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<NOFDbContext>>();
-        var nofFactory = scope.ServiceProvider.GetRequiredService<NOF.Infrastructure.IPersistenceSessionFactory>();
+        var efFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<NOFDbContext>>();
+        var nofFactory = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory<NOFDbContext>>();
 
         Assert.Same(customFactory, baseFactory);
         Assert.Same(customFactory, tenantFactory);
@@ -334,7 +336,7 @@ public class NOFInfrastructureTests
         {
             LastTenantId = tenantId;
             return new NOFDbContext(
-                new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<NOFDbContext>().Options);
+                new DbContextOptionsBuilder<NOFDbContext>().Options);
         }
     }
 

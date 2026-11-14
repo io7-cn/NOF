@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate</PackageId>
+    <Description>Native NHibernate persistence for the NOF OIDC extension.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NOF.Hosting.AspNetCore.Extension.OidcServer/NOF.Hosting.AspNetCore.Extension.OidcServer.csproj" />
+    <ProjectReference Include="../../Infrastructures/NOF.Infrastructure.NHibernate/NOF.Infrastructure.NHibernate.csproj" />
+  </ItemGroup>
+</Project>

@@ -8,6 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore\NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Extensions\NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate\NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />

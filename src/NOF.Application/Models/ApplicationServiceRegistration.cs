@@ -5,5 +5,5 @@ public sealed record ApplicationServiceRegistration(
     Type ImplementationType)
 {
     /// <summary>Gets the operations captured by generic server registration.</summary>
-    public IReadOnlyDictionary<string, ServiceOperationMapping>? HandlerMappings { get; init; }
+    public required IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; init; }
 }

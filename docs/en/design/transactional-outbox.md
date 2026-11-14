@@ -108,3 +108,5 @@ Custom IOutboxStore implementations remain usable without an ORM or transport un
 Capability configuration does not edit existing model snapshots or execute table drops. Migration-owning hosts sharing a database must keep its full capability model; do not generate destructive removals merely to disable a process worker. RunWorkers=false retains the model and all durable progress.
 
 Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-migration) before changing existing Inbox receipt routes.
+
+Inbox receipts now use only ID and opaque Route; the unused Command/Notification label and Memory Rider wrappers are removed. Apply the explicit classification-column migration and select native persistence as described in [persistence boundaries](persistence-boundaries.md). The default memory backend stores message state only.

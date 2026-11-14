@@ -5,11 +5,13 @@ namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed class PersistenceRevokedRefreshTokenRepository : IRevokedRefreshTokenRepository
 {
-    private readonly IPersistenceSession _dbContext;
+    private readonly IRevokedRefreshTokenStore _tokens;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public PersistenceRevokedRefreshTokenRepository(IPersistenceSession dbContext)
+    public PersistenceRevokedRefreshTokenRepository(IRevokedRefreshTokenStore tokens, IUnitOfWork unitOfWork)
     {
-        _dbContext = dbContext;
+        _tokens = tokens;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task RevokeAsync(string tokenId, TimeSpan expiration, CancellationToken cancellationToken = default)
@@ -17,10 +19,7 @@ public sealed class PersistenceRevokedRefreshTokenRepository : IRevokedRefreshTo
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenId);
 
         var expiresAtUtc = DateTime.UtcNow.Add(expiration);
-        var revokedToken = await _dbContext
-            .Set<RevokedRefreshToken>()
-            .Where(token => token.TokenId == tokenId)
-            .FirstOrDefaultAsync(cancellationToken)
+        var revokedToken = await _tokens.FindAsync(tokenId, cancellationToken)
             .ConfigureAwait(false);
 
         if (revokedToken is null)
@@ -30,24 +29,21 @@ public sealed class PersistenceRevokedRefreshTokenRepository : IRevokedRefreshTo
                 TokenId = tokenId,
                 ExpiresAtUtc = expiresAtUtc
             };
-            _dbContext.Set<RevokedRefreshToken>().Add(revokedToken);
+            _tokens.Add(revokedToken);
         }
         else
         {
             revokedToken.ExpiresAtUtc = expiresAtUtc;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> IsRevokedAsync(string tokenId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenId);
 
-        var revokedToken = await _dbContext
-            .Set<RevokedRefreshToken>()
-            .Where(token => token.TokenId == tokenId)
-            .FirstOrDefaultAsync(cancellationToken)
+        var revokedToken = await _tokens.FindAsync(tokenId, cancellationToken)
             .ConfigureAwait(false);
 
         return revokedToken is not null && revokedToken.ExpiresAtUtc > DateTime.UtcNow;

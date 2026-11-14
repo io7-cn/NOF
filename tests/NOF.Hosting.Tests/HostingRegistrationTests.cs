@@ -44,7 +44,7 @@ public class HostingRegistrationTests
     public void AddNOFHosting_OnBuilder_ShouldPreserveEnvironmentAndRemainIdempotent()
     {
         var builder = new TestAppBuilder();
-        var environment = ServiceDescriptor.Singleton<IHostEnvironment>(builder.Environment);
+        var environment = ServiceDescriptor.Singleton(builder.Environment);
         builder.Services.Add(environment);
 
         builder.AddNOFHosting();

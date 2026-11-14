@@ -135,3 +135,5 @@ Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConf
 处理器经 MessageDelivery 将 `OutboxDeliveryContext.Headers` 转为原生 RabbitMQ Headers，重试保留入队时的自定义头快照，NOF 补充 ID、租户与追踪。示例不保证邮件、审计、指标队列之间的先后关系。需要顺序时，由基础设施实现领取调度与消费协调，业务版本则放入负载。升级已有数据库前，执行[移除顺序模型的迁移](transactional-outbox.md#可靠处理与迁移)。
 
 Notifications 示例使用 EnsureCreated 创建本地 SQLite 文件，不升级已有结构。升级前停止接收者，排空或显式迁移顺序回执，备份文件，再通过显式 SQLite 迁移删除两张顺序状态表、顺序索引与 NOFInboxMessage 的三个顺序列，保留回执 ID 和历史。可丢弃的演示数据库可在备份后有意重建；持久服务必须保留去重历史。生产者的 PostgreSQL 迁移不会升级这个独立接收者数据库。
+
+生产者使用原生 EF 持久化，并通过 AddOidcEntityFrameworkCore 注册 OIDC 存储；接收者在原有 SQLite 上下文中使用原生 EF Inbox Store。已有生产者和接收者数据库需要显式迁移，删除未使用的 Inbox 分类列；回执路由与消息 ID 不变。

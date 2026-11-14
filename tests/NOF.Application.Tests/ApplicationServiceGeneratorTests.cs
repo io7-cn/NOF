@@ -116,12 +116,12 @@ public class ApplicationServiceGeneratorTests
             typeof(AutoInjectAttribute),
             typeof(Empty),
             typeof(IApplicationService),
-            typeof(NOF.Testing.TestOutcome));
+            typeof(Testing.TestOutcome));
         var generatedCode = result.GeneratedTrees.Single(tree => tree.FilePath.EndsWith(".ApplicationService.g.cs", StringComparison.Ordinal)).GetRoot().ToFullString();
 
         Assert.Contains("partial class MyService : global::NOF.Application.IApplicationServiceImplementation", generatedCode);
-        Assert.Contains("protected override global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> GetHandlerMappings()", generatedCode);
-        Assert.Contains("public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __rpcHandlerMappings;", generatedCode);
+        Assert.DoesNotContain("GetHandlerMappings", generatedCode);
+        Assert.Contains("public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __handlerMappings;", generatedCode);
         Assert.Contains("public abstract class Ping : global::NOF.Application.ServiceOperation<global::App.PingRequest, global::NOF.Testing.TestOutcome>", generatedCode);
         Assert.Contains("public abstract class Get : global::NOF.Application.ServiceOperation<global::App.GetRequest, global::NOF.Testing.TestOutcome<global::App.MyDto>>", generatedCode);
         Assert.Contains("public abstract class Archive : global::NOF.Application.ServiceOperation<global::App.ArchiveRequest, global::NOF.Testing.TestOutcome>", generatedCode);
@@ -135,7 +135,7 @@ public class ApplicationServiceGeneratorTests
         var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.CreateCompilation("ApplicationOperations", source, true, references);
         GeneratorDriver driver = Microsoft.CodeAnalysis.CSharp.CSharpGeneratorDriver.Create(
             [new ApplicationServiceGenerator().AsSourceGenerator()],
-            parseOptions: (Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)compilation.SyntaxTrees.First().Options);
+            parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         Assert.Empty(diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error));
         Assert.Empty(output.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error));

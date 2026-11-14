@@ -288,7 +288,7 @@ public sealed class AuthenticationInvocationFilterTests
         {
             HandlerType = typeof(object),
             HandlerMethodInfo = serviceMethod,
-            Operation = new InvocationTestDescriptor(typeof(object), (serviceMethod).Name, typeof(object), typeof(NOF.Testing.TestOutcome)),
+            Operation = new InvocationTestDescriptor(typeof(object), (serviceMethod).Name, typeof(object), typeof(Testing.TestOutcome)),
             Origin = InvocationOrigin.Http
         };
     }

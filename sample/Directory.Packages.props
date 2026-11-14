@@ -4,15 +4,14 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="AntDesign" Version="1.5.1" />
     <!-- Aspire's security-fixed AppHost requires OpenTelemetry 1.17 in the sample host. -->
-    <PackageVersion Update="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="[1.17.0,1.18.0)" />
-    <PackageVersion Update="OpenTelemetry.Extensions.Hosting" Version="[1.17.0,1.18.0)" />
+    <PackageVersion Update="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="[1.17.0,1.18.0)" Condition="'$(MSBuildProjectName)' == 'NOF.Sample.AppHost'" />
+    <PackageVersion Update="OpenTelemetry.Extensions.Hosting" Version="[1.17.0,1.18.0)" Condition="'$(MSBuildProjectName)' == 'NOF.Sample.AppHost'" />
     <PackageVersion Include="Aspire.Hosting" Version="13.6.5" />
     <PackageVersion Include="Aspire.Hosting.Garnet" Version="13.1.0" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.1.0" />
     <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="13.1.0" />
-    <PackageVersion Include="MessagePack" Version="[2.5.303,3.0.0)" />
+    <PackageVersion Include="MessagePack" Version="[2.5.307,3.0.0)" />
     <!-- Align the sample Blazor packages with the .NET 11 runtime. -->
     <PackageVersion Update="Microsoft.AspNetCore.Components" Version="[11.0.0,11.1.0)" />
     <PackageVersion Update="Microsoft.AspNetCore.Components.WebAssembly" Version="[11.0.0,11.1.0)" />

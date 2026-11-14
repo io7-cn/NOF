@@ -1,40 +1,20 @@
 @inherits LayoutComponentBase
 
-<AntContainer />
-
-<Layout Class="site-layout" Style="min-height: 100vh;">
-    <Header Style="background: #001529; padding: 0 24px; display: flex; align-items: center;">
-        <div style="color: #fff; font-size: 20px; font-weight: bold;">
-            🐨 配置中心
-        </div>
-        <div style="margin-left: auto; display: flex; gap: 12px;">
-            <a href="/streaming-demo"
-               style="color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 4px; transition: background-color 0.3s;"
-               onmouseover="this.style.backgroundColor='#404040'"
-               onmouseout="this.style.backgroundColor='transparent'">
-                📡 Streaming Demo
-            </a>
-            <a href="/oidc-demo"
-               style="color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 4px; transition: background-color 0.3s;"
-               onmouseover="this.style.backgroundColor='#404040'"
-               onmouseout="this.style.backgroundColor='transparent'">
-                🔐 OIDC Demo
-            </a>
-            <a href="/oauth-chain-demo"
-               style="color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 4px; transition: background-color 0.3s;"
-               onmouseover="this.style.backgroundColor='#404040'"
-               onmouseout="this.style.backgroundColor='transparent'">
-                🔄 OAuth Chain
-            </a>
-        </div>
-    </Header>
-    <Content Style="padding: 0; background: #f0f2f5;">
-        @Body
-    </Content>
-</Layout>
+<div class="sample-app">
+    <header class="sample-header">
+        <a class="sample-brand" href="/">NOF · 配置中心</a>
+        <nav aria-label="主导航">
+            <NavLink href="/" Match="NavLinkMatch.All">配置中心</NavLink>
+            <NavLink href="/streaming-demo">Streaming Demo</NavLink>
+            <NavLink href="/oidc-demo">OIDC Demo</NavLink>
+            <NavLink href="/oauth-chain-demo">OAuth Chain</NavLink>
+        </nav>
+    </header>
+    <main>@Body</main>
+    <MessageBanner />
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    页面出现错误。<a href="" class="reload">重新加载</a>
+    <span class="dismiss">×</span>
 </div>

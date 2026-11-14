@@ -23,7 +23,7 @@ public static partial class NOFInfrastructureExtensions
             ArgumentNullException.ThrowIfNull(configureOptions);
 
             ConfigureProvider(services, configureOptions);
-            services.ReplaceOrAddSingleton<IAmazonS3>(static serviceProvider =>
+            services.ReplaceOrAddSingleton(static serviceProvider =>
                 AmazonS3ClientFactory.Create(
                     serviceProvider
                         .GetRequiredService<IOptions<AmazonS3ObjectStorageOptions>>()

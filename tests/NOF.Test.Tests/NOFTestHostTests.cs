@@ -126,7 +126,7 @@ public class NOFTestHostTests
         builder.Services.AddScoped<ITestClient, TestClient>();
 
         await using var host = builder.BuildTestHost();
-        var result = await host.CallAsync<string>(
+        var result = await host.CallAsync(
             (services, context, cancellationToken) => services.GetRequiredService<ITestClient>().EchoAsync(context, cancellationToken),
             configure: scope => scope.SetContextItem("case", "host-call"));
 
@@ -134,29 +134,21 @@ public class NOFTestHostTests
     }
 
     [Fact]
-    public async Task AddInMemoryPersistence_ShouldAllowPersistingAcrossScopes()
+    public async Task MessageUnitOfWork_ShouldStageAcrossHarnessScopes()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.Services.AddInMemoryPersistence();
-
+        builder.Services.AddOutbox(_ => { });
         await using var host = builder.BuildTestHost();
-
+        var id = Guid.NewGuid();
         await host.ExecuteAsync(async scope =>
         {
-            var dbContext = scope.GetRequiredService<IPersistenceSession>();
-            dbContext.Set<TestEntity>().Add(new TestEntity { Name = "persisted" });
-            await dbContext.SaveChangesAsync();
+            scope.GetRequiredService<IOutboxStore>().Stage(new NOFOutboxMessage
+            { Id = id, MessageType = "test", Payload = [], Headers = "{}" });
+            await scope.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         });
-
-        var entity = await host.ExecuteAsync(async scope =>
-        {
-            return await scope.GetRequiredService<IPersistenceSession>()
-                .Set<TestEntity>()
-                .FirstOrDefaultAsync(item => item.Name == "persisted");
-        });
-
-        Assert.NotNull(entity);
-        Assert.Equal("persisted", entity.Name);
+        var messages = await host.ExecuteAsync(async scope =>
+            await scope.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync());
+        Assert.Equal(id, Assert.Single(messages).Id);
     }
 
     [Fact]

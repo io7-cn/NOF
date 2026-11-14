@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract generates no code; NOF.Contract.SourceGenerator keeps its name and declaration analyzers only. Application owns ServiceOperationReference and generates MailService.Send with a complete typed Descriptor. Its Reference preserves the stable operation identity. Remote producers reference the shared business Contract plus framework Application and explicitly construct a reference, without the receiving implementation. All contract interfaces, including FailureCase declarations, and IApplicationServiceImplementation need no partial. Result and failure branches are generated directly in Application operations. Operation identity is contract plus method, never the input/output pair or handler implementation name.
+Contract generates no code; NOF.Contract.SourceGenerator retains declaration analyzers. Application generates Service.Operation and a complete typed Descriptor. ServiceOperationReference and Descriptor.Reference are removed; remote clients use shared payloads and their own concrete integration ports. Contracts and IApplicationServiceImplementation need no partial modifier. Result and failure branches are generated in Application operations. Operation identity remains contract plus method. Registration captures static HandlerMappings, which are required; no service-container construction or instance-mapping fallback is used during resolution.
 
 Register the application assembly and each service container once. Individual operations continue to be discovered automatically:
 

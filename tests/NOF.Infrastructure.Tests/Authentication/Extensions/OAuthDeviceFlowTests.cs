@@ -21,6 +21,8 @@ public sealed class OAuthDeviceFlowTests
     public async Task AddDeviceClient_ShouldBootstrapDeviceOnlyPublicClient()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(ConfigureOptions)
             .AddDeviceClient(
                 "living-room-tv",
@@ -186,6 +188,8 @@ public sealed class OAuthDeviceFlowTests
     public async Task Metadata_ShouldAdvertiseDeviceAuthorizationGrant()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(ConfigureOptions);
 
         await using var host = builder.BuildTestHost();
@@ -229,6 +233,8 @@ public sealed class OAuthDeviceFlowTests
     public async Task DynamicRegistration_ShouldAllowDeviceOnlyClientWithoutRedirectOrResponseType()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(ConfigureOptions);
 
         await using var host = builder.BuildTestHost();
@@ -263,6 +269,8 @@ public sealed class OAuthDeviceFlowTests
         Action<OAuthAuthorizationServerOptions>? configure = null)
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
             {
                 ConfigureOptions(options);
@@ -293,7 +301,7 @@ public sealed class OAuthDeviceFlowTests
     }
 
     private static async Task<T> ExecuteJsonAsync<T>(
-        Microsoft.AspNetCore.Http.IResult result,
+        IResult result,
         DefaultHttpContext context)
     {
         context.Response.Body = new MemoryStream();

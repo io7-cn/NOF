@@ -12,7 +12,9 @@ using NOF.Sample.Services;
 using NOF.Sample.UI.Services;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
-builder.AddApplicationPart(typeof(NOF.Sample.Endpoints.ConfigNodeEndpoints).Assembly);
+builder.Services.AddOidcEntityFrameworkCore();
+builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly);
+
 var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
@@ -79,12 +81,14 @@ builder.Services.ReplaceOrAddScoped<ISampleApi, ServerSampleApi>();
 builder.Services.ReplaceOrAddScoped<IOAuthDemoApi, ServerOAuthDemoApi>();
 builder.Services.AddScoped<IOAuthAuthorizeEndpoint, SampleOAuthAuthorizeEndpoint>();
 builder.Services.AddScoped<IOAuthSubjectService, SampleOAuthSubjectService>();
+
 builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin));
+
 builder.Services.AddTransient<OAuthChainDemoAccessTokenHandler>();
 builder.Services.AddHttpClient<IDemoDownstreamApi, DownstreamApi>(client => client.BaseAddress = new Uri(sampleOrigin))
     .AddHttpMessageHandler<OAuthChainDemoAccessTokenHandler>();
 
-builder.Services.AddAntDesign();
+builder.Services.AddScoped<SampleMessageService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()

@@ -10,7 +10,7 @@ public sealed class DefaultOAuthMetadataEndpoint(IOptions<OAuthAuthorizationServ
     {
         cancellationToken.ThrowIfCancellationRequested();
         var issuer = options.Value.Issuer.TrimEnd('/');
-        return ValueTask.FromResult<IResult>(Results.Json(new OAuthServerMetadata
+        return ValueTask.FromResult(Results.Json(new OAuthServerMetadata
         {
             Issuer = issuer,
             AuthorizationEndpoint = $"{issuer}/authorize",

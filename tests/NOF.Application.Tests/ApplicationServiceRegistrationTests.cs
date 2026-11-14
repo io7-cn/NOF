@@ -59,12 +59,12 @@ public class ApplicationServiceRegistrationTests
     public class FirstServer : ApplicationService<IRegistrationService>, IApplicationServiceImplementation
     {
         public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } = new Dictionary<string, ServiceOperationMapping>();
-        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
+
     }
 
     public class ReplacementServer : ApplicationService<IRegistrationService>, IApplicationServiceImplementation
     {
         public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } = new Dictionary<string, ServiceOperationMapping>();
-        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
+
     }
 }

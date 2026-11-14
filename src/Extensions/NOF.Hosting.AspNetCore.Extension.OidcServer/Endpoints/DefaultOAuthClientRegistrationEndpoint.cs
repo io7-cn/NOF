@@ -200,7 +200,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             : request.TokenEndpointAuthenticationMethod.Trim();
         if (!_options.ClientRegistrationAuthenticationMethodsAllowed.Contains(authenticationMethod, StringComparer.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "token_endpoint_auth_method is not allowed.");
+            return new Failure("invalid_client_metadata", "token_endpoint_auth_method is not allowed.");
         }
 
         var clientType = string.Equals(authenticationMethod, OAuthClientAuthenticationMethods.None, StringComparison.Ordinal)
@@ -218,29 +218,29 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
 
         if (grantTypes.Any(grantType => !_options.ClientRegistrationGrantTypesAllowed.Contains(grantType, StringComparer.Ordinal)))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "grant_types contains a value that is not allowed.");
+            return new Failure("invalid_client_metadata", "grant_types contains a value that is not allowed.");
         }
 
         if (responseTypes.Any(static responseType => !string.Equals(responseType, "code", StringComparison.Ordinal)))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "only response_type=code is supported.");
+            return new Failure("invalid_client_metadata", "only response_type=code is supported.");
         }
 
         if (grantTypes.Contains(OAuthGrantTypes.AuthorizationCode, StringComparer.Ordinal)
             != responseTypes.Contains("code", StringComparer.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "authorization_code and response_type=code must be registered together.");
+            return new Failure("invalid_client_metadata", "authorization_code and response_type=code must be registered together.");
         }
 
         if (clientType == OAuthClientType.Public
             && grantTypes.Contains(OAuthGrantTypes.ClientCredentials, StringComparer.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "public clients must not use the client_credentials grant type.");
+            return new Failure("invalid_client_metadata", "public clients must not use the client_credentials grant type.");
         }
 
         if (scopes.Any(scope => !_options.ClientRegistrationScopesAllowed.Contains(scope, StringComparer.Ordinal)))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "scope contains a value that is not allowed.");
+            return new Failure("invalid_client_metadata", "scope contains a value that is not allowed.");
         }
 
         var applicationType = string.IsNullOrWhiteSpace(request.ApplicationType)
@@ -249,18 +249,18 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
         if (!string.Equals(applicationType, OAuthClientApplicationTypes.Web, StringComparison.Ordinal)
             && !string.Equals(applicationType, OAuthClientApplicationTypes.Native, StringComparison.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "application_type must be web or native.");
+            return new Failure("invalid_client_metadata", "application_type must be web or native.");
         }
 
         var redirectError = ValidateRedirectUris(redirectUris, applicationType);
         if (redirectError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_redirect_uri", redirectError);
+            return new Failure("invalid_redirect_uri", redirectError);
         }
 
         if (grantTypes.Contains(OAuthGrantTypes.AuthorizationCode, StringComparer.Ordinal) && redirectUris.Length == 0)
         {
-            return new global::NOF.Abstraction.Failure("invalid_redirect_uri", "redirect_uris is required for authorization_code clients.");
+            return new Failure("invalid_redirect_uri", "redirect_uris is required for authorization_code clients.");
         }
 
         var subjectType = string.IsNullOrWhiteSpace(request.SubjectType)
@@ -268,7 +268,7 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             : request.SubjectType.Trim();
         if (!string.Equals(subjectType, OAuthSubjectTypes.Public, StringComparison.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "only subject_type=public is supported.");
+            return new Failure("invalid_client_metadata", "only subject_type=public is supported.");
         }
 
         var idTokenAlgorithm = string.IsNullOrWhiteSpace(request.IdTokenSignedResponseAlgorithm)
@@ -276,44 +276,44 @@ public sealed class DefaultOAuthClientRegistrationEndpoint(
             : request.IdTokenSignedResponseAlgorithm.Trim();
         if (!string.Equals(idTokenAlgorithm, OAuthSigningAlgorithms.RsaSha256, StringComparison.Ordinal))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "only id_token_signed_response_alg=RS256 is supported.");
+            return new Failure("invalid_client_metadata", "only id_token_signed_response_alg=RS256 is supported.");
         }
 
         var jsonWebKeySet = request.JsonWebKeySet?.GetRawText();
         if (request.JsonWebKeySet.HasValue
             && request.JsonWebKeySet.Value.ValueKind != JsonValueKind.Object)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "jwks must be a JSON object.");
+            return new Failure("invalid_client_metadata", "jwks must be a JSON object.");
         }
 
         if (string.Equals(authenticationMethod, OAuthClientAuthenticationMethods.PrivateKeyJwt, StringComparison.Ordinal)
             && string.IsNullOrWhiteSpace(jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "private_key_jwt clients must register jwks.");
+            return new Failure("invalid_client_metadata", "private_key_jwt clients must register jwks.");
         }
 
         if (clientType == OAuthClientType.Public && !string.IsNullOrWhiteSpace(jsonWebKeySet))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "public clients must not register client assertion keys.");
+            return new Failure("invalid_client_metadata", "public clients must not register client assertion keys.");
         }
 
         var metadataUriError = ValidateMetadataUris(request);
         if (metadataUriError is not null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", metadataUriError);
+            return new Failure("invalid_client_metadata", metadataUriError);
         }
 
         if ((request.ClientName?.Length ?? 0) > 256
             || (request.SoftwareId?.Length ?? 0) > 256
             || (request.SoftwareVersion?.Length ?? 0) > 256)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "client metadata exceeds the supported length.");
+            return new Failure("invalid_client_metadata", "client metadata exceeds the supported length.");
         }
 
         var contacts = NormalizeValues(request.Contacts ?? []);
         if (redirectUris.Length > 20 || scopes.Length > 64 || contacts.Length > 20)
         {
-            return new global::NOF.Abstraction.Failure("invalid_client_metadata", "client metadata contains too many values.");
+            return new Failure("invalid_client_metadata", "client metadata contains too many values.");
         }
 
         return new CreateOAuthClientRequest

@@ -47,24 +47,7 @@ public sealed record ServiceOperationMapping(
 /// <summary>
 /// Base type for source-generated application service containers.
 /// </summary>
-public abstract class ApplicationService
-{
-
-    /// <summary>
-    /// Returns the mapping from operation name to split handler base type.
-    /// </summary>
-    protected abstract IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings();
-
-    /// <summary>
-    /// Tries to resolve one operation mapping.
-    /// </summary>
-    public bool TryGetHandlerMapping(string operationName, [MaybeNullWhen(false)] out ServiceOperationMapping mapping)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-
-        return GetHandlerMappings().TryGetValue(operationName, out mapping);
-    }
-}
+public abstract class ApplicationService;
 
 /// <summary>
 /// Typed base class for an application service container.

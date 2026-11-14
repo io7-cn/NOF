@@ -11,36 +11,6 @@ namespace NOF.Application.Tests;
 public sealed class ContractFailureOwnershipTests
 {
     [Fact]
-    public void RemoteProducer_ReferencesOnlyContractMetadataAndFrameworkApplication()
-    {
-        var contract = CSharpCompilation.CreateCompilation("ProducerContract_" + Guid.NewGuid().ToString("N"), """
-            using NOF.Contract;
-            namespace Business;
-            public sealed record Query;
-            public interface IService : IApplicationService { Empty Run(Query request); }
-            """, true, typeof(IApplicationService));
-        contract = contract.RemoveReferences(contract.References.Where(reference =>
-            Path.GetFileNameWithoutExtension(reference.Display) is { } name
-            && name.StartsWith("NOF.", StringComparison.Ordinal) && name != "NOF.Contract"));
-        using var image = new MemoryStream();
-        var emitted = contract.Emit(image);
-        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
-        var producer = CSharpCompilation.CreateCompilation("RemoteProducer", """
-            using NOF.Application;
-            public static class Producer
-            {
-                public static ServiceOperationReference<Business.Query> Target { get; }
-                    = new(typeof(Business.IService), nameof(Business.IService.Run));
-            }
-            """, true, typeof(ServiceOperationReference<>), typeof(IApplicationService))
-            .AddReferences(MetadataReference.CreateFromImage(image.ToArray()));
-        Assert.DoesNotContain(producer.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Null(producer.GetTypeByMetadataName("Business.IServiceOperations"));
-        var target = producer.GetTypeByMetadataName("Producer")!.GetMembers("Target").OfType<IPropertySymbol>().Single();
-        Assert.Equal("NOF.Application", target.Type.ContainingAssembly.Name);
-    }
-
-    [Fact]
     public void MetadataContract_GeneratesOutcomesOnlyInApplication()
     {
         var contract = CSharpCompilation.CreateCompilation("FailureContract_" + Guid.NewGuid().ToString("N"), """

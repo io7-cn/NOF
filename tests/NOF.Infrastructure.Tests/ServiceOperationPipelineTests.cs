@@ -88,7 +88,7 @@ public class ServiceOperationPipelineTests
                 [nameof(IProbeService.Find)] = new(implementation, typeof(Query), typeof(Reply))
             }
         });
-        return new(provider, new ApplicationServiceInvocationResolver(provider, registry));
+        return new(provider, registry);
     }
 
     public sealed record Query;

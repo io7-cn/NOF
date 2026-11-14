@@ -19,10 +19,10 @@ public sealed class MessageInboxReceiverTests
         store.Setup(value => value.ReceiveAsync(It.IsAny<NOFInboxMessage>(), It.IsAny<CancellationToken>()))
             .Callback<NOFInboxMessage, CancellationToken>((message, _) => receipt = message).Returns(Task.CompletedTask);
         var services = new ServiceCollection();
-        services.AddScoped<IInboxStore>(_ => { constructorTenant = Context.Current.TenantId; return store.Object; });
+        services.AddScoped(_ => { constructorTenant = Context.Current.TenantId; return store.Object; });
         await using var provider = services.BuildServiceProvider();
         var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer());
-        await receiver.ReceiveAsync(Guid.NewGuid(), InboxMessageType.Command, new byte[] { 1 }, "queue:work.v1",
+        await receiver.ReceiveAsync(Guid.NewGuid(), new byte[] { 1 }, "queue:work.v1",
             [new(NOFAbstractionConstants.Transport.Headers.TenantId, "delivery")], default);
         Assert.Equal("delivery", constructorTenant);
         Assert.Equal("queue:work.v1", receipt!.Route);
@@ -42,7 +42,7 @@ public sealed class MessageInboxReceiverTests
         var services = new ServiceCollection().AddScoped(_ => store.Object);
         await using var provider = services.BuildServiceProvider();
         var receiver = new MessageInboxReceiver(provider, new JsonObjectSerializer());
-        var action = () => receiver.ReceiveAsync(id, InboxMessageType.Notification, new byte[] { 1 }, "subscription:audit", null, default);
+        var action = () => receiver.ReceiveAsync(id, new byte[] { 1 }, "subscription:audit", null, default);
         if (exists)
         {
             await action();

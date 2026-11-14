@@ -94,7 +94,7 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
 
                         var messageId = Guid.TryParse(args.BasicProperties.MessageId, out var nativeId)
                             ? nativeId : MessageInboxReceiver.GetMessageId(headers);
-                        await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, InboxMessageType.Command, payload, endpoint.ConsumerId, headers, CancellationToken.None);
+                        await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, payload, endpoint.ConsumerId, headers, CancellationToken.None);
 
                         await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
                     }

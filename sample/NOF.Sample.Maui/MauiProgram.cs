@@ -19,7 +19,7 @@ public static class MauiProgram
             });
 
         builder.Services.AddMauiBlazorWebView();
-        builder.Services.AddAntDesign();
+        builder.Services.AddScoped<SampleMessageService>();
         builder.Services.AddScoped<ISampleApi, HttpSampleApi>();
         builder.Services.AddScoped(_ => new HttpClient
         {

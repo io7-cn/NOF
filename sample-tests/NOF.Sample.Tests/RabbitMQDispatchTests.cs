@@ -233,7 +233,7 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(ConsumerService).Assembly);
         builder.AddApplicationService<ConsumerService>();
-        builder.Services.AddScoped<NOF.Sample.Notifications.INotificationReceipts, NotificationReceipts>();
+        builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
         if (missingQueue is null)
         {
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));

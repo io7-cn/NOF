@@ -55,7 +55,7 @@ public sealed class DefaultInboundAuthorizationHandler(
                 context.HandlerType.DisplayName,
                 operationName);
             return new InboundAuthorizationResult.Denied(
-                new global::NOF.Abstraction.Failure("401", "Please login first"),
+                new Abstraction.Failure("401", "Please login first"),
                 Reason: AuthorizationFailureReason.Authentication,
                 ChallengePermissions: GetPermissions(requirement.Value));
         }
@@ -80,7 +80,7 @@ public sealed class DefaultInboundAuthorizationHandler(
                 operationName,
                 permission);
             return new InboundAuthorizationResult.Denied(
-                new global::NOF.Abstraction.Failure("403", "Insufficient permissions"),
+                new Abstraction.Failure("403", "Insufficient permissions"),
                 Reason: AuthorizationFailureReason.Authorization,
                 ChallengePermissions: requiredPermissions);
         }

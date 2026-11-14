@@ -13,7 +13,8 @@ using System.Text.Json;
 namespace NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 public sealed class PersistenceOAuthClientRepository(
-    IPersistenceSession dbContext,
+    IOAuthClientStore clients,
+    IUnitOfWork unitOfWork,
     ICacheService cacheService,
     IOptions<OAuthAuthorizationServerOptions> oauthOptions) : IOAuthClientRepository, IOAuthClientRegistrationRepository
 {
@@ -96,14 +97,10 @@ public sealed class PersistenceOAuthClientRepository(
 
     public async Task<IReadOnlyList<OAuthClientDescriptor>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var clients = await dbContext
-            .Set<OAuthClient>()
-            .AsNoTracking()
-            .OrderBy(static client => client.ClientId)
-            .ToListAsync(cancellationToken)
+        var stored = await clients.ListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return clients.Select(ToDescriptor).ToArray();
+        return stored.Select(ToDescriptor).ToArray();
     }
 
     public async Task<OAuthClientLookup> GetAsync(string clientId, CancellationToken cancellationToken = default)
@@ -217,8 +214,8 @@ public sealed class PersistenceOAuthClientRepository(
             UpdatedAtUtc = now
         };
 
-        await dbContext.Set<OAuthClient>().AddAsync(client, cancellationToken).ConfigureAwait(false);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        clients.Add(client);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return new OAuthClientSecretDescriptor
         {
@@ -327,7 +324,7 @@ public sealed class PersistenceOAuthClientRepository(
         client.IsEnabled = request.IsEnabled;
         client.UpdatedAtUtc = DateTime.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return ToDescriptor(client);
     }
 
@@ -403,7 +400,7 @@ public sealed class PersistenceOAuthClientRepository(
             client.SecretHash = secretMaterial.Hash;
         }
         client.UpdatedAtUtc = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return new OAuthClientRegistrationSecretDescriptor
         {
@@ -515,7 +512,7 @@ public sealed class PersistenceOAuthClientRepository(
         var (rotatedToken, registrationSalt, registrationHash) = CreateRegistrationAccessTokenMaterial();
         client.RegistrationAccessTokenSalt = registrationSalt;
         client.RegistrationAccessTokenHash = registrationHash;
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return new OAuthClientRegistrationSecretDescriptor
         {
@@ -540,8 +537,8 @@ public sealed class PersistenceOAuthClientRepository(
             return new OAuthClientRegistrationTokenInvalid("registration access token is invalid.");
         }
 
-        dbContext.Set<OAuthClient>().Remove(client);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        clients.Remove(client);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return Empty.Instance;
     }
 
@@ -570,7 +567,7 @@ public sealed class PersistenceOAuthClientRepository(
         client.SecretHash = hash;
         client.UpdatedAtUtc = DateTime.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return new OAuthClientSecretDescriptor
         {
             Client = ToDescriptor(client),
@@ -591,18 +588,15 @@ public sealed class PersistenceOAuthClientRepository(
             return new OAuthClientNotFound();
         }
 
-        dbContext.Set<OAuthClient>().Remove(client);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        clients.Remove(client);
+        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Empty.Instance;
     }
 
     private async Task<OAuthClient?> FindClientAsync(string clientId, CancellationToken cancellationToken)
     {
-        return await dbContext
-            .Set<OAuthClient>()
-            .Where(client => client.ClientId == clientId)
-            .FirstOrDefaultAsync(cancellationToken)
+        return await clients.FindAsync(clientId, cancellationToken)
             .ConfigureAwait(false);
     }
 

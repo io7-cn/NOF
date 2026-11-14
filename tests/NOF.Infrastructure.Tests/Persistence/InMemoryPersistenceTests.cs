@@ -11,6 +11,7 @@ using NOF.Application;
 using NOF.Contract;
 using NOF.Domain;
 using NOF.Hosting;
+using NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore;
 using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using System.Linq.Expressions;
@@ -61,13 +62,13 @@ public class SqliteInMemoryPersistenceTests
         var sender = scope.ServiceProvider.GetRequiredService<IOutbox>();
         await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
         {
-            var state = NOFInboxMessage.Create(Guid.NewGuid(), InboxMessageType.Command, "shared", [], "{}");
+            var state = NOFInboxMessage.Create(Guid.NewGuid(), "shared", [], "{}");
             concrete.Set<NOFInboxMessage>().Add(state);
             Assert.Same(state, Assert.Single(concrete.ChangeTracker.Entries<NOFInboxMessage>()).Entity);
             Assert.NotNull(concrete.Database.CurrentTransaction);
             await publisher.EnqueueAsync(new ScopedTransactionMessage("first"), Context.Current);
             await application.SaveChangesAsync();
-            concrete.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(Guid.NewGuid(), InboxMessageType.Command, "native", [], "{}"));
+            concrete.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(Guid.NewGuid(), "native", [], "{}"));
             await sender.EnqueueAsync(new ScopedTransactionMessage("second"), Context.Current);
             await application.SaveChangesAsync();
             await application.SaveChangesAsync();
@@ -151,7 +152,7 @@ public class SqliteInMemoryPersistenceTests
         var db = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         var id = Guid.NewGuid();
-        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, InboxMessageType.Command, "efcore-default", [], "{}"));
+        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, "efcore-default", [], "{}"));
         await db.SaveChangesAsync();
 
         var receipt = await db.FindAsync<NOFInboxMessage>([id, "efcore-default"]);
@@ -327,7 +328,7 @@ public class SqliteInMemoryPersistenceTests
         var db = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         var id = Guid.NewGuid();
-        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, InboxMessageType.Command, "default", [], "{}"));
+        db.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(id, "default", [], "{}"));
         await db.SaveChangesAsync();
 
         var receipt = await db.FindAsync<NOFInboxMessage>([id, "default"]);
@@ -385,10 +386,9 @@ public class SqliteInMemoryPersistenceTests
         using (var setupScope = services.CreateScope())
         {
             SetTenant(setupScope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-            var dbContext = setupScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+            var dbContext = setupScope.ServiceProvider.GetRequiredService<DbContext>();
             dbContext.Set<NOFInboxMessage>().Add(NOFInboxMessage.Create(
                 Guid.NewGuid(),
-                InboxMessageType.Notification,
                 "OrderedHandler",
                 [1],
                 "{}"));
@@ -416,7 +416,7 @@ public class SqliteInMemoryPersistenceTests
         var builder = new TestServiceRegistrationContext();
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
-        builder.Services.AddSingleton<IDbContextModelCreatingContributor, DynamicAuditEntryModelCreatingContributor>();
+        builder.Services.AddSingleton<IEFCoreModelConfiguration, DynamicAuditEntryModelCreatingContributor>();
 
         builder.AddNOFHosting();
         builder.AddNOF();
@@ -514,7 +514,7 @@ public class SqliteInMemoryPersistenceTests
         builder.AddNOF();
         builder.Services.AddOutbox(_ => { });
         builder.Services.AddInbox();
-        builder.Services.AddSingleton<IDbContextModelCreatingContributor, DynamicAuditEntryModelCreatingContributor>();
+        builder.Services.AddSingleton<IEFCoreModelConfiguration, DynamicAuditEntryModelCreatingContributor>();
         ConfigureSqliteInMemory(
             builder.UseDbContext<NOFDbContext>()
                 .WithTenantMode(TenantMode.DatabasePerTenant),
@@ -1569,7 +1569,7 @@ public class SqliteInMemoryPersistenceTests
             Route = typeof(SqliteInMemoryPersistenceTests).AssemblyQualifiedName!,
             Payload = System.Text.Encoding.UTF8.GetBytes("payload"),
             Headers = "{}",
-            MessageType = InboxMessageType.Command
+
         };
 
         db.Set<NOFInboxMessage>().Add(message);
@@ -1642,7 +1642,7 @@ public class SqliteInMemoryPersistenceTests
         using var services = CreateServiceProvider();
         using var scope = services.CreateScope();
         SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-        var session = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+        var session = scope.ServiceProvider.GetRequiredService<DbContext>();
         var blocked = Guid.NewGuid();
         var independent = Guid.NewGuid();
         session.Set<NOFOutboxMessage>().Add(new NOFOutboxMessage
@@ -1812,8 +1812,8 @@ public class SqliteInMemoryPersistenceTests
             });
         await db.SaveChangesAsync();
 
-        var appDb = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        var changed = await TransactionalMessageRecovery.MarkExpiredExhaustedOutboxMessagesAsFailedAsync(
+        var appDb = scope.ServiceProvider.GetRequiredService<DbContext>();
+        var changed = await EfCoreMessageRecovery.MarkExpiredExhaustedOutboxMessagesAsFailedAsync(
             appDb,
             maxRetryCount: 2,
             now,
@@ -1863,7 +1863,6 @@ public class SqliteInMemoryPersistenceTests
                 Route = handlerType,
                 Payload = System.Text.Encoding.UTF8.GetBytes("expired"),
                 Headers = "{}",
-                MessageType = InboxMessageType.Command,
                 ClaimedBy = "expired-claim",
                 ClaimExpiresAtUtc = now.AddSeconds(-1)
             },
@@ -1874,14 +1873,13 @@ public class SqliteInMemoryPersistenceTests
                 Route = handlerType,
                 Payload = System.Text.Encoding.UTF8.GetBytes("future"),
                 Headers = "{}",
-                MessageType = InboxMessageType.Command,
                 ClaimedBy = "future-claim",
                 ClaimExpiresAtUtc = now.AddMinutes(5)
             });
         await db.SaveChangesAsync();
 
-        var appDb = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-        var changed = await TransactionalMessageRecovery.MarkExpiredExhaustedInboxMessagesAsFailedAsync(
+        var appDb = scope.ServiceProvider.GetRequiredService<DbContext>();
+        var changed = await EfCoreMessageRecovery.MarkExpiredExhaustedInboxMessagesAsFailedAsync(
             appDb,
             maxRetryCount: 2,
             now,
@@ -1987,7 +1985,7 @@ public class SqliteInMemoryPersistenceTests
             .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString));
     }
 
-    private static void ConfigureDynamicAuditEntry(IDbModelBuilder modelBuilder)
+    private static void ConfigureDynamicAuditEntry(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<DynamicAuditEntry>(entity =>
         {
@@ -1997,7 +1995,7 @@ public class SqliteInMemoryPersistenceTests
         });
     }
 
-    private static ServiceProvider BuildServiceProviderWithModelCreating(IDbContextModelCreatingContributor contributor)
+    private static ServiceProvider BuildServiceProviderWithModelCreating(IEFCoreModelConfiguration contributor)
     {
         var builder = new TestServiceRegistrationContext();
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
@@ -2042,12 +2040,12 @@ public class SqliteInMemoryPersistenceTests
         {
             using var tenantContext = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
             dbContext.Set<NOFInboxMessage>().Add(new NOFInboxMessage
             {
                 Id = messageId,
                 Route = "missing-handler",
-                MessageType = (InboxMessageType)999,
+
                 Payload = [],
                 Headers = "{}"
             });
@@ -2075,8 +2073,8 @@ public class SqliteInMemoryPersistenceTests
                 {
                     using var tenantContext = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
                     using var scope = services.CreateScope();
-                    var dbContext = scope.ServiceProvider.GetRequiredService<IPersistenceSession>();
-                    var message = await NOF.Infrastructure.QueryableAsyncExtensions.FirstAsync(
+                    var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+                    var message = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstAsync(
                         dbContext.Set<NOFInboxMessage>(),
                         m => m.Id == messageId,
                         timeout.Token);
@@ -2084,7 +2082,7 @@ public class SqliteInMemoryPersistenceTests
                     {
                         failedCount++;
                     }
-                    var outboxMessage = await NOF.Infrastructure.QueryableAsyncExtensions.FirstAsync(
+                    var outboxMessage = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstAsync(
                         dbContext.Set<NOFOutboxMessage>(),
                         m => m.Id == messageId,
                         timeout.Token);
@@ -2136,7 +2134,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddInbox();
         if (messageTenantProvider is not null)
         {
-            builder.Services.ReplaceOrAddSingleton<ITenantProvider>(_ => messageTenantProvider);
+            builder.Services.ReplaceOrAddSingleton(_ => messageTenantProvider);
         }
         ConfigureSqliteInMemory(
             builder.UseDbContext<TestDbContext>()
@@ -2309,15 +2307,15 @@ public class SqliteInMemoryPersistenceTests
         public long Id { get; init; }
     }
 
-    private sealed class DynamicAuditEntryModelCreatingContributor : IDbContextModelCreatingContributor
+    private sealed class DynamicAuditEntryModelCreatingContributor : IEFCoreModelConfiguration
     {
-        public void Configure(IDbModelBuilder modelBuilder)
+        public void Configure(ModelBuilder modelBuilder)
             => ConfigureDynamicAuditEntry(modelBuilder);
     }
 
-    private sealed class FirstDynamicEntryContributor : IDbContextModelCreatingContributor
+    private sealed class FirstDynamicEntryContributor : IEFCoreModelConfiguration
     {
-        public void Configure(IDbModelBuilder modelBuilder)
+        public void Configure(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<FirstDynamicEntry>(entity =>
             {
@@ -2327,9 +2325,9 @@ public class SqliteInMemoryPersistenceTests
         }
     }
 
-    private sealed class SecondDynamicEntryContributor : IDbContextModelCreatingContributor
+    private sealed class SecondDynamicEntryContributor : IEFCoreModelConfiguration
     {
-        public void Configure(IDbModelBuilder modelBuilder)
+        public void Configure(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<SecondDynamicEntry>(entity =>
             {

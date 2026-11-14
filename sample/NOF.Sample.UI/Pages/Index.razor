@@ -1,181 +1,107 @@
 @page "/"
 @using System.Text.Json
-@inject IMessageService Message
+@inject SampleMessageService Message
 @inject ISampleApi NOFService
 
 <PageTitle>配置中心</PageTitle>
 
-<div style="height: calc(100vh - 64px); padding: 16px;">
-    <Row Gutter="16" Style="height: 100%;">
-        <!-- 左侧：树形配置 (4栏) -->
-        <AntDesign.Col Span="8" Style="height: 100%;">
-            <Card Title="配置树" Style="height: 100%; display: flex; flex-direction: column;">
-                <TitleTemplate>
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <span>配置树</span>
-                        <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" Icon="plus"
-                                OnClick="() => ShowCreateNodeModal(null)">
-                            添加根节点
-                        </Button>
-                    </div>
-                </TitleTemplate>
-                <ChildContent>
-                    <div style="overflow-y: auto; flex: 1;">
-                        <ConfigTree OnSelectNode="OnNodeSelected" OnAddChild="ShowCreateNodeModal"
-                                    OnDeleteNode="DeleteNode" @ref="_tree" />
-                    </div>
-                </ChildContent>
-            </Card>
-        </AntDesign.Col>
-
-        <!-- 右侧：详情和预览 (20栏) -->
-        <AntDesign.Col Span="16" Style="height: 100%;">
-            @if (_selectedNode != null)
+<div class="sample-page">
+    <h1>配置中心</h1>
+    <div class="sample-config-grid">
+        <section class="sample-card">
+            <div class="sample-section-heading">
+                <h2>配置树</h2>
+                <button type="button" class="sample-primary" @onclick="() => ShowCreateNodeModal(null)">添加根节点</button>
+            </div>
+            <ConfigTree OnSelectNode="OnNodeSelected" OnAddChild="ShowCreateNodeModal" OnDeleteNode="id => _pendingDeleteNode = id" @ref="_tree" />
+        </section>
+        <div>
+            @if (_selectedNode is not null)
             {
-                <div style="height: 100%; display: flex; flex-direction: column; gap: 16px;">
-                    <!-- 上半部分：文件列表和内容 -->
-                    <Card Style="flex: 1; display: flex; flex-direction: column;">
-                        <ChildContent>
-                            <Row Gutter="16" Style="height: 100%;">
-                                <!-- 文件列表 (2栏) -->
-                                <AntDesign.Col Span="6" Style="height: 100%; border-right: 1px solid #f0f0f0;">
-                                    <div
-                                        style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                                        <Title Level="4" Style="margin: 0;">配置文件</Title>
-                                        <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" Icon="plus"
-                                                OnClick="ShowCreateFileModal">
-                                            添加
-                                        </Button>
-                                    </div>
-                                    <Menu Mode="@MenuMode.Inline" SelectedKeys="@(new[] { _selectedFile ?? "" })"
-                                          OnMenuItemClicked="OnFileSelected">
-                                        @if (_node?.ConfigFiles != null)
-                                        {
-                                            @foreach (var file in _node.ConfigFiles)
-                                            {
-                                                <MenuItem Key="@file.Name">
-                                                    <Space>
-                                                        <SpaceItem>
-                                                            <Icon Type="file-text" Theme="IconThemeType.Outline" />
-                                                            @file.Name
-                                                        </SpaceItem>
-                                                        @if (_node.ActiveFileName == file.Name)
-                                                        {
-                                                            <SpaceItem>
-                                                                <Tag Color="TagColor.Green">激活</Tag>
-                                                            </SpaceItem>
-                                                        }
-                                                    </Space>
-                                                </MenuItem>
-                                            }
-                                        }
-                                    </Menu>
-                                </AntDesign.Col>
-
-                                <!-- 文件内容 (18栏) -->
-                                <AntDesign.Col Span="18" Style="height: 100%; display: flex; flex-direction: column;">
-                                    @if (_selectedFile != null)
+                <section class="sample-card">
+                    <div class="sample-section-heading"><h2>@_node?.Name · 配置文件</h2><button type="button" @onclick="ShowCreateFileModal">添加文件</button></div>
+                    <div class="sample-files-grid">
+                        <nav aria-label="配置文件" class="sample-file-list">
+                            @if (_node?.ConfigFiles is not null)
+                            {
+                                @foreach (var file in _node.ConfigFiles)
+                                {
+                                    <button type="button" class="@(_selectedFile == file.Name ? "sample-selected" : "")" @onclick="() => OnFileSelected(file.Name)">
+                                        @file.Name @if (_node.ActiveFileName == file.Name) { <span class="sample-tag">激活</span> }
+                                    </button>
+                                }
+                            }
+                        </nav>
+                        <div class="sample-form">
+                            @if (_selectedFile is not null)
+                            {
+                                <h3>@_selectedFile</h3>
+                                <label>文件内容<textarea rows="16" @bind="_fileContent" @bind:event="oninput"></textarea></label>
+                                <div class="sample-actions">
+                                    <button type="button" class="sample-primary" @onclick="SaveCurrentFile">保存文件</button>
+                                    @if (_node?.ActiveFileName != _selectedFile)
                                     {
-                                        var file = _node?.ConfigFiles.FirstOrDefault(f => f.Name == _selectedFile);
-                                        if (file != null)
-                                        {
-                                            <div
-                                                style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                                                <Title Level="4" Style="margin: 0;">@file.Name</Title>
-                                                <Space>
-                                                    @if (_node?.ActiveFileName != file.Name)
-                                                    {
-                                                        <SpaceItem>
-                                                            <Button Type="@ButtonType.Default" Size="@ButtonSize.Small"
-                                                                    OnClick="() => SetActiveFile(file.Name)">
-                                                                设为激活
-                                                            </Button>
-                                                        </SpaceItem>
-                                                    }
-                                                    <SpaceItem>
-                                                        <Popconfirm Title="确定删除此文件吗？" OnConfirm="() => DeleteFile(file.Name)">
-                                                            <Button Danger Size="@ButtonSize.Small">删除</Button>
-                                                        </Popconfirm>
-                                                    </SpaceItem>
-                                                </Space>
-                                            </div>
-                                            <TextArea @bind-Value="@_fileContent" Rows="20"
-                                                      Style="font-family: 'Courier New', monospace; flex: 1;"
-                                                      OnBlur="SaveCurrentFile"></TextArea>
-                                        }
+                                        <button type="button" @onclick="() => SetActiveFile(_selectedFile)">设为激活</button>
                                     }
-                                    else
-                                    {
-                                        <Empty Description="@("请选择一个配置文件")" />
-                                    }
-                                </AntDesign.Col>
-                            </Row>
-                        </ChildContent>
-                    </Card>
-
-                    <!-- 下半部分：配置预览 -->
-                    <Card Style="flex: 1; display: flex; flex-direction: column;">
-                        <TitleTemplate>
-                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                                <span>配置预览</span>
-                                <Button Type="@ButtonType.Primary" Size="@ButtonSize.Small" Icon="reload"
-                                        OnClick="LoadPreview">
-                                    刷新预览
-                                </Button>
-                            </div>
-                        </TitleTemplate>
-                        <ChildContent>
-                            <div style="overflow-y: auto; flex: 1;">
-                                @if (_previewLoading)
-                                {
-                                    <Spin />
-                                }
-                                else if (!string.IsNullOrEmpty(_previewContent))
-                                {
-                                    <pre
-                                    style="background: #f5f5f5; padding: 16px; border-radius: 4px; margin: 0;">@_previewContent</pre>
-                                }
-                                else
-                                {
-                                    <Empty Description="@("暂无预览内容")" />
-                                }
-                            </div>
-                        </ChildContent>
-                    </Card>
-                </div>
+                                    <button type="button" class="sample-danger" @onclick="() => _pendingDeleteFile = _selectedFile">删除文件</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="sample-empty">请选择一个配置文件，或添加新文件。</p>
+                            }
+                        </div>
+                    </div>
+                </section>
+                <section class="sample-card">
+                    <div class="sample-section-heading"><h2>配置预览</h2><button type="button" @onclick="LoadPreview">刷新预览</button></div>
+                    @if (_previewLoading) { <p role="status">正在加载…</p> }
+                    else if (!string.IsNullOrEmpty(_previewContent)) { <pre>@_previewContent</pre> }
+                    else { <p class="sample-empty">暂无预览内容</p> }
+                </section>
             }
             else
             {
-                <Card Style="height: 100%; display: flex; align-items: center; justify-content: center;">
-                    <Empty Description="@("请选择一个配置节点")" />
-                </Card>
+                <section class="sample-card"><p class="sample-empty">请选择一个配置节点。</p></section>
             }
-        </AntDesign.Col>
-    </Row>
+        </div>
+    </div>
 </div>
 
-<!-- 创建节点对话框 -->
-<Modal Title="创建节点" @bind-Visible="_createNodeModalVisible" OnOk="CreateNode"
-       OnCancel="() => _createNodeModalVisible = false">
-    <Form Model="_createNodeModel">
-        <FormItem Label="节点名称">
-            <Input @bind-Value="@_createNodeModel.Name" Placeholder="请输入节点名称" />
-        </FormItem>
-    </Form>
-</Modal>
-
-<!-- 创建文件对话框 -->
-<Modal Title="创建配置文件" @bind-Visible="_fileModalVisible" OnOk="SaveFile" OnCancel="() => _fileModalVisible = false"
-       Width="600">
-    <Form Model="_fileModel">
-        <FormItem Label="文件名">
-            <Input @bind-Value="@_fileModel.Name" Placeholder="例如: appsettings.json" />
-        </FormItem>
-        <FormItem Label="内容 (JSON)">
-            <TextArea @bind-Value="@_fileModel.Content" Rows="10" Placeholder="{}"></TextArea>
-        </FormItem>
-    </Form>
-</Modal>
+@if (_createNodeModalVisible)
+{
+    <div class="sample-modal-backdrop">
+        <section class="sample-modal sample-form" role="dialog" aria-modal="true" aria-labelledby="create-node-title">
+            <h2 id="create-node-title">创建节点</h2>
+            <label>节点名称<input @bind:event="oninput" @bind="_createNodeModel.Name" placeholder="请输入节点名称" /></label>
+            <div class="sample-actions"><button type="button" class="sample-primary" @onclick="CreateNode">创建</button><button type="button" @onclick="() => _createNodeModalVisible = false">取消</button></div>
+        </section>
+    </div>
+}
+@if (_fileModalVisible)
+{
+    <div class="sample-modal-backdrop">
+        <section class="sample-modal sample-form" role="dialog" aria-modal="true" aria-labelledby="create-file-title">
+            <h2 id="create-file-title">创建配置文件</h2>
+            <label>文件名<input @bind:event="oninput" @bind="_fileModel.Name" placeholder="例如: appsettings.json" /></label>
+            <label>内容 (JSON)<textarea @bind:event="oninput" @bind="_fileModel.Content" rows="10" placeholder="{}"></textarea></label>
+            <div class="sample-actions"><button type="button" class="sample-primary" @onclick="SaveFile">保存</button><button type="button" @onclick="() => _fileModalVisible = false">取消</button></div>
+        </section>
+    </div>
+}
+@if (_pendingDeleteNode is not null || _pendingDeleteFile is not null)
+{
+    <div class="sample-modal-backdrop">
+        <section class="sample-modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+            <h2 id="delete-title">确认删除</h2>
+            <p>@(_pendingDeleteFile is not null ? $"确定删除文件 {_pendingDeleteFile} 吗？" : "确定删除此配置节点吗？")</p>
+            <div class="sample-actions">
+                <button type="button" class="sample-danger" @onclick="async () => { if (_pendingDeleteFile is not null) { await DeleteFile(_pendingDeleteFile); } else if (_pendingDeleteNode is long id) { await DeleteNode(id); } _pendingDeleteNode = null; _pendingDeleteFile = null; }">确认删除</button>
+                <button type="button" @onclick="() => { _pendingDeleteNode = null; _pendingDeleteFile = null; }">取消</button>
+            </div>
+        </section>
+    </div>
+}
 
 @code {
     private ConfigTree? _tree;
@@ -190,6 +116,8 @@
     private CreateNodeModel _createNodeModel = new();
     private long? _creatingChildFor;
 
+    private long? _pendingDeleteNode;
+    private string? _pendingDeleteFile;
     private bool _fileModalVisible;
     private FileModel _fileModel = new();
 
@@ -216,9 +144,9 @@
         }
     }
 
-    private void OnFileSelected(MenuItem menuItem)
+    private void OnFileSelected(string fileName)
     {
-        _selectedFile = menuItem.Key;
+        _selectedFile = fileName;
         var file = _node?.ConfigFiles.FirstOrDefault(f => f.Name == _selectedFile);
         if (file != null)
         {
@@ -232,7 +160,7 @@
         {
             try
             {
-                JsonDocument.Parse(_fileContent);
+                using var document = JsonDocument.Parse(_fileContent);
             }
             catch
             {
@@ -246,7 +174,7 @@
                 FileName = _selectedFile,
                 Content = _fileContent
             }, NOF.Abstraction.Context.Empty);
-            if (result is NOF.Contract.Empty)
+            if (result.Value is NOF.Contract.Empty)
             {
                 Message.Success("保存成功");
                 await LoadNode();
@@ -261,9 +189,12 @@
     private async Task LoadPreview()
     {
         if (!_selectedNode.HasValue)
+        {
             return;
+        }
 
         _previewLoading = true;
+        _previewContent = "";
 
         try
         {
@@ -299,7 +230,7 @@
     {
         try
         {
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
         }
         catch
@@ -328,7 +259,7 @@
             Name = _createNodeModel.Name,
             ParentId = _creatingChildFor
         }, NOF.Abstraction.Context.Empty);
-        if (result is NOF.Contract.Empty)
+        if (result.Value is NOF.Contract.Empty)
         {
             Message.Success("节点创建成功");
             _createNodeModalVisible = false;
@@ -349,7 +280,7 @@
         {
             Id = nodeId
         }, NOF.Abstraction.Context.Empty);
-        if (result is NOF.Contract.Empty)
+        if (result.Value is NOF.Contract.Empty)
         {
             Message.Success("节点删除成功");
             if (_selectedNode == nodeId)
@@ -385,7 +316,7 @@
 
         try
         {
-            JsonDocument.Parse(_fileModel.Content);
+            using var document = JsonDocument.Parse(_fileModel.Content);
         }
         catch
         {
@@ -401,9 +332,11 @@
                 FileName = _fileModel.Name,
                 Content = _fileModel.Content
             }, NOF.Abstraction.Context.Empty);
-            if (result is NOF.Contract.Empty)
+            if (result.Value is NOF.Contract.Empty)
             {
                 Message.Success("文件保存成功");
+                _selectedFile = _fileModel.Name;
+                _fileContent = _fileModel.Content;
                 _fileModalVisible = false;
                 await LoadNode();
             }
@@ -421,9 +354,9 @@
             var result = await NOFService.RemoveConfigFileAsync(new RemoveConfigFileRequest
             {
                 NodeId = _selectedNode.Value,
-                FileName = _selectedFile!
+                FileName = fileName
             }, NOF.Abstraction.Context.Empty);
-            if (result is NOF.Contract.Empty)
+            if (result.Value is NOF.Contract.Empty)
             {
                 Message.Success("文件删除成功");
                 if (_selectedFile == fileName)
@@ -449,7 +382,7 @@
                 NodeId = _selectedNode.Value,
                 FileName = fileName
             }, NOF.Abstraction.Context.Empty);
-            if (result is NOF.Contract.Empty)
+            if (result.Value is NOF.Contract.Empty)
             {
                 Message.Success("已设为激活文件");
                 await LoadNode();

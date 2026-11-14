@@ -16,7 +16,7 @@ public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, Applic
     public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin)
     {
         var registration = services.GetRegistration(operation.ServiceType);
-        var mapping = registration.HandlerMappings?.GetValueOrDefault(operation.OperationName)
+        var mapping = registration.HandlerMappings.GetValueOrDefault(operation.OperationName)
             ?? throw new InvalidOperationException("Construction-free invocation description requires captured handler mappings.");
         var implementation = services.GetOperationImplementation(mapping.HandlerType);
         return Describe(new InvocationContext

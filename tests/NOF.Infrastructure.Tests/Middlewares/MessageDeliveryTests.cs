@@ -15,7 +15,7 @@ public sealed class MessageDeliveryTests
     public async Task Delivery_ShouldPrepareTenantAndStableMessageIdentity(bool hasTenant, string expected)
     {
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("ambient"));
-        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new NOF.Hosting.DeploymentOptions()));
+        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new DeploymentOptions()));
         Dictionary<string, string?>? captured = null;
         await delivery.ExecuteAsync(new object(), hasTenant ? Context.Empty.WithTenantId("explicit") : Context.Empty,
             (headers, _) => { captured = headers; return ValueTask.CompletedTask; }, default);
@@ -33,7 +33,7 @@ public sealed class MessageDeliveryTests
         };
         ActivitySource.AddActivityListener(listener);
         using var parent = new Activity("caller").Start();
-        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new NOF.Hosting.DeploymentOptions()));
+        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new DeploymentOptions()));
         var expected = new InvalidOperationException("dispatch failed");
         var actual = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await delivery.ExecuteAsync(new object(), Context.Empty, (headers, _) =>
@@ -50,7 +50,7 @@ public sealed class MessageDeliveryTests
     [Fact]
     public async Task Delivery_Cancellation_DoesNotDispatch()
     {
-        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new NOF.Hosting.DeploymentOptions()));
+        var delivery = new MessageDelivery(Microsoft.Extensions.Options.Options.Create(new DeploymentOptions()));
         using var source = new CancellationTokenSource();
         source.Cancel();
         var called = false;

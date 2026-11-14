@@ -25,14 +25,6 @@ public static partial class NOFInfrastructureExtensions
             return builder;
         }
 
-        [UnconditionalSuppressMessage(
-            "AOT",
-            "IL3050:RequiresDynamicCode",
-            Justification = "NOF defaults to in-memory persistence for host-only scenarios until an explicit persistence provider is registered.")]
-        [UnconditionalSuppressMessage(
-            "Trimming",
-            "IL2026:RequiresUnreferencedCode",
-            Justification = "NOF defaults to in-memory persistence for host-only scenarios until an explicit persistence provider is registered.")]
         /// <summary>Registers default server infrastructure on a native host builder without building or starting it.</summary>
         public IHostApplicationBuilder AddNOF()
         {
@@ -43,7 +35,7 @@ public static partial class NOFInfrastructureExtensions
             builder.Properties[InfrastructureConfiguredKey] = true;
             builder.AddNOFHosting();
             builder.Services.AddNOFApplication();
-            builder.Services.AddInMemoryPersistence();
+            builder.Services.AddInMemoryMessagingPersistence();
             AddOpenTelemetry(builder);
 
             #region Core Services
@@ -55,7 +47,6 @@ public static partial class NOFInfrastructureExtensions
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value.ServiceId,
                 sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeploymentOptions>>().Value.InstanceId)));
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
-            builder.Services.TryAddScoped<ApplicationServiceInvocationResolver>();
             builder.Services.TryAddScoped<IOperationInvoker, OperationInvoker>();
 
             builder.Services.TryAddSingleton<MemoryCacheServiceRiderState>();
@@ -111,8 +102,6 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.TryAddScoped<ICacheServiceRider>(sp => new MemoryCacheServiceRider(
                 sp.GetRequiredService<MemoryCacheServiceRiderState>()));
             builder.Services.TryAddScoped<IObjectStorageRider, FileSystemObjectStorageRider>();
-            builder.Services.TryAddSingleton<MemoryCommandRider>();
-            builder.Services.TryAddSingleton<MemoryNotificationRider>();
             builder.Services.TryAddScoped<MemoryMessageClient>();
             #endregion
 

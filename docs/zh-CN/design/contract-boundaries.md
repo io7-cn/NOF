@@ -7,7 +7,7 @@ NOF.Contract 只包含声明和数据模型。其运行时程序集不引用其�
 | 归属 | 类型与职责 |
 |---|---|
 | Contract | IApplicationService、FailureCase/策略元数据特性、请求、成功 DTO、自定义错误数据、Empty/Optional/Page |
-| Application | ServiceOperationReference、ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据与调用接口 |
+| Application | ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据与调用接口 |
 | Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure 等基础能力 |
 | 宿主/基础设施 | IInvocationFilter/InvocationDelegate/IInvocationPipeline、有效计划与失败目录、传输适配、身份建立、所选执行引擎、HTTP 表达、消息路由与可靠接收/重试 |
 
@@ -33,13 +33,13 @@ public sealed class ReadNodeHandler : NodeService.Read
 
 FailureCase 仍标在无需 partial 的 Contract 接口方法上；Result 与具体失败分支仍生成在 Application 操作中。执行类型现在使用 NOF.Application 命名空间。语义 Context 的命名空间改为 NOF.Abstraction，与其原有程序集归属一致。
 
-ServiceOperationReference<TRequest> 是 Application 的身份/输入元数据，不是客户端或 Outbox 路由。完整描述符保留稳定操作身份；具体客户端指定目标，通用 Outbox 处理器解释持久意图。参见[事务性发件箱](transactional-outbox.md)。
+ServiceOperationDescriptor 是唯一的操作身份、输入和输出元数据，删除仅含输入的 ServiceOperationReference 与 Descriptor.Reference。具体客户端指定目标，通用 Outbox 处理器解释持久意图。参见[事务性发件箱](transactional-outbox.md)。
 
 NodeService.Read.Descriptor 提供完整返回类型和解析后的方法元数据，其操作身份元数据不负责指定传输目标。ServiceOperationInspector.ValidateReference 集中校验引用；CanSubmit 检查是否返回 Empty 且没有 FailureCase；RequiresHostTenant 解释特性及等价策略元数据。默认消息绑定和路由调用这些检查，逻辑迁移不会绕过授权或允许丢弃业务失败。
 
 ## 迁移
 
-- 为 ServiceOperationReference、ServiceOperation、InvocationContext、完整描述符、执行结果及拒绝类型引入 NOF.Application；Contract 不保留旧类型别名或转发。
+- 为 ServiceOperation、InvocationContext、完整描述符、执行结果及拒绝类型引入 NOF.Application；Contract 不保留旧类型别名或转发。
 - 为 Context 引入 NOF.Abstraction，并替换显式 NOF.Contract.Context 引用。其不可变语义和异步流恢复行为不变；Contract 中旧 TypeForwardedTo 转发入口此次明确删除。
 - 移除生成的 IServiceOperations.Method 生产者路由。即时调用使用具体客户端，事务性消息通过 IOutbox.EnqueueAsync 与基础设施处理器执行；入站消费者保留完整描述符。
 - 需要直接检查引用时，用 Application 的 ServiceOperationInspector 替代 reference.MethodInfo/CanSubmit。正常调用和消息绑定 API 已自动检查，业务 Handler 无需重复校验。

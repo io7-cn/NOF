@@ -228,7 +228,7 @@ public sealed class FailureCaseGeneratorTests
     {
         source += "\npublic partial class Service : global::NOF.Application.ApplicationService<IService>;";
         var compilation = CSharpCompilation.CreateCompilation("ExpectedFailures_" + Guid.NewGuid().ToString("N"), source, true,
-            typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions), typeof(FailureCaseAttribute), typeof(Empty), typeof(NOF.Abstraction.Failure), typeof(JsonUnionAttribute));
+            typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions), typeof(FailureCaseAttribute), typeof(Empty), typeof(Abstraction.Failure), typeof(JsonUnionAttribute));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ApplicationServiceGenerator().AsSourceGenerator()],
             parseOptions: new CSharpParseOptions(LanguageVersion.Preview));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);

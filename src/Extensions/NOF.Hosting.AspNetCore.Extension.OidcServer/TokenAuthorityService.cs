@@ -29,7 +29,7 @@ public sealed partial class TokenAuthorityService : ITokenService
     {
         if (!TryCreateAccessClaims(request, out var accessClaims, out var accessClaimError))
         {
-            return new global::NOF.Abstraction.Failure("400", accessClaimError);
+            return new Abstraction.Failure("400", accessClaimError);
         }
 
         var now = DateTime.UtcNow;
@@ -109,12 +109,12 @@ public sealed partial class TokenAuthorityService : ITokenService
 
             if (string.IsNullOrWhiteSpace(tokenId))
             {
-                return new global::NOF.Abstraction.Failure("400", "Invalid refresh token claims.");
+                return new Abstraction.Failure("400", "Invalid refresh token claims.");
             }
 
             if (await _revokedRefreshTokenRepository.IsRevokedAsync(tokenId, cancellationToken).ConfigureAwait(false))
             {
-                return new global::NOF.Abstraction.Failure("401", "Refresh token has been revoked.");
+                return new Abstraction.Failure("401", "Refresh token has been revoked.");
             }
 
             return new ValidateRefreshTokenResponse
@@ -125,7 +125,7 @@ public sealed partial class TokenAuthorityService : ITokenService
         }
         catch (Exception ex)
         {
-            return new global::NOF.Abstraction.Failure("401", ex.Message);
+            return new Abstraction.Failure("401", ex.Message);
         }
     }
 
@@ -144,7 +144,7 @@ public sealed partial class TokenAuthorityService : ITokenService
     {
         if (string.IsNullOrWhiteSpace(request.Token))
         {
-            return new global::NOF.Abstraction.Failure("400", "token is required.");
+            return new Abstraction.Failure("400", "token is required.");
         }
 
         var tokenTypeHint = request.TokenTypeHint?.Trim();

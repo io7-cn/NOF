@@ -12,7 +12,7 @@ public interface IOrderService : IApplicationService
 
 Declare one reference-type input and a synchronous business success type. Interfaces do not need partial. FailureCase/policy annotations remain here; Application generates Result and failure types in Service.Operation. NOF.Contract.SourceGenerator retains its name and declaration analyzers; Contract generates no code or operation references.
 
-Application owns ServiceOperationReference, which contains contract identity, operation name and input type only. Reflection, method/input validation and submission eligibility belong to Application's ServiceOperationInspector. Complete execution descriptors, ServiceOperation, InvocationContext, execution outcomes and rejection exceptions also belong to Application. Context belongs to Abstraction, with no Contract forwarding facade.
+Application owns the complete ServiceOperationDescriptor, which validates contract identity and input without constructing a handler. Input-only ServiceOperationReference and Descriptor.Reference are removed; submission eligibility and host-tenant policy interpretation remain Application concerns. Complete execution descriptors, ServiceOperation, InvocationContext, execution outcomes and rejection exceptions also belong to Application. Context belongs to Abstraction, with no Contract forwarding facade.
 
 This package retains IApplicationService, declaration attributes, Empty/Optional/Page and ordinary request/response/error data models. HTTP adapters, generated clients, generic result wrappers and execution machinery are not included. Native endpoints own resource/ProblemDetails mappings; clients own HTTP integration.
 

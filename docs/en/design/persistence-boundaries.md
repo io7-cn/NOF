@@ -1,97 +1,120 @@
-# Aggregate repositories and persistence boundaries
+# Aggregate repositories and native persistence
 
 [简体中文](../../zh-CN/design/persistence-boundaries.md) · [Development](../README.md)
 
-Domain/Application no longer publish a generic ORM facade. Application-owned read ports
-return DTOs; domain-owned repositories load complete aggregates for modification. Application
-coordinates one IUnitOfWork.SaveChangesAsync(CancellationToken), returning Task rather than
-provider-dependent change counts. No Set<T>, IQueryable repository, ICollection repository,
-Attach/Update, tracking switch, query executor or update-expression DSL is exposed by core.
+Domain owns aggregate-specific repository interfaces; Application owns DTO read ports and IUnitOfWork.
+Those interfaces expose business operations and data, with no IQueryable, tracking switches, entity sets
+or query language. Hosts implement them using their chosen native persistence APIs.
 
 ```csharp
 public interface IConfigNodeRepository
 {
     Task<ConfigNode?> GetAsync(ConfigNodeId id, CancellationToken ct = default);
-    Task<bool> ExistsByNameAsync(ConfigNodeName name, CancellationToken ct = default);
     void Add(ConfigNode node);
     void Remove(ConfigNode node);
 }
 
-// Application use case: dependencies are owned ports, not a generic context.
-var node = await nodes.GetAsync(id, cancellationToken);
-if (node is null)
+// Host implementation: native EF Core, sharing the scoped context with NOF stores.
+public sealed class ConfigNodePersistence(DbContext context) : IConfigNodeRepository
 {
-    return new NotFound("Node not found.");
+    public Task<ConfigNode?> GetAsync(ConfigNodeId id, CancellationToken ct = default)
+        => context.Set<ConfigNode>().FirstOrDefaultAsync(node => node.Id == id, ct);
+    public void Add(ConfigNode node) => context.Set<ConfigNode>().Add(node);
+    public void Remove(ConfigNode node) => context.Set<ConfigNode>().Remove(node);
 }
-node.UpdateParent(parentId);
-await outbox.EnqueueAsync(message, context, cancellationToken: cancellationToken);
-await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-GetAsync loads a managed aggregate including its owned children. Add/Remove stage work;
-repositories do not save independently. Aggregate methods control child mutations. DTO
-query ports own their materialization and return no provider query objects. Read adapters
-may use native LINQ/SQL and mapping expressions internally. Unique constraints and optimistic
-concurrency still belong in the persistence implementation; a precheck alone cannot prevent races.
-No generic specification language or framework aggregate marker is required.
+The compiled sample adapter also implements the configuration read and hierarchy ports. Native EF
+queries retain mapping expressions, owned graphs, uniqueness constraints, tenant filters and soft-delete
+conventions. Repositories stage work; handlers save once through the shared IUnitOfWork. A precheck
+never replaces a database uniqueness or concurrency constraint.
 
-## Configuration-node implementation
+## Shared unit of work
 
-Domain declares IConfigNodeRepository. Application declares IConfigNodeQueries and
-IConfigNodeHierarchyStore, the latter maintaining the hierarchy projection during domain
-events without saving it independently. Every CRUD/file/hierarchy/configuration handler now
-uses these ports. ConfigNodePersistence in the host implements them, sharing the authorized,
-scoped provider session. DTO reads return detached business data and copy mutable hierarchy
-collections. Existing generated mappings, validation, cache keys and HTTP outcomes remain.
-Register its assembly with AddApplicationPart; AutoInject supplies scoped implementations.
-The sample integration harness links the same adapter and tests both memory and relational paths.
+IUnitOfWork.SaveChangesAsync returns Task, without provider-dependent counts. Optional
+ITransactionManager.BeginTransactionAsync returns ITransaction with async commit, rollback and disposal.
+Saving flushes inside an explicit transaction; committing makes those changes durable. Dispose or
+rollback an incomplete transaction and discard the scope before retrying. An unknown commit outcome
+requires idempotent recovery, not an assumption that rollback succeeded.
 
-## Transactions and reliable messaging
+EF Core uses the same scoped DbContext for business adapters, EfCoreUnitOfWork, Inbox and Outbox.
+NHibernate uses the same scoped ISession for those responsibilities. Hosts retain their native factory,
+query, transaction, savepoint and mapping APIs. There is no second context for framework-owned writes.
 
-ITransactionManager.BeginTransactionAsync returns the minimal ITransaction: asynchronous
-CommitAsync, RollbackAsync and disposal. Without an explicit transaction, saving uses the
-provider's atomic save. With one, SaveChangesAsync flushes inside it; CommitAsync makes the
-transaction durable. Multiple saves do not commit the outer transaction. Savepoints and
-native transaction identifiers are native provider concerns, absent from the shared contract.
+## Native provider implementations
 
-A scoped PersistenceUnitOfWork delegates to the same session used by aggregate adapters,
-projection stores, deferred outbox staging and inbox processing. Do not introduce a second
-context for work that must be atomic. Outbox staging does not send immediately. On failure,
-rollback or unknown commit outcome, discard the scope and recover with a fresh context and
-an application idempotency key. A commit exception does not prove rollback.
+The cross-ORM collaboration layer is removed: IPersistenceSession/factory/transaction, IEntitySet,
+IProviderQuery/executor, ProviderQuery, shared async query extensions, UpdateSetters, IDbModelBuilder
+and IDbContextModelCreatingContributor no longer ship. Provider adapters no longer translate a NOF
+query/update/model language. The shared general-purpose memory ORM and its reflection tracker are
+also removed. No forwarding aliases or compatibility implementations remain.
 
-Infrastructure defines IInboxStore/IOutboxStore for receiving, deduplication checks, claims,
-ordering, recovery, completion, failures, retention and staging. Workers and memory/RabbitMQ
-riders consume these ports. Provider-backed stores retain the existing atomic transitions;
-application handler writes and inbox completion share the same transaction. Retries, lease
-expiry, ordering and cancellation remain covered by the existing delivery regression suite.
+Infrastructure keeps the feature-specific IInboxStore and IOutboxStore ports consumed by workers.
+EF implements those ports with native EF queries and ExecuteUpdateAsync/ExecuteDeleteAsync.
+NHibernate uses native LINQ DML; bounded claims select scalar candidate identities and atomically
+compare-and-set each still-eligible row. Both backends preserve attempt limits, delayed Outbox retries,
+lease recovery, tenant isolation and owner-fenced completion/failure/release.
 
-## Provider implementation boundary
+Inbox completion shares the handler's transaction. Native bulk claims bypass ORM tracking, so a
+receipt already cached by the processing session is refreshed before use. EF uses a claim-owner
+concurrency token; NHibernate uses native dirty optimistic locking and dynamic updates. An expired
+worker cannot overwrite a replacement owner's receipt when saving its result. Claim result projections
+are delivery snapshots rather than cached NHibernate entities.
 
-Infrastructure retains IPersistenceSession, IEntitySet, IProviderQuery/IProviderQueryExecutor
-and provider update expressions as low-level collaboration for shared store implementations.
-These are not relocated domain repository contracts or a business API. The session has only
-Set<T>, async save and async transaction begin. Entity sets no longer implement ICollection
-or expose Attach/Update/Range/Clear/CopyTo. Core has no Infrastructure reference.
-Concrete EF/NHibernate/native transaction mechanisms remain available in host adapters.
-The query helpers require the Infrastructure namespace rather than adding global System.Linq persistence extensions. They are shipped by Infrastructure, including provider
-fallback tests; pure expression mapping remains in Application.
+EF-specific model extensions implement IEFCoreModelConfiguration.Configure(ModelBuilder) in the
+EF provider package, using native EF APIs. NHibernate extensions register Action<ModelMapper>
+callbacks and configure native mapping-by-code. Value-object conversion and EF length/collection,
+tenant and soft-delete conventions remain provider features. Application code injects neither model
+configuration nor native sessions.
 
-This change removes the ORM abstraction from the business dependency boundary rather than
-claiming every ORM has identical execution semantics. Native batch SQL can execute before
-SaveChanges, bypass tracking, and require an explicit surrounding transaction when mixed
-with other writes. Keep such operations inside reviewed storage implementations.
+## OIDC persistence
 
-## Breaking migration
+The OIDC extension retains shared protocol/client-management/signing-key rules. Its storage boundary
+is IOAuthClientStore, ISigningKeyStore and IRevokedRefreshTokenStore: feature operations and tracked
+state, with no generic query or ORM model API.
 
-Remove Domain IRepository/IAsyncQueryable/IAsyncQueryExecutor/update setters and Application
-IDbContext/IDbContextFactory/IDbContextTransaction/async query helpers. Define domain-specific
-repositories and Application DTO query ports; inject IUnitOfWork for saving and optionally
-ITransactionManager for explicit transactions. Move native persistence and query composition
-to host/provider implementations. There are no forwarding aliases for the removed core APIs.
+Choose the matching optional integration package and register it on the host's services:
 
-Infrastructure implementations use the provider collaboration contracts and register
-AddPersistenceServices; application code must not inject those contracts as a replacement
-business facade. Update custom provider factories and mocks together. Range/tracking/savepoint
-operations use concrete native APIs. Upgrade all packages, ports, adapters and tests together;
-rollback restores the previous coherent set. This API migration requires no database schema change.
+```csharp
+// Package NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore
+builder.Services.AddOidcEntityFrameworkCore();
+// Or package NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate
+builder.Services.AddOidcNHibernate();
+```
+
+Configure the corresponding native persistence provider and AddOidcServer as usual. Native OIDC stores
+share its scoped unit of work. The base OIDC package has no EF/NHibernate dependency; neither generic
+provider package depends on the optional OIDC feature. Custom storage can implement the three narrow
+ports and supply the same unit-of-work boundary.
+
+## Memory messages and tests
+
+AddNOF retains a development memory message backend. AddInMemoryMessagingPersistence registers
+its host-local, tenant-partitioned state and scoped message unit of work; AddInbox/AddOutbox select
+its stores unless a native provider or custom store is configured. Capabilities and workers remain
+opt-in. Native and custom registrations work before or after capability assembly.
+
+This backend stores only intents and receipts. It atomically saves receipt completion plus staged
+messages, isolates tenants and fences claims. It has no arbitrary business entity tables or ORM API.
+Business persistence tests should select an actual provider, for example UseDbContext with SQLite
+in memory, or register business-owned test ports and an appropriate unit of work. NOF.Test does not
+pretend that arbitrary domain objects have automatically become persistent.
+
+## Migration
+
+Replace native adapter dependencies on the removed collaboration interfaces with DbContext/ISession
+inside infrastructure, leaving business-owned ports unchanged. Register native model configuration
+and optional OIDC integration. Replace AddInMemoryPersistence/AddPersistenceServices with a selected
+native provider; the message-only memory default remains available without either ORM package.
+
+Inbox no longer stores a Command/Notification classification: identity is MessageId plus the opaque
+Route, and execution resolves the route's keyed handler. MemoryMessageClient directly accepts queue
+or subscription receipts; MemoryCommandRider/MemoryNotificationRider and InboxMessageType are removed.
+The PostgreSQL sample migration 20261114170000_RemoveInboxClassification drops only that unused
+column after the earlier migrations, preserving payloads, Headers, IDs, leases and deduplication history.
+Stop old binaries before applying it. Down refuses to infer legacy classifications; restore a matching
+backup and package set. Existing SQLite receiver files need an explicit equivalent schema migration;
+EnsureCreated does not upgrade them.
+
+The native query/model API change itself does not rename tables or reinterpret data. Review generated
+provider migrations before deployment and migrate every tenant database deliberately.

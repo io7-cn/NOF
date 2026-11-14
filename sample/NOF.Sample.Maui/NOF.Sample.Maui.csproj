@@ -52,7 +52,6 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(_HasMauiWorkload)' == 'true'">
-        <PackageReference Include="AntDesign" />
         <PackageReference Include="Microsoft.Maui.Controls" VersionOverride="$(MauiVersion)" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" VersionOverride="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" />

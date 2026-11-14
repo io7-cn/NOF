@@ -26,6 +26,8 @@ public sealed class JwtJwksHttpClientTests
         };
 
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local/oauth2";

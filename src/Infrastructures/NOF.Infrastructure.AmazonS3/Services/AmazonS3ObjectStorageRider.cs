@@ -34,7 +34,7 @@ public sealed class AmazonS3ObjectStorageRider : IObjectStorageRider
         => CreatePresignedRequestAsync(bucketName, objectKey, lifetime, Amazon.S3.HttpVerb.GET, null, cancellationToken);
 
     private async ValueTask<ObjectStoragePresignedRequest> CreatePresignedRequestAsync(
-        string bucketName, string objectKey, TimeSpan lifetime, Amazon.S3.HttpVerb verb,
+        string bucketName, string objectKey, TimeSpan lifetime, HttpVerb verb,
         ObjectStorageWriteOptions? options, CancellationToken cancellationToken)
     {
         ValidateLocation(bucketName, objectKey);

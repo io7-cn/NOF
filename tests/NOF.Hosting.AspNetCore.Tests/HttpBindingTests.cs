@@ -324,7 +324,6 @@ public sealed class HttpBindingTests
             }
         };
 
-        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
     public sealed class UpdateHandler : ServiceOperation<UpdateInput, UpdateReply>

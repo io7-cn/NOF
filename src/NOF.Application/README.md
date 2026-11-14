@@ -201,4 +201,4 @@ Apache-2.0
 
 FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Application operation references contain identity/input only; execution descriptors contain the complete output. See [expected failures](../../docs/en/design/expected-failures.md).
 
-Execution models, descriptors and policy interpretation belong to this package. Application also owns input-only ServiceOperationReference; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).
+Execution models, descriptors and policy interpretation belong to this package. ServiceOperationDescriptor is the sole operation metadata model; input-only Reference and instance mapping/resolver fallbacks are removed; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).

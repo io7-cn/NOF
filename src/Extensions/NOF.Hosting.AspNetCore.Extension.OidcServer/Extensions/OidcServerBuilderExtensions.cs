@@ -24,9 +24,6 @@ public static partial class NOFOidcServerExtensions
             builder.Services.TryAddScoped<IOAuthInitialAccessTokenHandler, DefaultOAuthInitialAccessTokenHandler>();
             builder.Services.TryAddScoped<IOAuthTokenExchangeHandler, DefaultOAuthTokenExchangeHandler>();
             builder.Services.TryAddScoped<IOAuthDeviceGrantService, CacheOAuthDeviceGrantService>();
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, PersistedSigningKeyModelCreatingContributor>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, RevokedRefreshTokenModelCreatingContributor>());
-            builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, OAuthClientModelCreatingContributor>());
             builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, RevokedRefreshTokenCleanupBackgroundService>());
             builder.Services.ReplaceOrAddScoped<LocalJwksService, LocalJwksService>();
             builder.Services.ReplaceOrAddScoped<LocalAuthorizationServerMetadataService, LocalAuthorizationServerMetadataService>();
@@ -48,7 +45,7 @@ public static partial class NOFOidcServerExtensions
             builder.Services.TryAddScoped<IOAuthClientRegistrationEndpoint, DefaultOAuthClientRegistrationEndpoint>();
             builder.Services.TryAddScoped<OAuthAuthorizationCodeIssuer>();
             builder.Services.TryAddScoped<OAuthTokenResponseIssuer>();
-            builder.Services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+            builder.Services.TryAddSingleton(TimeProvider.System);
             builder.Services.AddHostedService<SigningKeyRotationBackgroundService>();
             builder.Services.AddOptions<OidcServerBootstrapOptions>();
             builder.Services.AddOptions<OAuthAuthorizationServerOptions>()

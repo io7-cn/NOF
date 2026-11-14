@@ -22,10 +22,10 @@ public static class InboxServiceCollectionExtensions
                 && options.Inbox.ClaimTimeout > TimeSpan.Zero && options.Inbox.CleanupInterval > TimeSpan.Zero
                 && options.Inbox.RetentionPeriod > TimeSpan.Zero, "Inbox transactional message options are invalid.")
             .ValidateOnStart();
-        services.TryAddScoped<IInboxStore, PersistenceInboxStore>();
+        services.AddInMemoryMessagingPersistence();
+        services.TryAddScoped(sp => sp.GetRequiredKeyedService<IInboxStore>(typeof(IInboxStore)));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxMessageBackgroundService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, InboxCleanupBackgroundService>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDbContextModelCreatingContributor, NOFInboxMessageModelCreatingContributor>());
         services.TryAddSingleton<MessageInboxReceiver>();
         return services;
     }

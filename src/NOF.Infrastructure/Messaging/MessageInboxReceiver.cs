@@ -9,7 +9,7 @@ namespace NOF.Infrastructure;
 public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSerializer serializer)
 {
     /// <summary>Stores one consumer receipt or confirms that the same receipt already exists.</summary>
-    public async Task ReceiveAsync(Guid messageId, InboxMessageType kind, ReadOnlyMemory<byte> payload,
+    public async Task ReceiveAsync(Guid messageId, ReadOnlyMemory<byte> payload,
         string consumerId, IEnumerable<KeyValuePair<string, string?>>? headers, CancellationToken cancellationToken)
     {
         var metadata = headers?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase)
@@ -19,7 +19,7 @@ public sealed class MessageInboxReceiver(IServiceProvider services, IObjectSeria
         await using var scope = services.CreateAsyncScope();
         using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var store = scope.ServiceProvider.GetRequiredService<IInboxStore>();
-        var message = NOFInboxMessage.Create(messageId, kind, consumerId, payload.ToArray(),
+        var message = NOFInboxMessage.Create(messageId, consumerId, payload.ToArray(),
             serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>)));
         try
         {

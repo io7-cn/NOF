@@ -26,7 +26,7 @@ public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 }
 ```
 
-Contract 不再生成代码；NOF.Contract.SourceGenerator 保留原名，只承载声明分析器。ServiceOperationReference 归 Application，由 Application 生成 MailService.Send 及完整 Descriptor，其 Reference 保留稳定操作身份。远端生产者只引用共享业务 Contract 和框架 Application，显式构造操作引用，无需依赖接收方实现。所有契约接口（包括 FailureCase 声明）和 IApplicationServiceImplementation 均无需 partial；Result 与失败分支直接生成在 Application 操作中。操作身份是“契约＋方法”，不依赖请求/响应组合或 Handler 实现类名。
+Contract 不生成代码；NOF.Contract.SourceGenerator 保留声明分析器。Application 生成 Service.Operation 和完整强类型 Descriptor，删除 ServiceOperationReference、Descriptor.Reference。远程客户端使用共享负载及自行维护的集成端口。契约接口和 IApplicationServiceImplementation 无需 partial；Result 与失败分支生成在 Application 操作中。身份保持为契约加方法。注册时必须捕获静态 HandlerMappings；解析不再构造服务容器或回退到实例映射。
 
 注册应用程序集和服务容器后，操作实现自动发现，无须逐个注册：
 

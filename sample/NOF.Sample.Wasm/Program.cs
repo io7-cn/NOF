@@ -4,7 +4,7 @@ using NOF.Sample.UI.Services;
 
 var builder = Microsoft.AspNetCore.Components.WebAssembly.Hosting.WebAssemblyHostBuilder.CreateDefault(args).AddNOF();
 
-builder.Services.AddAntDesign();
+builder.Services.AddScoped<SampleMessageService>();
 builder.Services.AddScoped<ISampleApi, HttpSampleApi>();
 builder.Services.AddScoped<IOAuthDemoApi, HttpOAuthDemoApi>();
 builder.Services.AddScoped(_ => new HttpClient

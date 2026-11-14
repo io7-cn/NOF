@@ -69,9 +69,9 @@ public sealed class TenantRequestAuthorizationTests
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive");
         var routes = app.MapGroup("").Context(context => context.TenantFromHeader(NOFAbstractionConstants.Transport.Headers.TenantId));
-        routes.MapPost("/tenant", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)));
-        routes.MapPost("/host", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)));
-        routes.MapPost("/stream", new ServiceOperationDescriptor<Empty, NOF.Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)));
+        routes.MapPost("/tenant", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)));
+        routes.MapPost("/host", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)));
+        routes.MapPost("/stream", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)));
         app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();
@@ -128,14 +128,14 @@ public sealed class TenantRequestAuthorizationTests
     public interface ITenantService : IApplicationService
     {
         [RequirePermission]
-        NOF.Testing.TestOutcome<string> Tenant(Empty request);
+        Testing.TestOutcome<string> Tenant(Empty request);
 
         [UseHostTenant]
         [RequirePermission("platform.manage")]
-        NOF.Testing.TestOutcome<string> Host(Empty request);
+        Testing.TestOutcome<string> Host(Empty request);
 
         [RequirePermission]
-        NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>> Stream(Empty request);
+        Testing.TestOutcome<IAsyncEnumerable<string>> Stream(Empty request);
     }
 
     public sealed class TenantServer : ApplicationService<ITenantService>, IApplicationServiceImplementation
@@ -143,23 +143,22 @@ public sealed class TenantRequestAuthorizationTests
         public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
             new Dictionary<string, ServiceOperationMapping>
             {
-                [nameof(ITenantService.Tenant)] = new(typeof(TenantHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome<string>)),
-                [nameof(ITenantService.Host)] = new(typeof(TenantHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome<string>)),
-                [nameof(ITenantService.Stream)] = new(typeof(StreamHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>))
+                [nameof(ITenantService.Tenant)] = new(typeof(TenantHandler), typeof(Empty), typeof(Testing.TestOutcome<string>)),
+                [nameof(ITenantService.Host)] = new(typeof(TenantHandler), typeof(Empty), typeof(Testing.TestOutcome<string>)),
+                [nameof(ITenantService.Stream)] = new(typeof(StreamHandler), typeof(Empty), typeof(Testing.TestOutcome<IAsyncEnumerable<string>>))
             };
 
-        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
     }
 
-    public sealed class TenantHandler : ServiceOperation<Empty, NOF.Testing.TestOutcome<string>>
+    public sealed class TenantHandler : ServiceOperation<Empty, Testing.TestOutcome<string>>
     {
-        public override Task<NOF.Testing.TestOutcome<string>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
-            => Task.FromResult(NOF.Testing.TestOutcome.Success<string>(context.TenantId));
+        public override Task<Testing.TestOutcome<string>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
+            => Task.FromResult(NOF.Testing.TestOutcome.Success(context.TenantId));
     }
 
-    public sealed class StreamHandler : ServiceOperation<Empty, NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>>
+    public sealed class StreamHandler : ServiceOperation<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>
     {
-        public override Task<NOF.Testing.TestOutcome<global::System.Collections.Generic.IAsyncEnumerable<string>>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
+        public override Task<Testing.TestOutcome<IAsyncEnumerable<string>>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Unauthorized streaming handlers must not run");
     }
 

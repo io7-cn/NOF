@@ -30,7 +30,7 @@ public sealed record OAuthInitialAccessScopeMissing(string Detail) : IFailure
 }
 
 /// <summary>The complete admission outcomes for dynamic OAuth client registration.</summary>
-public union OAuthInitialAccessAuthorization(NOF.Contract.Empty, OAuthInitialAccessTokenInvalid, OAuthInitialAccessScopeMissing);
+public union OAuthInitialAccessAuthorization(Contract.Empty, OAuthInitialAccessTokenInvalid, OAuthInitialAccessScopeMissing);
 /// <summary>Invalid client request.</summary>
 public sealed record OAuthClientInvalidRequest(string Detail) : IFailure
 {
@@ -74,4 +74,4 @@ public sealed record OAuthClientStorageFailure(string Detail) : IFailure
 }
 
 /// <summary>The complete client administration mutation outcomes.</summary>
-public union OAuthClientMutation(NOF.Contract.Empty, OAuthClientNotFound, OAuthClientConflict, OAuthClientInvalidRequest, OAuthClientInvalidOperation, OAuthClientRegistrationTokenInvalid, OAuthClientMetadataInvalid, OAuthClientRedirectUriInvalid, OAuthClientStorageFailure);
+public union OAuthClientMutation(Contract.Empty, OAuthClientNotFound, OAuthClientConflict, OAuthClientInvalidRequest, OAuthClientInvalidOperation, OAuthClientRegistrationTokenInvalid, OAuthClientMetadataInvalid, OAuthClientRedirectUriInvalid, OAuthClientStorageFailure);

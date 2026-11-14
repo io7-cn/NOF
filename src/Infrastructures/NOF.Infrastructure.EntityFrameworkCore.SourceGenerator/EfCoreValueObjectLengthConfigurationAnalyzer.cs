@@ -1,6 +1,5 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
-using NOF.SourceGenerator.Shared;
 using System.Collections.Immutable;
 
 namespace NOF.Infrastructure.EntityFrameworkCore.SourceGenerator;
@@ -17,8 +16,7 @@ public sealed class EfCoreValueObjectLengthConfigurationAnalyzer : DiagnosticAna
         context.EnableConcurrentExecution();
         context.RegisterOperationAction(
             static operationContext => ValueObjectLengthConfigurationAnalysis.AnalyzeInvocation(
-                operationContext,
-                ValueObjectLengthBuilderFamily.EntityFrameworkCore),
+                operationContext),
             OperationKind.Invocation);
     }
 }

@@ -25,7 +25,7 @@ public sealed class TypeResolverSynchronizationTests
 
 public sealed class __TypeResolverSynchronizationAssemblyInitializer : IAssemblyInitializer
 {
-    public static void Initialize(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+    public static void Initialize(IServiceCollection services)
     {
         services.AddSingleton<__TypeResolverSynchronizationProbe>();
     }

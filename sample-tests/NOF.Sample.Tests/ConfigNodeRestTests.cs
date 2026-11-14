@@ -103,7 +103,7 @@ public sealed class ConfigNodeRestTests
     [Fact]
     public async Task NativeModule_ShouldKeepTenantIsolationAndNotExposeLegacyRoutes()
     {
-        await using var app = await CreateAppAsync(relational: true);
+        await using var app = await CreateAppAsync();
         using var first = app.GetTestClient();
         first.DefaultRequestHeaders.Add(NOFAbstractionConstants.Transport.Headers.TenantId, "tenant-a");
         var id = await CreateAsync(first, "private");
@@ -184,25 +184,22 @@ public sealed class ConfigNodeRestTests
         Assert.Equal(code, problem.RootElement.GetProperty("title").GetString());
     }
 
-    private static async Task<WebApplication> CreateAppAsync(bool relational = false)
+    private static async Task<WebApplication> CreateAppAsync()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
-        builder.AddApplicationPart(typeof(NOF.Sample.Persistence.ConfigNodePersistence).Assembly);
+        builder.AddApplicationPart(typeof(Persistence.ConfigNodePersistence).Assembly);
         builder.AddApplicationService<NOFSampleService>();
         builder.AddApplicationService<PolicyProbeService>();
         builder.Services.AddSingleton<PolicyProbe>();
         builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "rest-test:{tenantId}:");
         builder.Services.AddProblemDetails();
-        if (relational)
-        {
-            builder.UseDbContext<RestConfigDbContext>()
-                .WithTenantMode(TenantMode.DatabasePerTenant)
-                .WithConnectionString($"Data Source=rest-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
-                .WithOptions(static (options, connection) => options.UseSqlite(connection));
-        }
+        builder.UseDbContext<RestConfigDbContext>()
+            .WithTenantMode(TenantMode.DatabasePerTenant)
+            .WithConnectionString($"Data Source=rest-{Guid.NewGuid():N}-{{tenantId}};Mode=Memory;Cache=Shared")
+            .WithOptions(static (options, connection) => options.UseSqlite(connection));
         var app = builder.Build();
         app.UseNOF();
         app.MapConfigNodeEndpoints();
@@ -229,7 +226,7 @@ public sealed class RestConfigDbContext(DbContextOptions<RestConfigDbContext> op
                 file.HasKey("Id");
             });
         });
-        model.Entity<NOF.Sample.Application.Entities.ConfigNodeChildren>().HasKey(value => value.NodeId);
+        model.Entity<Application.Entities.ConfigNodeChildren>().HasKey(value => value.NodeId);
     }
 }
 

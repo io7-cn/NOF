@@ -391,7 +391,7 @@ public sealed class AuthorizationInvocationFilterTests
         {
             HandlerType = typeof(TestHandler),
             HandlerMethodInfo = handlerMethod,
-            Operation = new InvocationTestDescriptor(typeof(TestService), (serviceMethod).Name, typeof(TestRequest), responseType ?? typeof(NOF.Testing.TestOutcome)),
+            Operation = new InvocationTestDescriptor(typeof(TestService), (serviceMethod).Name, typeof(TestRequest), responseType ?? typeof(Testing.TestOutcome)),
             Origin = origin
         };
     }

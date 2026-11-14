@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
@@ -14,14 +15,14 @@ public sealed class InboxHandlerTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddInbox();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
         var probe = new Probe();
         builder.Services.AddKeyedScoped<IInboxHandler>("custom-adapter:receipt", (_, _) => new RawHandler(probe));
         using var host = builder.Build();
         var id = Guid.NewGuid();
-        await host.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(id, InboxMessageType.Command,
-            new byte[] { 10, 20 }, "custom-adapter:receipt", null, default);
+        await host.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(id, new byte[] { 10, 20 }, "custom-adapter:receipt", null, default);
         Assert.False(probe.Created);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token);
@@ -30,7 +31,7 @@ public sealed class InboxHandlerTests
             while (true)
             {
                 using var scope = host.Services.CreateScope();
-                var message = await scope.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFInboxMessage>().SingleAsync(timeout.Token);
+                var message = await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFInboxMessage>().SingleAsync(timeout.Token);
                 if (message.Status == InboxMessageStatus.Processed)
                 {
                     Assert.Equal(id, message.Id);

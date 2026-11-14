@@ -1,17 +1,16 @@
 using NOF.Abstraction;
 using NOF.Contract;
-using NOF.Sample.UI.Services;
 
-namespace AntDesign;
+namespace NOF.Sample.UI.Services;
 
 public static class NOFSampleWebUIExtensions
 {
-    extension(IMessageService messageService)
+    extension(SampleMessageService messageService)
     {
         /// <summary>Displays a payload-free result's selected message.</summary>
         public void ShowMessage(UiResponse result, string? successMessage = null, bool showSuccess = false)
         {
-            switch (result)
+            switch (result.Value)
             {
                 case NOF.Contract.Empty:
                     if (showSuccess && successMessage is not null)
@@ -22,7 +21,7 @@ public static class NOFSampleWebUIExtensions
                 case Failure failure:
                     messageService.Error(failure.Detail);
                     break;
-                case null:
+                default:
                     throw new InvalidOperationException("The response contains no outcome case.");
             }
         }
@@ -30,7 +29,7 @@ public static class NOFSampleWebUIExtensions
         /// <summary>Displays an error or caller-provided success message and returns the successful value.</summary>
         public T? UnwrapWithMessage<T>(UiResponse<T> result, string? successMessage = null, bool showSuccess = false)
         {
-            switch (result)
+            switch (result.Value)
             {
                 case Failure failure:
                     messageService.Error(failure.Detail);
@@ -41,7 +40,7 @@ public static class NOFSampleWebUIExtensions
                         messageService.Success(successMessage);
                     }
                     return value;
-                case null:
+                default:
                     throw new InvalidOperationException("The response contains no outcome case.");
             }
         }
@@ -51,7 +50,7 @@ public static class NOFSampleWebUIExtensions
         {
             ArgumentNullException.ThrowIfNull(successMessageFactory);
             return messageService.UnwrapWithMessage(result,
-                result is T value ? successMessageFactory(value) : null, showSuccess);
+                result.Value is T value ? successMessageFactory(value) : null, showSuccess);
         }
     }
 }

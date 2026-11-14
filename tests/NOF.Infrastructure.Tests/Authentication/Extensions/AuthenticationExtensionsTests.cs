@@ -79,6 +79,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddOidcServer_ShouldRegisterProtocolServicesOnly()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -97,6 +99,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddOidcServer_MapsProtocolEndpointsExplicitly()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -239,6 +243,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddOidcServer_AddPublicClient_ShouldEnsureClientExistsOnInitialize()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -297,6 +303,8 @@ public sealed class AuthenticationExtensionsTests
             }
 
             var secondBuilder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+            secondBuilder.AddNativeTestPersistence();
+            secondBuilder.Services.AddOidcEntityFrameworkCore();
             secondBuilder.AddOidcServer(options =>
             {
                 options.Issuer = "https://issuer.local";
@@ -343,6 +351,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddOidcServer_AddConfidentialClient_ShouldEnsureClientExistsOnInitialize()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local/oauth2";
@@ -392,6 +402,8 @@ public sealed class AuthenticationExtensionsTests
         using var rsa = RSA.Create(2048);
         var jsonWebKeySet = CreateJsonWebKeySet(rsa, keyId);
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = issuer;
@@ -1621,6 +1633,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddOidcServer_WithoutEncryptionKey_ShouldGenerateLocalFallbackSecret()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local";
@@ -1644,6 +1658,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddAuthenticationResourceServer_ShouldRegisterSeparately()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
@@ -1761,6 +1777,8 @@ public sealed class AuthenticationExtensionsTests
     {
         const string issuer = "http://localhost:5080/oauth2";
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = issuer;
@@ -1794,6 +1812,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddAuthenticationResourceServer_Only_ShouldRegisterInboundResourceServer()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
@@ -1816,6 +1836,8 @@ public sealed class AuthenticationExtensionsTests
     public async Task AddAuthenticationResourceServer_Only_ShouldNotRegisterAuthorityServicesExplicitly()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.Services.AddAuthenticationResourceServer(options =>
         {
             options.AuthorizationServerIssuer = "https://auth.local";
@@ -1881,6 +1903,8 @@ public sealed class AuthenticationExtensionsTests
     private static HostApplicationBuilder CreateAuthorityBuilder(string connectionString)
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         // Repository tests control key rotation explicitly rather than racing a maintenance worker.
         builder.Services.Configure<DeploymentOptions>(options => options.PrimaryNode = false);
         builder.AddOidcServer(options =>

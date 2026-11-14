@@ -4,20 +4,19 @@ NHibernate persistence package for the [NOF Framework](https://github.com/XmmShp
 
 ## Overview
 
-`NOF.Infrastructure.NHibernate` provides an NHibernate-based implementation of the NOF persistence abstractions.
+`NOF.Infrastructure.NHibernate` implements NOF feature stores and the application unit-of-work boundary with native NHibernate APIs.
 
 Current scope:
 
 - `UseNHibernate()`
-- NHibernate-backed `IPersistenceSession` and `IPersistenceSessionFactory`
-- contributor-based entity mapping through `IDbContextModelCreatingContributor`
+- a shared native `ISession`, feature-specific Inbox/Outbox stores and `NHibernateUnitOfWork`
+- native mapping-by-code configuration through `Action<ModelMapper>`
 - tenant-aware connection-string resolution for `TenantMode.DatabasePerTenant`
 
 Current limitations:
 
 - `TenantMode.SharedDatabase` is not supported yet
-- `AsNoTracking()` currently returns the same LINQ query shape without a dedicated no-tracking session
-- schema management is limited to NHibernate `SchemaUpdate`
+- optional framework schema initialization uses NHibernate `SchemaUpdate`; native configuration retains its own schema options
 
 In `DatabasePerTenant` mode, the host database and all tenant databases use the same model and
 therefore the same schema. Tenant databases must accept tables used only by host-level features as
@@ -47,4 +46,4 @@ builder.UseNHibernate()
     .BuildSchemaOnInitialize();
 ```
 
-Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and its query helpers are infrastructure collaboration only. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).
+Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. Infrastructure uses native ISession/LINQ DML and mapping APIs. No cross-ORM session, query executor or model builder remains. Optional OIDC storage is supplied by NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate with AddOidcNHibernate. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).

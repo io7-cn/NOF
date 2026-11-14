@@ -78,7 +78,7 @@ public sealed class HttpOperationAdapterTests
             "HttpRpcTransportResultReader", "JsonRpcHttpClient", "RpcResponse", "SseResponseReader",
             "StreamingResponseMetadata", "IApplicationServiceTransport", "ApplicationServiceTransportInitializationStep" };
         foreach (var assembly in new[] { typeof(WebApplicationExtensions).Assembly, typeof(IApplicationService).Assembly,
-            typeof(NOF.Infrastructure.NOFInfrastructureConstants).Assembly })
+            typeof(Infrastructure.NOFInfrastructureConstants).Assembly })
         {
             Assert.DoesNotContain(assembly.GetTypes(), type => removed.Contains(type.Name));
         }
@@ -99,7 +99,7 @@ public sealed class HttpOperationAdapterTests
                 [nameof(IEchoService.Echo)] = new(typeof(EchoHandler), typeof(EchoRequest), typeof(EchoResponse)),
                 [nameof(IEchoService.Reject)] = new(typeof(RejectHandler), typeof(EchoRequest), typeof(Failure))
             };
-        protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => HandlerMappings;
+
     }
     public sealed class RejectHandler : ServiceOperation<EchoRequest, Failure>
     {

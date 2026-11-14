@@ -1,92 +1,49 @@
 @page "/oauth-chain-demo"
 @using System.Text.Json
-@inject IMessageService Message
+@inject SampleMessageService Message
 @inject IOAuthDemoApi OAuthDemoService
 
 <PageTitle>OAuth Chain Demo</PageTitle>
 
-<style>
-    .demo-section {
-        margin-bottom: 16px;
-    }
-
-    .mono-block {
-        background: #f5f5f5;
-        border-radius: 6px;
-        font-family: Consolas, monospace;
-        font-size: 12px;
-        min-height: 84px;
-        padding: 12px;
-        white-space: pre-wrap;
-        word-break: break-all;
-    }
-</style>
-
-<h3>OAuth Chain Demo</h3>
-
-<Alert Type="AlertType.Info" ShowIcon="true" Message="一条完整的 OAuth 演示链路"
-       Description="这个页面会按步骤演示：生成 OAuth Client、Client Credentials 获取服务 Token、用户获取 Token、Client 发起 Token Exchange，以及下游服务消费交换后的 Token 并读取标准 act claim。" />
-
-<Spin Spinning="@_busy" Tip="@_busyText">
-    <Row Gutter="16">
-        <AntDesign.Col Span="12">
-            <Card Title="Step 1. 生成 Client" Class="demo-section">
-                <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                    <div>点击后在后端创建一个新的 OAuth client，并返回一次性的 `ClientSecret`。</div>
-                    <Button Type="@ButtonType.Primary" OnClick="@CreateClientAsync">生成 Client</Button>
-                    <div class="mono-block">@_step1Result</div>
-                </div>
-            </Card>
-        </AntDesign.Col>
-        <AntDesign.Col Span="12">
-            <Card Title="Step 2. Client 用凭证获取 Token" Class="demo-section">
-                <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                    <div>WASM 页面调用后端 demo service，由后端请求 token endpoint 获取 `client_credentials` token。</div>
-                    <Button Type="@ButtonType.Primary" Disabled="@string.IsNullOrWhiteSpace(_clientSecret)"
-                            OnClick="@GetClientTokenAsync">获取 Client Token</Button>
-                    <div class="mono-block">@_step2Result</div>
-                </div>
-            </Card>
-        </AntDesign.Col>
-    </Row>
-
-    <Row Gutter="16">
-        <AntDesign.Col Span="12">
-            <Card Title="Step 3. User 获取 Token" Class="demo-section">
-                <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                    <div>WASM 页面调用后端 demo service，由后端模拟 `authorization_code + PKCE` 为 `demo-user` 取 token。</div>
-                    <Button Type="@ButtonType.Primary" OnClick="@GetUserTokenAsync">获取 User Token</Button>
-                    <div class="mono-block">@_step3Result</div>
-                </div>
-            </Card>
-        </AntDesign.Col>
-        <AntDesign.Col Span="12">
-            <Card Title="Step 4. Client 发起 Token Exchange" Class="demo-section">
-                <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-                    <div>WASM 页面调用后端 demo service，由后端将用户 token 作为 `subject_token`、服务 token 作为 `actor_token` 发起交换。</div>
-                    <Button Type="@ButtonType.Primary"
-                            Disabled="@(string.IsNullOrWhiteSpace(_clientAccessToken) || string.IsNullOrWhiteSpace(_userAccessToken))"
-                            OnClick="@ExchangeUserTokenAsync">
-                        发起 Token Exchange
-                    </Button>
-                    <div class="mono-block">@_step4Result</div>
-                </div>
-            </Card>
-        </AntDesign.Col>
-    </Row>
-
-    <Card Title="Step 5. Downstream 消费交换后的 Token" Class="demo-section">
-        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-            <div>WASM 页面调用后端 orchestrator；后端再通过 `HTTPRpcClient` self-call 下游服务，读取标准 `act` claim 链。</div>
-            <Button Type="@ButtonType.Primary" Disabled="@string.IsNullOrWhiteSpace(_exchangedAccessToken)"
-                    OnClick="@ConsumeExchangedTokenAsync">
-                调用 Downstream
-            </Button>
-            <div class="mono-block">@_step5Result</div>
+<div class="sample-page">
+    <h1>OAuth Chain Demo</h1>
+    <p class="sample-muted">依次创建 Client、获取服务与用户 Token、交换 Token，最后调用下游服务。</p>
+    <p role="status">@(_busy ? _busyText : "准备就绪")</p>
+    <fieldset class="sample-fieldset" disabled="@_busy">
+        <div class="sample-grid">
+            <section class="sample-card">
+                <h2>Step 1. 生成 Client</h2>
+                <p>创建一个演示 OAuth client，并返回一次性的 ClientSecret。</p>
+                <button type="button" class="sample-primary" @onclick="CreateClientAsync">生成 Client</button>
+                <pre>@_step1Result</pre>
+            </section>
+            <section class="sample-card">
+                <h2>Step 2. Client 用凭证获取 Token</h2>
+                <p>通过 Client Credentials 获取服务 Token。</p>
+                <button type="button" class="sample-primary" disabled="@string.IsNullOrWhiteSpace(_clientSecret)" @onclick="GetClientTokenAsync">获取 Client Token</button>
+                <pre>@_step2Result</pre>
+            </section>
+            <section class="sample-card">
+                <h2>Step 3. User 获取 Token</h2>
+                <p>通过授权码和 PKCE 为 demo-user 获取 Token。</p>
+                <button type="button" class="sample-primary" @onclick="GetUserTokenAsync">获取 User Token</button>
+                <pre>@_step3Result</pre>
+            </section>
+            <section class="sample-card">
+                <h2>Step 4. Client 发起 Token Exchange</h2>
+                <p>以用户 Token 和服务 Token 发起交换。</p>
+                <button type="button" class="sample-primary" disabled="@(string.IsNullOrWhiteSpace(_clientAccessToken) || string.IsNullOrWhiteSpace(_userAccessToken))" @onclick="ExchangeUserTokenAsync">发起 Token Exchange</button>
+                <pre>@_step4Result</pre>
+            </section>
         </div>
-    </Card>
-</Spin>
-
+        <section class="sample-card">
+            <h2>Step 5. Downstream 消费交换后的 Token</h2>
+            <p>调用下游服务，读取标准 act claim 链。</p>
+            <button type="button" class="sample-primary" disabled="@string.IsNullOrWhiteSpace(_exchangedAccessToken)" @onclick="ConsumeExchangedTokenAsync">调用 Downstream</button>
+            <pre>@_step5Result</pre>
+        </section>
+    </fieldset>
+</div>
 
 @code {
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
@@ -119,7 +76,7 @@
                 new CreateDemoOAuthClientRequest(),
                 Context.Empty);
 
-            if (result is not CreateDemoOAuthClientResponse success)
+            if (result.Value is not CreateDemoOAuthClientResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
@@ -147,7 +104,7 @@
                 },
                 Context.Empty);
 
-            if (result is not DemoTokenResponse success)
+            if (result.Value is not DemoTokenResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
@@ -165,7 +122,7 @@
         await ExecuteStepAsync("正在模拟用户授权并获取 Token...", async () =>
         {
             var result = await OAuthDemoService.GetUserTokenAsync(new GetDemoUserTokenRequest(), Context.Empty);
-            if (result is not DemoTokenResponse success)
+            if (result.Value is not DemoTokenResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
@@ -193,7 +150,7 @@
                 },
                 Context.Empty);
 
-            if (result is not DemoTokenResponse success)
+            if (result.Value is not DemoTokenResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }
@@ -215,7 +172,7 @@
                 },
                 Context.Empty);
 
-            if (result is not ConsumeDemoAccessTokenResponse success)
+            if (result.Value is not ConsumeDemoAccessTokenResponse success)
             {
                 throw new InvalidOperationException(result.GetRpcFailureMessage());
             }

@@ -15,7 +15,7 @@ public sealed class EfCoreFindUsageAnalyzerTests
 {
     private static readonly Type[] _refs =
     [
-        typeof(IEntitySet<>),
+        typeof(DbSet<>),
         typeof(DbContext),
         typeof(NOFDbContext),
         typeof(EntityFrameworkQueryableExtensions)
@@ -221,9 +221,9 @@ public sealed class EfCoreFindUsageAnalyzerTests
 
             public sealed class OrderHandler
             {
-                private readonly IPersistenceSession _dbContext;
+                private readonly DbContext _dbContext;
 
-                public OrderHandler(IPersistenceSession dbContext)
+                public OrderHandler(DbContext dbContext)
                 {
                     _dbContext = dbContext;
                 }

@@ -1,191 +1,87 @@
-@inject IMessageService Message
+@inject SampleMessageService Message
 @inject ISampleApi NOFService
 
-<Tree TItem="TreeNodeData" DataSource="@_treeData" TitleExpression="@(node => node.DataItem.Title)"
-      KeyExpression="@(node => node.DataItem.Key)" IsLeafExpression="@(node => node.DataItem.IsLeaf)"
-      ChildrenExpression="@(node => node.DataItem.Children)" OnNodeLoadDelayAsync="@OnNodeLoadAsync" Draggable
-      OnDrop="@OnNodeDrop" ShowLine @bind-SelectedKeys="@_selectedKeys" OnClick="@OnNodeClick">
-    <TitleTemplate>
-        <Dropdown>
-            <Overlay>
-                <Menu>
-                    <MenuItem OnClick="() => OnAddChildClick(context.Key)">
-                        <Icon Type="plus" Theme="IconThemeType.Outline" /> 添加子节点
-                    </MenuItem>
-                    <MenuItem OnClick="() => OnDelete(context.Key)">
-                        <Icon Type="delete" Theme="IconThemeType.Outline" /> 删除
-                    </MenuItem>
-                </Menu>
-            </Overlay>
-            <ChildContent>
-                <span>@context.Title</span>
-            </ChildContent>
-        </Dropdown>
-    </TitleTemplate>
-</Tree>
+<div class="sample-tree-root" @ondragover:preventDefault @ondrop="() => MoveNode(null)">
+    <p class="sample-muted">展开节点查看子项；拖动节点到其他节点可更改父节点，拖到此处可移回根节点。</p>
+    @if (_nodes.Count == 0)
+    {
+        <p class="sample-empty">暂无配置节点</p>
+    }
+    else
+    {
+        <ul class="sample-tree" aria-label="配置树">
+            @foreach (var node in _nodes)
+            {
+                <ConfigTreeNode @key="(node.Id, _revision)" Node="node" SelectedId="_selectedId" OnSelect="SelectNode"
+                                OnAddChild="OnAddChild" OnDelete="OnDeleteNode" OnDrag="DragNode" OnDrop="MoveNode" />
+            }
+        </ul>
+    }
+</div>
 
 @code {
     [Parameter] public EventCallback<long> OnSelectNode { get; set; }
     [Parameter] public EventCallback<long?> OnAddChild { get; set; }
     [Parameter] public EventCallback<long> OnDeleteNode { get; set; }
 
-    private List<TreeNodeData> _treeData = [];
-    private string[] _selectedKeys = [];
+    private List<ConfigNodeDto> _nodes = [];
+    private long? _selectedId;
+    private long? _draggedId;
+    private int _revision;
 
-    public class TreeNodeData
-    {
-        public string Key { get; set; } = "";
-        public string Title { get; set; } = "";
-        public bool IsLeaf { get; set; }
-        public List<TreeNodeData>? Children { get; set; }
-        public long NodeId { get; set; }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadRootNodes();
-    }
-
-    private async Task LoadRootNodes()
-    {
-        try
-        {
-            var response = Message.UnwrapWithMessage(await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), NOF.Abstraction.Context.Empty));
-            if (response is null)
-            {
-                _treeData = [];
-                return;
-            }
-            _treeData = response.Nodes.Select(node => new TreeNodeData
-            {
-                Key = node.Id.ToString(),
-                Title = node.Name,
-                NodeId = node.Id,
-                IsLeaf = false,
-                Children = null
-            }).ToList();
-        }
-        catch (HttpRequestException rejected)
-        {
-            _treeData = [];
-            Message.Error(rejected.Message);
-        }
-    }
-
-    private async Task OnNodeLoadAsync(TreeEventArgs<TreeNodeData> args)
-    {
-        var nodeId = args.Node.DataItem.NodeId;
-        var result = await NOFService.GetConfigNodeChildrenAsync(new GetConfigNodeChildrenRequest
-        {
-            Id = nodeId
-        }, NOF.Abstraction.Context.Empty);
-        var children = Message.UnwrapWithMessage(result);
-
-        if (children == null || children.ChildrenIds.Count == 0)
-        {
-            args.Node.DataItem.Children = [];
-            return;
-        }
-
-        var childNodes = new List<TreeNodeData>();
-        foreach (var childId in children.ChildrenIds)
-        {
-            var childResult = await NOFService.GetConfigNodeByIdAsync(new GetConfigNodeByIdRequest
-            {
-                Id = childId
-            }, NOF.Abstraction.Context.Empty);
-            var childNode = Message.UnwrapWithMessage(childResult)?.Node;
-            if (childNode != null)
-            {
-                childNodes.Add(new TreeNodeData
-                {
-                    Key = childId.ToString(),
-                    Title = childNode.Name,
-                    NodeId = childId,
-                    IsLeaf = false, // 假设所有节点都可能有子节点
-                    Children = null
-                });
-            }
-        }
-
-        args.Node.DataItem.Children = childNodes;
-    }
-
-    private async Task OnNodeClick(TreeEventArgs<TreeNodeData> args)
-    {
-        var nodeId = args.Node.DataItem.NodeId;
-        await OnSelectNode.InvokeAsync(nodeId);
-    }
-
-    private async Task OnAddChildClick(string key)
-    {
-        var nodeId = long.Parse(key);
-        await OnAddChild.InvokeAsync(nodeId);
-    }
-
-    private async Task OnDelete(string key)
-    {
-        var nodeId = long.Parse(key);
-        await OnDeleteNode.InvokeAsync(nodeId);
-    }
-
-    private async Task OnNodeDrop(TreeEventArgs<TreeNodeData> args)
-    {
-        // args.Node 是被拖拽的节点
-        // args.TargetNode 是目标节点
-
-        if (args.Node == null || args.TargetNode == null)
-        {
-            return;
-        }
-
-        var dragNodeId = args.Node.DataItem.NodeId;
-        var dropNodeId = args.TargetNode.DataItem.NodeId;
-
-        // 根据 DropPosition 决定新的父节点
-        long? newParentId;
-
-        if (args.DropBelow)
-        {
-            // 放到目标节点内部（作为子节点）
-            newParentId = dropNodeId;
-        }
-        else
-        {
-            // 放到目标节点的前面或后面（作为兄弟节点）
-            // 获取目标节点的父节点
-            var getNodeResult = await NOFService.GetConfigNodeByIdAsync(new GetConfigNodeByIdRequest
-            {
-                Id = dropNodeId
-            }, NOF.Abstraction.Context.Empty);
-            var targetNode = Message.UnwrapWithMessage(getNodeResult)?.Node;
-            newParentId = targetNode?.ParentId;
-        }
-
-        // 调用服务更新父节点
-        var result = await NOFService.UpdateConfigNodeParentAsync(new UpdateConfigNodeParentRequest
-        {
-            NodeId = dragNodeId,
-            NewParentId = newParentId
-        }, NOF.Abstraction.Context.Empty);
-
-        if (result is NOF.Contract.Empty)
-        {
-            Message.Success("节点移动成功");
-            await LoadRootNodes();
-        }
-        else
-        {
-            Message.Error($"移动失败: {result.GetRpcFailureMessage()}");
-        }
-    }
+    protected override async Task OnInitializedAsync() => await ReloadNode(null);
 
     public async Task ReloadNode(long? parentId)
     {
-        if (parentId == null)
+        try
         {
-            await LoadRootNodes();
+            var result = await NOFService.GetRootConfigNodesAsync(new GetRootConfigNodesRequest(), Context.Empty);
+            _nodes = Message.UnwrapWithMessage(result)?.Nodes ?? [];
+            _revision++;
+            await InvokeAsync(StateHasChanged);
         }
-        StateHasChanged();
+        catch (Exception exception)
+        {
+            Message.Error(exception.Message);
+        }
+    }
+
+    private async Task SelectNode(long id)
+    {
+        _selectedId = id;
+        await OnSelectNode.InvokeAsync(id);
+    }
+
+    private void DragNode(long id) => _draggedId = id;
+
+    private async Task MoveNode(long? parentId)
+    {
+        if (_draggedId is not long id || parentId == id)
+        {
+            return;
+        }
+
+        _draggedId = null;
+        try
+        {
+            var result = await NOFService.UpdateConfigNodeParentAsync(new UpdateConfigNodeParentRequest
+            {
+                NodeId = id,
+                NewParentId = parentId
+            }, Context.Empty);
+            if (result.Value is NOF.Contract.Empty)
+            {
+                Message.Success("节点移动成功");
+                await ReloadNode(null);
+            }
+            else
+            {
+                Message.Error(result.GetRpcFailureMessage());
+            }
+        }
+        catch (Exception exception)
+        {
+            Message.Error(exception.Message);
+        }
     }
 }

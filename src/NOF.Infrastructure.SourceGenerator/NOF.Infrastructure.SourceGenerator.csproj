@@ -19,7 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\SourceGenerator.Shared\ValueObjectLengthConfigurationAnalysis.cs" Link="Shared\ValueObjectLengthConfigurationAnalysis.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\SourceGenerator.Shared\FailureBranchEmitter.cs" Link="Shared\FailureBranchEmitter.cs" />

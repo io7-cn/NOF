@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
 using NOF.Application;
@@ -9,7 +10,7 @@ namespace NOF.Sample.Persistence;
 
 /// <summary>Infrastructure implementation of aggregate and read-model ports, sharing the scoped provider session.</summary>
 [AutoInject(ServiceLifetime.Scoped)]
-public sealed class ConfigNodePersistence(IPersistenceSession session) : IConfigNodeRepository, IConfigNodeQueries, IConfigNodeHierarchyStore
+public sealed class ConfigNodePersistence(DbContext session) : IConfigNodeRepository, IConfigNodeQueries, IConfigNodeHierarchyStore
 {
     public Task<ConfigNode?> GetAsync(ConfigNodeId id, CancellationToken cancellationToken = default)
         => session.Set<ConfigNode>().FirstOrDefaultAsync(node => node.Id == id, cancellationToken);

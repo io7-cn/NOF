@@ -18,7 +18,7 @@ public sealed class DefaultOAuthAuthorizeEndpoint : IOAuthAuthorizeEndpoint
             CodeChallenge: OidcRoutes.EmptyToNull(request.Request.CodeChallenge),
             CodeChallengeMethod: OidcRoutes.EmptyToNull(request.Request.CodeChallengeMethod));
 
-        return Task.FromResult<IResult>(OidcRoutes.CreateAuthorizeFailureResult(
+        return Task.FromResult(OidcRoutes.CreateAuthorizeFailureResult(
             authorizationRequest,
             OidcRoutes.CreateOAuthError(
                 "server_error",

@@ -27,7 +27,7 @@ public sealed class CacheOAuthDeviceGrantService(
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.ClientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client", "client_id is required.");
+            return new Failure("invalid_client", "client_id is required.");
         }
 
         var serverOptions = options.Value;
@@ -92,7 +92,7 @@ public sealed class CacheOAuthDeviceGrantService(
             };
         }
 
-        return new global::NOF.Abstraction.Failure("server_error", "Unable to allocate a unique device authorization code.");
+        return new Failure("server_error", "Unable to allocate a unique device authorization code.");
     }
 
     public async Task<OAuthDeviceInspection> GetPendingAsync(
@@ -107,7 +107,7 @@ public sealed class CacheOAuthDeviceGrantService(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
+            return new Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
         }
 
         var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;
@@ -118,19 +118,19 @@ public sealed class CacheOAuthDeviceGrantService(
         if (!sessionValue.HasValue)
         {
             await cacheService.RemoveAsync(userCodeKey, cancellationToken).ConfigureAwait(false);
-            return new global::NOF.Abstraction.Failure("invalid_user_code", "user_code is invalid or expired.");
+            return new Failure("invalid_user_code", "user_code is invalid or expired.");
         }
 
         var session = sessionValue.Value;
         if (session.ExpiresAtUtc <= timeProvider.GetUtcNow())
         {
             await cacheService.RemoveAsync(userCodeKey, cancellationToken).ConfigureAwait(false);
-            return new global::NOF.Abstraction.Failure("expired_token", "user_code is expired.");
+            return new Failure("expired_token", "user_code is expired.");
         }
 
         if (session.Status != OidcDeviceAuthorizationStatus.Pending)
         {
-            return new global::NOF.Abstraction.Failure("invalid_state", "device authorization is no longer pending.");
+            return new Failure("invalid_state", "device authorization is no longer pending.");
         }
 
         return ToDescriptor(session);
@@ -143,7 +143,7 @@ public sealed class CacheOAuthDeviceGrantService(
     {
         if (string.IsNullOrWhiteSpace(subject))
         {
-            return Task.FromResult<OAuthMutation>(new global::NOF.Abstraction.Failure("invalid_request", "subject is required."));
+            return Task.FromResult<OAuthMutation>(new Failure("invalid_request", "subject is required."));
         }
 
         return DecideAsync(userCode, OidcDeviceAuthorizationStatus.Approved, subject.Trim(), cancellationToken);
@@ -161,19 +161,19 @@ public sealed class CacheOAuthDeviceGrantService(
     {
         if (string.IsNullOrWhiteSpace(deviceCode) || deviceCode.Length > 512)
         {
-            return new global::NOF.Abstraction.Failure("invalid_request", "device_code is required.");
+            return new Failure("invalid_request", "device_code is required.");
         }
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
-            return new global::NOF.Abstraction.Failure("invalid_client", "client_id is required.");
+            return new Failure("invalid_client", "client_id is required.");
         }
 
         var deviceCodeKey = new OidcDeviceAuthorizationCacheKey(HashValue(deviceCode.Trim()));
         var initialSession = await cacheService.GetAsync(deviceCodeKey, cancellationToken).ConfigureAwait(false);
         if (!initialSession.HasValue)
         {
-            return new global::NOF.Abstraction.Failure("invalid_grant", "device_code is invalid or already redeemed.");
+            return new Failure("invalid_grant", "device_code is invalid or already redeemed.");
         }
 
         await using var sessionLock = await cacheService
@@ -182,24 +182,24 @@ public sealed class CacheOAuthDeviceGrantService(
         var sessionValue = await cacheService.GetAsync(deviceCodeKey, cancellationToken).ConfigureAwait(false);
         if (!sessionValue.HasValue)
         {
-            return new global::NOF.Abstraction.Failure("invalid_grant", "device_code is invalid or already redeemed.");
+            return new Failure("invalid_grant", "device_code is invalid or already redeemed.");
         }
 
         var session = sessionValue.Value;
         if (!FixedTimeEquals(session.ClientId, clientId.Trim()))
         {
-            return new global::NOF.Abstraction.Failure("invalid_grant", "device_code was not issued to this client.");
+            return new Failure("invalid_grant", "device_code was not issued to this client.");
         }
 
         var now = timeProvider.GetUtcNow();
         if (session.ExpiresAtUtc <= now)
         {
-            return new global::NOF.Abstraction.Failure("expired_token", "device_code is expired.");
+            return new Failure("expired_token", "device_code is expired.");
         }
 
         if (session.Status == OidcDeviceAuthorizationStatus.Denied)
         {
-            return new global::NOF.Abstraction.Failure("access_denied", "The end user denied the device authorization request.");
+            return new Failure("access_denied", "The end user denied the device authorization request.");
         }
 
         if (session.Status == OidcDeviceAuthorizationStatus.Redeemed)
@@ -223,7 +223,7 @@ public sealed class CacheOAuthDeviceGrantService(
                     session,
                     CreateSessionCacheOptions(session),
                     cancellationToken).ConfigureAwait(false);
-                return new global::NOF.Abstraction.Failure("slow_down", "The client is polling the token endpoint too quickly.");
+                return new Failure("slow_down", "The client is polling the token endpoint too quickly.");
             }
 
             session = session with
@@ -235,12 +235,12 @@ public sealed class CacheOAuthDeviceGrantService(
                 session,
                 CreateSessionCacheOptions(session),
                 cancellationToken).ConfigureAwait(false);
-            return new global::NOF.Abstraction.Failure("authorization_pending", "The end user has not completed device authorization.");
+            return new Failure("authorization_pending", "The end user has not completed device authorization.");
         }
 
         if (session.Status != OidcDeviceAuthorizationStatus.Approved || string.IsNullOrWhiteSpace(session.Subject))
         {
-            return new global::NOF.Abstraction.Failure("invalid_grant", "device authorization state is invalid.");
+            return new Failure("invalid_grant", "device authorization state is invalid.");
         }
 
         OAuthTokenResponseIssuer? tokenResponseIssuer;
@@ -255,7 +255,7 @@ public sealed class CacheOAuthDeviceGrantService(
 
         if (tokenResponseIssuer is null)
         {
-            return new global::NOF.Abstraction.Failure("server_error", "OAuth subject service is not registered.");
+            return new Failure("server_error", "OAuth subject service is not registered.");
         }
 
         var response = await tokenResponseIssuer.IssueAsync(
@@ -269,7 +269,7 @@ public sealed class CacheOAuthDeviceGrantService(
             cancellationToken).ConfigureAwait(false);
         if (response is null)
         {
-            return new global::NOF.Abstraction.Failure("invalid_grant", "device authorization subject is invalid.");
+            return new Failure("invalid_grant", "device authorization subject is invalid.");
         }
 
         var redeemed = session with
@@ -303,7 +303,7 @@ public sealed class CacheOAuthDeviceGrantService(
                 Failure responseFailure => responseFailure,
                 _ => throw new InvalidOperationException("The response contains no outcome case.")
             };
-            return new global::NOF.Abstraction.Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
+            return new Failure(sessionLookupFailure.Title, sessionLookupFailure.Detail);
         }
 
         var (userCodeKey, deviceCodeKey) = sessionLookupSuccess;
@@ -314,19 +314,19 @@ public sealed class CacheOAuthDeviceGrantService(
         if (!sessionValue.HasValue)
         {
             await cacheService.RemoveAsync(userCodeKey, cancellationToken).ConfigureAwait(false);
-            return new global::NOF.Abstraction.Failure("invalid_user_code", "user_code is invalid or expired.");
+            return new Failure("invalid_user_code", "user_code is invalid or expired.");
         }
 
         var session = sessionValue.Value;
         if (session.ExpiresAtUtc <= timeProvider.GetUtcNow())
         {
             await cacheService.RemoveAsync(userCodeKey, cancellationToken).ConfigureAwait(false);
-            return new global::NOF.Abstraction.Failure("expired_token", "user_code is expired.");
+            return new Failure("expired_token", "user_code is expired.");
         }
 
         if (session.Status != OidcDeviceAuthorizationStatus.Pending)
         {
-            return new global::NOF.Abstraction.Failure("invalid_state", "device authorization is no longer pending.");
+            return new Failure("invalid_state", "device authorization is no longer pending.");
         }
 
         var decided = session with
@@ -348,20 +348,20 @@ public sealed class CacheOAuthDeviceGrantService(
     {
         if (string.IsNullOrWhiteSpace(userCode) || userCode.Length > 64)
         {
-            return new global::NOF.Abstraction.Failure("invalid_user_code", "user_code is required.");
+            return new Failure("invalid_user_code", "user_code is required.");
         }
 
         var normalizedUserCode = NormalizeUserCode(userCode);
         if (string.IsNullOrWhiteSpace(normalizedUserCode))
         {
-            return new global::NOF.Abstraction.Failure("invalid_user_code", "user_code is required.");
+            return new Failure("invalid_user_code", "user_code is required.");
         }
 
         var userCodeKey = new OidcDeviceUserCodeCacheKey(HashValue(normalizedUserCode));
         var deviceCodeDigest = await cacheService.GetAsync(userCodeKey, cancellationToken).ConfigureAwait(false);
         if (!deviceCodeDigest.HasValue || string.IsNullOrWhiteSpace(deviceCodeDigest.Value))
         {
-            return new global::NOF.Abstraction.Failure("invalid_user_code", "user_code is invalid or expired.");
+            return new Failure("invalid_user_code", "user_code is invalid or expired.");
         }
 
         return (userCodeKey, new OidcDeviceAuthorizationCacheKey(deviceCodeDigest.Value));

@@ -91,13 +91,13 @@ public sealed partial class AuthorizationInvocationFilter(
         {
             if (!isAuthenticated)
             {
-                return new(new global::NOF.Abstraction.Failure("401", "Please login first"), AuthorizationFailureReason.Authentication, []);
+                return new(new Failure("401", "Please login first"), AuthorizationFailureReason.Authentication, []);
             }
 
             if (!isHostOperation && (string.IsNullOrWhiteSpace(trustedTenant)
                 || normalizedTenant == NOFAbstractionConstants.Tenant.HostId))
             {
-                return new(new global::NOF.Abstraction.Failure("403", "An authenticated tenant is required"), AuthorizationFailureReason.Authorization, []);
+                return new(new Failure("403", "An authenticated tenant is required"), AuthorizationFailureReason.Authorization, []);
             }
         }
 
@@ -106,7 +106,7 @@ public sealed partial class AuthorizationInvocationFilter(
             && context.TenantId != NOFAbstractionConstants.Tenant.HostId
             && !string.Equals(context.TenantId, normalizedTenant, StringComparison.Ordinal))
         {
-            return new(new global::NOF.Abstraction.Failure("403", "Request tenant does not match the authenticated tenant"), AuthorizationFailureReason.Authorization, []);
+            return new(new Failure("403", "Request tenant does not match the authenticated tenant"), AuthorizationFailureReason.Authorization, []);
         }
 
         return null;

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NOF.Contract;
 using NOF.Hosting;
@@ -434,6 +435,8 @@ public sealed class TokenAuthorityServiceTests
     private static HostApplicationBuilder CreateOidcServerBuilder()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.AddNativeTestPersistence();
+        builder.Services.AddOidcEntityFrameworkCore();
         builder.AddOidcServer(options =>
         {
             options.Issuer = "https://issuer.local";

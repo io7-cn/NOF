@@ -1,7 +1,9 @@
+using Microsoft.EntityFrameworkCore;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
 using NOF.Infrastructure;
+using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample.Application;
 using NOF.Sample.Application.Entities;
 using NOF.Test;
@@ -15,20 +17,20 @@ public sealed class NOFSampleHarnessTests
     public async Task ExpectedFailures_ShouldReturnDeclaredCasesAndTypedData_WithoutDomainExceptions()
     {
         await using var host = await CreateHostAsync();
-        var invalid = await host.CallAsync<object?>(
+        var invalid = await host.CallAsync(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = " " }, context, ct));
         Assert.NotEmpty(Assert.IsType<NOFSampleService.CreateConfigNode.InvalidInput>(InvocationResult.Value(invalid)).Detail);
 
-        var parent = await host.CallAsync<object?>(
+        var parent = await host.CallAsync(
             static (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "checked-parent" }, context, ct));
         var id = Assert.IsType<CreatedConfigNode>(InvocationResult.Value(parent)).Id;
-        var child = await host.CallAsync<object?>(
+        var child = await host.CallAsync(
             (services, context, ct) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "checked-child", ParentId = id }, context, ct));
         Assert.IsType<CreatedConfigNode>(InvocationResult.Value(child));
-        var deleted = await host.CallAsync<object?>(
+        var deleted = await host.CallAsync(
             (services, context, ct) => NOFSampleService.DeleteConfigNode.InvokeAsync(services,
                 new DeleteConfigNodeRequest { Id = id }, context, ct));
         Assert.Equal(id, Assert.IsType<NOFSampleService.DeleteConfigNode.HasChildren>(InvocationResult.Value(deleted)).Error.NodeId);
@@ -39,7 +41,7 @@ public sealed class NOFSampleHarnessTests
     {
         await using var host = await CreateHostAsync();
 
-        var createResult = await host.CallAsync<object?>(
+        var createResult = await host.CallAsync(
             static (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                 new CreateConfigNodeRequest { Name = "root-a" },
                 context,
@@ -50,7 +52,7 @@ public sealed class NOFSampleHarnessTests
 
         Assert.NotNull(Assert.IsType<CreatedConfigNode>(InvocationResult.Value(createResult)));
 
-        var roots = await host.CallAsync<object?>(
+        var roots = await host.CallAsync(
             static (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
                 new GetRootConfigNodesRequest(),
                 context,
@@ -75,21 +77,21 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var createParent = await scope.CallAsync<object?>(
+            var createParent = await scope.CallAsync(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "parent-b" },
                     context,
                     cancellationToken));
             Assert.NotNull(Assert.IsType<CreatedConfigNode>(InvocationResult.Value(createParent)));
 
-            var roots = await scope.CallAsync<object?>(
+            var roots = await scope.CallAsync(
                 (services, context, cancellationToken) => NOFSampleService.GetRootConfigNodes.InvokeAsync(services,
                     new GetRootConfigNodesRequest(),
                     context,
                     cancellationToken));
             var root = Assert.Single(Assert.IsType<GetRootConfigNodesResponse>(roots).Nodes);
 
-            var createChild = await scope.CallAsync<object?>(
+            var createChild = await scope.CallAsync(
                 (services, context, cancellationToken) => NOFSampleService.CreateConfigNode.InvokeAsync(services,
                     new CreateConfigNodeRequest { Name = "child-b", ParentId = root.Id },
                     context,
@@ -104,7 +106,7 @@ public sealed class NOFSampleHarnessTests
             scope.SetTenant("tenant-b")
                 .SetUser("user-2", "Bob");
 
-            var parent = await scope.CallAsync<object?>(
+            var parent = await scope.CallAsync(
                 (services, context, cancellationToken) => NOFSampleService.GetConfigNodeById.InvokeAsync(services,
                     new GetConfigNodeByIdRequest { Id = parentId },
                     context,
@@ -113,7 +115,7 @@ public sealed class NOFSampleHarnessTests
             Assert.NotNull(Assert.IsType<GetConfigNodeByIdResponse>(InvocationResult.Value(parent)));
             Assert.Equal("parent-b", Assert.IsType<GetConfigNodeByIdResponse>(InvocationResult.Value(parent))!.Node.Name);
 
-            var projection = await scope.GetRequiredService<IPersistenceSession>()
+            var projection = await scope.GetRequiredService<DbContext>()
                 .Set<ConfigNodeChildren>()
                 .FirstOrDefaultAsync(entity => entity.NodeId == ConfigNodeId.From(parentId));
 
@@ -125,9 +127,11 @@ public sealed class NOFSampleHarnessTests
     private static Task<NOFTestHost> CreateHostAsync()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.UseDbContext<RestConfigDbContext>().WithConnectionString($"Data Source=harness-{Guid.NewGuid():N}-{{TenantId}};Mode=Memory;Cache=Shared")
+            .WithOptions((options, connection) => options.UseSqlite(connection));
         builder.AddApplicationPartOf<NOFSampleService>();
         builder.AddApplicationPart(typeof(SampleHarnessMappings).Assembly);
-        builder.AddApplicationPart(typeof(NOF.Sample.Persistence.ConfigNodePersistence).Assembly);
+        builder.AddApplicationPart(typeof(Persistence.ConfigNodePersistence).Assembly);
         builder.AddApplicationService<NOFSampleService>();
 
         return Task.FromResult(builder.BuildTestHost());

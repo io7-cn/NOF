@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -43,9 +44,9 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var result = await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.GetFleetOverview), new Empty(), Context.Empty);
         var recorder = provider.GetRequiredService<InvocationRecorder>();
 
-        Assert.NotNull(Assert.IsType<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess());
-        Assert.NotNull(Assert.IsType<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess());
-        Assert.Equal("fleet", Assert.IsType<NOF.Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess().Name);
+        Assert.NotNull(Assert.IsType<Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess());
+        Assert.NotNull(Assert.IsType<Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess());
+        Assert.Equal("fleet", Assert.IsType<Testing.TestOutcome<GetFleetOverviewResponse>>(result).ExpectSuccess().Name);
         Assert.Equal(1, recorder.Count);
     }
 
@@ -105,7 +106,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         await using var provider = BuildServiceProvider();
         await using var callerScope = provider.CreateAsyncScope();
 
-        var dbContext = callerScope.ServiceProvider.GetRequiredService<IPersistenceSession>();
+        var dbContext = callerScope.ServiceProvider.GetRequiredService<DbContext>();
         var marker = callerScope.ServiceProvider.GetRequiredService<LocalScopeMarker>();
         var invoker = callerScope.ServiceProvider.GetRequiredService<IOperationInvoker>();
 
@@ -113,8 +114,8 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         var secondResult = (await invoker.InvokeAsync<IProtectedFleetService>(nameof(IProtectedFleetService.CheckScope), new ScopeCheckRequest(dbContext, marker), Context.Empty));
         var probe = callerScope.ServiceProvider.GetRequiredService<LocalScopeProbe>();
 
-        Assert.NotNull(Assert.IsType<NOF.Testing.TestOutcome>(firstResult).ExpectSuccess());
-        Assert.NotNull(Assert.IsType<NOF.Testing.TestOutcome>(secondResult).ExpectSuccess());
+        Assert.NotNull(Assert.IsType<Testing.TestOutcome>(firstResult).ExpectSuccess());
+        Assert.NotNull(Assert.IsType<Testing.TestOutcome>(secondResult).ExpectSuccess());
         Assert.False(probe.HandlerUsedCallerScopeDbContext);
         Assert.False(probe.HandlerUsedCallerScopeMarker);
         Assert.True(probe.EventHandlerUsedHandlerDbContext);
@@ -133,7 +134,7 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         services.AddLogging();
 
         services.AddScoped<IUserContext, UserContext>();
-        services.AddScoped<IPersistenceSession, LocalScopedDbContext>();
+        services.AddScoped<DbContext, LocalScopedDbContext>();
         services.AddScoped<LocalScopeMarker>();
         services.AddSingleton<InvocationRecorder>();
         services.AddSingleton<LocalScopeProbe>();
@@ -155,10 +156,9 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         services.AddScoped<ScopeLifecycleProbeService>();
 
         services.AddScoped<IOperationExecutor, OperationExecutor>();
-        services.AddScoped<ApplicationServiceInvocationResolver>();
 
         var rpcServerRegistry = new ApplicationServiceRegistry();
-        rpcServerRegistry.Add(new ApplicationServiceRegistration(typeof(IProtectedFleetService), typeof(ProtectedFleetServer)));
+        rpcServerRegistry.Add(new ApplicationServiceRegistration(typeof(IProtectedFleetService), typeof(ProtectedFleetServer)) { HandlerMappings = ProtectedFleetServer.HandlerMappings });
         services.AddSingleton(rpcServerRegistry);
         services.AddSingleton(_ =>
         {
@@ -178,19 +178,19 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
 public interface IProtectedFleetService : IApplicationService
 {
     [RequirePermission("fleet.read")]
-    NOF.Testing.TestOutcome<GetFleetOverviewResponse> GetFleetOverview(Empty request);
+    Testing.TestOutcome<GetFleetOverviewResponse> GetFleetOverview(Empty request);
 
-    NOF.Testing.TestOutcome CheckScope(ScopeCheckRequest request);
+    Testing.TestOutcome CheckScope(ScopeCheckRequest request);
 
     [RequirePermission("fleet.read")]
-    NOF.Testing.TestOutcome InspectContext(ContextCheckRequest request);
+    Testing.TestOutcome InspectContext(ContextCheckRequest request);
 }
 
 public sealed record ContextCheckRequest(object Key, object Value);
 
-public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<ContextCheckRequest, NOF.Testing.TestOutcome>
+public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<ContextCheckRequest, Testing.TestOutcome>
 {
-    public override Task<NOF.Testing.TestOutcome> HandleAsync(ContextCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
+    public override Task<Testing.TestOutcome> HandleAsync(ContextCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         Assert.Same(request.Value, context.Context[request.Key]);
         Assert.Same(context.Context, Context.Current);
@@ -203,9 +203,9 @@ public sealed class ContextCheckHandler(IUserContext user) : ServiceOperation<Co
 
 public sealed record GetFleetOverviewResponse(string Name);
 
-public sealed record ScopeCheckRequest(IPersistenceSession ExpectedDbContext, LocalScopeMarker ExpectedMarker);
+public sealed record ScopeCheckRequest(DbContext ExpectedDbContext, LocalScopeMarker ExpectedMarker);
 
-public sealed record ScopeCheckEvent(IPersistenceSession HandlerDbContext, LocalScopeMarker HandlerMarker);
+public sealed record ScopeCheckEvent(DbContext HandlerDbContext, LocalScopeMarker HandlerMarker);
 
 public sealed class LocalScopeMarker;
 
@@ -238,18 +238,18 @@ public sealed class InvocationRecorder
 
 public sealed class ProtectedFleetServer : ApplicationService<IProtectedFleetService>
 {
+    public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings => _mappings;
     private static readonly IReadOnlyDictionary<string, ServiceOperationMapping> _mappings =
         new Dictionary<string, ServiceOperationMapping>
         {
             [nameof(IProtectedFleetService.GetFleetOverview)] =
-                new(typeof(GetFleetOverviewHandler), typeof(Empty), typeof(NOF.Testing.TestOutcome<GetFleetOverviewResponse>)),
+                new(typeof(GetFleetOverviewHandler), typeof(Empty), typeof(Testing.TestOutcome<GetFleetOverviewResponse>)),
             [nameof(IProtectedFleetService.CheckScope)] =
-                new(typeof(ScopeCheckHandler), typeof(ScopeCheckRequest), typeof(NOF.Testing.TestOutcome)),
+                new(typeof(ScopeCheckHandler), typeof(ScopeCheckRequest), typeof(Testing.TestOutcome)),
             [nameof(IProtectedFleetService.InspectContext)] =
-                new(typeof(ContextCheckHandler), typeof(ContextCheckRequest), typeof(NOF.Testing.TestOutcome))
+                new(typeof(ContextCheckHandler), typeof(ContextCheckRequest), typeof(Testing.TestOutcome))
         };
 
-    protected override IReadOnlyDictionary<string, ServiceOperationMapping> GetHandlerMappings() => _mappings;
 }
 
 public sealed class ScopeLifecycleProbeService : IAsyncDisposable
@@ -271,11 +271,11 @@ public sealed class ScopeLifecycleProbeService : IAsyncDisposable
 
 public sealed class ScopeCheckHandler(
     ScopeLifecycleProbeService lifetime,
-    IPersistenceSession dbContext,
+    DbContext dbContext,
     LocalScopeMarker marker,
-    LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, NOF.Testing.TestOutcome>
+    LocalScopeProbe probe) : ServiceOperation<ScopeCheckRequest, Testing.TestOutcome>
 {
-    public override Task<NOF.Testing.TestOutcome> HandleAsync(ScopeCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
+    public override Task<Testing.TestOutcome> HandleAsync(ScopeCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
         _ = lifetime;
         probe.HandlerUsedCallerScopeDbContext = ReferenceEquals(request.ExpectedDbContext, dbContext);
@@ -288,7 +288,7 @@ public sealed class ScopeCheckHandler(
 }
 
 public sealed class ScopeCheckEventHandler(
-    IPersistenceSession dbContext,
+    DbContext dbContext,
     LocalScopeMarker marker,
     LocalScopeProbe probe) : LocalEventHandler<ScopeCheckEvent>
 {
@@ -301,34 +301,11 @@ public sealed class ScopeCheckEventHandler(
     }
 }
 
-public sealed class LocalScopedDbContext : IPersistenceSession
+public sealed class LocalScopedDbContext : DbContext;
+
+public sealed class GetFleetOverviewHandler(InvocationRecorder recorder) : ServiceOperation<Empty, Testing.TestOutcome<GetFleetOverviewResponse>>
 {
-    public IEntitySet<TEntity> Set<TEntity>()
-        where TEntity : class
-        => throw new NotSupportedException();
-
-    public int SaveChanges()
-        => 0;
-
-    public int SaveChanges(bool acceptAllChangesOnSuccess)
-        => 0;
-
-    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(0);
-
-    public Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
-        => Task.FromResult(0);
-
-    public IPersistenceTransaction BeginTransaction()
-        => throw new NotSupportedException();
-
-    public Task<IPersistenceTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
-        => throw new NotSupportedException();
-}
-
-public sealed class GetFleetOverviewHandler(InvocationRecorder recorder) : ServiceOperation<Empty, NOF.Testing.TestOutcome<GetFleetOverviewResponse>>
-{
-    public override Task<NOF.Testing.TestOutcome<GetFleetOverviewResponse>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
+    public override Task<Testing.TestOutcome<GetFleetOverviewResponse>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
     {
         recorder.Count++;
         return Task.FromResult(NOF.Testing.TestOutcome.Success(new GetFleetOverviewResponse("fleet")));

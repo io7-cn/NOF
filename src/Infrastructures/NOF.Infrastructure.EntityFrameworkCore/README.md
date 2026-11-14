@@ -10,7 +10,7 @@ Entity Framework Core persistence package for the [NOF Framework](https://github
 - `UseDbContext<TDbContext>()`
 - `EFCoreSelector`
 - tenant-aware model customization and factory services
-- EF-backed `IInboxStore` and `IPersistenceSession` adapter
+- native EF `IInboxStore`/`IOutboxStore` implementations and `EfCoreUnitOfWork`
 - SQLite in-memory default persistence registration
 
 ## Installation
@@ -108,7 +108,7 @@ builder.UseDbContext<AppDbContext>()
     .MigrateOnStart();
 ```
 
-The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because NOF's `IPersistenceSessionFactory` creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
+The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because the native tenant-aware EF context factory creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
 
 ## Custom tenant migration orchestration
 
@@ -178,7 +178,7 @@ builder.UseDbContext<AppDbContext, AppDbContextFactory>()
 
 The custom factory is registered as itself and as `NOFDbContextFactory<TDbContext>`,
 `ITenantDbContextFactory<TDbContext>`, EF Core's `IDbContextFactory<TDbContext>`, and NOF's
-provider-neutral `IPersistenceSessionFactory`. Prefer `WithConnectionStringResolver(...)` when only database
+native `IDbContextFactory<TDbContext>`. Prefer `WithConnectionStringResolver(...)` when only database
 routing differs; derive the factory when the context creation lifecycle itself must change.
 
 ## Soft delete
@@ -208,4 +208,4 @@ Applications upgrading from a version where soft delete was enabled by default s
 `WithSoftDelete(true)` before generating or applying further migrations if they intend to preserve
 their existing delete columns, indexes, filters, and behavior.
 
-Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. IPersistenceSession and its query helpers are infrastructure collaboration only. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).
+Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. Infrastructure adapters use native DbContext and EF query/mapping APIs. The cross-ORM session/query/model layer is removed; EF-specific model extensions implement IEFCoreModelConfiguration with ModelBuilder. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).

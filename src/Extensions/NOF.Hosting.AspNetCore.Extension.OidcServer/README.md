@@ -18,6 +18,12 @@ database used by the authority rather than from the requesting tenant's database
 - Supports RFC 7591 client registration and RFC 7592 client configuration management
 - Uses standard ASP.NET Core HTTP behavior for redirects, form posts, status codes, and JSON responses
 
+Select the optional `NOF.Hosting.AspNetCore.Extension.OidcServer.EntityFrameworkCore` or
+`NOF.Hosting.AspNetCore.Extension.OidcServer.NHibernate` package for persistent state, then call
+`builder.Services.AddOidcEntityFrameworkCore()` or `AddOidcNHibernate()` alongside the native provider.
+The base extension owns protocol policy; storage uses feature-specific ports without a cross-ORM query API.
+See the [migration guide](../../../docs/en/design/persistence-boundaries.md).
+
 ## Usage
 
 ```csharp
@@ -25,6 +31,8 @@ using NOF.Hosting.AspNetCore;
 using NOF.Hosting.AspNetCore.Extension.OidcServer;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
+// After selecting the native EF provider and installing its OIDC integration:
+builder.Services.AddOidcEntityFrameworkCore();
 
 builder.AddOidcServer(options =>
 {

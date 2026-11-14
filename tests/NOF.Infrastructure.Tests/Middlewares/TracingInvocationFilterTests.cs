@@ -59,7 +59,7 @@ public sealed class TracingInvocationFilterTests
 
     private static TracingInvocationFilter CreateMiddleware()
         => new(
-            Microsoft.Extensions.Options.Options.Create(new NOF.Hosting.DeploymentOptions()),
+            Microsoft.Extensions.Options.Options.Create(new Hosting.DeploymentOptions()),
             NullLogger<TracingInvocationFilter>.Instance);
 
     private static InvocationContext CreateCommandContext()

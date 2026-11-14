@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -6,6 +7,7 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using NOF.Hosting;
+using NOF.Infrastructure.EntityFrameworkCore;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests;
@@ -20,7 +22,7 @@ public sealed class MessageCapabilityRegistrationTests
         builder.AddNOF();
         using var host = builder.Build();
         Assert.DoesNotContain(host.Services.GetServices<IHostedService>(), service => WorkerTypes.Contains(service.GetType()));
-        Assert.Empty(host.Services.GetServices<IDbContextModelCreatingContributor>());
+        Assert.Empty(host.Services.GetServices<IEFCoreModelConfiguration>());
         using var scope = host.Services.CreateScope();
         Assert.Null(scope.ServiceProvider.GetService<IOutbox>());
         Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());
@@ -41,6 +43,7 @@ public sealed class MessageCapabilityRegistrationTests
         }
 
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddOutbox(_ =>
         {
         });
@@ -49,7 +52,10 @@ public sealed class MessageCapabilityRegistrationTests
         Assert.Equal(2, workers.Length);
         Assert.Contains(workers, service => service is OutboxMessageBackgroundService);
         Assert.Contains(workers, service => service is OutboxCleanupBackgroundService);
-        Assert.Single(host.Services.GetServices<IDbContextModelCreatingContributor>());
+        using (var modelScope = host.Services.CreateScope())
+        {
+            Assert.NotNull(modelScope.ServiceProvider.GetRequiredService<DbContext>().Model.FindEntityType(typeof(NOFOutboxMessage)));
+        }
         using var scope = host.Services.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
         Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());
@@ -62,6 +68,7 @@ public sealed class MessageCapabilityRegistrationTests
         var outbox = new Mock<IOutboxStore>(MockBehavior.Strict);
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddSingleton(inbox.Object);
         builder.Services.AddSingleton(outbox.Object);
         builder.Services.AddOutbox(_ =>
@@ -94,6 +101,7 @@ public sealed class MessageCapabilityRegistrationTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddOutbox(outbox => outbox.Add<Work, Handler>("work"));
         builder.Services.AddSingleton<Probe>();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
@@ -105,7 +113,7 @@ public sealed class MessageCapabilityRegistrationTests
             var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work("pending"), Context.Empty);
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
             using var observer = host.Services.CreateScope();
-            var record = await observer.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFOutboxMessage>().SingleAsync(item => item.Id == id);
+            var record = await observer.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>().SingleAsync(item => item.Id == id);
             Assert.Equal(OutboxMessageStatus.Pending, record.Status);
             Assert.Equal(0, record.RetryCount);
             Assert.Equal(0, host.Services.GetRequiredService<Probe>().Constructed);
@@ -121,7 +129,8 @@ public sealed class MessageCapabilityRegistrationTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapQueue<Work>("work", new ServiceOperationDescriptor<Work, Empty>(typeof(IConsumer), nameof(IConsumer.Handle))));
+        builder.AddNativeTestPersistence();
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapQueue("work", new ServiceOperationDescriptor<Work, Empty>(typeof(IConsumer), nameof(IConsumer.Handle))));
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = false);
         using var host = builder.Build();
         await host.StartAsync();
@@ -130,7 +139,7 @@ public sealed class MessageCapabilityRegistrationTests
             using var scope = host.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<MemoryMessageClient>().SendAsync("work", new Work("pending"), Context.Empty);
             using var observer = host.Services.CreateScope();
-            var record = await observer.ServiceProvider.GetRequiredService<IPersistenceSession>().Set<NOFInboxMessage>().SingleAsync();
+            var record = await observer.ServiceProvider.GetRequiredService<DbContext>().Set<NOFInboxMessage>().SingleAsync();
             Assert.Equal(InboxMessageStatus.Pending, record.Status);
             Assert.Null(observer.ServiceProvider.GetService<IOutboxStore>());
         }
@@ -145,6 +154,7 @@ public sealed class MessageCapabilityRegistrationTests
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
+        builder.AddNativeTestPersistence();
         builder.Services.AddOutbox(_ =>
         {
         });

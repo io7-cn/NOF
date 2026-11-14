@@ -7,7 +7,7 @@ NOF.Contract contains declarations and data models only. Its runtime assembly re
 | Owner | Types and responsibilities |
 |---|---|
 | Contract | IApplicationService, FailureCase/policy metadata attributes, requests, successful DTOs, custom error data, Empty/Optional/Page |
-| Application | ServiceOperationReference, ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata and invocation interfaces |
+| Application | ServiceOperation, InvocationContext/InvocationOrigin, full ServiceOperationDescriptor, business result metadata and invocation interfaces |
 | Abstraction | Context and its immutable semantic items/async-flow binding, shared Failure and other foundation services |
 | Host/infrastructure | IInvocationFilter/InvocationDelegate/IInvocationPipeline, effective plans/catalogs, transport adaptation, identity establishment, selected invocation engine, HTTP presentation, queue routing and durable receipt/retry behavior |
 
@@ -33,13 +33,13 @@ public sealed class ReadNodeHandler : NodeService.Read
 
 FailureCase stays on the non-partial Contract interface method; concrete Result and branch types remain generated in the Application operation. Runtime execution types now use namespace NOF.Application. Semantic Context uses namespace NOF.Abstraction as well as its existing Abstraction assembly.
 
-ServiceOperationReference<TRequest> is Application-owned identity/input metadata. It is not a transport client or an Outbox route. Complete operation descriptors retain their stable identities; concrete clients name destinations and generic Outbox handlers interpret durable intents. See [transactional outbox](transactional-outbox.md).
+ServiceOperationDescriptor is the sole operation identity/input/output model. Input-only ServiceOperationReference and Descriptor.Reference are removed. Concrete clients name destinations and generic Outbox handlers interpret durable intents. See [transactional outbox](transactional-outbox.md).
 
 NodeService.Read.Descriptor supplies the complete response type and resolved method metadata. Its identity metadata is independent of transport destinations. Validation is centralized in ServiceOperationInspector.ValidateReference; CanSubmit checks for an Empty return with no declared FailureCase, and RequiresHostTenant interprets equivalent policy metadata. Default bindings and dispatch routes invoke these checks. Moving the logic does not bypass authorization or permit discarded business failures.
 
 ## Migration
 
-- Import NOF.Application for ServiceOperationReference, ServiceOperation, InvocationContext, descriptors and business result metadata. No Contract aliases/forwarders are retained.
+- Import NOF.Application for ServiceOperation, InvocationContext, descriptors and business result metadata. No Contract aliases/forwarders are retained.
 - Import NOF.Abstraction for Context and replace explicit NOF.Contract.Context references. Its semantic behavior and ambient async-flow restoration stay the same. The obsolete Contract TypeForwardedTo entry is removed intentionally.
 - Remove generated IServiceOperations.Method producer routing. Immediate calls use concrete clients; transactional messages use IOutbox.EnqueueAsync with infrastructure handlers. Inbound consumers retain full operation descriptors.
 - Replace reference.MethodInfo/CanSubmit with Application-owned ServiceOperationInspector calls where direct inspection is needed. Normal application invocation and message binding APIs already validate; business handlers do not need to repeat it.
