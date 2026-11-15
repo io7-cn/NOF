@@ -27,6 +27,13 @@ public static class CapabilityServiceCollectionExtensions
         return new(services);
     }
 
+    /// <summary>Appends cache policy configuration and keeps the provider-selection chain.</summary>
+    public static CacheServiceSelector Configure(this CacheServiceSelector selector, Action<CacheServiceOptions> configure)
+    {
+        selector.Services.Configure(configure);
+        return selector;
+    }
+
     /// <summary>Registers tenant-prefixed object storage; the host selects a provider.</summary>
     public static ObjectStorageSelector AddObjectStorage(this IServiceCollection services, Action<ObjectStorageOptions>? configure = null)
     {

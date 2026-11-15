@@ -3,7 +3,7 @@
 [English](../../en/design/host-composition.md) · [开发指南](../README.md)
 
 NOF 负责应用操作、业务授权、执行上下文与事务消息语义。原生宿主负责认证协议、遥测及具体基础设施选择。
-AddNOF 安装执行器、调用器、默认执行引擎、诊断埋点与通用授权/租户 Filter；不再默认选择缓存、对象存储、
+AddNOF 安装统一执行器、默认执行引擎、诊断埋点与通用授权/租户 Filter；不再默认选择缓存、对象存储、
 Backplane、ID 算法、消息传输、数据库、JWT 验证器或遥测导出器。
 
 HTTP 的 AddNOF 重载还会注册适配器自身需要的 JSON、ProblemDetails 和 OpenAPI。宿主无需重复调用 AddProblemDetails()；
@@ -13,7 +13,8 @@ HTTP 的 AddNOF 重载还会注册适配器自身需要的 JSON、ProblemDetails
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args).AddNOF();
-builder.Services.AddCacheService(options => options.KeyPrefix = "app:{tenantId}:")
+builder.Services.AddCacheService()
+    .Configure(options => options.KeyPrefix = "app:{tenantId}:")
     .AddMemoryCacheService();
 // 或 .AddRedisCache(connectionString)
 builder.Services.AddObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = "objects");
@@ -27,6 +28,8 @@ builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 自定义实现仍可直接使用 DI。选择缓存不会顺带启动传输或持久化 Worker。AddMemoryMessaging 开启内存消息；
 AddInbox/AddOutbox 按需安装消息专用内存持久化。AddNOF/AddOutbox/AddMemoryMessaging 自动以 Scoped 注册 MessageDelivery，原生 RabbitMQ 适配器只选择具体客户端与序列化器。
 EF/NHibernate 依然是独立选择。
+
+CacheServiceSelector.Configure 追加原生 CacheServiceOptions 配置并返回同一个 Selector，可在选择 Provider 前后使用，也可重复调用；回调按注册顺序执行，配置选项不会替换缓存 Provider。
 
 SnowflakeIdGenerator 与 SnowflakeIdGeneratorOptions 移到 Infrastructure。Domain 只保留 IIdGenerator 和可空的
 IdGenerator.Current；未绑定时返回 null，调用方决定跳过、选择替代实现或抛出异常。生成的 New() 必须取得 ID，

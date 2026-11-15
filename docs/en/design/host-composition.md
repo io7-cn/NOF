@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/design/host-composition.md) · [Development guide](../README.md)
 
-NOF owns application operations, business authorization, execution context and transactional message semantics. Native hosts own authentication protocols, telemetry and concrete infrastructure selection. AddNOF installs the operation executor, invoker, default invocation engine, instrumentation and generic authorization/tenant filters. It does not select a cache, object store, backplane, ID algorithm, message transport, database, JWT validator or telemetry exporter.
+NOF owns application operations, business authorization, execution context and transactional message semantics. Native hosts own authentication protocols, telemetry and concrete infrastructure selection. AddNOF installs the unified operation executor, default invocation engine, instrumentation and generic authorization/tenant filters. It does not select a cache, object store, backplane, ID algorithm, message transport, database, JWT validator or telemetry exporter.
 
 The HTTP AddNOF overload also registers its adapter prerequisites: JSON, ProblemDetails and OpenAPI. Hosts do not repeat AddProblemDetails(); they may configure native ProblemDetailsOptions when customization is needed.
 
@@ -10,7 +10,8 @@ The HTTP AddNOF overload also registers its adapter prerequisites: JSON, Problem
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args).AddNOF();
-builder.Services.AddCacheService(options => options.KeyPrefix = "app:{tenantId}:")
+builder.Services.AddCacheService()
+    .Configure(options => options.KeyPrefix = "app:{tenantId}:")
     .AddMemoryCacheService();
 // Or: .AddRedisCache(connectionString);
 builder.Services.AddObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = "objects");
@@ -21,6 +22,8 @@ builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 ```
 
 The entry installs common policy; its typed Selector chooses a provider and retains complete method names. Repeated entry calls do not duplicate shared services. Custom implementations can still use ordinary DI. Selecting one capability does not enable another transport or durable worker. Memory messaging is enabled by AddMemoryMessaging; AddInbox/AddOutbox install message-only persistence as needed. AddNOF/AddOutbox/AddMemoryMessaging automatically register scoped MessageDelivery; native publishing adapters select their concrete client and serializer. Native EF/NHibernate remain independent provider choices.
+
+CacheServiceSelector.Configure appends a native CacheServiceOptions callback and returns the same selector. It works before or after provider selection and supports repeated calls in registration order; no cache provider is replaced by configuring options.
 
 SnowflakeIdGenerator and SnowflakeIdGeneratorOptions live in Infrastructure. Domain keeps IIdGenerator and the nullable IdGenerator.Current convenience accessor. Missing ambient registration returns null; the caller decides whether to skip, use an alternative, or throw. Generated New() requires an ID and reports the missing provider at that call site; New(IIdGenerator) remains explicit. AddNOFDomain is removed because Domain has no runtime registration responsibilities. AddNOFTest explicitly selects memory cache/object storage and Snowflake for its test conveniences.
 

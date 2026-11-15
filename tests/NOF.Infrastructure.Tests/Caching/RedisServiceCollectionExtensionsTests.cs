@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NOF.Application;
 using NOF.Hosting;
 using NOF.Infrastructure.StackExchangeRedis;
@@ -34,18 +35,26 @@ public sealed class RedisServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddCacheService().AddRedisCache(
+        services.AddCacheService()
+            .Configure(options => options.KeyPrefix = "app:{tenantId}:")
+            .AddRedisCache(
             new ConfigurationOptions
             {
                 EndPoints = { "localhost:6379" },
                 AbortOnConnectFail = false
             },
-            options => options.MinimumLockRenewalDuration = TimeSpan.FromMinutes(3));
+            options => options.MinimumLockRenewalDuration = TimeSpan.FromMinutes(3))
+            .Configure(options => options.LockRenewalIntervalFactor = 0.75);
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConnectionMultiplexer));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ICacheServiceRider) &&
             descriptor.ImplementationType == typeof(RedisCacheServiceRider));
+        using var provider = services.BuildServiceProvider();
+        var cacheOptions = provider.GetRequiredService<IOptions<CacheServiceOptions>>().Value;
+        Assert.Equal("app:{tenantId}:", cacheOptions.KeyPrefix);
+        Assert.Equal(TimeSpan.FromMinutes(3), cacheOptions.MinimumLockRenewalDuration);
+        Assert.Equal(0.75, cacheOptions.LockRenewalIntervalFactor);
     }
 
 }

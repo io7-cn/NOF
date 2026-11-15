@@ -43,9 +43,8 @@ builder.Services.AddObjectStorage()
 builder.Services.AddCacheService()
     .AddRedisCache(
         builder.Configuration.GetConnectionString("redis")
-            ?? throw new InvalidOperationException("Connection string 'redis' is required."));
-
-builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
+            ?? throw new InvalidOperationException("Connection string 'redis' is required."))
+    .Configure(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 
 // Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
 builder.Logging.AddOpenTelemetry(options => { options.IncludeFormattedMessage = true; options.IncludeScopes = true; });
