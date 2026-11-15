@@ -28,11 +28,10 @@ builder.AddApplicationService<PermissionDemoService>();
 builder.AddApplicationService<OAuthChainDemoService>();
 builder.AddApplicationService<DemoDownstreamService>();
 
-builder.Services.AddTransactionalMessages();
-builder.Services.Configure<TransactionalMessageOptions>(options =>
+builder.Services.AddOutbox();
+builder.Services.Configure<OutboxOptions>(options =>
 {
-    options.Outbox.PollingInterval = TimeSpan.FromSeconds(1);
-    options.Inbox.RunWorkers = false;
+    options.PollingInterval = TimeSpan.FromSeconds(1);
 });
 
 builder.Services.AddIdGenerator()

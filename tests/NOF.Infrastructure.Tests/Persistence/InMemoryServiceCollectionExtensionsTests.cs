@@ -11,7 +11,7 @@ public sealed class InMemoryServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
         services.AddInMemoryMessagingPersistence();
-        services.AddTransactionalMessages();
+        services.AddOutbox();
         return services.BuildServiceProvider();
     }
     private static NOFOutboxMessage Intent() => new() { Id = Guid.NewGuid(), MessageType = "test", Payload = [1], Headers = "{}" };
@@ -54,27 +54,7 @@ public sealed class InMemoryServiceCollectionExtensionsTests
         { await transaction.RollbackAsync(); }
         Assert.Equal(commit ? 1 : 0, (await reader.AtomicClaimPendingMessagesAsync().ToListAsync()).Count);
     }
-    [Fact]
-    public async Task ReceiptCompletion_AndStagedOutbox_RollBackTogether()
-    {
-        using var provider = CreateProvider();
-        using var scope = provider.CreateScope();
-        var inbox = scope.ServiceProvider.GetRequiredService<IInboxStore>();
-        var message = NOFInboxMessage.Create(Guid.NewGuid(), "route", [1], "{}");
-        await inbox.ReceiveAsync(message, default);
-        var claimed = Assert.Single(await inbox.AtomicClaimPendingMessagesAsync(10, TimeSpan.FromMinutes(1)).ToListAsync());
-        await using (var transaction = await scope.ServiceProvider.GetRequiredService<ITransactionManager>().BeginTransactionAsync())
-        {
-            var pending = await inbox.FindPendingAsync(claimed, default);
-            pending!.Status = InboxMessageStatus.Processed;
-            scope.ServiceProvider.GetRequiredService<IOutboxStore>().Stage(Intent());
-            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
-            await transaction.RollbackAsync();
-        }
-        using var observer = provider.CreateScope();
-        Assert.NotNull(await observer.ServiceProvider.GetRequiredService<IInboxStore>().FindPendingAsync(claimed, default));
-        Assert.Empty(await observer.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync());
-    }
+
     [Fact]
     public async Task TenantState_IsIsolated()
     {
@@ -88,24 +68,6 @@ public sealed class InMemoryServiceCollectionExtensionsTests
         using (Context.PushCurrent(Context.Empty.WithTenantId("first")))
         using (var scope = provider.CreateScope())
         { Assert.Single(await scope.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync()); }
-    }
-    [Fact]
-    public async Task SavingCompletedReceiptAgain_DoesNotRepeatItsStateTransition()
-    {
-        using var provider = CreateProvider();
-        using var scope = provider.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<IInboxStore>();
-        await store.ReceiveAsync(NOFInboxMessage.Create(Guid.NewGuid(), "route", [1], "{}"), default);
-        var claimed = Assert.Single(await store.AtomicClaimPendingMessagesAsync(1, TimeSpan.FromMinutes(1)).ToListAsync());
-        var row = await store.FindPendingAsync(claimed, default);
-        row!.Status = InboxMessageStatus.Processed;
-        row.ProcessedAtUtc = DateTime.UtcNow;
-        row.ClaimedBy = null;
-        row.ClaimExpiresAtUtc = null;
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        await unitOfWork.SaveChangesAsync();
-        await unitOfWork.SaveChangesAsync();
-        Assert.Equal(1, await store.CleanupAsync(DateTime.UtcNow.AddSeconds(1), default));
     }
 
 }

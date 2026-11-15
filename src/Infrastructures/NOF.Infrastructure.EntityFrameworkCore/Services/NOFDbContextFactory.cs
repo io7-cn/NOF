@@ -105,8 +105,6 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         var modelCreatingExtension = new NOFModelCreatingDbContextOptionsExtension
         {
             Contributors = [.. ModelCreatingContributors,
-                .. (ServiceProvider.GetService<IServiceProviderIsService>()!.IsService(typeof(IInboxStore))
-                    ? new IEFCoreModelConfiguration[] { new NOFInboxMessageModelCreatingContributor() } : []),
                 .. (ServiceProvider.GetService<IServiceProviderIsService>()!.IsService(typeof(IOutboxStore))
                     ? new IEFCoreModelConfiguration[] { new NOFOutboxMessageModelCreatingContributor() } : [])]
         };

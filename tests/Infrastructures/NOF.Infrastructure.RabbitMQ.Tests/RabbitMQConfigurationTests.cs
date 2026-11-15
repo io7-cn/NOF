@@ -53,7 +53,7 @@ public sealed class RabbitMQConfigurationTests
     }
 
     [Fact]
-    public async Task TopologyOnlyHost_RunsOrderedCallbacksWithoutEnablingInbox()
+    public async Task TopologyOnlyHost_RunsOrderedCallbacksWithoutEnablingPersistence()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -82,8 +82,8 @@ public sealed class RabbitMQConfigurationTests
         await host.StartAsync();
         Assert.Equal(new[] { 1, 2 }, calls);
         using var scope = host.Services.CreateScope();
-        Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());
-        Assert.DoesNotContain(host.Services.GetServices<IHostedService>(), item => item is InboxMessageBackgroundService or InboxCleanupBackgroundService);
+        Assert.Null(scope.ServiceProvider.GetService<NOF.Application.IUnitOfWork>());
+        Assert.DoesNotContain(host.Services.GetServices<IHostedService>(), item => item is OutboxMessageBackgroundService or OutboxCleanupBackgroundService);
         await host.StopAsync();
     }
 

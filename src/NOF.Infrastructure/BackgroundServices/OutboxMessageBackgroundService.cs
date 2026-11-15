@@ -11,10 +11,10 @@ using System.Text.Json.Nodes;
 namespace NOF.Infrastructure;
 
 /// <summary>Claims generic intents and invokes scoped handlers independently of all transport clients.</summary>
-public sealed class OutboxMessageBackgroundService(IServiceProvider services, IOptions<TransactionalMessageOptions> options,
+public sealed class OutboxMessageBackgroundService(IServiceProvider services, IOptions<OutboxOptions> options,
     ILogger<OutboxMessageBackgroundService> logger, IOptions<DeploymentOptions> deployment, ITenantProvider tenants) : BackgroundService
 {
-    private readonly TransactionalMessageProcessorOptions _options = options.Value.Outbox;
+    private readonly OutboxOptions _options = options.Value;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

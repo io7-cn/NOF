@@ -36,7 +36,7 @@ public sealed class HostJsonOptionsTests
         using var other = new ServiceCollection().AddCacheService().AddMemoryCacheService().Services.BuildServiceProvider();
         Assert.NotSame(first.GetRequiredService<MemoryCacheServiceRiderState>(), other.GetRequiredService<MemoryCacheServiceRiderState>());
         Assert.Equal("host-a:", first.GetRequiredService<IOptions<CacheServiceOptions>>().Value.KeyPrefix);
-        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IInboxStore) || item.ServiceType == typeof(IOutboxStore));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IOutboxStore));
     }
 
     private static ServiceProvider CreateHost(JsonNamingPolicy? naming, bool beforeRegistration)

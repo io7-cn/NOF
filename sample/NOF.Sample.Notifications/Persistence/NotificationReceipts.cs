@@ -2,17 +2,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace NOF.Sample.Notifications.Persistence;
 
-/// <summary>Stages projections in the very same EF scope that owns the durable inbox receipt.</summary>
+/// <summary>Commits one projection atomically; its unique business key makes repeated deliveries harmless.</summary>
 public sealed class NotificationReceipts(NotificationsDbContext dbContext) : INotificationReceipts
 {
-    public void Add(MessageReceiptDto receipt) => dbContext.Receipts.Add(new MessageReceiptRow
+    public async Task RecordAsync(string idempotencyKey, MessageReceiptDto receipt, CancellationToken cancellationToken)
     {
-        Id = receipt.Id,
-        OrderId = receipt.OrderId,
-        Kind = receipt.Kind,
-        Summary = receipt.Summary,
-        ReceivedAtUtc = receipt.ReceivedAtUtc
-    });
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Receipts" ("Id", "IdempotencyKey", "OrderId", "Kind", "Summary", "ReceivedAtUtc", "TenantId")
+            VALUES ({receipt.Id}, {idempotencyKey}, {receipt.OrderId}, {(int)receipt.Kind}, {receipt.Summary}, {receipt.ReceivedAtUtc}, {dbContext.CurrentTenantId})
+            ON CONFLICT ("IdempotencyKey", "Kind", "TenantId") DO NOTHING
+            """, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<MessageReceiptDto>> ListAsync(Guid? orderId, CancellationToken cancellationToken)
         => await dbContext.Receipts.AsNoTracking().Where(row => orderId == null || row.OrderId == orderId)

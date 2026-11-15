@@ -16,7 +16,7 @@ public sealed class MemoryEndpointsBuilder(IServiceCollection services, MemoryEn
     public void MapQueue<T>(string queue, OperationDescriptor<T> operation)
         => Add(queue, "memory:queue:" + queue, operation, false);
 
-    /// <summary>Maps a statically selected operation to an independent durable topic subscription.</summary>
+    /// <summary>Maps a statically selected operation to an independent local topic subscription.</summary>
     public void MapSubscription<TOperation>(string topic, string subscription) where TOperation : OperationHandler
         => AddSubscription(topic, subscription, services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)));
 
@@ -38,8 +38,10 @@ public sealed class MemoryEndpointsBuilder(IServiceCollection services, MemoryEn
         {
             throw new InvalidOperationException("Configure Memory endpoints before reading bindings or starting the host.");
         }
-        var endpoints = services.GetOrAddSingleton<InboxEndpointRegistry>();
-        endpoints.Add(new(consumerId, operation));
+        if (!OperationInspector.CanSubmit(operation))
+        {
+            throw new InvalidOperationException("Memory endpoints require a void operation without business failure cases.");
+        }
         registry.Add(new(route, consumerId, operation.RequestType, operation, subscription));
     }
 }

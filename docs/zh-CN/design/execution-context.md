@@ -35,7 +35,7 @@ public sealed class ForwardOrder(IMessageClient client) : OutboxHandler<OrderCre
 
 每次尝试都在构造 scoped Outbox Handler 前还原并绑定持久化 Context。OutboxDeliveryContext 直接提供 Context、MessageId、Attempt 和可直接发送的只读 Headers。原生适配器转发 Headers，将消息 ID 同时写入传输的原生字段；无需注入或调用 MessageDelivery，该服务及注册已删除。重试保留入队快照和 ID，不借用当时其他请求或后台作用域的上下文。
 
-Inbox Worker 在执行管线与构造业务 Handler 前还原 JSON 基本值。普通显式 Headers 仍以标量项提供，自定义名称冲突时以语义快照为准；持久化租户和当前收据消息 ID 始终权威。RabbitMQ 原生层负责拓扑与确认，消费身份由宿主建立。IUserContext/Claims、DI 对象、取消令牌和运行中请求不序列化；明确放入 Context 的标量都是持久化数据，全部保留。
+消息端点在独立 Scope 内恢复 Context，直接执行操作及正常权限/Filter 管道。NOF 不再提供 Inbox 存储、消费去重或消费重试调度。业务负责幂等和事务/保存边界，RabbitMQ 在操作完成后 ACK；原生适配器负责重投和死信。Memory 等待执行并传播失败。只有 AddOutbox 开启持久化发件及 Worker，队列映射不安装持久化。见[直接端点与迁移](transactional-outbox.md)。
 
 旧待发记录或未提供 X-NOF-Context 的原生消息，只能还原原有租户/头数据，无法补回旧版从未保存的项。本次不需要数据库迁移，保留消息 ID、负载、Headers 和收据历史；同步更新包并迁移破坏性的 Context API。
 

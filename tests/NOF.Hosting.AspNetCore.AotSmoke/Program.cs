@@ -30,7 +30,6 @@ builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
 builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<ReceiveOneWaySmoke>("one-way"));
-builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
 builder.Services.AddInvocationFilters(filters =>
 {
     filters.Global.Use<ValidateReadOrder>();
@@ -39,7 +38,7 @@ builder.Services.AddInvocationFilters(filters =>
 });
 builder.Services.AddSingleton<SmokeOutboxStore>();
 builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
-builder.Services.AddTransactionalMessages();
+builder.Services.AddOutbox();
 await using var app = builder.Build();
 app.UseNOF();
 SmokeEndpointModule.Map(app);
@@ -93,12 +92,12 @@ using (var scope = app.Services.CreateScope())
 }
 var receiptId = Guid.NewGuid();
 var oneWayPayload = app.Services.GetRequiredService<IObjectSerializer>().Serialize(new SmokeIntent("one-way"), typeof(SmokeIntent));
-await app.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(receiptId, oneWayPayload, "memory:queue:one-way",
+await app.Services.ExecuteMessageAsync(app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke)), oneWayPayload,
     new Dictionary<string, string?>
     {
         [NOFAbstractionConstants.Transport.Headers.Context] = Context.Empty.WithItem("correlation", "aot").WithItem("count", 3).Items.ToJsonString()
     }, default);
-Expect(!ReceiveOneWaySmoke.Completed.Task.IsCompleted, "Inbox acceptance unexpectedly executed the business handler");
+Expect(ReceiveOneWaySmoke.Completed.Task.IsCompleted, "The endpoint did not execute its handler directly");
 await app.StartAsync();
 await ReceiveOneWaySmoke.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
 var oneWayOperation = app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke));
@@ -430,7 +429,7 @@ public sealed class ReceiveOneWaySmoke : OperationHandler<SmokeIntent>
         if (request.Value != "one-way" || context.Context["correlation"]?.GetValue<string>() != "aot"
             || context.Context["count"]?.GetValue<int>() != 3)
         {
-            throw new InvalidOperationException("The one-way Inbox payload changed.");
+            throw new InvalidOperationException("The one-way message payload changed.");
         }
         Completed.TrySetResult();
         return Task.CompletedTask;

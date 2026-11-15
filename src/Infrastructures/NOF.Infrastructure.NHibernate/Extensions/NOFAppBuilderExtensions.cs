@@ -23,7 +23,6 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.AddScoped<NHibernateUnitOfWork>();
             builder.Services.Replace(ServiceDescriptor.Scoped<IUnitOfWork>(sp => sp.GetRequiredService<NHibernateUnitOfWork>()));
             builder.Services.Replace(ServiceDescriptor.Scoped<ITransactionManager>(sp => sp.GetRequiredService<NHibernateUnitOfWork>()));
-            builder.Services.Replace(ServiceDescriptor.KeyedScoped<IInboxStore, NHibernateInboxStore>(typeof(IInboxStore)));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IOutboxStore, NHibernateOutboxStore>(typeof(IOutboxStore)));
 
             return new NHibernateSelector(builder);

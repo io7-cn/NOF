@@ -9,7 +9,7 @@ NHibernate persistence package for the [NOF Framework](https://github.com/XmmShp
 Current scope:
 
 - `UseNHibernate()`
-- a shared native `ISession`, feature-specific Inbox/Outbox stores and `NHibernateUnitOfWork`
+Message endpoints directly execute their operation with restored Context and the existing policy/filter pipeline. Business code owns idempotency and commit boundaries; adapters own acknowledgement, retry and dead-letter behavior. NOF Inbox storage and workers are removed. AddOutbox explicitly enables outgoing intents only; configure flat OutboxOptions. See [transactional Outbox and migration](https://github.com/io7-cn/NOF/blob/main/docs/en/design/transactional-outbox.md).
 - native mapping-by-code configuration through `Action<ModelMapper>`
 - tenant-aware connection-string resolution for `TenantMode.DatabasePerTenant`
 

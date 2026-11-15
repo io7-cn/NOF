@@ -10,13 +10,11 @@ namespace NOF.Infrastructure.RabbitMQ.Tests;
 public sealed class RabbitMQEndpointTests
 {
     [Fact]
-    public void ClientOnlyRegistration_DoesNotEnableInboxOrBrokerConsumers()
+    public void ClientOnlyRegistration_DoesNotEnablePersistenceOrBrokerConsumers()
     {
         var services = new ServiceCollection();
         services.AddRabbitMQ(factory => factory.HostName = "localhost");
-        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IInboxStore));
         Assert.DoesNotContain(services, item => item.ImplementationType == typeof(RabbitMQConsumerHostedService));
-        Assert.DoesNotContain(services, item => item.ImplementationType == typeof(InboxMessageBackgroundService));
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(RabbitMQBuilder));
     }
 
@@ -35,7 +33,7 @@ public sealed class RabbitMQEndpointTests
     }
 
     [Fact]
-    public void SameRouteInDifferentAdapters_HasIndependentReceiptsAndTargets()
+    public void SameRouteInDifferentAdapters_HasIndependentTargetsAndNoPersistence()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -43,19 +41,15 @@ public sealed class RabbitMQEndpointTests
         builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
         builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue("work", Second));
         using var host = builder.Build();
-        Assert.Single(host.Services.GetServices<IHostedService>().OfType<InboxMessageBackgroundService>());
-        Assert.Single(host.Services.GetServices<IHostedService>().OfType<OutboxMessageBackgroundService>());
-        Assert.Single(host.Services.GetServices<IHostedService>().OfType<InboxCleanupBackgroundService>());
-        Assert.Single(host.Services.GetServices<IHostedService>().OfType<OutboxCleanupBackgroundService>());
+        Assert.Empty(host.Services.GetServices<IHostedService>().OfType<OutboxMessageBackgroundService>());
+        Assert.Empty(host.Services.GetServices<IHostedService>().OfType<OutboxCleanupBackgroundService>());
         var memory = Assert.Single(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
         var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
         Assert.Equal(First.Id, memory.Operation.Id);
         Assert.Equal(Second.Id, rabbit.Operation.Id);
-        Assert.NotEqual(memory.ConsumerId, rabbit.ConsumerId);
         using var scope = host.Services.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
-        Assert.Equal(First.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(memory.ConsumerId).Id);
-        Assert.Equal(Second.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(rabbit.ConsumerId).Id);
+        Assert.Null(scope.ServiceProvider.GetService<IOutbox>());
+        Assert.Null(scope.ServiceProvider.GetService<IUnitOfWork>());
     }
 
     [Fact]

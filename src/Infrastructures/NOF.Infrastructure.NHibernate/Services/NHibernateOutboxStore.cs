@@ -6,11 +6,11 @@ using NOF.Application;
 namespace NOF.Infrastructure.NHibernate;
 
 /// <summary>Provider-backed outbox storage, isolated from dispatch and application execution.</summary>
-public sealed partial class NHibernateOutboxStore(global::NHibernate.ISession session, IOptions<TransactionalMessageOptions> options,
+public sealed partial class NHibernateOutboxStore(global::NHibernate.ISession session, IOptions<OutboxOptions> options,
     ILogger<NHibernateOutboxStore> logger) : IOutboxStore
 {
     private readonly global::NHibernate.ISession _session = session;
-    private readonly TransactionalMessageProcessorOptions _options = options.Value.Outbox;
+    private readonly OutboxOptions _options = options.Value;
     private readonly ILogger<NHibernateOutboxStore> _logger = logger;
     /// <inheritdoc />
     public void Stage(NOFOutboxMessage message) => _session.Save(message);

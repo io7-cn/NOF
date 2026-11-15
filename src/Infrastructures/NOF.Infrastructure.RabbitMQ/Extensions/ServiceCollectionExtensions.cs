@@ -12,7 +12,7 @@ public static partial class NOFInfrastructureRabbitMQExtensions
 {
     extension(IServiceCollection services)
     {
-        /// <summary>Registers lazy native connection access; no topology, Inbox or consumers are enabled.</summary>
+        /// <summary>Registers lazy native connection access; no topology, persistence or consumers are enabled.</summary>
         public IServiceCollection AddRabbitMQ(Action<ConnectionFactory>? configureConnection = null)
         {
             var options = services.AddOptions<ConnectionFactory>();

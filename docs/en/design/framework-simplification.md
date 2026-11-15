@@ -29,7 +29,7 @@ Application retains IUnitOfWork and the minimal transaction interfaces without d
 
 Remove NOF.Application.DbException, DbUpdateException, DbUpdateConcurrencyException, DbTransactionException and DbTransactionCommitException catches/imports. Use the BCL save errors above when a provider-independent distinction is needed; native transaction diagnostics and cancellation are preserved.
 
-Inbox reception reconciles DataException in a fresh scope and acknowledges only after verifying the exact message ID and consumer receipt. Cancellation and programming errors never enter this reconciliation path. Owner fencing and transaction boundaries remain unchanged. Custom stores use the same save-error contract.
+Message endpoints execute operations directly in an isolated scope with restored Context and the normal policy/filter pipeline. NOF owns no Inbox storage, deduplication or consumer retry scheduler. Business code owns idempotency and transaction/save boundaries; RabbitMQ ACK follows operation completion. Native adapters own retries and dead-letter policy. Memory calls await execution and propagate failures. AddOutbox alone enables durable outgoing intents and workers; queue mapping enables no persistence. See [direct endpoints and migration](transactional-outbox.md).
 
 ## Removed duplicate entry points
 
@@ -44,8 +44,6 @@ Inbox reception reconciles DataException in a fresh scope and acknowledges only 
 | Empty NOFApplicationConstants and unused service-method reflection helper | Existing concrete constants and OperationDescriptor.MethodInfo |
 
 The event registration generator also emits native Replace. Provider selectors keep their existing last-registration behavior. HTTP identity is copied before semantic context selectors run, and both explicit and fluent endpoints retain the common authorization boundary. Hosting no longer requires the JWT library; hosts select their identity protocol dependencies.
-
-Scoped Lazy<T> resolution, explicit capability selectors, application-part discovery, typed business failures, invocation filters, minimal persistence ports and reliable Inbox/Outbox remain because they have concrete callers or enforce framework semantics. OutboxPermanentFailureException still signals a terminal delivery failure; replacing it with an undifferentiated exception would lose the retry decision.
 
 Update runtime packages, providers and generators together. Permission directories and their display DTOs belong to the application; AddPermissions, PermissionCatalog and PermissionDefinition are removed. Cached plans never cache grant decisions; each check calls its provider for current data. Outbox persists every JSON-scalar Context item and prepares complete immutable delivery Headers; fresh attempt scopes bind the restored Context before handler construction. Native clients forward OutboxDeliveryContext.Headers directly; MessageDelivery and its registrations are removed.
 

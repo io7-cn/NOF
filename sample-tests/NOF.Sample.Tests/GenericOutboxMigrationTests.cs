@@ -9,6 +9,21 @@ namespace NOF.Sample.Tests;
 public sealed class GenericOutboxMigrationTests
 {
     [Fact]
+    public void InboxRemoval_GuardsUnfinishedDeliveriesBeforeDroppingOnlyTheRetiredTable()
+    {
+        using var context = new DbContext(new DbContextOptionsBuilder()
+            .UseNpgsql("Host=unused;Database=unused;Username=unused").Options);
+        var migration = new RemoveInbox();
+        var sql = string.Join("\n", context.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations).Select(command => command.CommandText));
+        Assert.Contains("LOCK TABLE", sql);
+        Assert.Contains("\"Status\" <> 1", sql);
+        Assert.True(sql.IndexOf("RAISE EXCEPTION", StringComparison.Ordinal) < sql.IndexOf("DROP TABLE", StringComparison.Ordinal));
+        var drop = Assert.IsType<Microsoft.EntityFrameworkCore.Migrations.Operations.DropTableOperation>(migration.UpOperations.Last());
+        Assert.Equal("NOFInboxMessage", drop.Name);
+        Assert.DoesNotContain("NOFOutboxMessage", sql);
+        Assert.Throws<NotSupportedException>(() => migration.DownOperations);
+    }
+    [Fact]
     public void SimplifiedOutboxMetadata_GuardsPendingVersions_AndPreservesMessagesAndPayloads()
     {
         using var context = new DbContext(new DbContextOptionsBuilder()

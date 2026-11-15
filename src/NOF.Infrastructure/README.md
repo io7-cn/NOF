@@ -37,8 +37,8 @@ This package includes:
 - direct MemoryMessageClient queue/subscription receipt acceptance
 - message-only in-memory persistence for development (`services.AddInMemoryMessagingPersistence()`)
 - in-process event publisher (`IEventPublisher`)
-- feature-specific IInboxStore/IOutboxStore contracts, implemented through native APIs in provider packages
-- outbox / inbox entities and transactional message background services
+Message endpoints directly execute their operation with restored Context and the existing policy/filter pipeline. Business code owns idempotency and commit boundaries; adapters own acknowledgement, retry and dead-letter behavior. NOF Inbox storage and workers are removed. AddOutbox explicitly enables outgoing intents only; configure flat OutboxOptions. See [transactional Outbox and migration](https://github.com/io7-cn/NOF/blob/main/docs/en/design/transactional-outbox.md).
+- outbox entities and transactional message background services
 
 The default in-memory cache implementation is isolated per NOF host:
 
@@ -115,69 +115,25 @@ See the [REST implementation](../../docs/en/design/configuration-rest.md).
 
 `NOF.Infrastructure` no longer ships a built-in EF Core implementation. Database persistence is provided by adapter packages such as `NOF.Infrastructure.EntityFrameworkCore`.
 
-After adding the EF Core package, persistence is configured through `UseDbContext<TDbContext>()` and `EFCoreSelector`:
+Use the provider's native typed builder. NOF configures only tenant/soft-delete policy:
 
 ```csharp
-using Microsoft.EntityFrameworkCore;
-using NOF.Infrastructure.EntityFrameworkCore;
-
-var builder = WebApplication.CreateBuilder(args).AddNOF();
-
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
+builder.UseDbContext<AppDbContext>((creation, ef) =>
+        ef.UseNpgsql(builder.Configuration.GetConnectionString("postgres")))
+    .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant)
     .MigrateOnStart();
 ```
 
-Available configuration methods:
+DbContextCreationContext exposes normalized TenantId, scoped Services, DbContextType and TenantMode. Resolve tenant catalogs/secrets in this native callback; provider logging, retries and interceptors stay on the EF builder. Old With* forwarding APIs are removed. See [native EF configuration](../../docs/en/design/efcore-configuration.md).
 
-- `WithTenantMode(...)`
-- `WithConnectionString(...)`
-- `WithConnectionStringResolver(...)`
-- `WithOptions(...)`
-- `MigrateOnStart()`
-
-The resolver receives the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and scoped services. Use it for tenant catalogs, secret stores, or shard maps; the template remains the convenient static default.
-
-`MigrateOnStart()` waits for host database migration before hosted services start. In
-`DatabasePerTenant` mode, it then migrates tenants from `ITenantProvider` sequentially in the
-background after the application starts. Each migration uses an isolated scope and the tenant's
-resolved connection string; one tenant failure is logged without stopping the remaining migrations.
-`SharedDatabase` mode migrates only the host/shared database. For newly provisioned tenants or
-explicit retries, resolve `ITenantDbContextFactory<TDbContext>` from a scope and call
-`MigrateAsync(tenantId, cancellationToken)`.
-
-Transactional inbox and outbox processors also need the application's tenant catalog to
-poll database-per-tenant message tables. Register an `ITenantProvider`
-that enumerates tenant IDs from durable storage:
-
-```csharp
-builder.Services.AddSingleton<ITenantProvider, AppTenantCatalog>();
-```
-
-`AppTenantCatalog.GetTenantIdsAsync` should return every active tenant database, including
-tenants with messages written before this process started. NOF always polls the host database
-and deduplicates normalized tenant IDs. The default provider returns no additional tenants.
-`ITenantProvider` replaces `ITransactionalMessageTenantProvider`; update custom implementations
-and registrations to the new name. The same catalog is used by startup tenant migrations and
-inbox/outbox cleanup. Migrations enumerate once after startup; tenant migration failures require
-an explicit retry or a restart. For messaging, a catalog failure is logged and retried
-at the next polling interval; an error in one tenant database does not prevent other tenants
-from being processed.
+MigrateOnStart waits for host migration before hosted services start, then migrates database-per-tenant stores from ITenantProvider after startup. SharedDatabase migrates only the shared store. Outbox polling and cleanup use the same tenant catalog; consumers execute for the delivery tenant and do not enumerate databases or require persistence. Register the application's ITenantProvider when tenant database migration or Outbox workers need it.
 
 ## SQLite
 
-For SQLite, provide the provider configuration via `WithOptions(...)`:
-
 ```csharp
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.SharedDatabase)
-    .WithConnectionString(builder.Configuration.GetConnectionString("sqlite")
-        ?? throw new InvalidOperationException("Connection string 'sqlite' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseSqlite(connectionString))
-    .MigrateOnStart();
+builder.UseDbContext<AppDbContext>((_, ef) =>
+        ef.UseSqlite(builder.Configuration.GetConnectionString("sqlite")))
+    .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
 ```
 
 ## In-Memory SQLite
@@ -192,14 +148,10 @@ Apache-2.0
 
 NOF hosts select `InMemoryInvocationPipeline` by default. `AddInvocationFilter<T>(order)` registers a scoped extension definition; `UseInMemoryInvocationPipeline()` selects the optional engine without replacing a host-supplied `IInvocationPipeline`. Service and message adapters share this boundary. The old five middleware families and outbound contexts are removed. Outbox persists every JSON-scalar Context item and prepares complete immutable delivery Headers; fresh attempt scopes bind the restored Context before handler construction. Native clients forward OutboxDeliveryContext.Headers directly; MessageDelivery and its registrations are removed. See [execution and migration](../../docs/en/design/invocation-extensions.md).
 
-Business handlers depend on aggregate repositories, DTO query ports and IUnitOfWork. Native DbContext/ISession and query/model APIs remain in host/provider implementations. The generic session/query/update/model facade and general memory ORM are removed. Inbox/Outbox workers use resource-specific stores. See [persistence boundary migration](../../docs/en/design/persistence-boundaries.md).
+Message endpoints directly execute their operation with restored Context and the existing policy/filter pipeline. Business code owns idempotency and commit boundaries; adapters own acknowledgement, retry and dead-letter behavior. NOF Inbox storage and workers are removed. AddOutbox explicitly enables outgoing intents only; configure flat OutboxOptions. See [transactional Outbox and migration](https://github.com/io7-cn/NOF/blob/main/docs/en/design/transactional-outbox.md).
 
 See [unified operations](../../docs/en/design/unified-operations.md) for IOperationExecutor, host message bindings, durable consumer IDs and stored-route migration.
 
-Immediate messages use concrete MemoryMessageClient or native RabbitMQ IChannel with explicit destinations. Generic IOutbox intents are interpreted by OutboxHandler<T> adapters automatically registered through AddApplicationPart (identity inferred from T, without MessageType/SchemaVersion declarations); AddTransactionalMessages() explicitly enables the capability; AddRabbitMQ does not replace the memory client. Transport-owned queue/subscription endpoints remain separate. See [transactional outbox](../../docs/en/design/transactional-outbox.md).
-
-Durable workers and model contributors are installed only by AddTransactionalMessages (enabled by transport endpoint configuration). Set TransactionalMessageOptions.Outbox/Inbox.RunWorkers=false for staging/receiving-only hosts. See [outbox capability assembly](../../docs/en/design/transactional-outbox.md).
-
-Inbox is a uniform persistence/execution base. Adapters map stable opaque receipt IDs to void UseCase descriptors in InboxEndpointRegistry; the worker deserializes and invokes OperationExecutor.ExecuteInScopeAsync in its existing transaction. IInboxHandler and OperationInboxHandler are removed. Queue bindings reject Empty/value contracts. See [one-way operations](../../docs/en/design/one-way-operations.md) ([简体中文](../../docs/zh-CN/design/one-way-operations.md)).
+Immediate messages use concrete MemoryMessageClient or native RabbitMQ IChannel with explicit destinations. Generic IOutbox intents are interpreted by OutboxHandler<T> adapters automatically registered through AddApplicationPart (identity inferred from T, without MessageType/SchemaVersion declarations); AddOutbox() explicitly enables the capability; AddRabbitMQ does not replace the memory client. Transport-owned queue/subscription endpoints remain separate. See [transactional outbox](../../docs/en/design/transactional-outbox.md).
 
 OutboxHandler<TMessage> needs only HandleAsync. MessageType is inferred from the payload type, and SchemaVersion is removed from entity/storage/dispatch. Application parts register typed delegates automatically; explicit closed registration is AddOutboxHandler<TMessage,THandler>(). Stop old workers and apply the reviewed metadata migration before upgrading populated stores. See the [outbox guide](../../docs/en/design/transactional-outbox.md) and its Chinese edition.

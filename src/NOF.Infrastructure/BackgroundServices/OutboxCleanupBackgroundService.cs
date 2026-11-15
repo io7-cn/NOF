@@ -15,19 +15,19 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxCleanupBackgroundService> _logger;
-    private readonly TransactionalMessageProcessorOptions _options;
+    private readonly OutboxOptions _options;
     private readonly IOptions<DeploymentOptions> _deployment;
     private readonly ITenantProvider _tenantProvider;
 
     public OutboxCleanupBackgroundService(
         IServiceProvider serviceProvider,
-        IOptions<TransactionalMessageOptions> options,
+        IOptions<OutboxOptions> options,
         ILogger<OutboxCleanupBackgroundService> logger,
         IOptions<DeploymentOptions> deployment,
         ITenantProvider tenantProvider)
     {
         _serviceProvider = serviceProvider;
-        _options = options.Value.Outbox;
+        _options = options.Value;
         _logger = logger;
         _deployment = deployment;
         _tenantProvider = tenantProvider;

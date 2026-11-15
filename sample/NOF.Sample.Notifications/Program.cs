@@ -11,11 +11,6 @@ var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.AddApplicationPart(typeof(MessageDemoService).Assembly);
 builder.AddApplicationService<MessageDemoService>();
 
-builder.Services.Configure<TransactionalMessageOptions>(options =>
-{
-    options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(500);
-    options.Outbox.RunWorkers = false;
-});
 
 builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")
     ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required.")))

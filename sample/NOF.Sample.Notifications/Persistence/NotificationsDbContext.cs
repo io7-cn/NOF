@@ -14,6 +14,8 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
         {
             entity.HasKey(value => value.Id);
             entity.HasIndex(value => value.OrderId);
+            entity.Property(value => value.IdempotencyKey).HasMaxLength(256).IsRequired();
+            entity.HasIndex(value => new { value.IdempotencyKey, value.Kind }).IsUnique();
             entity.Property(value => value.Summary).HasMaxLength(1024);
         });
     }
@@ -22,6 +24,7 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
 public sealed class MessageReceiptRow
 {
     public Guid Id { get; set; }
+    public string IdempotencyKey { get; set; } = "";
     public Guid? OrderId { get; set; }
     public MessageReceiptKind Kind { get; set; }
     public string Summary { get; set; } = "";

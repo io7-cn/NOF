@@ -8,11 +8,10 @@ public sealed class InMemoryMessageDatabase
     private readonly ConcurrentDictionary<string, TenantMessages> _tenants = new(StringComparer.Ordinal);
     /// <summary>Gets one tenant's isolated state.</summary>
     internal TenantMessages ForTenant(string tenant) => _tenants.GetOrAdd(tenant, _ => new());
-    /// <summary>Owns only message intents and receipts; business persistence belongs to application ports.</summary>
+    /// <summary>Owns only outbox intents; business persistence belongs to application ports.</summary>
     public sealed class TenantMessages
     {
         internal object Gate { get; } = new();
         internal Dictionary<Guid, NOFOutboxMessage> Outbox { get; } = [];
-        internal Dictionary<(Guid Id, string Route), NOFInboxMessage> Inbox { get; } = [];
     }
 }

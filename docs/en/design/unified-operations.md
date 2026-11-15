@@ -57,15 +57,11 @@ Inbound endpoints belong to concrete transport adapters. The shared MessageBindi
 
 ## One execution boundary
 
-`IOperationExecutor.ExecuteAsync` creates an isolated local reply scope and copies verified identity. The same concrete `OperationExecutor.ExecuteInScopeAsync` runs host-owned entries; HTTP uses the request scope; Inbox uses its existing transaction scope so handler changes, receipt progress and newly staged messages commit together. No handler instance is constructed before invocation filters run.
+Message endpoints execute operations directly in an isolated scope with restored Context and the normal policy/filter pipeline. NOF owns no Inbox storage, deduplication or consumer retry scheduler. Business code owns idempotency and transaction/save boundaries; RabbitMQ ACK follows operation completion. Native adapters own retries and dead-letter policy. Memory calls await execution and propagate failures. AddOutbox alone enables durable outgoing intents and workers; queue mapping enables no persistence. See [direct endpoints and migration](transactional-outbox.md).
 
 Application-owned `InvocationContext` composes semantic `Context` and supplies Operation, InvocationId, Origin (Local/Http/Message), implementation policy metadata. Filters may replace semantic context through WithContext/WithTenantId; views preserve invocation identity; results flow through returns. `Context.Current` contains the semantic Context, not the InvocationContext. Pass `invocation.Context` to nested semantic APIs. Identity has one source, scoped IUserContext.
 
 All origins enforce authorization declared exclusively on Contract interfaces/operation methods. Handlers carry no permission declarations. Message authentication does not deserialize producer claims or access tokens. Hosts establish their consumer identity through their selected pipeline/filter before authorization; an anonymous consumer cannot invoke a protected operation. Broker ingress and tenant headers must be restricted by the host's trust boundary. Strict tenant options apply to all operation origins.
-
-HTTP status and challenge headers stay in native HTTP endpoints and the HTTP response mappings. RejectionReason identifies Policy/Authentication/Authorization without an HTTP status code in the execution context. Policy rejection is distinct from a completed business failure union. Technical exceptions propagate. Inbox records rejected operations as terminal failures; technical failures follow its retry policy. Transport acknowledgement follows durable receipt acceptance, not handler completion.
-
-The memory and RabbitMQ transports use the same MessageInboxReceiver. It establishes the delivery tenant before resolving scoped persistence, and treats a database conflict as duplicate acceptance only after confirming the exact message ID/consumer receipt exists.
 
 ## Breaking migration and stored messages
 
@@ -102,7 +98,5 @@ The EF Core adapter applies field access only to relationships explicitly mapped
 [Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
 
 RabbitMQ maps operations only to existing queues; see the [native topology sample](rabbitmq-sample.md).
-
-[One-way semantics and uniform Inbox](one-way-operations.md). Empty remains a reply-producing success type; void has no result-returning invocation API.
 
 Standalone OperationHandler classes use the same model without a Contract method; see [standalone reactions and executor migration](one-way-operations.md#standalone-application-reactions).

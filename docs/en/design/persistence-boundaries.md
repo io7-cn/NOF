@@ -37,9 +37,7 @@ Saving flushes inside an explicit transaction; committing makes those changes du
 rollback an incomplete transaction and discard the scope before retrying. An unknown commit outcome
 requires idempotent recovery, not an assumption that rollback succeeded.
 
-EF Core uses the same scoped DbContext for business adapters, EfCoreUnitOfWork, Inbox and Outbox.
-NHibernate uses the same scoped ISession for those responsibilities. Hosts retain their native factory,
-query, transaction, savepoint and mapping APIs. There is no second context for framework-owned writes.
+Native persistence retains IOutboxStore and shared application IUnitOfWork/transaction integration. There is no Inbox store, claim, receipt or consumer model. Message endpoints require no database; business handlers/filters choose saves, transactions and atomic idempotency constraints. Native EF/NHibernate Outbox operations preserve bounded claims, tenant isolation, delays, lease recovery and owner fencing. Resolve old Inbox work and review the guarded table-removal migration before deployment; see [Outbox and migration](transactional-outbox.md).
 
 ## Native provider implementations
 
@@ -48,18 +46,6 @@ IProviderQuery/executor, ProviderQuery, shared async query extensions, UpdateSet
 and IDbContextModelCreatingContributor no longer ship. Provider adapters no longer translate a NOF
 query/update/model language. The shared general-purpose memory ORM and its reflection tracker are
 also removed. No forwarding aliases or compatibility implementations remain.
-
-Infrastructure keeps the feature-specific IInboxStore and IOutboxStore ports consumed by workers.
-EF implements those ports with native EF queries and ExecuteUpdateAsync/ExecuteDeleteAsync.
-NHibernate uses native LINQ DML; bounded claims select scalar candidate identities and atomically
-compare-and-set each still-eligible row. Both backends preserve attempt limits, delayed Outbox retries,
-lease recovery, tenant isolation and owner-fenced completion/failure/release.
-
-Inbox completion shares the handler's transaction. Native bulk claims bypass ORM tracking, so a
-receipt already cached by the processing session is refreshed before use. EF uses a claim-owner
-concurrency token; NHibernate uses native dirty optimistic locking and dynamic updates. An expired
-worker cannot overwrite a replacement owner's receipt when saving its result. Claim result projections
-are delivery snapshots rather than cached NHibernate entities.
 
 EF-specific model extensions implement IEFCoreModelConfiguration.Configure(ModelBuilder) in the
 EF provider package, using native EF APIs. NHibernate extensions register Action<ModelMapper>
@@ -73,13 +59,12 @@ The OIDC protocol and store integration packages are removed. Hosts use upstream
 
 ## Memory messages and tests
 
-AddNOF retains a development memory message backend. AddInMemoryMessagingPersistence registers
-its host-local, tenant-partitioned state and scoped message unit of work; AddTransactionalMessages select
+AddOutbox selects the development memory Outbox backend if no native/custom store was chosen. AddInMemoryMessagingPersistence registers
+its host-local, tenant-partitioned state and scoped message unit of work; AddOutbox selects
 its stores unless a native provider or custom store is configured. Capabilities and workers remain
 opt-in. Native and custom registrations work before or after capability assembly.
 
-This backend stores only intents and receipts. It atomically saves receipt completion plus staged
-messages, isolates tenants and fences claims. It has no arbitrary business entity tables or ORM API.
+This backend stores only outgoing intents. It atomically commits staged messages, isolates tenants and fences Outbox claims. It has no arbitrary business entity tables or ORM API.
 Business persistence tests should select an actual provider, for example UseDbContext with SQLite
 in memory, or register business-owned test ports and an appropriate unit of work. NOF.Test does not
 pretend that arbitrary domain objects have automatically become persistent.
@@ -91,18 +76,9 @@ inside infrastructure, leaving business-owned ports unchanged. Register native m
 and the host's native identity integration. Replace AddInMemoryPersistence/AddPersistenceServices with a selected
 native provider; the message-only memory default remains available without either ORM package.
 
-Inbox no longer stores a Command/Notification classification: identity is MessageId plus the opaque
-Route, and execution resolves the route's keyed handler. MemoryMessageClient directly accepts queue
-or subscription receipts; MemoryCommandRider/MemoryNotificationRider and InboxMessageType are removed.
-The PostgreSQL sample migration 20261114170000_RemoveInboxClassification drops only that unused
-column after the earlier migrations, preserving payloads, Headers, IDs, leases and deduplication history.
-Stop old binaries before applying it. Down refuses to infer legacy classifications; restore a matching
-backup and package set. Existing SQLite receiver files need an explicit equivalent schema migration;
-EnsureCreated does not upgrade them.
-
 The native query/model API change itself does not rename tables or reinterpret data. Review generated
 provider migrations before deployment and migrate every tenant database deliberately.
 
 ## Persistence errors
 
-Application has no database exception hierarchy. Providers translate optimistic save conflicts to System.Data.DBConcurrencyException and native data-save errors to System.Data.DataException, preserving the original cause. Transactions, cancellation and unexpected errors propagate unchanged. Inbox duplicate confirmation still verifies the exact durable receipt in a fresh scope. See [framework boundaries](framework-simplification.md) for migration.
+Providers translate native optimistic save conflicts to System.Data.DBConcurrencyException and data-save failures to System.Data.DataException, preserving the original cause. Application has no database exception hierarchy. Transaction failures, cancellation and unexpected errors propagate. Native consumer implementations own transaction and idempotency decisions, not generic receipt reconciliation.

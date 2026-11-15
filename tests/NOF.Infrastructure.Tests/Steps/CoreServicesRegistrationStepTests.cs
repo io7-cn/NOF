@@ -51,14 +51,14 @@ public class NOFInfrastructureTests
             service.ImplementationType == typeof(OutboxMessageBackgroundService));
         Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
-            service.ImplementationType == typeof(InboxMessageBackgroundService));
-        Assert.DoesNotContain(builder.Services, service =>
-            service.ServiceType == typeof(IHostedService) &&
-            service.ImplementationType == typeof(InboxCleanupBackgroundService));
+            service.ImplementationType == typeof(OutboxMessageBackgroundService));
         Assert.DoesNotContain(builder.Services, service =>
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(OutboxCleanupBackgroundService));
-        Assert.NotNull(provider.GetRequiredService<IOptions<TransactionalMessageOptions>>());
+        Assert.DoesNotContain(builder.Services, service =>
+            service.ServiceType == typeof(IHostedService) &&
+            service.ImplementationType == typeof(OutboxCleanupBackgroundService));
+        Assert.NotNull(provider.GetRequiredService<IOptions<OutboxOptions>>());
         Assert.Equal(TenantMode.DatabasePerTenant, provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value.TenantMode);
         Assert.Null(provider.GetService<IBackplane>());
         Assert.IsType<InMemoryEventPublisher>(provider.GetRequiredService<IEventPublisher>());

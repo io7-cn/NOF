@@ -17,6 +17,7 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
     private readonly ILogger<RabbitMQConsumerHostedService> _logger;
     private readonly IServiceProvider _services;
     private readonly List<IChannel> _channels = [];
+    private readonly CancellationTokenSource _stopping = new();
     private bool _disposed;
 
     public RabbitMQConsumerHostedService(
@@ -69,6 +70,7 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
                     await endpoint.ConfigureChannel(channel, cancellationToken);
                 }
                 var consumer = new AsyncEventingBasicConsumer(channel);
+                var stoppingToken = _stopping.Token;
                 consumer.ReceivedAsync += async (_, args) =>
                 {
                     try
@@ -92,9 +94,13 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
                             }
                         }
 
-                        var messageId = Guid.TryParse(args.BasicProperties.MessageId, out var nativeId)
-                            ? nativeId : MessageInboxReceiver.GetMessageId(headers);
-                        await _services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(messageId, payload, endpoint.ConsumerId, headers, CancellationToken.None);
+                        if (!string.IsNullOrWhiteSpace(args.BasicProperties.MessageId))
+                        {
+                            headers ??= new(StringComparer.OrdinalIgnoreCase);
+                            headers[NOFAbstractionConstants.Transport.Headers.MessageId] = args.BasicProperties.MessageId;
+                        }
+                        await _services.ExecuteMessageAsync(endpoint.Operation, payload, headers, stoppingToken);
+                        stoppingToken.ThrowIfCancellationRequested();
 
                         await consumer.Channel.BasicAckAsync(args.DeliveryTag, false);
                     }
@@ -142,6 +148,8 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
             return;
         }
 
+        _disposed = true;
+        _stopping.Cancel();
         foreach (var channel in _channels)
         {
             try
@@ -154,6 +162,6 @@ public class RabbitMQConsumerHostedService : IHostedLifecycleService, IDisposabl
             }
         }
 
-        _disposed = true;
+        _stopping.Dispose();
     }
 }

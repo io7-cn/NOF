@@ -18,7 +18,7 @@ public class RabbitMQConsumerHostedServiceTests
         endpoints.MapQueue("work.v1", descriptor);
         endpoints.MapQueue("audit.v1", descriptor);
         Assert.Equal(new[] { "work.v1", "audit.v1" }, endpoints.Freeze().Endpoints.Select(endpoint => endpoint.QueueName));
-        Assert.Equal(new[] { "rabbitmq:queue:work.v1", "rabbitmq:queue:audit.v1" }, endpoints.Freeze().Endpoints.Select(endpoint => endpoint.ConsumerId));
+        Assert.All(endpoints.Freeze().Endpoints, endpoint => Assert.Same(descriptor, endpoint.Operation));
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue("late.v1", descriptor));
     }
 

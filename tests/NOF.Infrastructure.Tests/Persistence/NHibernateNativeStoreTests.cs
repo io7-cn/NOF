@@ -21,7 +21,7 @@ public sealed class NHibernateNativeStoreTests
         {
             var builder = Host.CreateApplicationBuilder();
             builder.AddNOF();
-            builder.Services.AddTransactionalMessages();
+            builder.Services.AddOutbox();
             builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")
                 .WithOptions((configuration, _) =>
                 {
@@ -43,13 +43,6 @@ public sealed class NHibernateNativeStoreTests
             Assert.Equal(0, await outbox.AtomicMarkAsSentAsync([first]));
             await outbox.AtomicRecordDeliveryFailureAsync(first, "stale", true);
             Assert.Equal(1, await outbox.AtomicMarkAsSentAsync([second]));
-            var inbox = scope.ServiceProvider.GetRequiredService<IInboxStore>();
-            await inbox.ReceiveAsync(NOFInboxMessage.Create(id, "one", [1], "{}"), default);
-            await inbox.ReceiveAsync(NOFInboxMessage.Create(id, "two", [1], "{}"), default);
-            var claimed = await inbox.AtomicClaimPendingMessagesAsync(10, TimeSpan.FromMinutes(1)).ToListAsync();
-            Assert.Equal(2, claimed.Count);
-            Assert.Equal(2, claimed.Select(row => row.Route).Distinct().Count());
-            Assert.All(claimed, row => Assert.Equal(1, row.RetryCount));
 
         }
         finally
@@ -57,49 +50,6 @@ public sealed class NHibernateNativeStoreTests
             if (File.Exists(file))
             { File.Delete(file); }
         }
-    }
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task NativeReceiptSave_RejectsAWorkerWhoseClaimWasReplaced(bool useNHibernate)
-    {
-        var file = Path.Combine(Path.GetTempPath(), $"nof-native-fence-{Guid.NewGuid():N}.db");
-        try
-        {
-            var builder = Host.CreateApplicationBuilder();
-            builder.AddNOF();
-            builder.Services.AddTransactionalMessages();
-            if (useNHibernate)
-            {
-                builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")
-                    .WithOptions((configuration, _) =>
-                    {
-                        configuration.DataBaseIntegration(database => { database.Driver<MicrosoftDataSqliteTestDriver>(); database.Dialect<SQLiteDialect>(); });
-                        configuration.SetProperty("hbm2ddl.auto", "create-drop");
-                        configuration.SetProperty("hbm2ddl.keywords", "none");
-                    });
-            }
-            else
-            {
-                builder.UseDbContext<NOFDbContext>((_, ef) => ef.UseSqlite($"Data Source={file};Pooling=False"));
-            }
-            using var host = builder.Build();
-            using var firstScope = host.Services.CreateScope();
-            var firstStore = firstScope.ServiceProvider.GetRequiredService<IInboxStore>();
-            await firstStore.ReceiveAsync(NOFInboxMessage.Create(Guid.NewGuid(), "route", [1], "{}"), default);
-            var first = Assert.Single(await firstStore.AtomicClaimPendingMessagesAsync(1, TimeSpan.FromSeconds(-1)).ToListAsync());
-            var pending = await firstStore.FindPendingAsync(first, default);
-            using var secondScope = host.Services.CreateScope();
-            var second = Assert.Single(await secondScope.ServiceProvider.GetRequiredService<IInboxStore>().AtomicClaimPendingMessagesAsync(1, TimeSpan.FromMinutes(1)).ToListAsync());
-            Assert.NotEqual(first.ClaimedBy, second.ClaimedBy);
-            pending!.Status = InboxMessageStatus.Processed;
-            pending.ClaimedBy = null;
-            pending.ClaimExpiresAtUtc = null;
-            await Assert.ThrowsAsync<DBConcurrencyException>(() => firstScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync());
-            using var verification = host.Services.CreateScope();
-            Assert.NotNull(await verification.ServiceProvider.GetRequiredService<IInboxStore>().FindPendingAsync(second, default));
-        }
-        finally { if (File.Exists(file)) { File.Delete(file); } }
     }
 
 }

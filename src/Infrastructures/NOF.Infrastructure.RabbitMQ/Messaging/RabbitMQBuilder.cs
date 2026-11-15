@@ -63,11 +63,17 @@ public sealed class RabbitMQBuilder
         {
             EnsureMutable();
             ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
-            var consumerId = "rabbitmq:queue:" + queueName;
             ArgumentNullException.ThrowIfNull(operation);
-            _services.GetOrAddSingleton<InboxEndpointRegistry>().Add(new(consumerId, operation));
-            _endpoints.Add(new(queueName, consumerId, operation, configureChannel, requeueOnFailure));
-            _services.AddTransactionalMessages();
+            if (!OperationInspector.CanSubmit(operation))
+            {
+                throw new ArgumentException("RabbitMQ endpoints require a void operation without business failure cases.", nameof(operation));
+            }
+            if (_endpoints.Any(endpoint => endpoint.QueueName == queueName))
+            {
+                throw new InvalidOperationException($"RabbitMQ queue '{queueName}' has already been mapped.");
+            }
+            _endpoints.Add(new(queueName, operation, configureChannel, requeueOnFailure));
+            _services.AddNOFJson();
             return this;
         }
     }
@@ -82,5 +88,5 @@ public sealed class RabbitMQBuilder
 }
 
 /// <summary>One queue consumer and its native channel settings.</summary>
-public sealed record RabbitMQEndpoint(string QueueName, string ConsumerId, OperationDescriptor Operation,
+public sealed record RabbitMQEndpoint(string QueueName, OperationDescriptor Operation,
     Func<IChannel, CancellationToken, Task>? ConfigureChannel = null, bool RequeueOnFailure = true);

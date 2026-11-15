@@ -32,22 +32,13 @@ IUnitOfWork.SaveChangesAsync 返回 Task，不传播 Provider 的变更计数。
 返回提供异步提交、回滚与释放的 ITransaction。显式事务内保存只负责 Flush，Commit 才使变更持久化。
 未完成事务需要释放或回滚，重试前丢弃当前作用域；提交结果不确定时应进行幂等恢复，不能假定已经回滚。
 
-EF Core 的业务适配器、EfCoreUnitOfWork、Inbox 和 Outbox 共用同一作用域 DbContext；NHibernate 共用同一 ISession。
-宿主继续使用原生工厂、查询、事务、Savepoint 和映射，不为框架写入另开上下文。
+原生持久化保留 IOutboxStore 与业务共享的 IUnitOfWork/事务集成，不再提供 Inbox Store、收件、认领或消费模型。消息端点不要求数据库，业务 Handler/Filter 决定保存、事务和原子幂等约束。EF/NHibernate Outbox 保留有界认领、租户隔离、延迟、租约恢复和所有权校验。部署前解决旧 Inbox 工作并审查防护删表迁移，见 [Outbox 与迁移](transactional-outbox.md)。
 
 ## 原生 Provider 实现
 
 完整移除跨 ORM 协作层：IPersistenceSession/Factory/Transaction、IEntitySet、IProviderQuery/Executor、ProviderQuery、
 共享异步查询扩展、UpdateSetters、IDbModelBuilder 和 IDbContextModelCreatingContributor 均不再提供。
 Provider 不再翻译 NOF 查询、更新或建模语言；通用内存 ORM 与反射跟踪器也一并删除，不保留兼容别名或实现。
-
-Infrastructure 保留 Worker 实际需要的 IInboxStore、IOutboxStore 功能端口。EF 使用原生查询及
-ExecuteUpdateAsync/ExecuteDeleteAsync；NHibernate 使用原生 LINQ DML，先选择有限的候选身份，再原子比较并领取
-仍满足条件的记录。两个后端保留尝试次数限制、Outbox 延迟重试、租约恢复、租户隔离，以及完成/失败/释放时的领取者校验。
-
-Inbox 完成状态与 Handler 写入共享事务。原生批量领取会绕过 ORM 跟踪，因此处理前会刷新同一会话中已有的回执。
-EF 使用领取者并发令牌；NHibernate 使用原生 Dirty 乐观锁和动态更新。过期工作者保存结果时不能覆盖新领取者的回执。
-领取结果是投递快照，不复用 NHibernate 会话缓存中的实体。
 
 EF 模型扩展在 EF Provider 包中实现 IEFCoreModelConfiguration.Configure(ModelBuilder)，直接使用原生 EF API。
 NHibernate 扩展注册 Action<ModelMapper> 回调，直接使用原生 Mapping By Code。值对象转换，以及 EF 的长度、集合、
@@ -61,10 +52,10 @@ OIDC 协议与存储集成包已移除，宿主直接使用上游方案。Sample
 ## 内存消息与测试
 
 消息能力在未选择原生 Provider 时使用开发用内存后端。AddInMemoryMessagingPersistence 注册宿主内、按租户分区的状态和作用域消息工作单元；
-AddTransactionalMessages 在未选择原生 Provider 或自定义 Store 时使用它。消息能力及 Worker 仍按需开启，
+AddOutbox 在未选择原生 Provider 或自定义 Store 时使用它。消息能力及 Worker 仍按需开启，
 原生 Provider、自定义 Store 与能力装配的前后顺序均受支持。
 
-此后端只保存意图和回执，可原子保存回执完成及新发件消息，并提供租户隔离与领取者校验；不再提供任意业务实体表或
+此后端只保存发件意图，可原子提交暂存消息，并提供租户隔离与领取者校验；不再提供任意业务实体表或
 ORM API。业务持久化测试应选择真实 Provider，例如 UseDbContext 配合内存 SQLite，或者注册业务专用测试端口与
 适当的工作单元。NOF.Test 不会自动将任意领域对象变为持久化实体。
 
@@ -73,14 +64,8 @@ ORM API。业务持久化测试应选择真实 Provider，例如 UseDbContext �
 基础设施适配器将被移除的协作接口依赖改为原生 DbContext/ISession，业务端口保持不变；注册原生模型配置与可选
 原生身份集成。AddInMemoryPersistence/AddPersistenceServices 改为明确选择原生 Provider；消息专用内存默认实现无需 ORM 包。
 
-Inbox 不再保存 Command/Notification 分类，身份仍为 MessageId 与不透明 Route，按 Route 选择 Keyed Handler。
-MemoryMessageClient 直接接收队列或订阅回执；删除 MemoryCommandRider、MemoryNotificationRider、InboxMessageType。
-PostgreSQL 示例的 20261114170000_RemoveInboxClassification 在之前的迁移后仅删除未使用的分类列，保留负载、Headers、
-ID、租约与去重历史。应用迁移前停止旧程序。Down 拒绝猜测旧分类，回退需恢复匹配备份和包。已有 SQLite 接收者文件
-需要显式等价迁移；EnsureCreated 不会升级结构。
-
 原生查询与建模 API 改造本身不重命名表或重新解释数据。部署前审查 Provider 迁移，并明确升级每个租户数据库。
 
 ## 持久化异常
 
-Application 不再定义数据库异常层级。Provider 将乐观并发保存冲突转为 System.Data.DBConcurrencyException，原生数据保存错误转为 System.Data.DataException，并保留原始原因。事务、取消与非预期异常保持原样。Inbox 仍在新作用域确认同一收据已持久化后才允许重复确认。迁移见[框架边界](framework-simplification.md)。
+Provider 将原生乐观并发保存失败转换为 System.Data.DBConcurrencyException，将数据保存失败转换为 System.Data.DataException，并保留原始原因。Application 不定义数据库异常体系。事务失败、取消及意外异常原样传播；消费端业务自行决定事务与幂等策略，不经过通用收件去重。

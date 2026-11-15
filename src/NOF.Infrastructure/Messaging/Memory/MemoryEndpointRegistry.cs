@@ -14,7 +14,18 @@ public sealed class MemoryEndpointRegistry : Registry<MemoryEndpoint>
     /// <summary>Gets whether adapter configuration has already been read.</summary>
     public bool IsFrozen => Items.IsFrozen;
 
-    /// <summary>Gets validated, frozen durable bindings.</summary>
+    /// <inheritdoc />
+    public override void Add(MemoryEndpoint item)
+    {
+        if (Items.Any(existing => existing.ConsumerId == item.ConsumerId
+            || !existing.IsSubscription && !item.IsSubscription && existing.Route == item.Route))
+        {
+            throw new InvalidOperationException($"Memory endpoint '{item.ConsumerId}' has already been mapped.");
+        }
+        base.Add(item);
+    }
+
+    /// <summary>Gets validated, frozen local bindings.</summary>
     public IReadOnlyList<MemoryEndpoint> Endpoints
     {
         get
@@ -32,8 +43,4 @@ public sealed class MemoryEndpointRegistry : Registry<MemoryEndpoint>
         }
     }
 
-    /// <summary>Resolves one durable consumer independently of its current implementation type.</summary>
-    public MemoryEndpoint GetConsumer(string consumerId)
-        => Endpoints.SingleOrDefault(binding => binding.ConsumerId == consumerId)
-            ?? throw new InvalidOperationException($"No message binding for '{consumerId}'. Drain or migrate old inbox records before upgrading.");
 }

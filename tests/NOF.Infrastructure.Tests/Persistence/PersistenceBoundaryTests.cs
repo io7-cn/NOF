@@ -13,7 +13,7 @@ public sealed class PersistenceBoundaryTests
         var removed = new[] { "IDbContext", "IDbContextFactory", "IDbContextTransaction", "IRepository`1",
             "IAsyncQueryable`1", "IAsyncQueryExecutor", "UpdateSetters`1", "IUpdateSetters`1",
             "IPersistenceSession", "IPersistenceSessionFactory", "IPersistenceTransaction", "IDbModelBuilder", "IDbContextModelCreatingContributor", "IEntitySet`1", "IProviderQuery`1" };
-        foreach (var assembly in new[] { typeof(IUnitOfWork).Assembly, typeof(IValueObject<>).Assembly, typeof(IInboxStore).Assembly })
+        foreach (var assembly in new[] { typeof(IUnitOfWork).Assembly, typeof(IValueObject<>).Assembly, typeof(IOutboxStore).Assembly })
         {
             Assert.DoesNotContain(assembly.GetExportedTypes(), type => removed.Contains(type.Name));
             Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name == "NOF.Infrastructure");

@@ -106,7 +106,7 @@ await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), context,
 await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-The client is concrete. IOutbox only stages; the host enables AddTransactionalMessages() and adds the assembly whose OutboxHandler<T> classes declare schema constants; generated application-part registrations bind the adapters. Explicit transactions require commit. See docs/en/design/transactional-outbox.md.
+The client is concrete. IOutbox only stages; the host enables AddOutbox() and adds the assembly whose OutboxHandler<T> classes declare schema constants; generated application-part registrations bind the adapters. Explicit transactions require commit. See docs/en/design/transactional-outbox.md.
 
 ## Server Operation Call
 

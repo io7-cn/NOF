@@ -63,8 +63,6 @@ public sealed class NHibernateSessionFactoryRegistry : IDisposable
         _options.Configure(configuration, connectionString);
 
         var mapper = new ModelMapper();
-        if (_capabilities.IsService(typeof(IInboxStore)))
-        { MessageModelConfigurations.Inbox(mapper); }
         if (_capabilities.IsService(typeof(IOutboxStore)))
         { MessageModelConfigurations.Outbox(mapper); }
         foreach (var configure in _configurations)

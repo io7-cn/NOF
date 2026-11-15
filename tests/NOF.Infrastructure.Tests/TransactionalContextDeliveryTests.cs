@@ -12,7 +12,7 @@ namespace NOF.Infrastructure.Tests;
 public sealed class TransactionalContextDeliveryTests
 {
     [Fact]
-    public async Task Outbox_ToInbox_PreservesJsonScalarsAndStableIdentity_WithoutManualReplay()
+    public async Task Outbox_ToEndpoint_PreservesJsonScalarsAndStableIdentity_WithoutManualReplay()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -24,10 +24,10 @@ public sealed class TransactionalContextDeliveryTests
         builder.Services.GetOrAddSingleton<ApplicationServiceRegistry>()
             .AddOperation(new(typeof(Receive), typeof(Work), typeof(void)) { Descriptor = descriptor });
         builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<Receive>("work"));
-        builder.Services.AddTransactionalMessages().AddOutboxHandler<Work, Forward>();
-        builder.Services.Configure<TransactionalMessageOptions>(options =>
+        builder.Services.AddOutbox().AddOutboxHandler<Work, Forward>();
+        builder.Services.Configure<OutboxOptions>(options =>
         {
-            options.Outbox.PollingInterval = options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
+            options.PollingInterval = TimeSpan.FromMilliseconds(10);
         });
         using var host = builder.Build();
         var snapshot = new JsonObject { ["correlation"] = "original", ["number"] = 7, ["flag"] = true, ["empty"] = null };

@@ -1,13 +1,7 @@
 namespace NOF.Infrastructure;
 
-public sealed class TransactionalMessageOptions
-{
-    public TransactionalMessageProcessorOptions Inbox { get; set; } = new();
-
-    public TransactionalMessageProcessorOptions Outbox { get; set; } = new();
-}
-
-public sealed class TransactionalMessageProcessorOptions
+/// <summary>Configures Outbox processing, retries and retention in this host.</summary>
+public sealed class OutboxOptions
 {
     /// <summary>Gets or sets whether this enabled capability runs its processing and cleanup workers in this host.</summary>
     public bool RunWorkers { get; set; } = true;

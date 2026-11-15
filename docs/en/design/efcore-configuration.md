@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/design/efcore-configuration.md) · [Persistence boundaries](persistence-boundaries.md)
 
-NOF retains tenant-aware context creation, optional soft deletion, value-object conventions, the scoped unit of work/transactions and native Inbox/Outbox stores. EF Core owns provider selection, connections, logging, interceptors, retry settings, tracking and model mapping. The adapter exposes one native configuration callback instead of forwarding those options through NOF methods.
+NOF retains tenant-aware context creation, optional soft deletion, value-object conventions, the scoped unit of work/transactions and native Outbox stores. EF Core owns provider selection, connections, logging, interceptors, retry settings, tracking and model mapping. The adapter exposes one native configuration callback instead of forwarding those options through NOF methods.
 
 ```csharp
 builder.UseDbContext<ConfigurationDbContext>((creation, ef) =>

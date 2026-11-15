@@ -10,7 +10,7 @@ Entity Framework Core persistence package for the [NOF Framework](https://github
 - `UseDbContext<TDbContext>()`
 - `EFCoreSelector`
 - tenant-aware model customization and factory services
-- native EF `IInboxStore`/`IOutboxStore` implementations and `EfCoreUnitOfWork`
+Message endpoints directly execute their operation with restored Context and the existing policy/filter pipeline. Business code owns idempotency and commit boundaries; adapters own acknowledgement, retry and dead-letter behavior. NOF Inbox storage and workers are removed. AddOutbox explicitly enables outgoing intents only; configure flat OutboxOptions. See [transactional Outbox and migration](https://github.com/io7-cn/NOF/blob/main/docs/en/design/transactional-outbox.md).
 - SQLite in-memory default persistence registration
 
 ## Installation
@@ -73,7 +73,7 @@ remain empty. Tenant databases must accept this schema superset.
 This is an intentional engineering tradeoff. NOF does not maintain separate host and tenant model
 variants because doing so would substantially increase model caching, migration generation,
 deployment orchestration, provider integration, and testing complexity. Data placement remains a
-runtime responsibility determined by the selected connection and current tenant. Inbox and outbox
+Message endpoints directly execute their operation with restored Context and the existing policy/filter pipeline. Business code owns idempotency and commit boundaries; adapters own acknowledgement, retry and dead-letter behavior. NOF Inbox storage and workers are removed. AddOutbox explicitly enables outgoing intents only; configure flat OutboxOptions. See [transactional Outbox and migration](https://github.com/io7-cn/NOF/blob/main/docs/en/design/transactional-outbox.md).
 tables are not necessarily empty in tenant databases because tenant-scoped transactional messaging
 may use them.
 

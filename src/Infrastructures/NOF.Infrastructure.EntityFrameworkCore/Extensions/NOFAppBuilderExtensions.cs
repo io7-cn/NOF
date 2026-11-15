@@ -45,7 +45,6 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.AddScoped<EfCoreUnitOfWork>();
             builder.Services.Replace(ServiceDescriptor.Scoped<IUnitOfWork>(sp => sp.GetRequiredService<EfCoreUnitOfWork>()));
             builder.Services.Replace(ServiceDescriptor.Scoped<ITransactionManager>(sp => sp.GetRequiredService<EfCoreUnitOfWork>()));
-            builder.Services.Replace(ServiceDescriptor.KeyedScoped<IInboxStore, EfCoreInboxStore>(typeof(IInboxStore)));
             builder.Services.Replace(ServiceDescriptor.KeyedScoped<IOutboxStore, EfCoreOutboxStore>(typeof(IOutboxStore)));
             if (typeof(TDbContext) != typeof(NOFDbContext))
             {

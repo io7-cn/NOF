@@ -6,11 +6,11 @@ using NOF.Application;
 namespace NOF.Infrastructure.EntityFrameworkCore;
 
 /// <summary>Provider-backed outbox storage, isolated from dispatch and application execution.</summary>
-public sealed partial class EfCoreOutboxStore(DbContext session, IOptions<TransactionalMessageOptions> options,
+public sealed partial class EfCoreOutboxStore(DbContext session, IOptions<OutboxOptions> options,
     ILogger<EfCoreOutboxStore> logger) : IOutboxStore
 {
     private readonly DbContext _session = session;
-    private readonly TransactionalMessageProcessorOptions _options = options.Value.Outbox;
+    private readonly OutboxOptions _options = options.Value;
     private readonly ILogger<EfCoreOutboxStore> _logger = logger;
     /// <inheritdoc />
     public void Stage(NOFOutboxMessage message) => _session.Set<NOFOutboxMessage>().Add(message);

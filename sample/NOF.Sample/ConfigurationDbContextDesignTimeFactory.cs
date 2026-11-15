@@ -23,7 +23,7 @@ public sealed class ConfigurationDbContextDesignTimeFactory : IDesignTimeDbConte
         });
         ((IDbContextOptionsBuilderInfrastructure)options).AddOrUpdateExtension(new NOFModelCreatingDbContextOptionsExtension
         {
-            Contributors = [new NOFInboxMessageModelCreatingContributor(), new NOFOutboxMessageModelCreatingContributor()]
+            Contributors = [new NOFOutboxMessageModelCreatingContributor()]
         });
         return new(options.Options);
     }

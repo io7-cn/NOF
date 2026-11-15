@@ -57,23 +57,17 @@ await unitOfWork.SaveChangesAsync(ct);
 
 ## 一个执行边界
 
-IOperationExecutor.ExecuteAsync 为本地回信调用创建新作用域并复制已验证身份。同一个 OperationExecutor 实现通过 ExecuteInScopeAsync 执行宿主拥有的入口；HTTP 复用请求作用域；Inbox 复用既有事务作用域，使业务修改、处理进度和新增 Outbox 一同提交。过滤器执行前不会构造 Handler。
+消息端点在独立 Scope 内恢复 Context，直接执行操作及正常权限/Filter 管道。NOF 不再提供 Inbox 存储、消费去重或消费重试调度。业务负责幂等和事务/保存边界，RabbitMQ 在操作完成后 ACK；原生适配器负责重投和死信。Memory 等待执行并传播失败。只有 AddOutbox 开启持久化发件及 Worker，队列映射不安装持久化。见[直接端点与迁移](transactional-outbox.md)。
 
 Application 中的 InvocationContext 组合语义 Context，提供 Operation、InvocationId、Origin（Local/Http/Message）、实现策略元数据。过滤器通过 WithContext/WithTenantId 替换语义信息，视图保留调用身份，结果通过返回值传播。Context.Current 保存语义 Context；向嵌套语义 API 传递 invocation.Context。身份唯一来源仍是作用域内的 IUserContext。
 
 所有入口检查仅声明在 Contract 接口/操作方法上的权限，Handler 不再声明权限。消息入口不会反序列化生产者身份或访问令牌；宿主在授权前通过所选管道/过滤器建立消费者身份，匿名消费者不能调用受保护操作。宿主应限制消息代理入口和租户头的信任边界。严格租户策略适用于所有操作来源。
-
-HTTP 状态码和认证挑战头由原生 HTTP 端点与 HTTP 响应映射处理；RejectionReason 用 Policy/Authentication/Authorization 表达原因，执行上下文不携带 HTTP 状态码。策略拒绝与已完成的业务失败 union 区分。技术异常继续传播；Inbox 将策略拒绝记录为终止失败，技术故障按既有策略重试。消息代理在可靠接受收件记录后确认，不等待业务执行完成。
-
-内存和 RabbitMQ 传输共用 MessageInboxReceiver：先建立投递租户再解析持久化依赖；数据库冲突只有在确认“消息 ID＋消费者标识”的记录确实存在后，才算重复投递已接受。
 
 ## 破坏性迁移与积压消息
 
 TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests 和 RejectMismatchedTenantForRequests 分别更名为 RequireAuthenticatedTenant 和 RejectMismatchedTenant，策略现在适用于所有操作来源。
 
 旧 Command/Notification Handler 改成返回 void 的单向操作与明确入站 Queue/Subscription 绑定，旧上下文子类改用 InvocationContext＋Origin。即时调用使用具体客户端；延迟 API 改为 IOutbox.EnqueueAsync 加选项。旧分派器与出站路由 API 不保留兼容层。
-
-通用 Outbox 必须在排空旧记录后执行结构迁移，按[发件箱迁移步骤](transactional-outbox.md)部署。此前 Inbox/Broker 路由名变更仍需排空，或为所有租户显式映射旧记录与订阅，备份并保留去重历史，不猜测未解析路由。
 
 ## 聚合拥有的集合
 
@@ -102,7 +96,5 @@ EF Core 在应用完成关系配置后，仅为已明确声明的 OwnsMany 自�
 [当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。
 
 RabbitMQ 仅将操作映射到已有队列，参见[原生拓扑示例](rabbitmq-sample.md)。
-
-[单向语义与统一 Inbox](one-way-operations.md)。Empty 仍是可回信的成功类型；void 不生成返回业务结果的调用入口。
 
 独立 OperationHandler 类无需 Contract 方法即可使用同一执行模型，参见[内部反应与 Executor 迁移](one-way-operations.md#application-内部反应)。

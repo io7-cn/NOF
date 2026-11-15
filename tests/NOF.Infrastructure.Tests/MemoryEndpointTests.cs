@@ -32,10 +32,10 @@ public sealed class MemoryEndpointTests
         bindings.MapQueue("second.v1", Second);
         bindings.MapSubscription("facts.v1", "projection", First);
         bindings.MapSubscription("facts.v1", "audit", Second);
-        Assert.Equal("first.v1", registry.GetConsumer("memory:queue:first.v1").Route);
-        Assert.Equal("second.v1", registry.GetConsumer("memory:queue:second.v1").Route);
-        Assert.Equal(First.Id, registry.GetConsumer("memory:subscription:projection").Operation.Id);
-        Assert.Equal(Second.Id, registry.GetConsumer("memory:subscription:audit").Operation.Id);
+        Assert.Equal("first.v1", registry.Endpoints.Single(binding => binding.ConsumerId == "memory:queue:first.v1").Route);
+        Assert.Equal("second.v1", registry.Endpoints.Single(binding => binding.ConsumerId == "memory:queue:second.v1").Route);
+        Assert.Equal(First.Id, registry.Endpoints.Single(binding => binding.ConsumerId == "memory:subscription:projection").Operation.Id);
+        Assert.Equal(Second.Id, registry.Endpoints.Single(binding => binding.ConsumerId == "memory:subscription:audit").Operation.Id);
         Assert.Throws<InvalidOperationException>(() => bindings.MapQueue("late.v1", First));
     }
 

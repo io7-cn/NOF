@@ -2,7 +2,7 @@
 
 [English](../../en/design/rabbitmq-sample.md) · [事务性 Outbox](transactional-outbox.md)
 
-Aspire 示例现在包含生产者 `NOF.Sample` 和接收者 `NOF.Sample.Notifications`，共同连接 RabbitMQ。AppHost 原本已有 RabbitMQ 资源，现在示例消息真正经过 Broker，不再用进程内 MemoryMessageClient。生产者保留 PostgreSQL、Redis、UI 和 OIDC；接收者独立使用 SQLite 保存 Inbox 和可查询的处理回执。
+Aspire 示例现在包含生产者 `NOF.Sample` 和接收者 `NOF.Sample.Notifications`，共同连接 RabbitMQ。AppHost 原本已有 RabbitMQ 资源，现在示例消息真正经过 Broker，不再用进程内 MemoryMessageClient。生产者保留 PostgreSQL、Redis、UI 和 OIDC；接收者独立使用 SQLite 保存业务幂等投影与查询数据。
 
 ## 运行与观察
 
@@ -42,7 +42,7 @@ await unitOfWork.SaveChangesAsync(ct);
 ```csharp
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
-builder.Services.AddTransactionalMessages();
+builder.Services.AddOutbox();
 ```
 
 `NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 直接转发已准备好的 OutboxDeliveryContext.Headers，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
@@ -88,53 +88,26 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 两个绑定的订单队列各收到一份消息；扩容同一队列的消费者只会竞争处理。Contract/Application 仍保持传输无关，路由、拓扑、序列化和原生发布属性都属于示例基础设施。
 
-两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者的队列映射自动装配事务性消息，并通过 `Outbox.RunWorkers=false` 停止发件 Worker。生产者调用 `AddTransactionalMessages`，通过 `Inbox.RunWorkers=false` 停止收件 Worker，不配置消费者。两侧均保留完整消息模型，包括生产者已有的 PostgreSQL 迁移模型。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
+两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者的队列映射自动装配事务性消息，并通过 `Outbox.RunWorkers=false` 停止发件 Worker。生产者调用 `AddOutbox`，通过 `Inbox.RunWorkers=false` 停止收件 Worker，不配置消费者。两侧均保留完整消息模型，包括生产者已有的 PostgreSQL 迁移模型。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
 
 ## 持久化与验证
 
-接收服务在项目工作目录使用 `notifications.db`。NOF 首次使用时初始化全新 SQLite 结构，此演示库没有迁移链；重置时先停服务再删除该数据库。生产环境应制定明确迁移策略。生产者仍遵循现有 PostgreSQL 迁移及升级注意事项，本次移除顺序模型需要执行显式 RemoveMessageOrdering 迁移，不推断自动清理或 Header 转换。新增 `SendEmail.OrderId` 为可选项，原 v1 负载仍可接收。
+生产者选择原生 EF/PostgreSQL，调用 AddOutbox，在同一业务工作单元中保存两条意图。接收者选择 EF/SQLite 仅用于业务投影，MapQueue 不安装 Outbox/Inbox 持久化。操作直接等待 INotificationReceipts.RecordAsync；该端口使用参数化 SQLite INSERT ... ON CONFLICT DO NOTHING，依赖 按租户隔离的 (IdempotencyKey, Kind, TenantId) 唯一索引。订单 ID 是业务键；无订单的邮件使用稳定消息 ID。同一订单即使有不同传输 ID，每种投影也只生成一次，不使用先查询后插入。
 
-投递语义是至少一次。NOF 保留消息 ID，通过 Inbox 按路由去重；事件的两个订阅刻意使用不同 Inbox 路由，因此相同 ID 会分别处理。真实 SMTP 等外部副作用仍需要自己的幂等方案。
+RabbitMQ 在操作的业务投影提交后 ACK，不再确认收件入库。提交与 ACK 之间失败会重投，唯一业务键使投影保持不变。邮件操作仅用投影模拟发送，真实 SMTP/服务商副作用需要 Outbox 或服务商幂等约定，单独记录一行不能让外部发送具有事务性。
 
-普通测试在未配置 `NOF_SAMPLE_RABBITMQ` 时跳过真实 Broker 测试。测试会声明示例的固定持久路由名，应使用独立 Broker 或 vhost。将该环境变量设为连接字符串后执行：
-
-```sh
-dotnet test sample-tests/NOF.Sample.Tests -c Release --filter FullyQualifiedName~RabbitMQDispatchTests
-```
-
-测试使用独立生产/接收宿主与数据库，验证真实 RabbitMQ 队列、事件分发、接收端离线与重启补收，并比对 Inbox 与 Outbox ID。显式配置的 Broker 不可用时测试失败。CI 在独立 Job 中提供临时 RabbitMQ 执行验证。真实 PostgreSQL 升级仍属于单独部署验证。
+无需 Broker 的 NotificationIdempotencyTests 并发交付重复消息，验证恰好三个业务投影且没有框架收件表。RabbitMQDeliveryTests 用模拟 Channel 驱动真实 Consumer 回调，验证执行完成前不 ACK、异常 NACK、非 Guid 标识透传。可选真实 Broker 测试覆盖队列/广播、离线恢复、完整 Header、原生/旧 Header 标识以及业务去重。设置隔离的 NOF_SAMPLE_RABBITMQ 连接串后运行，未设置时跳过；测试不会执行生产 PostgreSQL 迁移。
 
 ## 适配器边界与迁移
 
-删除 MessageBinding、MessageBindingRegistry 和 AddMessageBindings。RabbitMQ 只提供 MapQueue<Operation>：没有 Topic/Subscription DSL，不自动声明 Exchange、队列或绑定，也不安装统一的 Alternate/Dead-letter 转发拓扑或原始路由重放 Header。RabbitMQMessageClient 和命令/通知 Rider 均移除，发送直接使用原生 Channel；publisher confirms 直接使用 CreateChannelOptions，不再重复提供 NOF 配置。队列不存在则启动失败，mandatory 消息无法路由则投递失败；Broker Policy、DLX 重试、Exchange 绑定及重放由应用或运维负责。
+AddRabbitMQ 配置原生 ConnectionFactory；可重复链式 ConfigureRabbitMQ 在 Build 前追加拓扑回调和队列到操作的映射。框架 StartingAsync 在消费者启动前完成全部拓扑。只有 MapQueue 注册消费者，纯拓扑/客户端宿主无需持久化。队列映射要求 void、拒绝重复队列，不隐式创建拓扑。原生拓扑、预取、Requeue、死信策略属于宿主，Global/Service/UseCase 权限和 Filter 在构造 Handler 前继续生效。
 
-RabbitMQOptions 和 RabbitMQConnectionManager 已删除。AddRabbitMQ 接受原生 ConnectionFactory 配置，使用 AMQP/AMQPS URI（factory.Uri）或原生字段，不再解析旧的 key/value ConnectionString。TLS、超时及自动恢复直接使用原生设置。RabbitMQConnection.GetAsync 只负责惰性共享连接的生命周期；调用方创建和释放原生 Channel，不释放共享连接。首次连接失败允许重试；单个等待者取消不影响其他调用方；已建立连接交由原生机制恢复。
+每次交付在新 Scope 恢复 Context，直接执行所选操作。框架没有 InboxEndpointRegistry、收件路由、认领、重试计数或消费数据库。缺少传输 MessageId 就保持缺失，原生 ID 优先于旧 Header，不强制转换 Guid。直接 Memory 分发使用相同执行边界并传播失败，但不承诺 Broker 式跨进程恢复。
 
-ConfigureRabbitMQ 独立、支持 Fluent API，可在 Build 前多次调用。拓扑回调按声明顺序追加，队列标识必须唯一，启动时直接冻结共享 Builder。即使先配置端点、后由另一个模块补充拓扑，框架 StartingAsync 仍会先等待全部拓扑回调，再启动消费者。拓扑失败或取消将中止启动，不自动回滚 Broker 修改；消费者启动失败会释放已打开的 Channel。只配置拓扑不启用 Inbox 存储、模型或 Worker，空配置不触发网络调用；仅 AddRabbitMQ 仍为惰性连接，不注册生命周期或可靠消息 Worker。
-
-MapQueue 可指定 `configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)` 和 `requeueOnFailure`；默认 prefetch 为 1，回执持久化失败时重新入队。设置属于当前端点。
-
-通用 Inbox 把 Route 当作不透明键，仅查询 InboxEndpoint 元数据，在现有租户作用域和事务内直接执行 void UseCase，统一持久化、去重和重试，不依赖传输 Handler 或理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
-
-升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，修改 Inbox.Route，保留 ID 和已完成去重历史。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。
-
-Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConfigurationSnapshot。只读视图在启动冻结后保持不变。消费者启动及接收处理逻辑直接内联；连接持有器因生命周期不同于 Channel 和消息作用域而保留。
+切换前停止旧消费者/Inbox Worker，备份租户数据库。使用旧运行时处理 Pending/Failed，或显式导出并按审查方案重放；旧消息可能早已被 Broker ACK。按需导出完成历史。生产者 20261116000000_RemoveInbox 防护迁移拒绝未完成记录，仅删除旧 Inbox 表，保留 Outbox 和身份数据。本次源码修改不会执行线上数据库变更。
 
 ## 示例项目边界
 
-- NOF.Sample.Contract 保存消息负载、服务声明和 Messaging/RabbitMQDemoRoutes.cs 常量，不依赖 Broker。
-- NOF.Sample.Application 保存 IMessageClient 和生产者用例。SubmitDemoOrder 直接暂存两条意图并保存一次，删除 TransactionalMessages。客户端接口只使用普通消息和 Header 值，不依赖 RabbitMQ 类型或 OutboxDeliveryContext。
-- NOF.Sample 保存 Services/RabbitMQMessageClient.cs、SendEmailOutboxHandler.cs 与 OrderCreatedOutboxHandler.cs；每个 Handler 将可信 Outbox 元数据转换为 Header，客户端完成序列化和原生发布。
-- NOF.Sample.Notifications 是单个可执行项目，包含操作、回执端口、持久化与原生拓扑/端点模块，不再有独立 Notifications.Application 或共享 Messaging 实现项目。接收宿主将自身程序集注册为 Application Part。
+NOF.Sample.Notifications 是一个服务项目，包含操作、业务投影端口和原生 SQLite 实现。共享载荷/路由常量位于 NOF.Sample.Contract；发件客户端接口位于 Application，原生实现与 Outbox Handler 位于 NOF.Sample。CountOrder 仍是独立 OperationHandler 表达的内部反应，不声明为 Contract 方法。
 
-合并保留队列名、负载 Schema 和回执键；移除框架顺序能力同时会删除 SQLite 模型中的顺序列与状态表。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。
-
-处理器直接将 `OutboxDeliveryContext.Headers` 转为原生 RabbitMQ Headers，重试保留入队时的自定义头快照，NOF 补充 ID、租户与追踪。示例不保证邮件、审计、指标队列之间的先后关系。需要顺序时，由基础设施实现领取调度与消费协调，业务版本则放入负载。升级已有数据库前，执行[移除顺序模型的迁移](transactional-outbox.md#可靠处理与迁移)。
-
-Notifications 示例使用 EnsureCreated 创建本地 SQLite 文件，不升级已有结构。升级前停止接收者，排空或显式迁移顺序回执，备份文件，再通过显式 SQLite 迁移删除两张顺序状态表、顺序索引与 NOFInboxMessage 的三个顺序列，保留回执 ID 和历史。可丢弃的演示数据库可在备份后有意重建；持久服务必须保留去重历史。生产者的 PostgreSQL 迁移不会升级这个独立接收者数据库。
-
-生产者使用原生 EF 持久化，并通过 AddOidcEntityFrameworkCore 注册 OIDC 存储；接收者在原有 SQLite 上下文中使用原生 EF Inbox Store。已有生产者和接收者数据库需要显式迁移，删除未使用的 Inbox 分类列；回执路由与消息 ID 不变。
-
-CountOrder 是 Application 内部的 OperationHandler<OrderCreated>，无需 Contract 方法。AddApplicationPart 自动发现它，MapQueue<CountOrder> 绑定后仍走同一 Inbox 与策略管线。
-
-JSON Context、可直接发送的投递参数与链式注册参见[JSON 执行上下文](execution-context.md)。
+NotificationsDbContext 的 EnsureCreated 只创建新本地文件，不升级旧文件。旧接收库需审查 IdempotencyKey 与唯一索引迁移：为已知订单投影推导订单键、显式处理重复记录，并为旧的无订单/消息 ID 邮件决定业务键。删除旧表前备份 Inbox 历史并解决未完成工作，不要通过删除已有文件伪装迁移。示例业务投影是可观测数据，不是重新包装的通用 NOF Inbox。

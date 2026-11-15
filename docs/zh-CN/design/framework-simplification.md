@@ -29,7 +29,7 @@ Application 保留 IUnitOfWork 与最小事务接口，不定义数据库异常�
 
 删除对 NOF.Application.DbException、DbUpdateException、DbUpdateConcurrencyException、DbTransactionException、DbTransactionCommitException 的引用与捕获。确需跨 Provider 区分保存错误时使用上述 BCL 异常；事务诊断和取消保持原样。
 
-Inbox 仅对 DataException 在新作用域中复核，确认同一消息 ID 与消费者收据已持久化后才允许确认。取消和编程错误不进入重复确认路径。所有者围栏与事务边界不变，自定义 Store 遵循相同的保存错误约定。
+消息端点在独立 Scope 内恢复 Context，直接执行操作及正常权限/Filter 管道。NOF 不再提供 Inbox 存储、消费去重或消费重试调度。业务负责幂等和事务/保存边界，RabbitMQ 在操作完成后 ACK；原生适配器负责重投和死信。Memory 等待执行并传播失败。只有 AddOutbox 开启持久化发件及 Worker，队列映射不安装持久化。见[直接端点与迁移](transactional-outbox.md)。
 
 ## 删除的重复入口
 
@@ -44,8 +44,6 @@ Inbox 仅对 DataException 在新作用域中复核，确认同一消息 ID 与�
 | 空 NOFApplicationConstants 与未使用的服务方法反射辅助 | 现有具体常量与 OperationDescriptor.MethodInfo |
 
 事件注册生成器也改为生成原生 Replace；Provider Selector 保留后注册覆盖行为。HTTP 在计算语义上下文前复制原生身份，显式端点与 Fluent 端点继续走统一授权边界。Hosting 不再依赖 JWT 库，协议依赖由宿主选择。
-
-Scoped Lazy<T>、显式能力 Selector、ApplicationPart 发现、强类型业务失败、调用 Filter、最小持久化端口和可靠 Inbox/Outbox 仍有具体调用或框架语义，予以保留。OutboxPermanentFailureException 仍表达终止投递；换成无法区分的普通异常会丢失重试决策。
 
 运行时、Provider 与生成器需同步更新。共享权限类型改用 NOF.Abstraction，AuthorizationPolicyResolver 改用 NOF.Application。这批 API 调整不需要数据库迁移，也不重新解释已存消息。
 

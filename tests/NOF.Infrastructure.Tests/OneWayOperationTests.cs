@@ -39,22 +39,6 @@ public sealed class OneWayOperationTests
             .ExecuteAsync(operation, new Message(), Context.Empty));
     }
 
-    [Fact]
-    public void Inbox_RejectsReplyContracts_AndKeepsReceiptIdentityIndependentOfTransportTopology()
-    {
-        var registry = new InboxEndpointRegistry();
-        var operation = new OperationDescriptor<Message>(typeof(IService), nameof(IService.Send));
-        var reply = new OperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.Reply));
-        Assert.Throws<InvalidOperationException>(() => registry.Add(new("opaque:reply", reply)));
-        registry.Add(new("opaque:first", operation));
-        registry.Add(new("opaque:second", operation));
-        Assert.Throws<InvalidOperationException>(() => registry.Add(new("opaque:first", operation)));
-        Assert.Same(operation, registry.GetOperation("opaque:first"));
-        Assert.Same(operation, registry.GetOperation("opaque:second"));
-        Assert.Throws<InvalidOperationException>(() => registry.Add(new("opaque:late", operation)));
-        Assert.Throws<InvalidOperationException>(() => registry.GetOperation("missing"));
-    }
-
     public sealed record Message;
     public interface IService : IApplicationService
     {

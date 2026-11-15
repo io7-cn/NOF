@@ -38,7 +38,7 @@ public sealed class RabbitMQDispatchTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var scope = producer.Services.CreateScope();
         Assert.Equal(0, await Ef.CountAsync(scope.ServiceProvider.GetRequiredService<ProducerDbContext>().Set<NOFOutboxMessage>()));
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInboxStore>());
+        Assert.DoesNotContain(scope.ServiceProvider.GetRequiredService<ProducerDbContext>().Model.GetEntityTypes(), type => type.Name.Contains("Inbox"));
     }
 
     [RabbitMQSampleFact]
@@ -64,17 +64,10 @@ public sealed class RabbitMQDispatchTests
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
         await producer.StartAsync();
-        await WaitUntilAsync(async () =>
-        {
-            using var scope = consumer.Services.CreateScope();
-            return await Ef.AnyAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>(),
-                receipt => receipt.Id == id && receipt.Status == InboxMessageStatus.Processed);
-        });
-        using var verification = consumer.Services.CreateScope();
-        var receipt = await Ef.SingleAsync(verification.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>(),
-            receipt => receipt.Id == id);
-        var received = verification.ServiceProvider.GetRequiredService<IObjectSerializer>()
-            .Deserialize<Dictionary<string, string?>>(receipt.Headers)!;
+        var deliveries = consumer.Services.GetRequiredService<DeliveryProbe>();
+        await WaitUntilAsync(() => Task.FromResult(deliveries.Items.Any(item => item[NOFAbstractionConstants.Transport.Headers.MessageId]?.GetValue<string>() == id.ToString())));
+        var delivered = deliveries.Items.First(item => item[NOFAbstractionConstants.Transport.Headers.MessageId]?.GetValue<string>() == id.ToString());
+        var received = delivered.ToDictionary(pair => pair.Key, pair => pair.Value?.GetValue<string>());
         Assert.Equal("original", received["correlation-id"]);
         Assert.Null(received["optional"]);
         Assert.Equal("opaque", received["X-Order-Key"]);
@@ -100,7 +93,7 @@ public sealed class RabbitMQDispatchTests
         Assert.Equal(new[] { MessageReceiptKind.Mail, MessageReceiptKind.OrderAudit, MessageReceiptKind.OrderMetrics }, firstReceipts.Items.Select(item => item.Kind).Order().ToArray());
         Assert.Contains(firstReceipts.Items, item => item.Kind == MessageReceiptKind.Mail && item.Summary.Contains("first@example.test", StringComparison.Ordinal));
         await WaitUntilAsync(async () => await SentCountAsync(producer) == 2);
-        await AssertInboxAsync(consumer, 3, 2);
+
         // Durable broker queues outlive the receiver. Confirmed publishing can complete while it is offline.
         await consumer.StopAsync();
         var second = await SubmitAsync(producerClient, "offline@example.test");
@@ -108,7 +101,7 @@ public sealed class RabbitMQDispatchTests
         using (var scope = consumer.Services.CreateScope())
         {
             Assert.Equal(3, await Ef.CountAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Receipts));
-            Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
+            Assert.Null(scope.ServiceProvider.GetService<IOutbox>());
         }
 
         await using var restarted = CreateConsumer(connection, consumerDatabase);
@@ -117,12 +110,8 @@ public sealed class RabbitMQDispatchTests
         var secondReceipts = await WaitForReceiptsAsync(restartedClient, second.OrderId);
         Assert.Equal(3, secondReceipts.Items.Select(item => item.Kind).Distinct().Count());
         Assert.Equal(3, (await restartedClient.GetFromJsonAsync<MessageReceiptsResponse>($"/api/messages/receipts?orderId={first.OrderId}"))!.Items.Count);
-        await AssertInboxAsync(restarted, 6, 4);
-        using var producerScope = producer.Services.CreateScope();
-        using var receiverScope = restarted.Services.CreateScope();
-        var ids = await Ef.ToListAsync(producerScope.ServiceProvider.GetRequiredService<ProducerDbContext>().Set<NOFOutboxMessage>().Select(item => item.Id));
-        var receivedIds = await Ef.ToListAsync(receiverScope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>().Select(item => item.Id).Distinct());
-        Assert.Equal(ids.Order(), receivedIds.Order()); // The outbox identity is preserved, including fanout copies.
+
+
     }
 
     [RabbitMQSampleFact]
@@ -187,13 +176,29 @@ public sealed class RabbitMQDispatchTests
                 serializer.Serialize(new SendEmail("demo@example.test", "Identity", "Test", orderId), typeof(SendEmail)));
         }
         using var client = consumer.GetTestClient();
-        await WaitForReceiptsAsync(client, orderId);
-        var ids = await Ef.ToListAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>().Select(item => item.Id));
-        Assert.Equal(3, ids.Distinct().Count());
-        Assert.Contains(nativeId, ids);
-        Assert.Contains(legacyId, ids);
-        Assert.DoesNotContain(ignoredHeaderId, ids);
-        Assert.DoesNotContain(Guid.Empty, ids);
+        var deliveries = consumer.Services.GetRequiredService<DeliveryProbe>();
+        await WaitUntilAsync(() => Task.FromResult(deliveries.Items.Count == 3));
+        var ids = deliveries.Items.Select(item => item[NOFAbstractionConstants.Transport.Headers.MessageId]?.GetValue<string>()).ToArray();
+        await WaitUntilAsync(async () => (await client.GetFromJsonAsync<MessageReceiptsResponse>($"/api/messages/receipts?orderId={orderId}"))!.Items.Count == 1);
+        Assert.Contains(nativeId.ToString(), ids);
+        Assert.Contains(legacyId.ToString(), ids);
+        Assert.DoesNotContain(ignoredHeaderId.ToString(), ids);
+        Assert.Contains(ids, id => id is null);
+    }
+
+    public sealed class DeliveryProbe
+    {
+        public System.Collections.Concurrent.ConcurrentBag<System.Text.Json.Nodes.JsonObject> Items { get; } = [];
+    }
+    public sealed class DeliveryCapture(DeliveryProbe probe) : IInvocationFilter
+    {
+        public async ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken ct)
+        {
+            var result = await next(context, input, ct);
+            if (context.Origin == InvocationOrigin.Message)
+            { probe.Items.Add(context.Items); }
+            return result;
+        }
     }
 
     private static WebApplicationBuilder Builder()
@@ -201,11 +206,13 @@ public sealed class RabbitMQDispatchTests
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production }).AddNOF();
         builder.WebHost.UseTestServer();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
-        builder.Services.Configure<TransactionalMessageOptions>(options =>
+        builder.Services.Configure<OutboxOptions>(options =>
         {
-            options.Inbox.PollingInterval = options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(100);
-            options.Outbox.RetryDelay = TimeSpan.FromMilliseconds(100);
+            options.PollingInterval = TimeSpan.FromMilliseconds(100);
+            options.RetryDelay = TimeSpan.FromMilliseconds(100);
         });
+        builder.Services.AddSingleton<DeliveryProbe>();
+        builder.Services.AddInvocationFilters(filters => filters.Global.Use<DeliveryCapture>());
         return builder;
     }
 
@@ -216,8 +223,7 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationService<MessageDispatchService>();
         builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
         builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
-        builder.Services.AddTransactionalMessages();
-        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = false);
+        builder.Services.AddOutbox();
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>((_, ef) => ef.UseSqlite(database))
             .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
@@ -233,7 +239,6 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationPart(typeof(ConsumerService).Assembly);
         builder.AddApplicationService<ConsumerService>();
         builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
-        builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
         if (missingQueue is null)
         {
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
@@ -278,18 +283,6 @@ public sealed class RabbitMQDispatchTests
     {
         using var scope = app.Services.CreateScope();
         return await Ef.CountAsync(scope.ServiceProvider.GetRequiredService<ProducerDbContext>().Set<NOFOutboxMessage>(), item => item.Status == OutboxMessageStatus.Sent);
-    }
-
-    private static async Task AssertInboxAsync(WebApplication app, int expectedCount, int expectedIds)
-    {
-        using var scope = app.Services.CreateScope();
-        var records = await Ef.ToListAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Set<NOFInboxMessage>().AsNoTracking());
-        Assert.Equal(expectedCount, records.Count);
-        Assert.Equal(expectedIds, records.Select(item => item.Id).Distinct().Count());
-        Assert.All(records, record => Assert.Equal(InboxMessageStatus.Processed, record.Status));
-        Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.MailQueue);
-        Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.OrderAuditQueue);
-        Assert.Contains(records, record => record.Route == "rabbitmq:queue:" + RabbitMQDemoRoutes.OrderMetricsQueue);
     }
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)

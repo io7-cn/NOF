@@ -2,7 +2,7 @@
 
 [English](../../en/design/efcore-configuration.md) · [持久化边界](persistence-boundaries.md)
 
-NOF 保留租户感知的 Context 创建、可选软删除、值对象约定、作用域工作单元/事务及原生 Inbox/Outbox 存储。Provider、连接、日志、拦截器、重试、跟踪和模型映射交给 EF Core，通过一个原生配置回调完成，不再由 NOF 的逐项方法转发。
+NOF 保留租户感知的 Context 创建、可选软删除、值对象约定、作用域工作单元/事务及原生 Outbox 存储。Provider、连接、日志、拦截器、重试、跟踪和模型映射交给 EF Core，通过一个原生配置回调完成，不再由 NOF 的逐项方法转发。
 
 ```csharp
 builder.UseDbContext<ConfigurationDbContext>((creation, ef) =>

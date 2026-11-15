@@ -5,9 +5,9 @@ using System.Diagnostics;
 namespace NOF.Infrastructure;
 
 /// <summary>Explicit Memory client; queue/topic selection belongs to its caller, not application operations.</summary>
-public sealed class MemoryMessageClient(IObjectSerializer serializer, MemoryEndpointRegistry bindings, MessageInboxReceiver receiver)
+public sealed class MemoryMessageClient(IObjectSerializer serializer, MemoryEndpointRegistry bindings, IServiceProvider services)
 {
-    /// <summary>Waits for acceptance by the selected queue.</summary>
+    /// <summary>Waits for the selected local operation to complete; failures propagate to the caller.</summary>
     public Task SendAsync<T>(string queue, T message, Context context, CancellationToken cancellationToken = default)
         => DispatchAsync(queue, message, context, false, null, cancellationToken);
     /// <summary>Publishes to a selected topic.</summary>
@@ -37,8 +37,7 @@ public sealed class MemoryMessageClient(IObjectSerializer serializer, MemoryEndp
             [NOFAbstractionConstants.Transport.Headers.TraceParent] = Activity.Current?.ToTraceParent(),
             [NOFAbstractionConstants.Transport.Headers.Context] = context.WithTenantId(tenant).Items.ToJsonString()
         };
-        var id = intent?.MessageId ?? MessageInboxReceiver.GetMessageId(headers);
-        activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageId, id.ToString());
+        activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageId, headers[NOFAbstractionConstants.Transport.Headers.MessageId]);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.TenantId, tenant);
         activity?.SetTag(NOFHostingConstants.Outbound.Tags.MessageType, typeof(T).Name);
         try
@@ -48,14 +47,14 @@ public sealed class MemoryMessageClient(IObjectSerializer serializer, MemoryEndp
             {
                 foreach (var binding in bindings.Endpoints.Where(binding => binding.IsSubscription && binding.Route == route))
                 {
-                    await receiver.ReceiveAsync(id, payload, binding.ConsumerId, headers, cancellationToken).ConfigureAwait(false);
+                    await services.ExecuteMessageAsync(binding.Operation, payload, headers, cancellationToken).ConfigureAwait(false);
                 }
             }
             else
             {
                 var binding = bindings.Endpoints.SingleOrDefault(binding => !binding.IsSubscription && binding.Route == route)
                     ?? throw new InvalidOperationException($"No local queue binding for '{route}'.");
-                await receiver.ReceiveAsync(id, payload, binding.ConsumerId, headers, cancellationToken).ConfigureAwait(false);
+                await services.ExecuteMessageAsync(binding.Operation, payload, headers, cancellationToken).ConfigureAwait(false);
             }
             activity?.SetStatus(ActivityStatusCode.Ok);
         }
