@@ -26,7 +26,7 @@ builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 
 入口注册公共策略，类型化 Selector 选择 Provider 并保留完整方法名。重复调用入口不会重复注册共享服务，
 自定义实现仍可直接使用 DI。选择缓存不会顺带启动传输或持久化 Worker。AddMemoryMessaging 开启内存消息；
-AddInbox/AddOutbox 按需安装消息专用内存持久化。Outbox 自动保存并还原完整 JSON 标量上下文，直接提供可发送的 Headers；MessageDelivery 及其注册删除，适配器无需重放。
+AddTransactionalMessages 统一装配 Inbox/Outbox，按需安装消息专用内存持久化。AddMemoryMessaging 和 RabbitMQ 队列映射自动启用同一基座；Inbox/Outbox.RunWorkers 分别控制处理和清理。Outbox 自动保存并还原完整 JSON 标量上下文，直接提供可发送的 Headers；MessageDelivery 及其注册删除，适配器无需重放。
 EF/NHibernate 依然是独立选择。
 
 CacheServiceSelector.ConfigureCacheServiceOptions 追加原生 CacheServiceOptions 配置并返回同一个 Selector，可在选择 Provider 前后使用，也可重复调用；回调按注册顺序执行，配置选项不会替换缓存 Provider。

@@ -1,6 +1,6 @@
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using NOF.Infrastructure;
 using NOF.Infrastructure.AmazonS3;

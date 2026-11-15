@@ -67,7 +67,7 @@ public sealed class RabbitMQBuilder
             ArgumentNullException.ThrowIfNull(operation);
             _services.GetOrAddSingleton<InboxEndpointRegistry>().Add(new(consumerId, operation));
             _endpoints.Add(new(queueName, consumerId, operation, configureChannel, requeueOnFailure));
-            _services.AddInbox();
+            _services.AddTransactionalMessages();
             return this;
         }
     }

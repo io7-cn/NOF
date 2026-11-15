@@ -39,7 +39,7 @@ builder.Services.AddInvocationFilters(filters =>
 });
 builder.Services.AddSingleton<SmokeOutboxStore>();
 builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
-builder.Services.AddOutbox();
+builder.Services.AddTransactionalMessages();
 await using var app = builder.Build();
 app.UseNOF();
 SmokeEndpointModule.Map(app);

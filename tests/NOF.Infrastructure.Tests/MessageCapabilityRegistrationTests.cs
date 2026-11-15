@@ -32,29 +32,34 @@ public sealed class MessageCapabilityRegistrationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void OutboxAssembly_IsIdempotentAndIndependentOfDefaultRegistrationOrder(bool capabilityFirst)
+    public void TransactionalMessageAssembly_IsIdempotentAndIndependentOfDefaultRegistrationOrder(bool capabilityFirst)
     {
         var builder = Host.CreateApplicationBuilder();
         if (capabilityFirst)
         {
-            builder.Services.AddOutbox();
+            builder.Services.AddTransactionalMessages();
         }
 
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox();
+        builder.Services.AddTransactionalMessages();
         using var host = builder.Build();
         var workers = host.Services.GetServices<IHostedService>().Where(service => WorkerTypes.Contains(service.GetType())).ToArray();
-        Assert.Equal(2, workers.Length);
+        Assert.Equal(4, workers.Length);
+        Assert.Contains(workers, service => service is InboxMessageBackgroundService);
+        Assert.Contains(workers, service => service is InboxCleanupBackgroundService);
         Assert.Contains(workers, service => service is OutboxMessageBackgroundService);
         Assert.Contains(workers, service => service is OutboxCleanupBackgroundService);
         using (var modelScope = host.Services.CreateScope())
         {
-            Assert.NotNull(modelScope.ServiceProvider.GetRequiredService<DbContext>().Model.FindEntityType(typeof(NOFOutboxMessage)));
+            var model = modelScope.ServiceProvider.GetRequiredService<DbContext>().Model;
+            Assert.NotNull(model.FindEntityType(typeof(NOFOutboxMessage)));
+            Assert.NotNull(model.FindEntityType(typeof(NOFInboxMessage)));
         }
         using var scope = host.Services.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
-        Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInboxStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutboxStore>());
     }
 
     [Fact]
@@ -67,8 +72,7 @@ public sealed class MessageCapabilityRegistrationTests
         builder.AddNativeTestPersistence();
         builder.Services.AddSingleton(inbox.Object);
         builder.Services.AddSingleton(outbox.Object);
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Inbox.RunWorkers = options.Outbox.RunWorkers = false;
@@ -90,15 +94,62 @@ public sealed class MessageCapabilityRegistrationTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EachDirection_CanStopItsWorkersWithoutStoppingTheOther(bool disableInbox)
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.AddNOF();
+        builder.Services.AddTransactionalMessages();
+        builder.Services.Configure<TransactionalMessageOptions>(options =>
+        {
+            options.Inbox.PollingInterval = options.Outbox.PollingInterval = TimeSpan.FromHours(1);
+            options.Inbox.CleanupInterval = options.Outbox.CleanupInterval = TimeSpan.FromHours(1);
+            (disableInbox ? options.Inbox : options.Outbox).RunWorkers = false;
+        });
+        using var host = builder.Build();
+        await host.StartAsync();
+        try
+        {
+            var workers = host.Services.GetServices<IHostedService>()
+                .Where(service => WorkerTypes.Contains(service.GetType())).Cast<BackgroundService>().ToArray();
+            var stopped = workers.Where(worker => disableInbox
+                ? worker is InboxMessageBackgroundService or InboxCleanupBackgroundService
+                : worker is OutboxMessageBackgroundService or OutboxCleanupBackgroundService).ToArray();
+            await Task.WhenAll(stopped.Select(worker => worker.ExecuteTask!)).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, stopped.Length);
+            Assert.All(workers.Except(stopped), worker => Assert.False(worker.ExecuteTask!.IsCompleted));
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ActiveDirection_ValidatesItsSchedulingOptions(bool invalidInbox)
+    {
+        var services = new ServiceCollection().AddTransactionalMessages();
+        services.Configure<TransactionalMessageOptions>(options =>
+            (invalidInbox ? options.Inbox : options.Outbox).BatchSize = 0);
+        using var provider = services.BuildServiceProvider();
+        var error = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<TransactionalMessageOptions>>().Value);
+        Assert.Contains(invalidInbox ? "Inbox" : "Outbox", error.Message);
+    }
+
     [Fact]
     public async Task ProducerOnlyHost_StillStagesAndCommitsIntentsWithoutConstructingHandlers()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>();
+        builder.Services.AddTransactionalMessages().AddOutboxHandler<Work, Handler>();
         builder.Services.AddSingleton<Probe>();
-        builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = options.Outbox.RunWorkers = false);
         using var host = builder.Build();
         await host.StartAsync();
         try
@@ -135,7 +186,7 @@ public sealed class MessageCapabilityRegistrationTests
             using var observer = host.Services.CreateScope();
             var record = await observer.ServiceProvider.GetRequiredService<DbContext>().Set<NOFInboxMessage>().SingleAsync();
             Assert.Equal(InboxMessageStatus.Pending, record.Status);
-            Assert.Null(observer.ServiceProvider.GetService<IOutboxStore>());
+            Assert.NotNull(observer.ServiceProvider.GetRequiredService<IOutboxStore>());
         }
         finally
         {
@@ -144,14 +195,15 @@ public sealed class MessageCapabilityRegistrationTests
     }
 
     [Fact]
-    public async Task UnusedInboxOptions_DoNotBlockAnOutboxOnlyHost()
+    public async Task DisabledInboxSchedulingOptions_DoNotBlockHostStartup()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox();
+        builder.Services.AddTransactionalMessages();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
+            options.Inbox.RunWorkers = false;
             options.Inbox.BatchSize = 0;
             options.Outbox.RunWorkers = false;
         });

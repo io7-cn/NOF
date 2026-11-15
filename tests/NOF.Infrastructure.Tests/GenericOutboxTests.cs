@@ -22,7 +22,7 @@ public sealed class GenericOutboxTests
         services.AddSingleton<IObjectSerializer, JsonObjectSerializer>();
         services.AddSingleton<Probe>();
         services.AddOptions();
-        services.AddOutbox().AddOutboxHandler<Work, Handler>();
+        services.AddTransactionalMessages().AddOutboxHandler<Work, Handler>();
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work(), Context.Empty);
@@ -297,14 +297,14 @@ public sealed class GenericOutboxTests
     [Fact]
     public void Registrations_AreHostLocalUnambiguousAndFrozenOnUse()
     {
-        var first = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>();
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<Work, Handler>());
+        var first = new ServiceCollection().AddTransactionalMessages().AddOutboxHandler<Work, Handler>();
+        Assert.Throws<InvalidOperationException>(() => first.AddTransactionalMessages().AddOutboxHandler<Work, Handler>());
         using var one = first.BuildServiceProvider();
-        using var two = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>().BuildServiceProvider();
+        using var two = new ServiceCollection().AddTransactionalMessages().AddOutboxHandler<Work, Handler>().BuildServiceProvider();
         Assert.Equal(typeof(Work).ToString(), one.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
         Assert.Equal(typeof(Work).ToString(), two.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
         Assert.NotSame(one.GetRequiredService<OutboxRegistry>(), two.GetRequiredService<OutboxRegistry>());
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<string, StringHandler>());
+        Assert.Throws<InvalidOperationException>(() => first.AddTransactionalMessages().AddOutboxHandler<string, StringHandler>());
         Assert.Null(typeof(IOutbox).Assembly.GetType("NOF.Application.IMessageDispatcher"));
     }
 
@@ -338,7 +338,7 @@ public sealed class GenericOutboxTests
         builder.AddNOF();
         builder.AddNativeTestPersistence();
         builder.Services.AddSingleton<Probe>();
-        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>();
+        builder.Services.AddTransactionalMessages().AddOutboxHandler<Work, Handler>();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);

@@ -35,7 +35,7 @@ NOF 不保证发件或收件顺序。删除 OutboxEnqueueOptions、序号分配�
 
 ```csharp
 builder.AddApplicationPart(typeof(SendOrderConfirmationHandler).Assembly);
-builder.Services.AddOutbox();
+builder.Services.AddTransactionalMessages();
 
 public sealed class SendOrderConfirmationHandler(MailClient client)
     : OutboxHandler<SendOrderConfirmation>
@@ -51,11 +51,11 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
 }
 ```
 
-每个具体 OutboxHandler<TMessage> 只处理一种消息。Infrastructure 生成器通过 AddApplicationPart 注册可访问、非泛型 Handler 的 Scoped 实现与强类型投递委托。业务只实现 HandleAsync，无需 Attribute、partial、MessageType 或 SchemaVersion。持久化标识自动取 typeof(TMessage).ToString()，包含命名空间与闭合泛型参数，不包含程序集版本；同一宿主必须唯一，并符合现有 512 字符列长度。NOF330 检查不可访问的声明和已移除的元数据成员，NOF331 检查重复消息处理器，跨程序集冲突在装配时拒绝。注册不构造 Handler 或启动 Worker，宿主显式 AddOutbox() 启用能力。开放泛型模板可通过 AddOutboxHandler<TMessage,THandler>() 手动选择闭合类型，无元数据参数。
+每个具体 OutboxHandler<TMessage> 只处理一种消息。Infrastructure 生成器通过 AddApplicationPart 注册可访问、非泛型 Handler 的 Scoped 实现与强类型投递委托。业务只实现 HandleAsync，无需 Attribute、partial、MessageType 或 SchemaVersion。持久化标识自动取 typeof(TMessage).ToString()，包含命名空间与闭合泛型参数，不包含程序集版本；同一宿主必须唯一，并符合现有 512 字符列长度。NOF330 检查不可访问的声明和已移除的元数据成员，NOF331 检查重复消息处理器，跨程序集冲突在装配时拒绝。注册不构造 Handler 或启动 Worker，宿主显式 AddTransactionalMessages() 启用能力。开放泛型模板可通过 AddOutboxHandler<TMessage,THandler>() 手动选择闭合类型，无元数据参数。
 
 推导的标识只查找已注册的强类型委托，不传给 Type.GetType，也不按持久化 CLR 名称动态加载程序集。SchemaVersion 从实体、Store、注册表和分发 API 中删除。处理器改名无需修改注册；消息 DTO 类型或命名空间改名会改变持久化键，必须排空或显式迁移已有记录。不兼容的载荷演进由业务类型及迁移处理，不由框架维护版本分发。
 
-迁移时将 IOutboxHandler<T> 改为 OutboxHandler<T>，拆开多消息适配器，并删除 MessageType/SchemaVersion 声明与注册实参，保留 AddApplicationPart 加 AddOutbox。停止旧进程、备份各租户数据库，并把旧标识显式转换为经过审查的推导标识。示例 SimplifyOutboxMetadata 仅转换两种未改变的 v1 载荷标识，拒绝非 v1 的待发/失败工作，再删除 SchemaVersion；保留消息 ID、载荷、Header、投递状态及 Inbox 历史。其他应用需提供自己的标识/载荷映射，不增加运行时猜测旧格式的兼容层。已丢失的版本值无法重建，降级需匹配备份。
+迁移时将 IOutboxHandler<T> 改为 OutboxHandler<T>，拆开多消息适配器，并删除 MessageType/SchemaVersion 声明与注册实参，保留 AddApplicationPart 加 AddTransactionalMessages。停止旧进程、备份各租户数据库，并把旧标识显式转换为经过审查的推导标识。示例 SimplifyOutboxMetadata 仅转换两种未改变的 v1 载荷标识，拒绝非 v1 的待发/失败工作，再删除 SchemaVersion；保留消息 ID、载荷、Header、投递状态及 Inbox 历史。其他应用需提供自己的标识/载荷映射，不增加运行时猜测旧格式的兼容层。已丢失的版本值无法重建，降级需匹配备份。
 
 OutboxDeliveryContext 提供 MessageId、Context、Attempt 和 Headers。它是投递元数据，不是 InvocationContext；意图不一定执行 NOF 操作。处理器正常返回前，应达到具体客户端约定的接受条件。可重试异常遵循 MaxRetryCount 与可选 RetryDelay；OutboxPermanentFailureException 表示无法通过重试恢复，立即终止。未知消息标识和与注册 JSON 结构不符的内容也永久失败，不根据持久化 CLR 名称加载类型或猜测适配器。
 
@@ -100,15 +100,15 @@ AddMemoryMessaging 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接�
 
 ## 按能力装配与独立 Worker 宿主
 
-仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddOutbox 完整装配 Outbox 能力，AddInbox 完整装配传输无关的 Inbox 能力。AddMemoryMessaging 和配置队列端点的 ConfigureRabbitMQ 自动调用 AddInbox；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
+仅 AddNOF 不注册 IOutbox、可靠 Inbox/Outbox Store、对应模型贡献器或处理/清理 Worker。AddTransactionalMessages 统一装配 Inbox 与 Outbox：两侧 Store/注册表、暂存与收件 API、共享持久化及四个处理/清理 Worker。两侧默认都运行，通过 Inbox.RunWorkers 和 Outbox.RunWorkers 分别控制。AddMemoryMessaging 和配置队列端点的 ConfigureRabbitMQ 自动调用 AddTransactionalMessages；只注册客户端的 AddRabbitMQ 不启用消费者或 Inbox Worker。基础设施注册幂等，尊重自定义 Store/Provider，在 AddNOF 前后调用都有效；重复消息/Schema 声明仍然报错。调度参数只在对应能力启用且运行 Worker 时验证。
 
 ```csharp
 builder.AddApplicationPart(typeof(DeliverOrderCreated).Assembly);
-builder.Services.AddOutbox();
+builder.Services.AddTransactionalMessages();
 builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
 ```
 
-仅生产者宿主仍可暂存快照、提交工作单元，但不认领、发送、重试或清理消息。Inbox.RunWorkers=false 同样接收持久化回执，但不处理/清理。独立 Worker 宿主使用相同 Schema/绑定启用对应能力，并配置正确持久化与传输。关闭 Worker 不丢弃待处理记录，也不重置所有权。本次能力开关无需新增数据库迁移；从旧版本升级仍须遵循既有 generic-outbox 迁移要求。
+仅生产者宿主仍可暂存快照、提交工作单元，但不认领、发送、重试或清理消息。Inbox.RunWorkers=false 同样接收持久化回执，但不处理/清理。独立 Worker 宿主同样使用 AddTransactionalMessages 和相同 Schema/绑定，通过 RunWorkers 控制所需方向，并配置正确持久化与传输。关闭 Worker 不丢弃待处理记录，也不重置所有权。将 AddInbox/AddOutbox 替换为一次 AddTransactionalMessages，不保留兼容别名。原本已映射两张表的宿主无需修改数据库结构；原本只有单侧模型的 EF/NHibernate 宿主现在包含两张表，部署前应审查新增表的迁移。关闭 Worker 保留两侧模型和全部持久化状态；从旧版本升级仍须遵循既有 generic-outbox 迁移要求。
 
 自定义 IOutboxStore 在没有 ORM/传输、开启 DI 依赖验证时仍可使用。AddNOF 注册核心执行能力；宿主显式选择可选能力与具体 Provider。
 

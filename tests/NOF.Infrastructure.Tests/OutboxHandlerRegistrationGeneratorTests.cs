@@ -47,7 +47,7 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
         services.AddSingleton(store.Object);
         if (enableFirst)
         {
-            services.AddOutbox();
+            services.AddTransactionalMessages();
         }
         services.AddApplicationPart(assembly);
         services.AddApplicationPart(assembly);
@@ -55,9 +55,9 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
         if (!enableFirst)
         {
             Assert.DoesNotContain(services, item => item.ServiceType == typeof(IOutbox) || item.ServiceType == typeof(IHostedService));
-            services.AddOutbox();
+            services.AddTransactionalMessages();
         }
-        services.AddOutbox();
+        services.AddTransactionalMessages();
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         var registry = provider.GetRequiredService<OutboxRegistry>();
@@ -68,7 +68,7 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
         store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == "Work")), Moq.Times.Once);
         await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync("value", Context.Empty);
         store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == typeof(string).ToString())), Moq.Times.Once);
-        using var second = new ServiceCollection().AddOutbox().BuildServiceProvider();
+        using var second = new ServiceCollection().AddTransactionalMessages().BuildServiceProvider();
         Assert.Throws<InvalidOperationException>(() => second.GetRequiredService<OutboxRegistry>().Get(typeof(string)));
     }
 

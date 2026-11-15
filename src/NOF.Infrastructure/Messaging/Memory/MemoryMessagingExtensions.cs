@@ -10,7 +10,7 @@ public static class MemoryMessagingExtensions
     public static IServiceCollection AddMemoryMessaging(this IServiceCollection services, Action<MemoryEndpointsBuilder> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
-        services.AddInbox();
+        services.AddTransactionalMessages();
         services.TryAddScoped<MemoryMessageClient>();
         configure(new(services, services.GetOrAddSingleton<MemoryEndpointRegistry>()));
         return services;

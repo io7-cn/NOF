@@ -43,12 +43,17 @@ public sealed class RabbitMQEndpointTests
         builder.Services.AddRabbitMQ(factory => factory.HostName = "localhost");
         builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue("work", Second));
         using var host = builder.Build();
+        Assert.Single(host.Services.GetServices<IHostedService>().OfType<InboxMessageBackgroundService>());
+        Assert.Single(host.Services.GetServices<IHostedService>().OfType<OutboxMessageBackgroundService>());
+        Assert.Single(host.Services.GetServices<IHostedService>().OfType<InboxCleanupBackgroundService>());
+        Assert.Single(host.Services.GetServices<IHostedService>().OfType<OutboxCleanupBackgroundService>());
         var memory = Assert.Single(host.Services.GetRequiredService<MemoryEndpointRegistry>().Endpoints);
         var rabbit = Assert.Single(host.Services.GetRequiredService<RabbitMQBuilder>().Freeze().Endpoints);
         Assert.Equal(First.Id, memory.Operation.Id);
         Assert.Equal(Second.Id, rabbit.Operation.Id);
         Assert.NotEqual(memory.ConsumerId, rabbit.ConsumerId);
         using var scope = host.Services.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
         Assert.Equal(First.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(memory.ConsumerId).Id);
         Assert.Equal(Second.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(rabbit.ConsumerId).Id);
     }

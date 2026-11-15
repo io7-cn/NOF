@@ -42,7 +42,7 @@ await unitOfWork.SaveChangesAsync(ct);
 ```csharp
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
-builder.Services.AddOutbox();
+builder.Services.AddTransactionalMessages();
 ```
 
 `NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 直接转发已准备好的 OutboxDeliveryContext.Headers，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
@@ -88,7 +88,7 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 两个绑定的订单队列各收到一份消息；扩容同一队列的消费者只会竞争处理。Contract/Application 仍保持传输无关，路由、拓扑、序列化和原生发布属性都属于示例基础设施。
 
-两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者通过配置 RabbitMQ 端点开启 Inbox。生产者不配置消费者；它在 Outbox 之外保留停用的 Inbox 能力（`AddInbox` 加 `Inbox.RunWorkers=false`），仅用于保持已有 PostgreSQL 迁移模型一致。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
+两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者的队列映射自动装配事务性消息，并通过 `Outbox.RunWorkers=false` 停止发件 Worker。生产者调用 `AddTransactionalMessages`，通过 `Inbox.RunWorkers=false` 停止收件 Worker，不配置消费者。两侧均保留完整消息模型，包括生产者已有的 PostgreSQL 迁移模型。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
 
 ## 持久化与验证
 

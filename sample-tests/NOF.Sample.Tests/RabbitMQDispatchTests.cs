@@ -38,7 +38,7 @@ public sealed class RabbitMQDispatchTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var scope = producer.Services.CreateScope();
         Assert.Equal(0, await Ef.CountAsync(scope.ServiceProvider.GetRequiredService<ProducerDbContext>().Set<NOFOutboxMessage>()));
-        Assert.Null(scope.ServiceProvider.GetService<IInboxStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IInboxStore>());
     }
 
     [RabbitMQSampleFact]
@@ -108,7 +108,7 @@ public sealed class RabbitMQDispatchTests
         using (var scope = consumer.Services.CreateScope())
         {
             Assert.Equal(3, await Ef.CountAsync(scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Receipts));
-            Assert.Null(scope.ServiceProvider.GetService<IOutbox>());
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService<IOutbox>());
         }
 
         await using var restarted = CreateConsumer(connection, consumerDatabase);
@@ -216,7 +216,8 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationService<MessageDispatchService>();
         builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
         builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
-        builder.Services.AddOutbox();
+        builder.Services.AddTransactionalMessages();
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = false);
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>((_, ef) => ef.UseSqlite(database))
             .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
@@ -232,6 +233,7 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationPart(typeof(ConsumerService).Assembly);
         builder.AddApplicationService<ConsumerService>();
         builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
+        builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
         if (missingQueue is null)
         {
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));

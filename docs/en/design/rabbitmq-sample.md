@@ -42,7 +42,7 @@ The producer explicitly selects scoped infrastructure adapters and stable logica
 ```csharp
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
-builder.Services.AddOutbox();
+builder.Services.AddTransactionalMessages();
 ```
 
 `NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, need no MessageType/SchemaVersion metadata, and are automatically registered by the application part. Each handler forwards the ready-to-send OutboxDeliveryContext.Headers and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations (forward deliveryContext.Headers directly):
@@ -88,7 +88,7 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 Each bound order queue receives its own copy. Scaling consumers of the same queue adds competing workers, not additional recipients. Contract/Application remain transport independent. Routing, topology, serialization and native publish properties stay in sample infrastructure.
 
-Both hosts call `AddRabbitMQ` with the `rabbitmq` connection string injected by Aspire. The receiver enables Inbox by configuring RabbitMQ endpoints. The producer has no consumers; it retains an inactive Inbox capability (`AddInbox`, `Inbox.RunWorkers=false`) solely to preserve its existing PostgreSQL migration model alongside Outbox. Receiver handlers stage projections through `INotificationReceipts`; they do not save independently. The Inbox worker commits those changes with its processed receipt in the same SQLite unit of work. Acknowledgement at the broker means durable Inbox acceptance, not completion of the business handler.
+Both hosts call `AddRabbitMQ` with the `rabbitmq` connection string injected by Aspire. Queue mappings automatically assemble transactional messaging for the receiver, which stops Outbox workers with `Outbox.RunWorkers=false`. The producer calls `AddTransactionalMessages` and stops Inbox workers with `Inbox.RunWorkers=false`; it has no consumers. Both retain the complete message model, including the producer's existing PostgreSQL migration model. Receiver handlers stage projections through `INotificationReceipts`; they do not save independently. The Inbox worker commits those changes with its processed receipt in the same SQLite unit of work. Acknowledgement at the broker means durable Inbox acceptance, not completion of the business handler.
 
 ## Persistence and verification
 

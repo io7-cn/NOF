@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using NOF.Abstraction;
 using NOF.Application;
 using System.Diagnostics.CodeAnalysis;
@@ -67,26 +66,4 @@ public static class OutboxServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Enables transactional staging, persistence and workers. Register handler application parts separately.</summary>
-    public static IServiceCollection AddOutbox(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        services.GetOrAddSingleton<OutboxRegistry>();
-        services.TryAddScoped<IOutbox, TransactionalOutbox>();
-        services.AddLogging();
-        services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
-        services.AddNOFJson();
-        services.AddOptions<TransactionalMessageOptions>()
-            .Validate(options => !options.Outbox.RunWorkers ||
-                options.Outbox.PollingInterval > TimeSpan.Zero && options.Outbox.BatchSize > 0
-                && options.Outbox.MaxRetryCount > 0 && options.Outbox.RetryDelay >= TimeSpan.Zero
-                && options.Outbox.ClaimTimeout > TimeSpan.Zero && options.Outbox.CleanupInterval > TimeSpan.Zero
-                && options.Outbox.RetentionPeriod > TimeSpan.Zero, "Outbox transactional message options are invalid.")
-            .ValidateOnStart();
-        services.AddInMemoryMessagingPersistence();
-        services.TryAddScoped<IOutboxStore>(sp => sp.GetRequiredKeyedService<IOutboxStore>(typeof(IOutboxStore)));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxMessageBackgroundService>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
-        return services;
-    }
 }

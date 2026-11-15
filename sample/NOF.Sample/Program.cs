@@ -28,8 +28,7 @@ builder.AddApplicationService<PermissionDemoService>();
 builder.AddApplicationService<OAuthChainDemoService>();
 builder.AddApplicationService<DemoDownstreamService>();
 
-builder.Services.AddOutbox();
-builder.Services.AddInbox();
+builder.Services.AddTransactionalMessages();
 builder.Services.Configure<TransactionalMessageOptions>(options =>
 {
     options.Outbox.PollingInterval = TimeSpan.FromSeconds(1);

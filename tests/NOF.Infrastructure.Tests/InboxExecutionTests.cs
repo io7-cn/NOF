@@ -17,7 +17,7 @@ public sealed class InboxExecutionTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
         var probe = new Probe();
         builder.Services.AddSingleton(probe);

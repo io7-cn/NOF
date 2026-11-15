@@ -61,7 +61,7 @@ OIDC 协议与存储集成包已移除，宿主直接使用上游方案。Sample
 ## 内存消息与测试
 
 消息能力在未选择原生 Provider 时使用开发用内存后端。AddInMemoryMessagingPersistence 注册宿主内、按租户分区的状态和作用域消息工作单元；
-AddInbox/AddOutbox 在未选择原生 Provider 或自定义 Store 时使用它。消息能力及 Worker 仍按需开启，
+AddTransactionalMessages 在未选择原生 Provider 或自定义 Store 时使用它。消息能力及 Worker 仍按需开启，
 原生 Provider、自定义 Store 与能力装配的前后顺序均受支持。
 
 此后端只保存意图和回执，可原子保存回执完成及新发件消息，并提供租户隔离与领取者校验；不再提供任意业务实体表或

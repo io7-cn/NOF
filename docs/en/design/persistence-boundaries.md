@@ -74,7 +74,7 @@ The OIDC protocol and store integration packages are removed. Hosts use upstream
 ## Memory messages and tests
 
 AddNOF retains a development memory message backend. AddInMemoryMessagingPersistence registers
-its host-local, tenant-partitioned state and scoped message unit of work; AddInbox/AddOutbox select
+its host-local, tenant-partitioned state and scoped message unit of work; AddTransactionalMessages select
 its stores unless a native provider or custom store is configured. Capabilities and workers remain
 opt-in. Native and custom registrations work before or after capability assembly.
 

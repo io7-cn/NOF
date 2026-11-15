@@ -35,8 +35,7 @@ public class SqliteInMemoryPersistenceTests
         builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         var database = $"nof-shared-scope-{Guid.NewGuid():N}";
         if (useCustomContext)
         {
@@ -51,7 +50,7 @@ public class SqliteInMemoryPersistenceTests
         {
             bindings.MapQueue<ScopedTransactionMessage>("scope.work.v1", new(typeof(IScopeMessages), nameof(IScopeMessages.Apply)));
         });
-        builder.Services.AddOutbox().AddOutboxHandler<ScopedTransactionMessage, ScopedTransactionOutboxHandler>();
+        builder.Services.AddTransactionalMessages().AddOutboxHandler<ScopedTransactionMessage, ScopedTransactionOutboxHandler>();
         using var services = BuildServiceProvider(builder);
         using var scope = services.CreateScope();
         SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
@@ -143,8 +142,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -180,8 +178,7 @@ public class SqliteInMemoryPersistenceTests
 
             builder.AddNOFHosting();
             builder.AddNOF();
-            builder.Services.AddOutbox();
-            builder.Services.AddInbox();
+            builder.Services.AddTransactionalMessages();
             builder.UseDbContext<TestDbContext>((creation, ef) => ef.UseSqlite(
                 DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("sqlite")
                     ?? throw new InvalidOperationException("Connection string 'sqlite' not found in configuration."), creation.TenantId)));
@@ -221,8 +218,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         builder.UseDbContext<TestDbContext>((creation, ef) =>
         {
             var probe = creation.Services.GetRequiredService<ConnectionStringResolverProbe>();
@@ -282,8 +278,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<TestDbContext>(builder, $"nof-explicit-tenant-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -310,8 +305,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<TestDbContext>(builder, $"nof-identical-schema-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -333,8 +327,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -362,8 +355,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -435,8 +427,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -488,8 +479,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
 
@@ -523,8 +513,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         builder.Services.AddSingleton<IEFCoreModelConfiguration, DynamicAuditEntryModelCreatingContributor>();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
@@ -672,8 +661,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<TestDbContext>(builder, $"nof-soft-delete-default-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -2011,8 +1999,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
                 .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
 
@@ -2135,8 +2122,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
         if (messageTenantProvider is not null)
         {
             builder.Services.Replace(ServiceDescriptor.Singleton(_ => messageTenantProvider));
@@ -2172,8 +2158,7 @@ public class SqliteInMemoryPersistenceTests
 
         builder.AddNOFHosting();
         builder.AddNOF();
-        builder.Services.AddOutbox();
-        builder.Services.AddInbox();
+        builder.Services.AddTransactionalMessages();
 
         var databaseName = $"nof-tests-shared-{Guid.NewGuid():N}";
         builder.UseDbContext<TestDbContext>((_, ef) => ef.UseSqlite($"Data Source={databaseName};Mode=Memory;Cache=Shared"))

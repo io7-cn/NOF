@@ -21,8 +21,7 @@ public sealed class NHibernateNativeStoreTests
         {
             var builder = Host.CreateApplicationBuilder();
             builder.AddNOF();
-            builder.Services.AddOutbox();
-            builder.Services.AddInbox();
+            builder.Services.AddTransactionalMessages();
             builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")
                 .WithOptions((configuration, _) =>
                 {
@@ -69,7 +68,7 @@ public sealed class NHibernateNativeStoreTests
         {
             var builder = Host.CreateApplicationBuilder();
             builder.AddNOF();
-            builder.Services.AddInbox();
+            builder.Services.AddTransactionalMessages();
             if (useNHibernate)
             {
                 builder.UseNHibernate().WithConnectionString($"Data Source={file};Pooling=False")

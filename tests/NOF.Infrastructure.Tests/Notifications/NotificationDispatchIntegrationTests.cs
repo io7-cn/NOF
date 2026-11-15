@@ -473,7 +473,7 @@ public sealed class NotificationDispatchIntegrationTests
 
     private static void ConfigureMessages(IServiceCollection services, bool failingDelivery = false)
     {
-        services.AddOutbox();
+        services.AddTransactionalMessages();
         services.AddOutboxHandler<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>();
         services.AddOutboxHandler<BaseNotification, NotificationOutboxHandler<BaseNotification>>();
         services.AddOutboxHandler<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>();

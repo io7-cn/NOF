@@ -24,7 +24,7 @@ public sealed class TransactionalContextDeliveryTests
         builder.Services.GetOrAddSingleton<ApplicationServiceRegistry>()
             .AddOperation(new(typeof(Receive), typeof(Work), typeof(void)) { Descriptor = descriptor });
         builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<Receive>("work"));
-        builder.Services.AddOutbox().AddOutboxHandler<Work, Forward>();
+        builder.Services.AddTransactionalMessages().AddOutboxHandler<Work, Forward>();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Outbox.PollingInterval = options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10);
