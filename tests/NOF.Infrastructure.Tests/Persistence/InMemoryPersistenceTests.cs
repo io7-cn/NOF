@@ -1,8 +1,8 @@
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.Metrics;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -46,7 +46,7 @@ public class SqliteInMemoryPersistenceTests
         {
             bindings.MapQueue<ScopedTransactionMessage>("scope.work.v1", new(typeof(IScopeMessages), nameof(IScopeMessages.Apply)));
         });
-        builder.Services.AddOutbox().AddOutboxHandler<ScopedTransactionMessage, ScopedTransactionOutboxHandler>("scope.intent.v1");
+        builder.Services.AddOutbox().AddOutboxHandler<ScopedTransactionMessage, ScopedTransactionOutboxHandler>();
         using var services = BuildServiceProvider(builder);
         using var scope = services.CreateScope();
         SetTenant(scope.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
@@ -91,12 +91,11 @@ public class SqliteInMemoryPersistenceTests
 
     public sealed class ScopedTransactionOutboxHandler : OutboxHandler<ScopedTransactionMessage>
     {
-        public const string MessageType = "scope.intent.v1";
         public override ValueTask HandleAsync(ScopedTransactionMessage message, OutboxDeliveryContext context, CancellationToken ct)
             => ValueTask.CompletedTask;
     }
 
-    public interface IScopeMessages : IApplicationService { Empty Apply(ScopedTransactionMessage message); }
+    public interface IScopeMessages : IApplicationService { void Apply(ScopedTransactionMessage message); }
 
     public sealed record ScopedTransactionMessage(string Value);
 

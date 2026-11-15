@@ -19,9 +19,9 @@ namespace NOF.Hosting.AspNetCore.Tests;
 
 public sealed class HttpBindingTests
 {
-    private static readonly ServiceOperationDescriptor<UpdateInput, UpdateReply> Update = new(typeof(IService), nameof(IService.Update));
-    private static readonly ServiceOperationDescriptor<SearchInput, UpdateReply> Search = new(typeof(IService), nameof(IService.Search));
-    private static readonly ServiceOperationDescriptor<UpdateInput, UpdateReply> Denied = new(typeof(IService), nameof(IService.Denied));
+    private static readonly OperationDescriptor<UpdateInput, UpdateReply> Update = new(typeof(IService), nameof(IService.Update));
+    private static readonly OperationDescriptor<SearchInput, UpdateReply> Search = new(typeof(IService), nameof(IService.Search));
+    private static readonly OperationDescriptor<UpdateInput, UpdateReply> Denied = new(typeof(IService), nameof(IService.Denied));
     [Fact]
     public async Task ConventionBinding_ProtectsRouteIdentity_AndNativeProjectionMatchesOpenApi()
     {
@@ -308,7 +308,7 @@ public sealed class HttpBindingTests
 
     public sealed class Server : ApplicationService<IService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } = new Dictionary<string, ServiceOperationMapping>
+        public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; } = new Dictionary<string, OperationMapping>
         {
             [nameof(IService.Update)] = new(typeof(UpdateHandler), typeof(UpdateInput), typeof(UpdateReply))
             {
@@ -326,13 +326,13 @@ public sealed class HttpBindingTests
 
     }
 
-    public sealed class UpdateHandler : ServiceOperation<UpdateInput, UpdateReply>
+    public sealed class UpdateHandler : OperationHandler<UpdateInput, UpdateReply>
     {
         public UpdateHandler(Probe probe) => probe.Constructed++;
         public override Task<UpdateReply> HandleAsync(UpdateInput input, InvocationContext context, CancellationToken ct) => Task.FromResult(new UpdateReply(input.Id, input.Name, context.TenantId, context.Context["correlation"]?.ToString(), context.TryGetItem("X-Unlisted", out _)));
     }
 
-    public sealed class SearchHandler : ServiceOperation<SearchInput, UpdateReply>
+    public sealed class SearchHandler : OperationHandler<SearchInput, UpdateReply>
     {
         public override Task<UpdateReply> HandleAsync(SearchInput input, InvocationContext context, CancellationToken ct) => Task.FromResult(new UpdateReply(0, $"{input.Name}:{input.Page}:{string.Join(',', input.Tags ?? [])}", context.TenantId, null, false));
     }

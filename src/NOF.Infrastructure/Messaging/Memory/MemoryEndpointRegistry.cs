@@ -4,13 +4,16 @@ using NOF.Contract;
 
 namespace NOF.Infrastructure;
 
-/// <summary>One Memory adapter endpoint targeting an Empty operation.</summary>
+/// <summary>One Memory adapter endpoint targeting a one-way operation.</summary>
 public sealed record MemoryEndpoint(string Route, string ConsumerId, Type MessageType,
-    ServiceOperationDescriptor Operation, bool IsSubscription);
+    OperationDescriptor Operation, bool IsSubscription);
 
 /// <summary>Owns only Memory endpoint topology; entries freeze on first use.</summary>
 public sealed class MemoryEndpointRegistry : Registry<MemoryEndpoint>
 {
+    /// <summary>Gets whether adapter configuration has already been read.</summary>
+    public bool IsFrozen => Items.IsFrozen;
+
     /// <summary>Gets validated, frozen durable bindings.</summary>
     public IReadOnlyList<MemoryEndpoint> Endpoints
     {
@@ -19,7 +22,7 @@ public sealed class MemoryEndpointRegistry : Registry<MemoryEndpoint>
             var bindings = Freeze().ToArray();
             if (bindings.Any(queue => !queue.IsSubscription && bindings.Any(subscription => subscription.IsSubscription && subscription.Route == queue.Route))
                 || bindings.GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Select(binding => binding.MessageType).Distinct().Count() != 1)
-                || bindings.Any(binding => !ServiceOperationInspector.CanSubmit(binding.Operation) || binding.Operation.ResponseType != typeof(Empty) || binding.Operation.RequestType != binding.MessageType)
+                || bindings.Any(binding => !OperationInspector.CanSubmit(binding.Operation) || binding.Operation.RequestType != binding.MessageType)
                 || bindings.GroupBy(binding => binding.ConsumerId, StringComparer.Ordinal).Any(group => group.Count() != 1)
                 || bindings.Where(binding => !binding.IsSubscription).GroupBy(binding => binding.Route, StringComparer.Ordinal).Any(group => group.Count() != 1))
             {

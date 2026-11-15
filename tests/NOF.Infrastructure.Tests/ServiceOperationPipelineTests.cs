@@ -60,7 +60,7 @@ public class ServiceOperationPipelineTests
         services.AddScoped<ThrowingOperation>();
         using var provider = services.BuildServiceProvider();
         var pipeline = CreateExecutor(provider, typeof(ThrowingOperation));
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipeline.ExecuteAsync(new ServiceOperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await pipeline.ExecuteInScopeAsync(new OperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local));
         Assert.Equal("caller", Context.Current.TenantId);
     }
 
@@ -70,19 +70,19 @@ public class ServiceOperationPipelineTests
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
         services.AddScoped<NullableOperation>();
         using var provider = services.BuildServiceProvider();
-        var result = await CreateExecutor(provider, typeof(NullableOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply?>(typeof(IProbeService), nameof(IProbeService.Find), true), new Query(), Context.Empty, InvocationOrigin.Local);
+        var result = await CreateExecutor(provider, typeof(NullableOperation)).ExecuteInScopeAsync(new OperationDescriptor<Query, Reply?>(typeof(IProbeService), nameof(IProbeService.Find), true), new Query(), Context.Empty, InvocationOrigin.Local);
         Assert.Null(result);
     }
 
     private static Task<object?> Execute(IServiceProvider provider, CancellationToken cancellationToken = default)
-        => CreateExecutor(provider, typeof(ProbeOperation)).ExecuteAsync(new ServiceOperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local, cancellationToken);
+        => CreateExecutor(provider, typeof(ProbeOperation)).ExecuteInScopeAsync(new OperationDescriptor<Query, Reply>(typeof(IProbeService), nameof(IProbeService.Read)), new Query(), Context.Empty, InvocationOrigin.Local, cancellationToken);
 
     private static OperationExecutor CreateExecutor(IServiceProvider provider, Type implementation)
     {
         var registry = new ApplicationServiceRegistry();
         registry.Add(new(typeof(IProbeService), typeof(object))
         {
-            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            HandlerMappings = new Dictionary<string, OperationMapping>
             {
                 [nameof(IProbeService.Read)] = new(implementation, typeof(Query), typeof(Reply)),
                 [nameof(IProbeService.Find)] = new(implementation, typeof(Query), typeof(Reply))
@@ -99,7 +99,7 @@ public class ServiceOperationPipelineTests
         Reply? Find(Query request);
     }
 
-    public sealed class ProbeOperation : ServiceOperation<Query, Reply>
+    public sealed class ProbeOperation : OperationHandler<Query, Reply>
     {
         private readonly Guid _id = Guid.NewGuid();
         private readonly string _constructorTenant = Context.Current.TenantId;
@@ -112,7 +112,7 @@ public class ServiceOperationPipelineTests
         }
     }
 
-    public sealed class ThrowingOperation : ServiceOperation<Query, Reply>
+    public sealed class ThrowingOperation : OperationHandler<Query, Reply>
     {
         public override async Task<Reply> HandleAsync(Query request, InvocationContext context, CancellationToken cancellationToken)
         {
@@ -121,7 +121,7 @@ public class ServiceOperationPipelineTests
         }
     }
 
-    public sealed class NullableOperation : ServiceOperation<Query, Reply?>
+    public sealed class NullableOperation : OperationHandler<Query, Reply?>
     {
         public override bool AllowsNullResponse => true;
         public override Task<Reply?> HandleAsync(Query request, InvocationContext context, CancellationToken cancellationToken)

@@ -39,7 +39,7 @@ public sealed class OperationRequestBindingGenerator : IIncrementalGenerator
         var symbol = context.SemanticModel.GetTypeInfo(argument).Type as INamedTypeSymbol;
         for (var current = symbol; current is not null; current = current.BaseType)
         {
-            if (current.OriginalDefinition.ToDisplayString() == "NOF.Application.ServiceOperation<TRequest, TResponse>")
+            if (current.OriginalDefinition.ToDisplayString() == "NOF.Application.OperationHandler<TRequest, TResponse>")
             {
                 return symbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "|" + current.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             }

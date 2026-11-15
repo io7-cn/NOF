@@ -76,3 +76,5 @@ The shared Sample UI uses native Blazor event binding and HTML controls, with no
 - [Contract authorization and dynamic permissions](design/authorization.md)
 
 - [Framework boundaries and native platform APIs](design/framework-simplification.md)
+
+- [One-way operations and uniform Inbox](design/one-way-operations.md)

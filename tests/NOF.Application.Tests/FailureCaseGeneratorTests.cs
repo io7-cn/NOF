@@ -56,7 +56,7 @@ public sealed class FailureCaseGeneratorTests
             }
             """, out _);
         Assert.Empty(output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-        Assert.Equal(typeof(ApplicationService).Assembly, typeof(ServiceOperation).Assembly);
+        Assert.Equal(typeof(ApplicationService).Assembly, typeof(OperationHandler).Assembly);
         Assert.DoesNotContain(typeof(IApplicationService).Assembly.GetReferencedAssemblies(), assembly => assembly.Name == "NOF.Application");
     }
 

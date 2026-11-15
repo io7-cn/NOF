@@ -9,6 +9,29 @@ namespace NOF.Sample.Tests;
 public sealed class GenericOutboxMigrationTests
 {
     [Fact]
+    public void SimplifiedOutboxMetadata_GuardsPendingVersions_AndPreservesMessagesAndPayloads()
+    {
+        using var context = new DbContext(new DbContextOptionsBuilder()
+            .UseNpgsql("Host=unused;Database=unused;Username=unused").Options);
+        var migration = new SimplifyOutboxMetadata();
+        var commands = context.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations);
+        var sql = string.Join("\n", commands.Select(command => command.CommandText));
+        Assert.Contains("LOCK TABLE", sql);
+        Assert.Contains("RAISE EXCEPTION", sql);
+        Assert.Contains("WHEN 'sample.send-email' THEN '" + typeof(SendEmail) + "'", sql);
+        Assert.Contains("WHEN 'sample.order-created' THEN '" + typeof(OrderCreated) + "'", sql);
+        Assert.Contains("\"SchemaVersion\" = 1", sql);
+        var dropped = Assert.IsType<Microsoft.EntityFrameworkCore.Migrations.Operations.DropColumnOperation>(migration.UpOperations.Last());
+        Assert.Equal("SchemaVersion", dropped.Name);
+        Assert.Equal("NOFOutboxMessage", dropped.Table);
+        Assert.True(sql.IndexOf("RAISE EXCEPTION", StringComparison.Ordinal) < sql.IndexOf("DROP COLUMN", StringComparison.Ordinal));
+        Assert.DoesNotContain("\"Payload\"", sql);
+        Assert.DoesNotContain("NOFInboxMessage", sql);
+        Assert.DoesNotContain("DELETE", sql);
+        Assert.Throws<NotSupportedException>(() => migration.DownOperations);
+    }
+
+    [Fact]
     public void PostgreSqlUpgrade_GeneratesGuardBeforeDestructiveOperations_AndRefusesAutomaticDowngrade()
     {
         using var context = new DbContext(new DbContextOptionsBuilder()

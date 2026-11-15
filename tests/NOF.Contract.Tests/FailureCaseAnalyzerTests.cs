@@ -24,6 +24,7 @@ public sealed class FailureCaseAnalyzerTests
     [InlineData("[FailureCase(\"Custom\", typeof(void))]", "string")]
     [InlineData("[FailureCase(\"Custom\", typeof(System.Collections.Generic.List<>))]", "string")]
     [InlineData("[FailureCase(\"A\")]", "string?")]
+    [InlineData("[FailureCase(\"Rejected\")]", "void")]
     public async Task InvalidDeclarations_ReportNOF220_WithoutRequiringPartial(string attributes, string response)
     {
         var source = $$"""

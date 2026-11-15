@@ -21,7 +21,7 @@ public sealed class InvocationContext
     /// <summary>Gets the semantic information allowed to flow into nested calls.</summary>
     public Context Context { get; private init; } = Context.Empty;
     /// <summary>Gets the operation selected by the host.</summary>
-    public required ServiceOperationDescriptor Operation { get; init; }
+    public required OperationDescriptor Operation { get; init; }
     /// <summary>Gets a unique execution identifier, distinct from a transported message identifier.</summary>
     public string InvocationId { get; init; }
     /// <summary>Gets the execution entry boundary.</summary>
@@ -35,7 +35,7 @@ public sealed class InvocationContext
     public Type InputType => Operation.RequestType;
     /// <summary>Gets the service contract.</summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
-    public Type ServiceType => Operation.ServiceType;
+    public Type? ServiceType => Operation.ContractType;
     /// <summary>Gets the contract method.</summary>
     public MethodInfo ServiceMethodInfo => Operation.MethodInfo;
     /// <summary>Gets a diagnostic operation name.</summary>

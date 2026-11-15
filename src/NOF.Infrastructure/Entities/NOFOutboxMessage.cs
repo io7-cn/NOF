@@ -13,7 +13,6 @@ public class NOFOutboxMessage
     public int RetryCount { get; set; }
 
     public string MessageType { get; set; } = null!;
-    public int SchemaVersion { get; set; } = 1;
     public DateTime? NextAttemptAtUtc { get; set; }
     public byte[] Payload { get; set; } = null!;
     public string Headers { get; set; } = null!;
@@ -29,7 +28,6 @@ public class NOFOutboxMessage
 
     internal static NOFOutboxMessage Create(
         string messageType,
-        int schemaVersion,
         byte[] payload,
         string headers,
         string? traceParent)
@@ -40,7 +38,6 @@ public class NOFOutboxMessage
             Id = Guid.CreateVersion7(new DateTimeOffset(createdAtUtc)),
             CreatedAtUtc = createdAtUtc,
             MessageType = messageType,
-            SchemaVersion = schemaVersion,
             Payload = payload,
             Headers = headers,
             TraceParent = traceParent

@@ -58,7 +58,7 @@ public sealed class HttpOperationAdapterTests
         app.UseNOF();
         app.MapPost("/rejected", async Task<IResult> (EchoRequest request, HttpContext http, CancellationToken ct) =>
         {
-            var result = await http.InvokeAsync(new ServiceOperationDescriptor<EchoRequest, Failure>(typeof(IEchoService), nameof(IEchoService.Reject)), request, Context.Empty, ct);
+            var result = await http.InvokeAsync(new OperationDescriptor<EchoRequest, Failure>(typeof(IEchoService), nameof(IEchoService.Reject)), request, Context.Empty, ct);
             var failure = Assert.IsType<Failure>(result);
             return TypedResults.Problem(statusCode: 409, type: "about:blank", title: failure.Title, detail: failure.Detail);
         });
@@ -93,21 +93,21 @@ public sealed class HttpOperationAdapterTests
     }
     public sealed class EchoService : ApplicationService<IEchoService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
-            new Dictionary<string, ServiceOperationMapping>
+        public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, OperationMapping>
             {
                 [nameof(IEchoService.Echo)] = new(typeof(EchoHandler), typeof(EchoRequest), typeof(EchoResponse)),
                 [nameof(IEchoService.Reject)] = new(typeof(RejectHandler), typeof(EchoRequest), typeof(Failure))
             };
 
     }
-    public sealed class RejectHandler : ServiceOperation<EchoRequest, Failure>
+    public sealed class RejectHandler : OperationHandler<EchoRequest, Failure>
     {
         public override Task<Failure> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(new Failure("Rejected", request.Value));
     }
 
-    public sealed class EchoHandler : ServiceOperation<EchoRequest, EchoResponse>
+    public sealed class EchoHandler : OperationHandler<EchoRequest, EchoResponse>
     {
         public override Task<EchoResponse> HandleAsync(EchoRequest request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(new EchoResponse(request.Value));
@@ -116,7 +116,7 @@ public sealed class HttpOperationAdapterTests
     {
         public void Map(IEndpointRouteBuilder endpoints)
             => endpoints.MapPost("/api/echoes", async (EchoRequest request, HttpContext http, CancellationToken ct)
-                => TypedResults.Ok(await http.InvokeAsync(new ServiceOperationDescriptor<EchoRequest, EchoResponse>(
+                => TypedResults.Ok(await http.InvokeAsync(new OperationDescriptor<EchoRequest, EchoResponse>(
                     typeof(IEchoService), nameof(IEchoService.Echo)), request, ct)))
                 ;
     }

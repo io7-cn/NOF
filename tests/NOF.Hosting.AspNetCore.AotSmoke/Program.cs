@@ -29,6 +29,8 @@ builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
 builder.Services.AddApplicationService<ExpectedOrderService>();
+builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<ReceiveOneWaySmoke>("one-way"));
+builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
 builder.Services.AddInvocationFilters(filters =>
 {
     filters.Global.Use<ValidateReadOrder>();
@@ -49,9 +51,9 @@ using (var scope = app.Services.CreateScope())
         .EnqueueAsync(new SmokeIntent("typed"), Context.Empty);
     var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
         ?? throw new InvalidOperationException("The outbox did not stage its snapshot");
-    Expect(record.Id == messageId && record.MessageType == "smoke.intent" && record.SchemaVersion == 1,
+    Expect(record.Id == messageId && record.MessageType == typeof(SmokeIntent).ToString(),
         "Outbox identity or schema was lost");
-    await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType, record.SchemaVersion)
+    await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType)
         .Deliver(scope.ServiceProvider, record, new OutboxDeliveryContext
         {
             MessageId = record.Id,
@@ -86,7 +88,15 @@ using (var scope = app.Services.CreateScope())
     Expect(InvocationResult.Value(conflict) is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
         "Typed expected failure data was lost");
 }
+var receiptId = Guid.NewGuid();
+var oneWayPayload = app.Services.GetRequiredService<IObjectSerializer>().Serialize(new SmokeIntent("one-way"), typeof(SmokeIntent));
+await app.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(receiptId, oneWayPayload, "memory:queue:one-way", null, default);
+Expect(!ReceiveOneWaySmoke.Completed.Task.IsCompleted, "Inbox acceptance unexpectedly executed the business handler");
 await app.StartAsync();
+await ReceiveOneWaySmoke.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+var oneWayOperation = app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke));
+Expect(oneWayOperation.IsOneWay && oneWayOperation.ResultCases.Count == 0 && oneWayOperation.ContractType is null,
+    "One-way metadata exposed a business reply case");
 using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 var id = Guid.NewGuid();
 Expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
@@ -112,6 +122,9 @@ var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", smokeJson.
 Expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
 using var nullable = await http.GetAsync($"/native/nullable/{id}");
 Expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
+using var directNullable = await http.GetAsync($"/native/internal/{id}");
+Expect(directNullable.StatusCode == HttpStatusCode.OK && await directNullable.Content.ReadAsStringAsync() == "null",
+    "Standalone nullable handler did not survive static discovery and trimming");
 using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
 Expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
 var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", smokeJson.GetRequiredTypeInfo<OrderReadReceipt>());
@@ -330,7 +343,6 @@ public partial class SmokeJsonContext : JsonSerializerContext;
 public sealed record SmokeIntent(string Value);
 public sealed class SmokeIntentHandler : OutboxHandler<SmokeIntent>
 {
-    public const string MessageType = "smoke.intent";
     public static string? Delivered { get; private set; }
     public override ValueTask HandleAsync(SmokeIntent message, OutboxDeliveryContext context, CancellationToken cancellationToken)
     {
@@ -371,6 +383,7 @@ public static class SmokeEndpointModule
             .Response<Failure>(400);
         group.MapGet<OrderServer.ReadProtected>("/protected/{id:guid}");
         group.MapGet<PlainOrderService.Find>("/nullable/{id:guid}");
+        group.MapGet<FindPrivateOrder>("/internal/{id:guid}");
         group.MapGet<PlainOrderService.Decide>("/decisions/{id:guid}")
             .Response<Failure>(404);
         group.MapGet<OrderServer.ReadWithMessage>("/messages/{id:guid}");
@@ -400,4 +413,24 @@ public sealed class EvaluateOrder : ExpectedOrderService.Evaluate
             0 => new Conflict(new OrderConflict(request.Id)),
             _ => new OrderDto(request.Id, "evaluated", "expected")
         });
+}
+
+public sealed class ReceiveOneWaySmoke : OperationHandler<SmokeIntent>
+{
+    public static TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public override Task HandleAsync(SmokeIntent request, InvocationContext context, CancellationToken cancellationToken)
+    {
+        if (request.Value != "one-way")
+        {
+            throw new InvalidOperationException("The one-way Inbox payload changed.");
+        }
+        Completed.TrySetResult();
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FindPrivateOrder : OperationHandler<ReadOrderRequest, OrderDto?>
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
 }

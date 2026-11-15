@@ -31,6 +31,8 @@ public sealed class PureServiceContractTests
             public record Dto(long Id);
             public interface IService : IApplicationService
             {
+                void Send(Query request);
+                Empty Acknowledge(Query request);
                 Dto? Find(Query request);
                 NOF.Testing.TestOutcome<Dto> Save(Query request);
             }
@@ -56,7 +58,7 @@ public sealed class PureServiceContractTests
 
     [Fact]
     public void ContractAnalyzer_ShipsOnlyTransportIndependentDiagnostics()
-        => Assert.Equal(["NOF200", "NOF207", "NOF208", "NOF209"],
+        => Assert.Equal(["NOF200", "NOF207", "NOF208"],
             new ApplicationServiceAnalyzer().SupportedDiagnostics.Select(static diagnostic => diagnostic.Id));
 
     private static Task<ImmutableArray<Diagnostic>> DiagnoseAsync(string source)

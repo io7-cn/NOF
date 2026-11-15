@@ -5,6 +5,60 @@ namespace NOF.Application;
 
 public sealed class ApplicationServiceRegistry : Registry<ApplicationServiceRegistration>
 {
+    private readonly Dictionary<Type, OperationMapping> _directOperations = [];
+
+    /// <summary>Registers a statically described standalone handler without constructing it.</summary>
+    public void AddOperation(OperationMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        if (Items.IsFrozen)
+        {
+            throw new InvalidOperationException("Application operation registrations are frozen.");
+        }
+        if (mapping.Descriptor is not { } descriptor || descriptor.ContractType is not null
+            || descriptor.DeclaringType != mapping.HandlerType || descriptor.RequestType != mapping.RequestType
+            || descriptor.ResponseType != mapping.ReturnType)
+        {
+            throw new ArgumentException("A standalone mapping must describe its own handler and input/output types.", nameof(mapping));
+        }
+        if (!_directOperations.TryAdd(mapping.HandlerType, mapping))
+        {
+            throw new InvalidOperationException($"Handler '{mapping.HandlerType}' is already registered.");
+        }
+    }
+
+    /// <summary>Looks up a generated operation base or a standalone handler during host configuration.</summary>
+    public OperationDescriptor GetOperation(Type handlerType)
+    {
+        ArgumentNullException.ThrowIfNull(handlerType);
+        if (_directOperations.TryGetValue(handlerType, out var direct))
+        {
+            return direct.Descriptor!;
+        }
+        return Items.SelectMany(item => item.HandlerMappings.Values)
+            .SingleOrDefault(mapping => mapping.HandlerType == handlerType
+                || GetOperationImplementation(mapping.HandlerType) == handlerType)?.Descriptor
+            ?? throw new InvalidOperationException($"Handler '{handlerType}' is not registered. Add its Application part and, for Contract operations, its application service.");
+    }
+
+    /// <summary>Resolves frozen execution metadata for either declaration style.</summary>
+    public OperationMapping GetMapping(OperationDescriptor operation)
+    {
+        Freeze();
+        if (operation.ContractType is { } contract)
+        {
+            return GetRegistration(contract).HandlerMappings.GetValueOrDefault(operation.OperationName)
+                ?? throw new InvalidOperationException($"No handler mapping for '{operation.Id}'.");
+        }
+        return _directOperations.GetValueOrDefault(operation.DeclaringType)
+            ?? throw new InvalidOperationException($"No handler mapping for '{operation.Id}'.");
+    }
+
+    /// <summary>Gets every captured descriptor and freezes further operation registration.</summary>
+    public IEnumerable<OperationDescriptor> GetOperations()
+        => Freeze().SelectMany(item => item.HandlerMappings.Values).Concat(_directOperations.Values)
+            .Select(mapping => mapping.Descriptor).OfType<OperationDescriptor>();
+
     private readonly Dictionary<Type, Type> _registrationsByService = [];
 
     private readonly Dictionary<Type, OperationImplementation> _operationImplementations = [];

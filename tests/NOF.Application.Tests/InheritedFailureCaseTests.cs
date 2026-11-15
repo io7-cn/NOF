@@ -72,7 +72,7 @@ public sealed class InheritedFailureCaseTests
             }
             """;
         var compilation = CSharpCompilation.CreateCompilation("InheritedFailures_" + Guid.NewGuid().ToString("N"), source, true,
-            typeof(ApplicationService<>), typeof(ServiceOperation<,>), typeof(FailureCaseAttribute), typeof(Context),
+            typeof(ApplicationService<>), typeof(OperationHandler<,>), typeof(FailureCaseAttribute), typeof(Context),
             typeof(ServiceProviderServiceExtensions), typeof(System.Text.Json.Serialization.JsonUnionAttribute));
         ISourceGenerator[] generators = [new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()];
         if (reverseOrder)

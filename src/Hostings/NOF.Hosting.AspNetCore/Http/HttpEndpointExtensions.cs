@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
 using NOF.Application;
 using NOF.Infrastructure;
@@ -58,34 +59,34 @@ public static class HttpEndpointExtensions
 {
     /// <summary>Maps explicit HTTP methods to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapOperation<TOperation>(this IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, methods)));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, methods)));
     /// <summary>Maps GET to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapGet<TOperation>(this IEndpointRouteBuilder endpoints, string pattern)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, ["GET"])));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, ["GET"])));
     /// <summary>Maps POST to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapPost<TOperation>(this IEndpointRouteBuilder endpoints, string pattern)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, ["POST"])));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, ["POST"])));
     /// <summary>Maps PUT to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapPut<TOperation>(this IEndpointRouteBuilder endpoints, string pattern)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, ["PUT"])));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, ["PUT"])));
     /// <summary>Maps PATCH to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapPatch<TOperation>(this IEndpointRouteBuilder endpoints, string pattern)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, ["PATCH"])));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, ["PATCH"])));
     /// <summary>Maps DELETE to a statically constrained operation type.</summary>
     public static HttpOperationEndpointBuilder<TOperation> MapDelete<TOperation>(this IEndpointRouteBuilder endpoints, string pattern)
-        where TOperation : ServiceOperation, IServiceOperationDefinition => new(TOperation.Describe(new HttpOperationMappingVisitor(endpoints, pattern, ["DELETE"])));
+        where TOperation : OperationHandler => new(endpoints.ServiceProvider.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)).Accept(new HttpOperationMappingVisitor(endpoints, pattern, ["DELETE"])));
     /// <summary>Registers an HTTP GET using an application descriptor.</summary>
-    public static HttpOperationBuilder<TRequest> MapGet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, ServiceOperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["GET"], operation);
+    public static HttpOperationBuilder<TRequest> MapGet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, OperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["GET"], operation);
     /// <summary>Registers an HTTP POST using an application descriptor.</summary>
-    public static HttpOperationBuilder<TRequest> MapPost<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, ServiceOperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["POST"], operation);
+    public static HttpOperationBuilder<TRequest> MapPost<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, OperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["POST"], operation);
     /// <summary>Registers an HTTP PUT using an application descriptor.</summary>
-    public static HttpOperationBuilder<TRequest> MapPut<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, ServiceOperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["PUT"], operation);
+    public static HttpOperationBuilder<TRequest> MapPut<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, OperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["PUT"], operation);
     /// <summary>Registers an HTTP PATCH using an application descriptor.</summary>
-    public static HttpOperationBuilder<TRequest> MapPatch<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, ServiceOperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["PATCH"], operation);
+    public static HttpOperationBuilder<TRequest> MapPatch<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, OperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["PATCH"], operation);
     /// <summary>Registers an HTTP DELETE using an application descriptor.</summary>
-    public static HttpOperationBuilder<TRequest> MapDelete<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, ServiceOperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["DELETE"], operation);
+    public static HttpOperationBuilder<TRequest> MapDelete<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, OperationDescriptor<TRequest, TResponse> operation) => MapOperation(endpoints, pattern, ["DELETE"], operation);
     /// <summary>Registers explicit methods without adding services to a built container.</summary>
-    public static HttpOperationBuilder<TRequest> MapOperation<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods, ServiceOperationDescriptor<TRequest, TResponse> operation)
+    public static HttpOperationBuilder<TRequest> MapOperation<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(this IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods, OperationDescriptor<TRequest, TResponse> operation)
     {
         HttpEndpointExecutor<TRequest>? binding = null;
         var methodList = methods.ToArray();
@@ -153,8 +154,12 @@ public static class HttpEndpointExtensions
 }
 
 /// <summary>Bridges static operation type arguments into the typed HTTP request binder.</summary>
-public sealed class HttpOperationMappingVisitor(IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods) : IServiceOperationDescriptorVisitor<RouteHandlerBuilder>
+public sealed class HttpOperationMappingVisitor(IEndpointRouteBuilder endpoints, string pattern, IEnumerable<string> methods) : IOperationDescriptorVisitor<RouteHandlerBuilder>
 {
+    /// <inheritdoc />
+    public RouteHandlerBuilder Visit<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest>(OperationDescriptor<TRequest> descriptor)
+        => throw new InvalidOperationException("Void operations have no HTTP business reply. Use a native acceptance endpoint and acknowledge durable submission.");
+
     /// <inheritdoc/>
-    public RouteHandlerBuilder Visit<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(ServiceOperationDescriptor<TRequest, TResponse> descriptor) => endpoints.MapOperation(pattern, methods, descriptor).NativeBuilder;
+    public RouteHandlerBuilder Visit<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest, TResponse>(OperationDescriptor<TRequest, TResponse> descriptor) => endpoints.MapOperation(pattern, methods, descriptor).NativeBuilder;
 }

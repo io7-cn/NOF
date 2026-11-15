@@ -45,7 +45,7 @@ var order = await OrderService.Find.InvokeAsync(services, request, context, ct);
 
 ## 原生 HTTP 端点模块
 
-使用返回原生 RouteGroupBuilder 的普通 MapFeatureEndpoints 扩展，以 `group.MapGet<OrderService.Find>("/{id}")` 映射操作，独立配置 Request 成员/完整构造和 Response<TCase>。Application 操作通过静态 Descriptor/Describe 实现 IServiceOperationDefinition，保持类型安全及 AOT 元数据；轻量 Hosting 生成器提供具体请求 lambda 类型，不分析函数、不依赖生成输出。宿主显式调用功能映射，不注册端点模块 DI，不集中列举 Handler。
+使用返回原生 RouteGroupBuilder 的普通 MapFeatureEndpoints 扩展，以 `group.MapGet<OrderService.Find>("/{id}")` 映射操作，独立配置 Request 成员/完整构造和 Response<TCase>。Application 以注册的 OperationDescriptor 和强类型 Visitor 保持生成操作与独立 OperationHandler 的类型安全及 AOT 元数据；轻量 Hosting 生成器提供具体请求 lambda 类型，不分析函数、不依赖生成输出。宿主显式调用功能映射，不注册端点模块 DI，不集中列举 Handler。
 
 默认 DTO/Empty/null/失败分别为 200 JSON/204/200 JSON null/422 ProblemDetails，404/409 等按具体失败类型配置。Context 只传入显式语义值，不从业务回流。运行时 OpenAPI 读取最终不可变绑定，不执行用户函数。中间件、异常处理及协议仍由 ASP.NET Core 负责。参见 [HTTP 适配](http-adaptation.md) 和[完整 CRUD](configuration-rest.md)。
 

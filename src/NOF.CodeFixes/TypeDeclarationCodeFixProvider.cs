@@ -16,7 +16,7 @@ namespace NOF.CodeFixes;
 public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        ["NOF010", "NOF011", "NOF021", "NOF200", "NOF209", "NOF300", "NOF304"];
+        ["NOF010", "NOF011", "NOF021", "NOF200", "NOF300", "NOF304"];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -51,17 +51,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                             "Convert request to a reference type",
                             cancellationToken => ConvertRequestToReferenceTypeAsync(context.Document, valueType, cancellationToken),
                             equivalenceKey: "ConvertRequestToReferenceType"),
-                        diagnostic);
-                }
-                break;
-            case "NOF209":
-                if (node.FirstAncestorOrSelf<MethodDeclarationSyntax>() is { } method)
-                {
-                    context.RegisterCodeFix(
-                        CodeAction.Create(
-                            "Return NOF Empty",
-                            cancellationToken => ReplaceVoidReturnAsync(context.Document, method, cancellationToken),
-                            equivalenceKey: "ReturnNofEmpty"),
                         diagnostic);
                 }
                 break;
@@ -255,19 +244,6 @@ public sealed class TypeDeclarationCodeFixProvider : CodeFixProvider
                 && !modifier.IsKind(SyntaxKind.RefKeyword))));
         return ReplaceNodeAsync(document, declaration, updated.WithAdditionalAnnotations(Formatter.Annotation), cancellationToken);
     }
-
-    private static Task<Document> ReplaceVoidReturnAsync(
-        Document document,
-        MethodDeclarationSyntax method,
-        CancellationToken cancellationToken)
-        => ReplaceNodeAsync(
-            document,
-            method,
-            method.WithReturnType(
-                SyntaxFactory.ParseTypeName("global::NOF.Contract.Empty")
-                    .WithTriviaFrom(method.ReturnType)
-                    .WithAdditionalAnnotations(Formatter.Annotation)),
-            cancellationToken);
 
     private static async Task<Document> ReplaceNodeAsync(
         Document document,

@@ -1,7 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
 using NOF.Infrastructure;
@@ -18,16 +18,34 @@ using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 
+builder.Services.AddNOFUI();
+
 builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly);
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
 builder.AddApplicationService<PermissionDemoService>();
+builder.AddApplicationService<OAuthChainDemoService>();
+builder.AddApplicationService<DemoDownstreamService>();
+
+builder.Services.AddOutbox();
+builder.Services.AddInbox();
+builder.Services.Configure<TransactionalMessageOptions>(options =>
+{
+    options.Outbox.PollingInterval = TimeSpan.FromSeconds(1);
+    options.Inbox.RunWorkers = false;
+});
 
 builder.Services.AddIdGenerator()
     .AddSnowflakeIdGenerator();
 builder.Services.AddObjectStorage()
     .AddFileSystemObjectStorage();
+builder.Services.AddCacheService()
+    .AddRedisCache(
+        builder.Configuration.GetConnectionString("redis")
+            ?? throw new InvalidOperationException("Connection string 'redis' is required."));
+
+builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 
 // Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
 builder.Logging.AddOpenTelemetry(options => { options.IncludeFormattedMessage = true; options.IncludeScopes = true; });
@@ -46,22 +64,7 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
-builder.Services.AddNOFUI();
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-builder.Services.AddOutbox();
-// Preserve the existing PostgreSQL migration model while moving consumers to a separate service.
-builder.Services.AddInbox();
-builder.Services.Configure<TransactionalMessageOptions>(options =>
-{
-    options.Outbox.PollingInterval = TimeSpan.FromSeconds(1);
-    options.Inbox.RunWorkers = false;
-});
-builder.AddApplicationService<OAuthChainDemoService>();
-builder.AddApplicationService<DemoDownstreamService>();
-
-builder.Services.AddCacheService()
-    .AddRedisCache(builder.Configuration.GetConnectionString("redis") ?? throw new InvalidOperationException("Connection string 'redis' is required."));
-builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "nof-sample:{tenantId}:");
 
 builder.Services.AddSampleIdentity<ConfigurationDbContext>(new Uri(sampleIssuer + "/"), builder.Environment.IsDevelopment());
 
@@ -80,6 +83,7 @@ builder.UseDbContext<ConfigurationDbContext>()
 
 builder.Services.Replace(ServiceDescriptor.Scoped<ISampleApi, ServerSampleApi>());
 builder.Services.Replace(ServiceDescriptor.Scoped<IOAuthDemoApi, ServerOAuthDemoApi>());
+builder.Services.AddScoped<SampleMessageService>();
 
 builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -87,8 +91,6 @@ builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddre
 builder.Services.AddTransient<OAuthChainDemoAccessTokenHandler>();
 builder.Services.AddHttpClient<IDemoDownstreamApi, DownstreamApi>(client => client.BaseAddress = new Uri(sampleOrigin))
     .AddHttpMessageHandler<OAuthChainDemoAccessTokenHandler>();
-
-builder.Services.AddScoped<SampleMessageService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()

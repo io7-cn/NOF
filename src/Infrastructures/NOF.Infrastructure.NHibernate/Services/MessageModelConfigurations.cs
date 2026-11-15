@@ -42,7 +42,6 @@ public static class MessageModelConfigurations
             map.Property(value => value.CreatedAtUtc, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_CreatedAtUtc")); });
             map.Property(value => value.RetryCount, property => { });
             map.Property(value => value.MessageType, property => { property.Length(512); property.NotNullable(true); });
-            map.Property(value => value.SchemaVersion, property => { });
             map.Property(value => value.NextAttemptAtUtc, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_NextAttemptAtUtc")); });
             map.Property(value => value.Payload, property => { property.Type(global::NHibernate.NHibernateUtil.BinaryBlob); });
             map.Property(value => value.Headers, property => { property.Type(global::NHibernate.NHibernateUtil.StringClob); property.NotNullable(true); });

@@ -92,9 +92,9 @@ public sealed class TenantRequestAuthorizationTests
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive");
         var routes = app.MapGroup("").Context(context => context.TenantFromHeader(NOFAbstractionConstants.Transport.Headers.TenantId));
-        routes.MapPost("/tenant", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)));
-        routes.MapPost("/host", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)));
-        routes.MapPost("/stream", new ServiceOperationDescriptor<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)));
+        routes.MapPost("/tenant", new OperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Tenant)));
+        routes.MapPost("/host", new OperationDescriptor<Empty, Testing.TestOutcome<string>>(typeof(ITenantService), nameof(ITenantService.Host)));
+        routes.MapPost("/stream", new OperationDescriptor<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>(typeof(ITenantService), nameof(ITenantService.Stream)));
         app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();
@@ -164,8 +164,8 @@ public sealed class TenantRequestAuthorizationTests
 
     public sealed class TenantServer : ApplicationService<ITenantService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } =
-            new Dictionary<string, ServiceOperationMapping>
+        public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; } =
+            new Dictionary<string, OperationMapping>
             {
                 [nameof(ITenantService.Tenant)] = new(typeof(TenantHandler), typeof(Empty), typeof(Testing.TestOutcome<string>)),
                 [nameof(ITenantService.Host)] = new(typeof(TenantHandler), typeof(Empty), typeof(Testing.TestOutcome<string>)),
@@ -174,13 +174,13 @@ public sealed class TenantRequestAuthorizationTests
 
     }
 
-    public sealed class TenantHandler : ServiceOperation<Empty, Testing.TestOutcome<string>>
+    public sealed class TenantHandler : OperationHandler<Empty, Testing.TestOutcome<string>>
     {
         public override Task<Testing.TestOutcome<string>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
             => Task.FromResult(NOF.Testing.TestOutcome.Success(context.TenantId));
     }
 
-    public sealed class StreamHandler : ServiceOperation<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>
+    public sealed class StreamHandler : OperationHandler<Empty, Testing.TestOutcome<IAsyncEnumerable<string>>>
     {
         public override Task<Testing.TestOutcome<IAsyncEnumerable<string>>> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Unauthorized streaming handlers must not run");

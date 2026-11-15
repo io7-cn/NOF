@@ -29,7 +29,7 @@ public sealed record HttpInputDescription(string Name, HttpInputLocation Locatio
 public sealed record HttpResponseDescription(Type SourceType, int StatusCode, Type? BodyType, string? ContentType);
 
 /// <summary>The final HTTP contract used by both execution and OpenAPI.</summary>
-public sealed record HttpEndpointBinding(ServiceOperationDescriptor Operation, IReadOnlyList<HttpInputDescription> Inputs, IReadOnlyList<HttpResponseDescription> Responses, IReadOnlyList<Type> FailureCases);
+public sealed record HttpEndpointBinding(OperationDescriptor Operation, IReadOnlyList<HttpInputDescription> Inputs, IReadOnlyList<HttpResponseDescription> Responses, IReadOnlyList<Type> FailureCases);
 
 /// <summary>Describes an externally supplied opaque input or writer without probing delegates.</summary>
 public sealed record HttpBodyDescription(Type BodyType, string ContentType = "application/json", bool Required = true);

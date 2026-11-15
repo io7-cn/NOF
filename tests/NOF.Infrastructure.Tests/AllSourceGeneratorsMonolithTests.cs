@@ -31,7 +31,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             """, isDll: true, typeof(HttpEndpointExtensions),
             typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
             typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),
-            typeof(IServiceOperationDefinition));
+            typeof(IOperationDescriptorVisitor<>));
         Assert.Contains(compilation.GetDiagnostics(), diagnostic => diagnostic.Id == "CS0311");
     }
 
@@ -90,7 +90,6 @@ public sealed class AllSourceGeneratorsMonolithTests
 
             public sealed class AppOutboxHandler : OutboxHandler<AppCommand>
             {
-                public const string MessageType = "monolith.command";
                 public override ValueTask HandleAsync(AppCommand message, OutboxDeliveryContext context, CancellationToken ct)
                     => ValueTask.CompletedTask;
             }
@@ -139,7 +138,7 @@ public sealed class AllSourceGeneratorsMonolithTests
             typeof(Testing.TestOutcome),
             typeof(IValueObject<>),
             typeof(FailureCaseAttribute),
-            typeof(OperationInvoker),
+            typeof(OperationExecutor),
             typeof(System.Text.Json.NOFAbstractionExtensions),
             typeof(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder),
             typeof(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder),

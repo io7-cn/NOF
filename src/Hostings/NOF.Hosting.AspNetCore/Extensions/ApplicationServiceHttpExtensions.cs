@@ -12,18 +12,18 @@ public static class ApplicationServiceHttpExtensions
     /// <summary>Runs native HTTP entry using the default semantic context.</summary>
     /// <remarks>Endpoints map business values and declared filter failures; built-in authorization failures are presented as problems.</remarks>
     public static Task<object?> InvokeAsync<TRequest, TResponse>(this HttpContext http,
-        ServiceOperationDescriptor<TRequest, TResponse> operation, TRequest request, CancellationToken cancellationToken = default)
+        OperationDescriptor<TRequest, TResponse> operation, TRequest request, CancellationToken cancellationToken = default)
         => http.InvokeAsync(operation, request, Context.Empty, cancellationToken);
 
     /// <summary>Runs native HTTP entry with explicitly selected semantic context.</summary>
     public static async Task<object?> InvokeAsync<TRequest, TResponse>(this HttpContext http,
-        ServiceOperationDescriptor<TRequest, TResponse> operation, TRequest request, Context context, CancellationToken cancellationToken = default)
+        OperationDescriptor<TRequest, TResponse> operation, TRequest request, Context context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(operation);
         http.BindIdentity();
-        var result = await http.RequestServices.GetRequiredService<IOperationExecutor>()
-            .ExecuteAsync(operation, request!, context, InvocationOrigin.Http, cancellationToken).ConfigureAwait(false);
+        var result = await http.RequestServices.GetRequiredService<OperationExecutor>()
+            .ExecuteInScopeAsync(operation, request!, context, InvocationOrigin.Http, cancellationToken).ConfigureAwait(false);
         return result switch
         {
             AuthorizationInvocationFilter.AuthenticationRequired failure => Problem(failure, StatusCodes.Status401Unauthorized),

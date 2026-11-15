@@ -117,7 +117,7 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
         {
             throw new OutboxPermanentFailureException("Outbox metadata does not match its persistence tenant.");
         }
-        var registration = scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType, record.SchemaVersion);
+        var registration = scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType);
         var context = new OutboxDeliveryContext
         {
             MessageId = record.Id,

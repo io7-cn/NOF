@@ -38,7 +38,7 @@ public sealed class TransactionalOutbox(OutboxRegistry registry, IOutboxStore st
         }
         metadata[NOFAbstractionConstants.Transport.Headers.TenantId] = tenant;
         // Persist only explicitly supplied headers, never arbitrary Context.Items or the current identity.
-        var record = NOFOutboxMessage.Create(registration.MessageType, registration.SchemaVersion,
+        var record = NOFOutboxMessage.Create(registration.MessageType,
             serializer.Serialize(message, typeof(TMessage)).ToArray(),
             serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>)), Activity.Current?.ToTraceParent());
         store.Stage(record);

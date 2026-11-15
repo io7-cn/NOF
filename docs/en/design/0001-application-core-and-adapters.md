@@ -69,7 +69,7 @@ public executor API to express one service operation.
 
 The former parallel IRequestHandler/IRequestExecutor prototype has been removed.
 The implementation retains generated service operations through IApplicationService,
-ApplicationService<TService> and ServiceOperation<TRequest,TResponse>. Contracts can
+ApplicationService<TService> and OperationHandler<TRequest,TResponse>. Contracts can
 return plain DTOs, nullable values and business unions, and need no transport attribute
 for local calls. HTTP exposure is explicit. See the [migration guide](application-requests.md).
 

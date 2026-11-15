@@ -10,7 +10,7 @@ public sealed class ExecutionBoundaryTests
     [Fact]
     public void ExecutionModels_BelongToApplication_AndSemanticContextToAbstraction()
     {
-        foreach (var type in new[] { typeof(ServiceOperation), typeof(ServiceOperation<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(ServiceOperationDescriptor), typeof(ServiceOperationDescriptor<,>) })
+        foreach (var type in new[] { typeof(OperationHandler), typeof(OperationHandler<,>), typeof(InvocationContext), typeof(InvocationOrigin), typeof(OperationDescriptor), typeof(OperationDescriptor<,>) })
         {
             Assert.Equal(typeof(ApplicationService).Assembly, type.Assembly);
             Assert.Equal("NOF.Application", type.Namespace);
@@ -31,16 +31,20 @@ public sealed class ExecutionBoundaryTests
     public void Descriptor_ValidatesContractInput_WithoutConstructingAnImplementation()
     {
         Assert.Null(typeof(ApplicationService).Assembly.GetType("NOF.Application.ServiceOperationReference"));
-        Assert.Throws<ArgumentException>(() => new ServiceOperationDescriptor<Query, Empty>(typeof(IService), "Missing"));
-        Assert.Throws<ArgumentException>(() => new ServiceOperationDescriptor<object, Empty>(typeof(IService), nameof(IService.Run)));
-        Assert.True(ServiceOperationInspector.CanSubmit(new ServiceOperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.Run))));
-        Assert.False(ServiceOperationInspector.CanSubmit(new ServiceOperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.MayFail))));
+        Assert.Throws<ArgumentException>(() => new OperationDescriptor<Query, Empty>(typeof(IService), "Missing"));
+        Assert.Throws<ArgumentException>(() => new OperationDescriptor<object, Empty>(typeof(IService), nameof(IService.Run)));
+        Assert.False(OperationInspector.CanSubmit(new OperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.Run))));
+        Assert.True(OperationInspector.CanSubmit(new OperationDescriptor<Query>(typeof(IService), nameof(IService.Send))));
+        Assert.Throws<ArgumentException>(() => new OperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.Send)));
+        Assert.Throws<ArgumentException>(() => new OperationDescriptor<Query>(typeof(IService), nameof(IService.Run)));
+        Assert.False(OperationInspector.CanSubmit(new OperationDescriptor<Query, Empty>(typeof(IService), nameof(IService.MayFail))));
     }
 
     public sealed record Query;
     public interface IService : IApplicationService
     {
         Empty Run(Query input);
+        void Send(Query input);
         [FailureCase("Rejected")]
         Empty MayFail(Query input);
         Empty Host(Query input);

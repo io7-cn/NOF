@@ -9,41 +9,37 @@ namespace NOF.Infrastructure;
 public sealed class MemoryEndpointsBuilder(IServiceCollection services, MemoryEndpointRegistry registry)
 {
     /// <summary>Maps a statically selected operation to a competing-consumer queue.</summary>
-    public void MapQueue<TOperation>(string queue) where TOperation : IServiceOperationDefinition
-        => Add(queue, "memory:queue:" + queue, TOperation.Descriptor, false);
+    public void MapQueue<TOperation>(string queue) where TOperation : OperationHandler
+        => Add(queue, "memory:queue:" + queue, services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)), false);
 
-    /// <summary>Maps an explicitly typed Empty operation to a queue.</summary>
-    public void MapQueue<T>(string queue, ServiceOperationDescriptor<T, Empty> operation)
+    /// <summary>Maps an explicitly typed one-way operation to a queue.</summary>
+    public void MapQueue<T>(string queue, OperationDescriptor<T> operation)
         => Add(queue, "memory:queue:" + queue, operation, false);
 
     /// <summary>Maps a statically selected operation to an independent durable topic subscription.</summary>
-    public void MapSubscription<TOperation>(string topic, string subscription) where TOperation : IServiceOperationDefinition
-        => AddSubscription(topic, subscription, TOperation.Descriptor);
+    public void MapSubscription<TOperation>(string topic, string subscription) where TOperation : OperationHandler
+        => AddSubscription(topic, subscription, services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)));
 
-    /// <summary>Maps an explicitly typed Empty operation to a topic subscription.</summary>
-    public void MapSubscription<T>(string topic, string subscription, ServiceOperationDescriptor<T, Empty> operation)
+    /// <summary>Maps an explicitly typed one-way operation to a topic subscription.</summary>
+    public void MapSubscription<T>(string topic, string subscription, OperationDescriptor<T> operation)
         => AddSubscription(topic, subscription, operation);
 
-    private void AddSubscription(string topic, string subscription, ServiceOperationDescriptor operation)
+    private void AddSubscription(string topic, string subscription, OperationDescriptor operation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subscription);
         Add(topic, "memory:subscription:" + subscription, operation, true);
     }
 
-    private void Add(string route, string consumerId, ServiceOperationDescriptor operation, bool subscription)
+    private void Add(string route, string consumerId, OperationDescriptor operation, bool subscription)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(route);
         ArgumentNullException.ThrowIfNull(operation);
-        if (operation.ResponseType != typeof(Empty) || !ServiceOperationInspector.CanSubmit(operation))
+        if (registry.IsFrozen || services.IsReadOnly)
         {
-            throw new InvalidOperationException($"Operation '{operation.Id}' must return Empty without declared failures for asynchronous consumption.");
+            throw new InvalidOperationException("Configure Memory endpoints before reading bindings or starting the host.");
         }
-        if (services.Any(item => item.ServiceType == typeof(IInboxHandler) && item.IsKeyedService && Equals(item.ServiceKey, consumerId)))
-        {
-            throw new InvalidOperationException($"Inbox endpoint '{consumerId}' has already been mapped.");
-        }
+        var endpoints = services.GetOrAddSingleton<InboxEndpointRegistry>();
+        endpoints.Add(new(consumerId, operation));
         registry.Add(new(route, consumerId, operation.RequestType, operation, subscription));
-        services.AddKeyedScoped<IInboxHandler>(consumerId, (provider, _) => new OperationInboxHandler(operation,
-            provider.GetRequiredService<IObjectSerializer>(), provider.GetRequiredService<IOperationExecutor>()));
     }
 }

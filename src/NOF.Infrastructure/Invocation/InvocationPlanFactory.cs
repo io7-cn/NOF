@@ -1,5 +1,5 @@
-using NOF.Application;
 using NOF.Abstraction;
+using NOF.Application;
 using System.Collections.Concurrent;
 
 namespace NOF.Infrastructure;
@@ -12,13 +12,11 @@ public sealed record InvocationPlanHostConfiguration(bool CustomAuthorization,
 public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, ApplicationServiceRegistry services,
     InvocationPlanHostConfiguration configuration)
 {
-    private readonly ConcurrentDictionary<(ServiceOperationDescriptor, Type, InvocationOrigin), InvocationPlan> _plans = new();
+    private readonly ConcurrentDictionary<(OperationDescriptor, Type, InvocationOrigin), InvocationPlan> _plans = new();
     /// <summary>Describes captured registration metadata without resolving scoped application services.</summary>
-    public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin)
+    public InvocationPlan Describe(OperationDescriptor operation, InvocationOrigin origin)
     {
-        var registration = services.GetRegistration(operation.ServiceType);
-        var mapping = registration.HandlerMappings.GetValueOrDefault(operation.OperationName)
-            ?? throw new InvalidOperationException("Construction-free invocation description requires captured handler mappings.");
+        var mapping = services.GetMapping(operation);
         var implementation = services.GetOperationImplementation(mapping.HandlerType);
         return Describe(new InvocationContext
         {
@@ -56,18 +54,18 @@ public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, Applic
         {
             return;
         }
+        foreach (var descriptor in services.GetOperations())
+        {
+            foreach (var origin in Enum.GetValues<InvocationOrigin>())
+            {
+                _ = Describe(descriptor, origin);
+            }
+        }
         foreach (var registration in services.Freeze())
         {
-            foreach (var entry in registration.HandlerMappings ?? new Dictionary<string, ServiceOperationMapping>())
+            foreach (var entry in registration.HandlerMappings.Where(entry => entry.Value.Descriptor is null))
             {
                 _ = rules.Resolve(registration.ServiceType, $"{registration.ServiceType.FullName}/{entry.Key}");
-                if (entry.Value.Descriptor is { } descriptor)
-                {
-                    foreach (var origin in Enum.GetValues<InvocationOrigin>())
-                    {
-                        _ = Describe(descriptor, origin);
-                    }
-                }
             }
         }
     }

@@ -21,8 +21,8 @@ public sealed class ApplicationTenantSelectionTests
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
         using var provider = CreateProvider(authenticated: true);
         using var scope = provider.CreateScope();
-        var pipeline = scope.ServiceProvider.GetRequiredService<IOperationExecutor>();
-        var result = await pipeline.ExecuteAsync(new ServiceOperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), method), new Empty(), Context.Empty.WithTenantId("untrusted"), InvocationOrigin.Http);
+        var pipeline = scope.ServiceProvider.GetRequiredService<OperationExecutor>();
+        var result = await pipeline.ExecuteInScopeAsync(new OperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), method), new Empty(), Context.Empty.WithTenantId("untrusted"), InvocationOrigin.Http);
 
         Assert.IsType<Empty>(InvocationResult.Value(result));
         var probe = provider.GetRequiredService<TenantProbe>();
@@ -37,8 +37,8 @@ public sealed class ApplicationTenantSelectionTests
     {
         using var provider = CreateProvider(authenticated: false);
         using var scope = provider.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
-            .ExecuteAsync(new ServiceOperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(), Context.Empty, InvocationOrigin.Http);
+        var result = await scope.ServiceProvider.GetRequiredService<OperationExecutor>()
+            .ExecuteInScopeAsync(new OperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(), Context.Empty, InvocationOrigin.Http);
 
         Assert.Equal("Authentication required", Assert.IsType<AuthorizationInvocationFilter.AuthenticationRequired>(result).Title);
         Assert.Null(provider.GetRequiredService<TenantProbe>().DependencyTenant);
@@ -50,7 +50,7 @@ public sealed class ApplicationTenantSelectionTests
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId("caller"));
         using var provider = CreateProvider(authenticated: true);
         using var scope = provider.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<IOperationInvoker>().InvokeAsync(new ServiceOperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(),
+        var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>().ExecuteAsync(new OperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)), new Empty(),
             Context.Empty.WithTenantId("explicit"), default);
         Assert.IsType<Empty>(InvocationResult.Value(result));
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, provider.GetRequiredService<TenantProbe>().DependencyTenant);
@@ -58,7 +58,7 @@ public sealed class ApplicationTenantSelectionTests
 
         provider.GetRequiredService<TenantProbe>().Throw = true;
         var failed = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await scope.ServiceProvider.GetRequiredService<IOperationInvoker>().InvokeAsync(new ServiceOperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)),
+            await scope.ServiceProvider.GetRequiredService<IOperationExecutor>().ExecuteAsync(new OperationDescriptor<Empty, Testing.TestOutcome>(typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host)),
                 new Empty(), Context.Empty, default));
         Assert.Equal("Simulated handler failure.", failed.Message);
         Assert.Equal("caller", Context.Current.TenantId);
@@ -83,7 +83,7 @@ public sealed class ApplicationTenantSelectionTests
         var registry = new ApplicationServiceRegistry();
         registry.Add(new ApplicationServiceRegistration(typeof(IHostTenantTestService), typeof(HostTenantTestServer)) { HandlerMappings = HostTenantTestServer.HandlerMappings });
         builder.Services.AddSingleton(registry);
-        builder.Services.AddInvocationFilters(filters => filters.UseCase(new ServiceOperationDescriptor<Empty, Testing.TestOutcome>(
+        builder.Services.AddInvocationFilters(filters => filters.UseCase(new OperationDescriptor<Empty, Testing.TestOutcome>(
             typeof(IHostTenantTestService), nameof(IHostTenantTestService.Host))).Use<ApplicationHostSelectionFilter>(-25));
         return builder.Services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
@@ -118,7 +118,7 @@ public sealed class TenantDependency
     public string TenantId { get; } = Context.Current.TenantId;
 }
 
-public sealed class TenantProbeHandler : ServiceOperation<Empty, Testing.TestOutcome>
+public sealed class TenantProbeHandler : OperationHandler<Empty, Testing.TestOutcome>
 {
     private readonly TenantProbe _probe;
 
@@ -143,9 +143,9 @@ public sealed class TenantProbeHandler : ServiceOperation<Empty, Testing.TestOut
 
 public sealed class HostTenantTestServer : ApplicationService<IHostTenantTestService>
 {
-    public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings => _mappings;
-    private static readonly IReadOnlyDictionary<string, ServiceOperationMapping> _mappings =
-        new Dictionary<string, ServiceOperationMapping>
+    public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings => _mappings;
+    private static readonly IReadOnlyDictionary<string, OperationMapping> _mappings =
+        new Dictionary<string, OperationMapping>
         {
             [nameof(IHostTenantTestService.Host)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(Testing.TestOutcome)),
             [nameof(IHostTenantTestService.MetadataHost)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(Testing.TestOutcome)),

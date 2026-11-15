@@ -7,7 +7,7 @@ using NOF.Infrastructure;
 namespace NOF.Hosting.AspNetCore;
 
 /// <summary>A native endpoint selected by its generated operation type.</summary>
-public sealed class HttpOperationEndpointBuilder<TOperation>(RouteHandlerBuilder nativeBuilder) : IEndpointConventionBuilder where TOperation : ServiceOperation, IServiceOperationDefinition
+public sealed class HttpOperationEndpointBuilder<TOperation>(RouteHandlerBuilder nativeBuilder) : IEndpointConventionBuilder where TOperation : OperationHandler
 {
     /// <summary>Gets the underlying native builder for native-specific conventions.</summary>
     public RouteHandlerBuilder NativeBuilder { get; } = nativeBuilder;

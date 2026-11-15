@@ -67,7 +67,12 @@ public sealed class FailureCaseAnalyzer : DiagnosticAnalyzer
             var declarations = ExpectedFailureModel.Declarations(method);
             var nullable = method.ReturnType.NullableAnnotation == NullableAnnotation.Annotated
                 || method.ReturnType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
-            if (method.IsStatic || method.Parameters.Length != 1 || method.TypeParameters.Length != 0 || method.ReturnsVoid || nullable
+            if (method.ReturnsVoid)
+            {
+                Report(output, method, "One-way void operations cannot declare FailureCase because no business reply can return.");
+                continue;
+            }
+            if (method.IsStatic || method.Parameters.Length != 1 || method.TypeParameters.Length != 0 || nullable
                 || method.ReturnType.ToDisplayString().StartsWith("System.Threading.Tasks.", StringComparison.Ordinal)
                 || service.GetMembers(method.Name).OfType<IMethodSymbol>().Count() != 1)
             {

@@ -40,7 +40,6 @@ builder.Services.AddOutbox();
 public sealed class SendOrderConfirmationHandler(MailClient client)
     : OutboxHandler<SendOrderConfirmation>
 {
-    public const string MessageType = "orders.send-confirmation";
 
     public override async ValueTask HandleAsync(
         SendOrderConfirmation message, OutboxDeliveryContext context, CancellationToken ct)
@@ -52,13 +51,15 @@ public sealed class SendOrderConfirmationHandler(MailClient client)
 }
 ```
 
-每个具体 OutboxHandler<TMessage> 只处理一种消息。Infrastructure 生成器发现程序集内可访问的非泛型 Handler，通过 AddApplicationPart 注册 Scoped 实现与强类型投递委托，不需要 Attribute 或 partial。Handler 必须声明 public const string MessageType；可选的正整数 public const int SchemaVersion 默认是 1。这些常量描述持久化格式，与队列和 CLR 名称无关。无效声明报告 NOF330，同程序集消息类型或标识/版本重复报告 NOF331，跨程序集冲突在宿主装配时失败。注册不构造 Handler，也不启动 Worker；宿主在添加 ApplicationPart 之前或之后显式调用 AddOutbox() 启用能力。开放泛型模板不自动发现；需要手动选择闭合适配器时，可使用 AddOutboxHandler<TMessage, THandler>(id, version)。
+每个具体 OutboxHandler<TMessage> 只处理一种消息。Infrastructure 生成器通过 AddApplicationPart 注册可访问、非泛型 Handler 的 Scoped 实现与强类型投递委托。业务只实现 HandleAsync，无需 Attribute、partial、MessageType 或 SchemaVersion。持久化标识自动取 typeof(TMessage).ToString()，包含命名空间与闭合泛型参数，不包含程序集版本；同一宿主必须唯一，并符合现有 512 字符列长度。NOF330 检查不可访问的声明和已移除的元数据成员，NOF331 检查重复消息处理器，跨程序集冲突在装配时拒绝。注册不构造 Handler 或启动 Worker，宿主显式 AddOutbox() 启用能力。开放泛型模板可通过 AddOutboxHandler<TMessage,THandler>() 手动选择闭合类型，无元数据参数。
 
-迁移时将 IOutboxHandler<T> 改成 OutboxHandler<T>，为 HandleAsync 添加 override，拆开多消息实现，并将原有标识和版本原样移入常量。用 AddApplicationPart 和无参 AddOutbox() 替换原注册回调，移除 OutboxBuilder。持久化记录格式不变。
+推导的标识只查找已注册的强类型委托，不传给 Type.GetType，也不按持久化 CLR 名称动态加载程序集。SchemaVersion 从实体、Store、注册表和分发 API 中删除。处理器改名无需修改注册；消息 DTO 类型或命名空间改名会改变持久化键，必须排空或显式迁移已有记录。不兼容的载荷演进由业务类型及迁移处理，不由框架维护版本分发。
 
-OutboxDeliveryContext 提供 MessageId、Context、Attempt 和 Headers。它是投递元数据，不是 InvocationContext；意图不一定执行 NOF 操作。处理器正常返回前，应达到具体客户端约定的接受条件。可重试异常遵循 MaxRetryCount 与可选 RetryDelay；OutboxPermanentFailureException 表示无法通过重试恢复，立即终止。未知标识/版本和与注册 JSON 结构不符的内容也永久失败，不根据持久化 CLR 名称加载类型或猜测适配器。
+迁移时将 IOutboxHandler<T> 改为 OutboxHandler<T>，拆开多消息适配器，并删除 MessageType/SchemaVersion 声明与注册实参，保留 AddApplicationPart 加 AddOutbox。停止旧进程、备份各租户数据库，并把旧标识显式转换为经过审查的推导标识。示例 SimplifyOutboxMetadata 仅转换两种未改变的 v1 载荷标识，拒绝非 v1 的待发/失败工作，再删除 SchemaVersion；保留消息 ID、载荷、Header、投递状态及 Inbox 历史。其他应用需提供自己的标识/载荷映射，不增加运行时猜测旧格式的兼容层。已丢失的版本值无法重建，降级需匹配备份。
 
-一个 CLR 消息类型和一个稳定的 (MessageType, SchemaVersion) 在每个宿主都只能绑定一个处理器。注册表属于 DI，首次使用即冻结。需要独立重试的渠道使用不同意图类型。升级结构时保留旧版本注册，或显式迁移存量记录。Native AOT 中通过 AddNOFJson 的宿主 Options 注册消息的源生成 JsonSerializerContext；注册表使用静态强类型委托和 IObjectSerializer，无需 CLR 名称查找。
+OutboxDeliveryContext 提供 MessageId、Context、Attempt 和 Headers。它是投递元数据，不是 InvocationContext；意图不一定执行 NOF 操作。处理器正常返回前，应达到具体客户端约定的接受条件。可重试异常遵循 MaxRetryCount 与可选 RetryDelay；OutboxPermanentFailureException 表示无法通过重试恢复，立即终止。未知消息标识和与注册 JSON 结构不符的内容也永久失败，不根据持久化 CLR 名称加载类型或猜测适配器。
+
+每个 CLR 消息类型及推导标识在每个宿主都只能绑定一个处理器。注册表属于 DI，首次使用即冻结。需要独立重试的渠道使用不同意图类型。不兼容载荷升级前需排空或显式迁移存量记录。Native AOT 中通过 AddNOFJson 的宿主 Options 注册消息的源生成 JsonSerializerContext；注册表使用静态强类型委托和 IObjectSerializer，无需 CLR 名称查找。
 
 ## 具体客户端与入站绑定
 
@@ -75,13 +76,13 @@ services.AddMemoryMessaging(endpoints =>
     endpoints.MapQueue<MailService.Send>("mail.send.v1"));
 ```
 
-AddNOF 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有 ConfigureRabbitMQ 映射队列端点才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并拒绝非 Empty 或声明了失败的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
+AddMemoryMessaging 注册 MemoryMessageClient；AddRabbitMQ 提供原生连接访问和可选队列消费者，只有 ConfigureRabbitMQ 映射队列端点才启用 RabbitMQ 入站消费者。适配器自己的队列/订阅端点仍进入统一执行策略，并只接受声明 void 且无业务 FailureCase 的操作。移除出站查找后，同一操作可以接多个明确队列。RouteToQueue、Topic 与 GetQueue/GetTopic API 均删除。
 
 示例 SubmitDemoOrder 处理器直接暂存 SendEmail 和 OrderCreated，最后保存同一工作单元一次。NOF.Sample 宿主适配器选择原生 RabbitMQ 目的地，NOF.Sample.Notifications 将接收队列映射到操作。见[双服务手动路由示例](rabbitmq-sample.md)。更换投递方式只修改基础设施，无需改变 Application 入队 API。
 
 ## 可靠处理与迁移
 
-记录使用稳定字符串 MessageType、SchemaVersion、Payload、显式暂存的 Headers、TraceParent、状态/次数/租约、NextAttemptAtUtc。删除 DispatchRoutes 与 OutboxMessageType。领取时排除延迟重试和有效租约；完成、失败、释放都检查领取者，过期工作者不能覆盖新领取者。停机时，已开始且结果不确定的尝试保留租约等待恢复；未开始的记录释放且不消耗尝试次数。
+记录使用自动推导的字符串 MessageType 与 Payload、显式暂存的 Headers、TraceParent、状态/次数/租约、NextAttemptAtUtc。删除 DispatchRoutes 与 OutboxMessageType。领取时排除延迟重试和有效租约；完成、失败、释放都检查领取者，过期工作者不能覆盖新领取者。停机时，已开始且结果不确定的尝试保留租约等待恢复；未开始的记录释放且不消耗尝试次数。
 
 投递是至少一次。进程可能在外部副作用完成后、写回完成状态前退出；重试始终复用 MessageId，具体客户端与外部系统须实现选定的幂等语义。同一处理器调用多个系统可能部分成功，需要独立恢复时拆成多条意图。工作者不会自动提交处理器内部的业务改动。
 

@@ -20,7 +20,7 @@ public interface IInvocationFilter
 public interface IInvocationPlanProvider
 {
     /// <summary>Describes an operation without constructing its filters or business handler.</summary>
-    InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin);
+    InvocationPlan Describe(OperationDescriptor operation, InvocationOrigin origin);
 }
 
 /// <summary>Executes the host-selected plan and returns its open result set.</summary>

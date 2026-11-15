@@ -41,7 +41,7 @@ Inbox reception reconciles DataException in a fresh scope and acknowledges only 
 | ClaimsPrincipal.HasPermission | IPermissionChecker; catalog validation and authenticated-grant semantics have one implementation |
 | ClaimsPrincipal.GetIdentity/GetIdentities | Native Identities.OfType<T>() queries |
 | JwtClaimsIdentity | Native host authentication and ClaimsIdentity; no token parser that implicitly marks unverified claims authenticated |
-| Empty NOFApplicationConstants and unused service-method reflection helper | Existing concrete constants and ServiceOperationDescriptor.MethodInfo |
+| Empty NOFApplicationConstants and unused service-method reflection helper | Existing concrete constants and OperationDescriptor.MethodInfo |
 
 The event registration generator also emits native Replace. Provider selectors keep their existing last-registration behavior. HTTP identity is copied before semantic context selectors run, and both explicit and fluent endpoints retain the common authorization boundary. Hosting no longer requires the JWT library; hosts select their identity protocol dependencies.
 

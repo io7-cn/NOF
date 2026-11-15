@@ -7,8 +7,7 @@ public sealed record OrderCreated(Guid OrderId);
 
 public interface IMessageDemoService : IApplicationService
 {
-    Empty SendMail(SendEmail request);
-    Empty RecordOrder(OrderCreated notification);
-    Empty CountOrder(OrderCreated notification);
+    void SendMail(SendEmail request);
+    void RecordOrder(OrderCreated notification);
     MessageReceiptsResponse GetReceipts(GetMessageReceiptsRequest request);
 }

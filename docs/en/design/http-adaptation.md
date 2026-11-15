@@ -6,7 +6,7 @@ Contract contains business declarations and data. Application generates operatio
 
 ## Typed operations and requests
 
-MapGet/MapPost/MapPut/MapPatch/MapDelete<Service.Operation> select IServiceOperationDefinition through static Descriptor/Describe, with no handler construction or runtime generic activation. The small Hosting analyzer retains exact Request lambda types from original declarations/referenced metadata; it never consumes another generator's output. Descriptor overloads remain available for authored catalogs. NativeBuilder exposes a real RouteHandlerBuilder for native-only extensions.
+MapGet/MapPost/MapPut/MapPatch/MapDelete<Handler> select registered OperationDescriptor metadata for generated Service.Operation bases or standalone OperationHandler<TRequest,TResponse> classes, without constructing handlers or runtime generic activation. The small Hosting analyzer retains exact Request lambda types from original declarations/referenced metadata; it never consumes another generator's output. Descriptor overloads remain available for authored catalogs. NativeBuilder exposes a real RouteHandlerBuilder for native-only extensions.
 
 Input priority is explicit Member, same-name Route, then Query for GET/HEAD/DELETE or JSON body for POST/PUT/PATCH. Header sources are explicit and source descriptions use HttpInputLocation. Route/query comparisons default to OrdinalIgnoreCase. Binding honors host JSON names/converters, required/init/constructor members, defaults and unknown-member handling. Arrays/lists accept repeated values; scalar duplicates fail. Composite input is deserialized once; a body id never overwrites route identity. OpenAPI projects only actual body members. Malformed input yields 400/415 before handler construction; technical user-hook exceptions propagate.
 
@@ -46,3 +46,5 @@ Execution and runtime OpenAPI use the final frozen selection. Known TypedResults
 ## Breaking migration
 
 Replace Response<T>(r => r.StatusCode(404)) with Response<T>(404). Replace body/header/Problem DSL with one typed native result lambda or an ordinary endpoint. Remove ConfigureProblem, Filter HTTP views, response variants/selectors and HttpOutputContext. Parent mappings are replaced as a whole. Keep Request configuration, generic operation maps, native middleware and the shared invocation policy boundary. Update JSON/OpenAPI metadata and consumers together. No compatibility layer is retained.
+
+Void operations have no business reply; generic HTTP operation mappings reject them at configuration. Use a native endpoint that authorizes and durably accepts work before returning an acceptance acknowledgement. See [one-way operations](one-way-operations.md).

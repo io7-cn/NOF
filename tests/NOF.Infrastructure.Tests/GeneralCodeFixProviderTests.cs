@@ -88,26 +88,6 @@ public sealed class GeneralCodeFixProviderTests
     }
 
     [Fact]
-    public async Task VoidRpcReturnFix_ReturnsEmpty()
-    {
-        const string source = """
-            namespace Test;
-            public interface IService
-            {
-                void Execute(object request);
-            }
-            """;
-
-        var changed = await ApplyFirstFixAsync(
-            source,
-            "NOF209",
-            "Execute",
-            new TypeDeclarationCodeFixProvider());
-
-        Assert.Contains("global::NOF.Contract.Empty Execute", changed);
-    }
-
-    [Fact]
     public async Task DbContextFix_ReplacesDirectEfCoreBase()
     {
         const string source = """

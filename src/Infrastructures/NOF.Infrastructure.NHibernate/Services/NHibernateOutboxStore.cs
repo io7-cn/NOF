@@ -71,7 +71,6 @@ public sealed partial class NHibernateOutboxStore(global::NHibernate.ISession se
                 CreatedAtUtc = row.CreatedAtUtc,
                 RetryCount = row.RetryCount,
                 MessageType = row.MessageType,
-                SchemaVersion = row.SchemaVersion,
                 NextAttemptAtUtc = row.NextAttemptAtUtc,
                 Payload = row.Payload,
                 Headers = row.Headers,

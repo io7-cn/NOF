@@ -54,7 +54,7 @@ UseCase 就是这套模型表达的应用操作，不是在 RPC 旁边再增加�
 独立 UseCase 类、RPC 转发类和另一套公开 Executor API。
 
 原先并行的 IRequestHandler/IRequestExecutor 原型已经移除。实现沿用生成式服务操作，
-使用 IApplicationService、ApplicationService<TService> 与 ServiceOperation<TRequest,TResponse>。
+使用 IApplicationService、ApplicationService<TService> 与 OperationHandler<TRequest,TResponse>。
 契约可以返回普通 DTO、可空值和业务 Union；本地调用无需传输特性，HTTP 暴露必须显式声明。
 参见[迁移指南](application-requests.md)。
 

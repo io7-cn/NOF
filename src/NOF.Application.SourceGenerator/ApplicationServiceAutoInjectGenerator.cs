@@ -11,6 +11,10 @@ namespace NOF.Application.SourceGenerator;
 [Generator]
 public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerator
 {
+    private static readonly DiagnosticDescriptor InvalidHandler = new(
+        "NOF301", "Inaccessible operation handler",
+        "Operation handler '{0}' must be accessible from its assembly initializer and cannot be nested in a generic type",
+        "ApplicationService", DiagnosticSeverity.Error, true);
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var sourceClasses = context.SyntaxProvider
@@ -31,6 +35,26 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
                             out var handlerBaseTypeName)
                         || handlerBaseTypeName is null)
                     {
+                        for (var current = classSymbol.BaseType; current is not null; current = current.BaseType)
+                        {
+                            // Referenced generated Contract operations retain their original operation identity.
+                            if (current.ContainingType is { } container
+                                && ApplicationServiceSymbolHelper.ImplementsApplicationService(container))
+                            {
+                                return [new RegistrationInfo(current.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                                    classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))];
+                            }
+                            if (current.OriginalDefinition.ToDisplayString() is "NOF.Application.OperationHandler<TRequest>"
+                                or "NOF.Application.OperationHandler<TRequest, TResponse>")
+                            {
+                                if (classSymbol.IsGenericType)
+                                {
+                                    return [];
+                                }
+                                return [new RegistrationInfo(classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                                    classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), current, classSymbol)];
+                            }
+                        }
                         return [];
                     }
 
@@ -72,7 +96,19 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
                 return;
             }
 
-            var source = GenerateInitializer(data.AssemblyName, data.Registrations);
+            var valid = data.Registrations.Where(registration =>
+            {
+                for (var type = registration.HandlerType; type is not null; type = type.ContainingType)
+                {
+                    if (type.IsGenericType || type.IsFileLocal || type.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal))
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(InvalidHandler, type.Locations.FirstOrDefault(), type.Name));
+                        return false;
+                    }
+                }
+                return true;
+            }).ToImmutableArray();
+            var source = GenerateInitializer(data.AssemblyName, valid);
             spc.AddSource("ApplicationServiceAutoInjectAssemblyInitializer.g.cs", SourceText.From(source, Encoding.UTF8));
         });
     }
@@ -106,7 +142,26 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
         foreach (var registration in registrations)
         {
             sb.AppendLine($"            services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Scoped(typeof({registration.ServiceType}), typeof({registration.ImplementationType})));");
-            sb.AppendLine($"            services.GetOrAddSingleton<global::NOF.Application.ApplicationServiceRegistry>().AddOperationImplementation(typeof({registration.ServiceType}), typeof({registration.ImplementationType}));");
+            if (registration.BaseType is { } handler)
+            {
+                var input = handler.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var output = handler.TypeArguments.Length == 1 ? "void" : handler.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var descriptorType = handler.TypeArguments.Length == 1 ? input : input + ", " + output;
+                var options = "";
+                if (handler.TypeArguments.Length == 2)
+                {
+                    var nullable = handler.TypeArguments[1].NullableAnnotation == NullableAnnotation.Annotated;
+                    var cases = ApplicationServiceGenerator.BusinessCaseTypes(handler.TypeArguments[1]);
+                    options = ", allowsNullResponse: " + (nullable ? "true" : "false") + ", resultCases: ["
+                        + string.Join(", ", cases.Select(type => "new(typeof(" + type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                            + "), " + (type.AllInterfaces.Any(item => item.ToDisplayString() == "NOF.Abstraction.IFailure") ? "true" : "false") + ")")) + "]";
+                }
+                sb.AppendLine($"            services.GetOrAddSingleton<global::NOF.Application.ApplicationServiceRegistry>().AddOperation(new(typeof({registration.ImplementationType}), typeof({input}), typeof({output})) {{ Descriptor = new global::NOF.Application.OperationDescriptor<{descriptorType}>(typeof({registration.ImplementationType}){options}) }});");
+            }
+            else
+            {
+                sb.AppendLine($"            services.GetOrAddSingleton<global::NOF.Application.ApplicationServiceRegistry>().AddOperationImplementation(typeof({registration.ServiceType}), typeof({registration.ImplementationType}));");
+            }
         }
 
         sb.AppendLine("        }");
@@ -129,13 +184,17 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
 
     private sealed class RegistrationInfo
     {
-        public RegistrationInfo(string serviceType, string implementationType)
+        public RegistrationInfo(string serviceType, string implementationType, INamedTypeSymbol? baseType = null, INamedTypeSymbol? handlerType = null)
         {
             ServiceType = serviceType;
             ImplementationType = implementationType;
+            BaseType = baseType;
+            HandlerType = handlerType;
         }
 
         public string ServiceType { get; }
         public string ImplementationType { get; }
+        public INamedTypeSymbol? BaseType { get; }
+        public INamedTypeSymbol? HandlerType { get; }
     }
 }

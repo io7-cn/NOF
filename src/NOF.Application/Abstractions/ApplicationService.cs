@@ -13,13 +13,13 @@ public interface IApplicationServiceType
 
 public interface IApplicationServiceImplementation : IApplicationServiceType
 {
-    static abstract IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; }
+    static abstract IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; }
 }
 
 /// <summary>
 /// One application operation mapping entry.
 /// </summary>
-public sealed record ServiceOperationMapping(
+public sealed record OperationMapping(
     [param: DynamicallyAccessedMembers(
         DynamicallyAccessedMemberTypes.PublicConstructors
         | DynamicallyAccessedMemberTypes.PublicMethods
@@ -41,7 +41,7 @@ public sealed record ServiceOperationMapping(
     Type ReturnType)
 {
     /// <summary>Gets the complete generated descriptor for construction-free plan validation.</summary>
-    public ServiceOperationDescriptor? Descriptor { get; init; }
+    public OperationDescriptor? Descriptor { get; init; }
 }
 
 /// <summary>

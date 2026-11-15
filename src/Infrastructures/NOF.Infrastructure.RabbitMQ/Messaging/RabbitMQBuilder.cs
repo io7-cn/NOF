@@ -50,14 +50,14 @@ public sealed class RabbitMQBuilder
     }
 
     /// <summary>Maps a statically selected operation to a competing-consumer queue.</summary>
-    public RabbitMQBuilder MapQueue<TOperation>(string queue, Func<IChannel, CancellationToken, Task>? configureChannel = null, bool requeueOnFailure = true) where TOperation : IServiceOperationDefinition
-        => Add(queue, TOperation.Descriptor, configureChannel, requeueOnFailure);
+    public RabbitMQBuilder MapQueue<TOperation>(string queue, Func<IChannel, CancellationToken, Task>? configureChannel = null, bool requeueOnFailure = true) where TOperation : OperationHandler
+        => Add(queue, _services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(TOperation)), configureChannel, requeueOnFailure);
 
-    /// <summary>Maps an explicitly typed Empty operation to a queue.</summary>
-    public RabbitMQBuilder MapQueue<T>(string queue, ServiceOperationDescriptor<T, Empty> operation, Func<IChannel, CancellationToken, Task>? configureChannel = null, bool requeueOnFailure = true)
+    /// <summary>Maps an explicitly typed one-way operation to a queue.</summary>
+    public RabbitMQBuilder MapQueue<T>(string queue, OperationDescriptor<T> operation, Func<IChannel, CancellationToken, Task>? configureChannel = null, bool requeueOnFailure = true)
         => Add(queue, operation, configureChannel, requeueOnFailure);
 
-    private RabbitMQBuilder Add(string queueName, ServiceOperationDescriptor operation, Func<IChannel, CancellationToken, Task>? configureChannel, bool requeueOnFailure)
+    private RabbitMQBuilder Add(string queueName, OperationDescriptor operation, Func<IChannel, CancellationToken, Task>? configureChannel, bool requeueOnFailure)
     {
         lock (_gate)
         {
@@ -65,18 +65,9 @@ public sealed class RabbitMQBuilder
             ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
             var consumerId = "rabbitmq:queue:" + queueName;
             ArgumentNullException.ThrowIfNull(operation);
-            if (operation.ResponseType != typeof(Empty) || !ServiceOperationInspector.CanSubmit(operation))
-            {
-                throw new InvalidOperationException($"Operation '{operation.Id}' must return Empty without declared failures for asynchronous consumption.");
-            }
-            if (_services.Any(item => item.ServiceType == typeof(IInboxHandler) && item.IsKeyedService && Equals(item.ServiceKey, consumerId)))
-            {
-                throw new InvalidOperationException($"Inbox endpoint '{consumerId}' has already been mapped.");
-            }
+            _services.GetOrAddSingleton<InboxEndpointRegistry>().Add(new(consumerId, operation));
             _endpoints.Add(new(queueName, consumerId, operation, configureChannel, requeueOnFailure));
             _services.AddInbox();
-            _services.AddKeyedScoped<IInboxHandler>(consumerId, (provider, _) => new OperationInboxHandler(operation,
-                provider.GetRequiredService<IObjectSerializer>(), provider.GetRequiredService<IOperationExecutor>()));
             return this;
         }
     }
@@ -91,5 +82,5 @@ public sealed class RabbitMQBuilder
 }
 
 /// <summary>One queue consumer and its native channel settings.</summary>
-public sealed record RabbitMQEndpoint(string QueueName, string ConsumerId, ServiceOperationDescriptor Operation,
+public sealed record RabbitMQEndpoint(string QueueName, string ConsumerId, OperationDescriptor Operation,
     Func<IChannel, CancellationToken, Task>? ConfigureChannel = null, bool RequeueOnFailure = true);

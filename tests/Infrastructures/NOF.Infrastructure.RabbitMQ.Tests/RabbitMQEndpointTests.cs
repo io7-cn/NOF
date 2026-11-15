@@ -35,7 +35,7 @@ public sealed class RabbitMQEndpointTests
     }
 
     [Fact]
-    public void SameRouteInDifferentAdapters_HasIndependentKeyedHandlersAndTargets()
+    public void SameRouteInDifferentAdapters_HasIndependentReceiptsAndTargets()
     {
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
@@ -49,8 +49,8 @@ public sealed class RabbitMQEndpointTests
         Assert.Equal(Second.Id, rabbit.Operation.Id);
         Assert.NotEqual(memory.ConsumerId, rabbit.ConsumerId);
         using var scope = host.Services.CreateScope();
-        Assert.IsType<OperationInboxHandler>(scope.ServiceProvider.GetRequiredKeyedService<IInboxHandler>(memory.ConsumerId));
-        Assert.IsType<OperationInboxHandler>(scope.ServiceProvider.GetRequiredKeyedService<IInboxHandler>(rabbit.ConsumerId));
+        Assert.Equal(First.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(memory.ConsumerId).Id);
+        Assert.Equal(Second.Id, scope.ServiceProvider.GetRequiredService<InboxEndpointRegistry>().GetOperation(rabbit.ConsumerId).Id);
     }
 
     [Fact]
@@ -60,17 +60,17 @@ public sealed class RabbitMQEndpointTests
         var endpoints = new RabbitMQBuilder(services);
         endpoints.MapQueue("work", First);
         Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue("work", Second));
-        Assert.Throws<InvalidOperationException>(() => endpoints.MapQueue<Input>("invalid",
+        Assert.Throws<ArgumentException>(() => endpoints.MapQueue<Input>("invalid",
             new(typeof(IWork), nameof(IWork.MayFail))));
     }
 
-    private static ServiceOperationDescriptor<Input, Empty> First => new(typeof(IWork), nameof(IWork.First));
-    private static ServiceOperationDescriptor<Input, Empty> Second => new(typeof(IWork), nameof(IWork.Second));
+    private static OperationDescriptor<Input> First => new(typeof(IWork), nameof(IWork.First));
+    private static OperationDescriptor<Input> Second => new(typeof(IWork), nameof(IWork.Second));
     public sealed record Input(string Value);
     public interface IWork : IApplicationService
     {
-        Empty First(Input input);
-        Empty Second(Input input);
+        void First(Input input);
+        void Second(Input input);
         [FailureCase("Rejected")]
         Empty MayFail(Input input);
     }

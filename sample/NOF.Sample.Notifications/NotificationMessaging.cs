@@ -25,6 +25,6 @@ public static class NotificationMessaging
             .MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue,
                 configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct))
             .MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue)
-            .MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
+            .MapQueue<CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
     }
 }

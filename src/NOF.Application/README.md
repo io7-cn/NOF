@@ -10,11 +10,11 @@ This package does not define runtime outbound authentication directives.
 
 `AddNOFApplication()` registers the package-local application defaults, including expression-based mapping, permission checking and registries. Domain has no runtime registration.
 
-All consumers implement generated ApplicationService operations. The host binds stable queues/subscriptions to Empty-returning operation descriptors. Plain contracts need no partial modifier; operation bases and descriptors are generated in Application.
+Consumers implement generated ApplicationService operations or standalone OperationHandler<TRequest> classes; internal reactions need no Contract interface method or partial modifier. The host binds stable queues/subscriptions to void-returning one-way operation descriptors. Plain contracts need no partial modifier; operation bases and descriptors are generated in Application.
 
 ## Application services
 
-IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. ServiceOperation<TRequest,TResponse> accepts ordinary business responses. IRpcResponse is removed. Generated descriptors identify operations for HTTP adapters without introducing an HTTP dependency. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
+IApplicationService contracts and ApplicationService<TService> containers keep generated Service.Operation overrides. OperationHandler<TRequest,TResponse> accepts ordinary business responses. IRpcResponse is removed. Generated descriptors identify operations for HTTP adapters without introducing an HTTP dependency. Application-part generation registers operation implementations; service containers register with AddApplicationService<TService>(). Client generation is removed. Call Service.Operation.InvokeAsync(services, request, context, ct) on the server; maintain HTTP integrations in the calling application. See the [migration guide](../../docs/en/design/application-requests.md).
 
 ## Key Abstractions
 
@@ -56,7 +56,7 @@ public sealed class GetOrder : OrderService.GetOrder
 }
 ```
 
-Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IOperationInvoker`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
+Call `OrderService.GetOrder.InvokeAsync(services, request, context, cancellationToken)` on the server. This resolves `IOperationExecutor`, preserves application policies and opens an invocation scope. No client interface, Local Client or HTTP Client is generated.
 
 Streaming operations may directly return IAsyncEnumerable<T> when they declare no initial failure:
 
@@ -83,7 +83,7 @@ The contract surface for the same method remains `IAsyncEnumerable<OrderEvent> W
 
 ### Message consumers and transactional intents
 
-Transport-owned queue/subscription endpoints target ordinary Empty-returning application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
+Transport-owned queue/subscription endpoints target ordinary void-returning one-way application operations. Immediate remote calls use concrete clients. Application stages generic messages through IOutbox:
 
 ```csharp
 await outbox.EnqueueAsync(new OrderCreated(order.Id), invocation.Context, cancellationToken: cancellationToken);
@@ -201,10 +201,12 @@ Apache-2.0
 
 FailureCase annotations stay on non-partial Contract methods; this package generates Service.Operation.Result and its concrete failure cases. Application owns the single complete operation descriptor. See [expected failures](../../docs/en/design/expected-failures.md).
 
-Execution models, descriptors and policy interpretation belong to this package. ServiceOperationDescriptor is the sole operation metadata model; input-only Reference and instance mapping/resolver fallbacks are removed; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).
+Execution models, descriptors and policy interpretation belong to this package. OperationDescriptor is the sole operation metadata model; input-only Reference and instance mapping/resolver fallbacks are removed; Contract holds declarations and data only and generates no code; semantic Context belongs to Abstraction. See [Contract boundaries](../../docs/en/design/contract-boundaries.md).
 
 ## Authorization and persistence boundaries
 
 AuthorizationPolicyResolver interprets Contract interface/method declarations into immutable Abstraction policies; shared checks live in Abstraction. Handlers are never declaration sources and UI has no Application dependency.
 
 Application has no custom database exceptions. Providers report failed optimistic-lock saves with System.Data.DBConcurrencyException and data-save failures with System.Data.DataException, retaining native causes. Transaction failures and cancellation propagate unchanged. See [persistence boundaries](../../docs/en/design/persistence-boundaries.md) and [framework simplification](../../docs/en/design/framework-simplification.md), each with a Chinese edition.
+
+Void Contract methods generate Task handlers and one-argument descriptors, without Result or result-returning InvokeAsync; Empty remains reply-producing and supports FailureCase. See [one-way operations](../../docs/en/design/one-way-operations.md) ([简体中文](../../docs/zh-CN/design/one-way-operations.md)).

@@ -100,7 +100,7 @@ public sealed class InvocationPipelineTests
     {
         HandlerType = typeof(InvocationPipelineTests),
         HandlerMethodInfo = typeof(InvocationPipelineTests).GetMethod(nameof(FilterRegistration_AloneDoesNotSelectOrRunAnEngine))!,
-        Operation = new ServiceOperationDescriptor<object, string>(typeof(IPipelineContract), nameof(IPipelineContract.Execute))
+        Operation = new OperationDescriptor<object, string>(typeof(IPipelineContract), nameof(IPipelineContract.Execute))
     };
 
     public interface IPipelineContract : IApplicationService
@@ -110,7 +110,7 @@ public sealed class InvocationPipelineTests
 
     public sealed class HostPipeline : IInvocationPipeline
     {
-        public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin) => new(operation, origin, [], []);
+        public InvocationPlan Describe(OperationDescriptor operation, InvocationOrigin origin) => new(operation, origin, [], []);
         public ValueTask<object?> ExecuteAsync(InvocationContext context, object input, InvocationDelegate terminal, CancellationToken ct)
             => terminal((InvocationContext)context.WithTenantId("host"), input, ct);
     }

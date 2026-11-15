@@ -38,11 +38,11 @@ public sealed class ContractAuthorizationExecutionTests
                 }
                 scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(principal);
             }
-            var descriptor = new ServiceOperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
+            var descriptor = new OperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
             var plans = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>();
             var plan = plans.Describe(descriptor, origin);
-            var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>()
-                .ExecuteAsync(descriptor, new Empty(), Context.Empty, origin);
+            var result = await scope.ServiceProvider.GetRequiredService<OperationExecutor>()
+                .ExecuteInScopeAsync(descriptor, new Empty(), Context.Empty, origin);
             Assert.Same(plan.Authorization!.Authorization, ((CapturingChecker)scope.ServiceProvider.GetRequiredService<IPermissionChecker>()).Policy);
             Assert.Equal(identity == 2 ? 1 : 0, host.Services.GetRequiredService<Probe>().Constructed);
             if (identity == 0)
@@ -96,15 +96,15 @@ public sealed class ContractAuthorizationExecutionTests
         {
             using var scope = host.Services.CreateScope();
             scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity("test"));
-            var descriptor = new ServiceOperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
+            var descriptor = new OperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
             var plans = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>();
             var plan = plans.Describe(descriptor, origin);
-            var executor = scope.ServiceProvider.GetRequiredService<IOperationExecutor>();
-            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            var executor = scope.ServiceProvider.GetRequiredService<OperationExecutor>();
+            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteInScopeAsync(descriptor, new Empty(), Context.Empty, origin));
             grants.Permissions.Add("read");
-            Assert.IsType<Empty>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            Assert.IsType<Empty>(await executor.ExecuteInScopeAsync(descriptor, new Empty(), Context.Empty, origin));
             grants.Permissions.Clear();
-            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteAsync(descriptor, new Empty(), Context.Empty, origin));
+            Assert.IsType<AuthorizationInvocationFilter.PermissionDenied>(await executor.ExecuteInScopeAsync(descriptor, new Empty(), Context.Empty, origin));
             Assert.Same(plan, plans.Describe(descriptor, origin));
             Assert.Equal(1, host.Services.GetRequiredService<Probe>().Constructed);
         }
@@ -127,8 +127,8 @@ public sealed class ContractAuthorizationExecutionTests
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity([new Claim(ClaimTypes.TenantId, "trusted")], "test"));
-        var descriptor = new ServiceOperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
-        var result = await scope.ServiceProvider.GetRequiredService<IOperationExecutor>().ExecuteAsync(descriptor, new Empty(),
+        var descriptor = new OperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read));
+        var result = await scope.ServiceProvider.GetRequiredService<OperationExecutor>().ExecuteInScopeAsync(descriptor, new Empty(),
             Context.Empty.WithTenantId("requested"), InvocationOrigin.Http);
         var probe = host.Services.GetRequiredService<Probe>();
         if (rejectMismatch)
@@ -154,10 +154,10 @@ public sealed class ContractAuthorizationExecutionTests
         builder.Services.AddScoped<IPermissionChecker, CapturingChecker>();
         builder.Services.GetOrAddSingleton<ApplicationServiceRegistry>().Add(new(typeof(IService), typeof(object))
         {
-            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            HandlerMappings = new Dictionary<string, OperationMapping>
             {
                 [nameof(IService.Read)] = new(typeof(Handler), typeof(Empty), typeof(Empty))
-                { Descriptor = new ServiceOperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read)) }
+                { Descriptor = new OperationDescriptor<Empty, Empty>(typeof(IService), nameof(IService.Read)) }
             }
         });
         return builder;
@@ -195,7 +195,7 @@ public sealed class ContractAuthorizationExecutionTests
         }
     }
     [IgnoredHandlerPermission]
-    public sealed class Handler : ServiceOperation<Empty, Empty>
+    public sealed class Handler : OperationHandler<Empty, Empty>
     {
         public Handler(Probe probe) => probe.Constructed++;
         public override Task<Empty> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)

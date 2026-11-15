@@ -173,14 +173,24 @@ public sealed class InboxMessageBackgroundService : BackgroundService
 
             using var activity = StartBoundaryActivity(message, traceParent);
 
-            var outcome = await services.GetRequiredKeyedService<IInboxHandler>(pendingMessage.Route).HandleAsync(
-                pendingMessage.Payload, processingHeaders, cancellationToken);
+            var operation = services.GetRequiredService<InboxEndpointRegistry>().GetOperation(pendingMessage.Route);
+            var input = _objectSerializer.Deserialize(pendingMessage.Payload, operation.RequestType)
+                ?? throw new InvalidOperationException($"Cannot deserialize message for '{operation.Id}'.");
+            var context = Context.Empty.WithItems(InboundContextReflection.ReadHeaderItems(processingHeaders));
+            var outcome = await services.GetRequiredService<OperationExecutor>()
+                .ExecuteInScopeAsync(operation, input, context, InvocationOrigin.Message, cancellationToken).ConfigureAwait(false);
 
-            if (outcome is IFailure)
+            var value = InvocationResult.Value(outcome);
+            if (value is IFailure)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                await MarkFailedAsync(message, outcome.ToString() ?? "Invocation declined", cancellationToken);
+                await MarkFailedAsync(message, value.ToString() ?? "Invocation declined", cancellationToken);
                 return false;
+            }
+
+            if (value is not null)
+            {
+                throw new InvalidOperationException("A one-way Inbox operation cannot produce a business response.");
             }
 
             pendingMessage.Status = InboxMessageStatus.Processed;

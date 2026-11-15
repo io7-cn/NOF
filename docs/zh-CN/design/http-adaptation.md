@@ -6,7 +6,7 @@ Contract 保留业务声明和数据，Application 生成操作身份/基类/结
 
 ## 泛型操作与请求
 
-MapGet/MapPost/MapPut/MapPatch/MapDelete<Service.Operation> 通过 IServiceOperationDefinition 的静态 Descriptor/Describe 选择操作，不构造 Handler，不动态实例化泛型。轻量 Hosting 分析器从原始声明/引用元数据提供具体 Request lambda 类型，不消费其他生成器输出。手工目录仍可用描述符重载。NativeBuilder 暴露真实 RouteHandlerBuilder，供只接受原生 Builder 的扩展使用。
+MapGet/MapPost/MapPut/MapPatch/MapDelete<Handler> 从注册的 OperationDescriptor 元数据选择生成的 Service.Operation 基类或独立 OperationHandler<TRequest,TResponse> 类，不构造 Handler，不动态实例化泛型。轻量 Hosting 分析器从原始声明/引用元数据提供具体 Request lambda 类型，不消费其他生成器输出。手工目录仍可用描述符重载。NativeBuilder 暴露真实 RouteHandlerBuilder，供只接受原生 Builder 的扩展使用。
 
 输入优先级为显式 Member、同名 Route，然后 GET/HEAD/DELETE 使用 Query，POST/PUT/PATCH 使用 JSON Body。Header 显式配置，来源描述使用 HttpInputLocation。Route/Query 默认 OrdinalIgnoreCase。绑定遵循宿主 JSON 命名/转换器、required/init/构造器、默认值和未知成员规则。数组/列表接受重复值，标量多值无效。合成输入后只反序列化一次，Body id 不能覆盖 Route 身份；OpenAPI Body 只展示实际 Body 成员。无效输入在构造 Handler 前返回 400/415；用户 Hook 技术异常继续传播。
 
@@ -46,3 +46,5 @@ Context 来源继续显式配置：已认证租户 Claim、租户意图 Header�
 ## 破坏性迁移
 
 Response<T>(r => r.StatusCode(404)) 改成 Response<T>(404)。Body/Header/Problem DSL 改成一条完整原生结果委托或普通端点。删除 ConfigureProblem、HTTP Filter 视图、命名变体/Selector 和 HttpOutputContext；父级映射整体替换。保留 Request 配置、泛型操作映射、原生中间件和统一调用策略。同步升级 JSON/OpenAPI 元数据和消费端，不保留兼容层。
+
+void 操作没有业务回信，泛型 HTTP 操作映射在配置时拒绝它。需要接收单向工作时，由原生端点完成授权并可靠接收，再返回接收确认。见[单向操作](one-way-operations.md)。

@@ -42,7 +42,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
         var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
             typeof(ApplicationService<>),
-            typeof(ServiceOperation<,>),
+            typeof(OperationHandler<,>),
             typeof(IApplicationService),
             typeof(Context),
             typeof(Testing.TestOutcome),
@@ -102,7 +102,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
         var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
             typeof(ApplicationService<>),
-            typeof(ServiceOperation<,>),
+            typeof(OperationHandler<,>),
             typeof(IApplicationService),
             typeof(Testing.TestOutcome),
             typeof(Testing.TestOutcome<>),
@@ -147,7 +147,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
 
         var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
             typeof(ApplicationService<>),
-            typeof(ServiceOperation<,>),
+            typeof(OperationHandler<,>),
             typeof(IApplicationService),
             typeof(Testing.TestOutcome),
             typeof(ServiceDescriptor),

@@ -7,7 +7,7 @@ NOF.Contract 只包含声明和数据模型。其运行时程序集为复用共�
 | 归属 | 类型与职责 |
 |---|---|
 | Contract | IApplicationService、FailureCase/策略元数据特性、请求、成功 DTO、自定义错误数据、Empty/Optional/Page |
-| Application | ServiceOperation、InvocationContext/InvocationOrigin、完整 ServiceOperationDescriptor、业务结果元数据、调用接口和 Contract 授权解析 |
+| Application | OperationHandler、InvocationContext/InvocationOrigin、完整 OperationDescriptor、业务结果元数据、调用接口和 Contract 授权解析 |
 | Abstraction | Context、不可变语义信息及异步流绑定、共享 Failure、权限模型/策略/检查等基础能力 |
 | 宿主/基础设施 | IInvocationFilter/InvocationDelegate/IInvocationPipeline、有效计划与失败目录、传输适配、身份建立、所选执行引擎、HTTP 表达、消息路由与可靠接收/重试 |
 
@@ -33,16 +33,16 @@ public sealed class ReadNodeHandler : NodeService.Read
 
 FailureCase 仍标在无需 partial 的 Contract 接口方法上；Result 与具体失败分支仍生成在 Application 操作中。执行类型现在使用 NOF.Application 命名空间。语义 Context 的命名空间改为 NOF.Abstraction，与其原有程序集归属一致。
 
-ServiceOperationDescriptor 是唯一的操作身份、输入和输出元数据，删除仅含输入的 ServiceOperationReference 与 Descriptor.Reference。具体客户端指定目标，通用 Outbox 处理器解释持久意图。参见[事务性发件箱](transactional-outbox.md)。
+OperationDescriptor 是唯一的操作身份、输入和输出元数据，删除仅含输入的 ServiceOperationReference 与 Descriptor.Reference。具体客户端指定目标，通用 Outbox 处理器解释持久意图。参见[事务性发件箱](transactional-outbox.md)。
 
 删除 UseHostTenant 注解；应用通过普通 Filter 或入口 Context 明确选择执行租户。
 
 ## 迁移
 
-- 为 ServiceOperation、InvocationContext、完整描述符、执行结果及拒绝类型引入 NOF.Application；Contract 不保留旧类型别名或转发。
+- 为 OperationHandler、InvocationContext、完整描述符、执行结果及拒绝类型引入 NOF.Application；Contract 不保留旧类型别名或转发。
 - 为 Context 引入 NOF.Abstraction，并替换显式 NOF.Contract.Context 引用。其不可变语义和异步流恢复行为不变；Contract 中旧 TypeForwardedTo 转发入口此次明确删除。
 - 移除生成的 IServiceOperations.Method 生产者路由。即时调用使用具体客户端，事务性消息通过 IOutbox.EnqueueAsync 与基础设施处理器执行；入站消费者保留完整描述符。
-- 需要检查消息适用性时使用 ServiceOperationInspector.CanSubmit。正常调用和消息绑定已自动检查，Handler 无需重复校验。
+- 需要检查消息适用性时使用 OperationInspector.CanSubmit。正常调用和消息绑定已自动检查，Handler 无需重复校验。
 - 删除 UseHostTenant 注解；应用通过普通 Filter 或入口 Context 明确选择执行租户。
 - 客户端继续只依赖 Contract 和基础能力。示例 HTTP 客户端改用原生 HttpRequestException/HTTP 状态码处理传输失败，不引用 Application 的执行拒绝异常。
 

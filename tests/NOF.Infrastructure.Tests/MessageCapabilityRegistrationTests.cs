@@ -96,7 +96,7 @@ public sealed class MessageCapabilityRegistrationTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>("work");
+        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>();
         builder.Services.AddSingleton<Probe>();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbox.RunWorkers = false);
         using var host = builder.Build();
@@ -124,7 +124,7 @@ public sealed class MessageCapabilityRegistrationTests
         var builder = Host.CreateApplicationBuilder();
         builder.AddNOF();
         builder.AddNativeTestPersistence();
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapQueue("work", new ServiceOperationDescriptor<Work, Empty>(typeof(IConsumer), nameof(IConsumer.Handle))));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapQueue("work", new OperationDescriptor<Work>(typeof(IConsumer), nameof(IConsumer.Handle))));
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.RunWorkers = false);
         using var host = builder.Build();
         await host.StartAsync();
@@ -163,7 +163,7 @@ public sealed class MessageCapabilityRegistrationTests
     public sealed record Work(string Value);
     public interface IConsumer : IApplicationService
     {
-        Empty Handle(Work work);
+        void Handle(Work work);
     }
 
     public sealed class Probe
@@ -173,7 +173,6 @@ public sealed class MessageCapabilityRegistrationTests
 
     public sealed class Handler : OutboxHandler<Work>
     {
-        public const string MessageType = "test.capability.work";
         public Handler(Probe probe) => probe.Constructed++;
         public override ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken) => throw new InvalidOperationException("Workers are disabled.");
     }

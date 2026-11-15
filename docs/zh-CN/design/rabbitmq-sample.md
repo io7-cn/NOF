@@ -45,7 +45,7 @@ builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，声明稳定的 MessageType 常量（版本默认 1），通过 ApplicationPart 自动注册。每个 Handler 通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
@@ -69,7 +69,7 @@ rabbit.Topology(async (channel, ct) =>
 })
 .MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue)
 .MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue)
-.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
+.MapQueue<CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
 ```
 
 | 意图 | 物理目的地 | 消费操作 |
@@ -114,7 +114,7 @@ ConfigureRabbitMQ 独立、支持 Fluent API，可在 Build 前多次调用。�
 
 MapQueue 可指定 `configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)` 和 `requeueOnFailure`；默认 prefetch 为 1，回执持久化失败时重新入队。设置属于当前端点。
 
-通用 Inbox 仍把 Route 当作不透明键，通过原生 keyed DI 解析 scoped IInboxHandler，在现有租户作用域和事务内持久化、去重和执行，不理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
+通用 Inbox 把 Route 当作不透明键，仅查询 InboxEndpoint 元数据，在现有租户作用域和事务内直接执行 void UseCase，统一持久化、去重和重试，不依赖传输 Handler 或理解拓扑。RabbitMQ 回执键为 `rabbitmq:queue:<queue>`；Memory 使用独立端点和键。优先使用原生 GUID MessageId，缺失时回退到 NOF Header。
 
 升级前停止并排空旧消费者和 Inbox 工作，备份数据。旧 `queue:`/`subscription:`（包括上一版 `rabbitmq:subscription:`）回执键需要显式映射到选定队列键，修改 Inbox.Route，保留 ID 和已完成去重历史。停用旧拓扑前，先排空或明确搬运旧订阅队列到新订单队列。已有队列可能带 NOF 安装的死信参数，应比较声明并在停机期间通过原生 RabbitMQ 配置有意保留或重建。NOF 不自动重映射、删数据、重放或修复拓扑。Outbox Schema 仍为 v1，不自动解释旧负载。
 
@@ -134,3 +134,5 @@ Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConf
 Notifications 示例使用 EnsureCreated 创建本地 SQLite 文件，不升级已有结构。升级前停止接收者，排空或显式迁移顺序回执，备份文件，再通过显式 SQLite 迁移删除两张顺序状态表、顺序索引与 NOFInboxMessage 的三个顺序列，保留回执 ID 和历史。可丢弃的演示数据库可在备份后有意重建；持久服务必须保留去重历史。生产者的 PostgreSQL 迁移不会升级这个独立接收者数据库。
 
 生产者使用原生 EF 持久化，并通过 AddOidcEntityFrameworkCore 注册 OIDC 存储；接收者在原有 SQLite 上下文中使用原生 EF Inbox Store。已有生产者和接收者数据库需要显式迁移，删除未使用的 Inbox 分类列；回执路由与消息 ID 不变。
+
+CountOrder 是 Application 内部的 OperationHandler<OrderCreated>，无需 Contract 方法。AddApplicationPart 自动发现它，MapQueue<CountOrder> 绑定后仍走同一 Inbox 与策略管线。

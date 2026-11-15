@@ -20,11 +20,11 @@ public sealed class GenericOutboxTests
         services.AddSingleton<IObjectSerializer, JsonObjectSerializer>();
         services.AddSingleton<Probe>();
         services.AddOptions();
-        services.AddOutbox().AddOutboxHandler<Work, Handler>("custom.work");
+        services.AddOutbox().AddOutboxHandler<Work, Handler>();
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         using var scope = provider.CreateScope();
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work(), Context.Empty);
-        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.Id == id && record.MessageType == "custom.work")), Moq.Times.Once);
+        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.Id == id && record.MessageType == typeof(Work).ToString())), Moq.Times.Once);
         Assert.Null(scope.ServiceProvider.GetService<DbContext>());
     }
 
@@ -46,8 +46,7 @@ public sealed class GenericOutboxTests
         Assert.Empty(host.Services.GetRequiredService<Probe>().Attempts);
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         var record = await ReadAsync(host, id);
-        Assert.Equal("work", record.MessageType);
-        Assert.Equal(2, record.SchemaVersion);
+        Assert.Equal(typeof(Work).ToString(), record.MessageType);
         Assert.Equal("before", host.Services.GetRequiredService<IObjectSerializer>().Deserialize<Work>(record.Payload)!.Value);
         Assert.DoesNotContain("secret", record.Headers);
         Assert.DoesNotContain("private", record.Headers);
@@ -112,7 +111,7 @@ public sealed class GenericOutboxTests
         using (var scope = host.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
-                .Where(record => record.Id == unknown).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.SchemaVersion, 999));
+                .Where(record => record.Id == unknown).ExecuteUpdateAsync(setters => setters.SetProperty(record => record.MessageType, "unregistered.message"));
         }
         var independent = await StageAsync(host, new Work { Value = "independent" });
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -250,14 +249,39 @@ public sealed class GenericOutboxTests
     [Fact]
     public void Registrations_AreHostLocalUnambiguousAndFrozenOnUse()
     {
-        var first = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>("work", 2);
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<Work, Handler>("other", 1));
+        var first = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>();
+        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<Work, Handler>());
         using var one = first.BuildServiceProvider();
-        using var two = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>("other", 1).BuildServiceProvider();
-        Assert.Equal("work", one.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
-        Assert.Equal("other", two.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
-        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<string, StringHandler>("late"));
+        using var two = new ServiceCollection().AddOutbox().AddOutboxHandler<Work, Handler>().BuildServiceProvider();
+        Assert.Equal(typeof(Work).ToString(), one.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
+        Assert.Equal(typeof(Work).ToString(), two.GetRequiredService<OutboxRegistry>().Get(typeof(Work)).MessageType);
+        Assert.NotSame(one.GetRequiredService<OutboxRegistry>(), two.GetRequiredService<OutboxRegistry>());
+        Assert.Throws<InvalidOperationException>(() => first.AddOutbox().AddOutboxHandler<string, StringHandler>());
         Assert.Null(typeof(IOutbox).Assembly.GetType("NOF.Application.IMessageDispatcher"));
+    }
+
+    [Fact]
+    public void ClosedGenericMessages_HaveDistinctAssemblyVersionIndependentInferredIdentities()
+    {
+        var services = new ServiceCollection()
+            .AddOutboxHandler<Envelope<string>, EnvelopeHandler<string>>()
+            .AddOutboxHandler<Envelope<int>, EnvelopeHandler<int>>();
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<OutboxRegistry>();
+        var text = registry.Get(typeof(Envelope<string>));
+        var number = registry.Get(typeof(Envelope<int>));
+        Assert.Equal(typeof(Envelope<string>).ToString(), text.MessageType);
+        Assert.NotEqual(text.MessageType, number.MessageType);
+        Assert.DoesNotContain("Version=", text.MessageType);
+        Assert.DoesNotContain("PublicKeyToken=", text.MessageType);
+        Assert.Same(text, registry.Get(text.MessageType));
+    }
+
+    public sealed record Envelope<T>(T Value);
+    public sealed class EnvelopeHandler<T> : OutboxHandler<Envelope<T>>
+    {
+        public override ValueTask HandleAsync(Envelope<T> message, OutboxDeliveryContext context, CancellationToken cancellationToken)
+            => ValueTask.CompletedTask;
     }
 
     private static IHost CreateHost(TimeSpan? retryDelay = null)
@@ -266,7 +290,7 @@ public sealed class GenericOutboxTests
         builder.AddNOF();
         builder.AddNativeTestPersistence();
         builder.Services.AddSingleton<Probe>();
-        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>("work", 2);
+        builder.Services.AddOutbox().AddOutboxHandler<Work, Handler>();
         builder.Services.Configure<TransactionalMessageOptions>(options =>
         {
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
@@ -314,8 +338,6 @@ public sealed class GenericOutboxTests
     }
     public sealed class Handler(Probe probe, MessageDelivery delivery) : OutboxHandler<Work>
     {
-        public const string MessageType = "test.generic.work";
-        public const int SchemaVersion = 2;
         private readonly Guid _scope = Guid.NewGuid();
         public override async ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken)
         {
@@ -347,7 +369,6 @@ public sealed class GenericOutboxTests
     }
     public sealed class StringHandler : OutboxHandler<string>
     {
-        public const string MessageType = "test.generic.string";
         public override ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken cancellationToken) => ValueTask.CompletedTask;
     }
 }

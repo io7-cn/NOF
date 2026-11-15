@@ -15,12 +15,12 @@ public sealed class OutboxHandlerRegistrationGenerator : IIncrementalGenerator
 {
     private static readonly DiagnosticDescriptor InvalidDeclaration = new(
         "NOF330", "Invalid Outbox handler declaration",
-        "Outbox handler '{0}' must be accessible from its assembly initializer, non-generic, and declare a public const string MessageType (1–512 nonblank characters) and optionally a positive public const int SchemaVersion",
+        "Outbox handler '{0}' must be accessible from its assembly initializer, non-generic, without MessageType or SchemaVersion declarations; its generic message argument supplies identity",
         "NOF.Messaging", DiagnosticSeverity.Error, true);
 
     private static readonly DiagnosticDescriptor DuplicateDeclaration = new(
         "NOF331", "Ambiguous Outbox handler",
-        "Outbox handler '{0}' duplicates a message CLR type or stable message schema declared by another handler in this assembly",
+        "Outbox handler '{0}' duplicates a message CLR type declared by another handler in this assembly",
         "NOF.Messaging", DiagnosticSeverity.Error, true);
 
     /// <inheritdoc />
@@ -36,7 +36,6 @@ public sealed class OutboxHandlerRegistrationGenerator : IIncrementalGenerator
         {
             var seenTypes = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
             var seenMessages = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-            var seenSchemas = new HashSet<(string, int)>();
             var statements = new List<string>();
             foreach (var type in data.Right.OfType<INamedTypeSymbol>().OrderBy(type => type.ToDisplayString(), StringComparer.Ordinal))
             {
@@ -44,24 +43,18 @@ public sealed class OutboxHandlerRegistrationGenerator : IIncrementalGenerator
                 {
                     continue;
                 }
-                var id = type.GetMembers("MessageType").OfType<IFieldSymbol>().SingleOrDefault();
-                var versions = type.GetMembers("SchemaVersion");
-                var version = versions.OfType<IFieldSymbol>().SingleOrDefault();
-                if (!IsAccessible(type) || id is not { IsConst: true, DeclaredAccessibility: Accessibility.Public, Type.SpecialType: SpecialType.System_String, ConstantValue: string messageType }
-                    || string.IsNullOrWhiteSpace(messageType) || messageType.Length > 512
-                    || versions.Length > 0 && (version is not { IsConst: true, DeclaredAccessibility: Accessibility.Public, Type.SpecialType: SpecialType.System_Int32, ConstantValue: int value } || value <= 0))
+                if (!IsAccessible(type) || type.GetMembers("MessageType").Length > 0 || type.GetMembers("SchemaVersion").Length > 0)
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(InvalidDeclaration, type.Locations.FirstOrDefault(), type.Name));
                     continue;
                 }
-                var schemaVersion = version?.ConstantValue is int supplied ? supplied : 1;
                 var message = FindMessage(type)!;
-                if (!seenMessages.Add(message) || !seenSchemas.Add((messageType, schemaVersion)))
+                if (!seenMessages.Add(message))
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(DuplicateDeclaration, type.Locations.FirstOrDefault(), type.Name));
                     continue;
                 }
-                statements.Add($"            global::NOF.Infrastructure.OutboxServiceCollectionExtensions.AddOutboxHandler<{message.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}, {type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(services, {SymbolDisplay.FormatLiteral(messageType, true)}, {schemaVersion});");
+                statements.Add($"            global::NOF.Infrastructure.OutboxServiceCollectionExtensions.AddOutboxHandler<{message.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}, {type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(services);");
             }
             if (statements.Count == 0)
             {

@@ -41,7 +41,7 @@ Inbox 仅对 DataException 在新作用域中复核，确认同一消息 ID 与�
 | ClaimsPrincipal.HasPermission | IPermissionChecker，统一目录校验和已认证授予语义 |
 | ClaimsPrincipal.GetIdentity/GetIdentities | 原生 Identities.OfType<T>() 查询 |
 | JwtClaimsIdentity | 原生宿主认证与 ClaimsIdentity，不再提供将未验证 Token 声明标为已认证的解析包装 |
-| 空 NOFApplicationConstants 与未使用的服务方法反射辅助 | 现有具体常量与 ServiceOperationDescriptor.MethodInfo |
+| 空 NOFApplicationConstants 与未使用的服务方法反射辅助 | 现有具体常量与 OperationDescriptor.MethodInfo |
 
 事件注册生成器也改为生成原生 Replace；Provider Selector 保留后注册覆盖行为。HTTP 在计算语义上下文前复制原生身份，显式端点与 Fluent 端点继续走统一授权边界。Hosting 不再依赖 JWT 库，协议依赖由宿主选择。
 

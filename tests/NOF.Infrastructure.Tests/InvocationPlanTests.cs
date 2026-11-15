@@ -8,8 +8,8 @@ namespace NOF.Infrastructure.Tests;
 
 public sealed class InvocationPlanTests
 {
-    private static ServiceOperationDescriptor<Query, string> Read => new(typeof(IService), nameof(IService.Read));
-    private static ServiceOperationDescriptor<Query, string> Other => new(typeof(IService), nameof(IService.Other));
+    private static OperationDescriptor<Query, string> Read => new(typeof(IService), nameof(IService.Read));
+    private static OperationDescriptor<Query, string> Other => new(typeof(IService), nameof(IService.Other));
 
     [Fact]
     public async Task Scopes_NestInOrder_WithStableTiesAndOnlyOneInstancePerType()
@@ -87,7 +87,7 @@ public sealed class InvocationPlanTests
         using var provider = services.BuildServiceProvider();
         var pipeline = provider.GetRequiredService<IInvocationPipeline>();
         Assert.Equal([typeof(First)], pipeline.Describe(CreateContext(Other)).Filters.Select(item => item.FilterType));
-        var sibling = new ServiceOperationDescriptor<Query, string>(typeof(ISibling), nameof(ISibling.Read));
+        var sibling = new OperationDescriptor<Query, string>(typeof(ISibling), nameof(ISibling.Read));
         Assert.Empty(pipeline.Describe(CreateContext(sibling)).Filters);
     }
 
@@ -162,12 +162,12 @@ public sealed class InvocationPlanTests
         var services = new ServiceCollection().UseInMemoryInvocationPipeline().AddInvocationFilter<MetadataFilter>();
         var descriptor = Read;
         var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
-        registry.AddOperationImplementation(typeof(ServiceOperation<Query, string>), typeof(Handler));
+        registry.AddOperationImplementation(typeof(OperationHandler<Query, string>), typeof(Handler));
         registry.Add(new(typeof(IService), typeof(object))
         {
-            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            HandlerMappings = new Dictionary<string, OperationMapping>
             {
-                [nameof(IService.Read)] = new(typeof(ServiceOperation<Query, string>), typeof(Query), typeof(string)) { Descriptor = descriptor }
+                [nameof(IService.Read)] = new(typeof(OperationHandler<Query, string>), typeof(Query), typeof(string)) { Descriptor = descriptor }
             }
         });
         using var provider = services.BuildServiceProvider();
@@ -193,7 +193,7 @@ public sealed class InvocationPlanTests
         Assert.DoesNotContain(typeof(CatalogFilter).GetMethods(), method => method.Name.StartsWith("Create", StringComparison.Ordinal));
     }
 
-    private static InvocationContext CreateContext(ServiceOperationDescriptor operation, InvocationOrigin origin = InvocationOrigin.Local) => new()
+    private static InvocationContext CreateContext(OperationDescriptor operation, InvocationOrigin origin = InvocationOrigin.Local) => new()
     {
         Operation = operation,
         Origin = origin,
@@ -204,7 +204,7 @@ public sealed class InvocationPlanTests
     public sealed record Query;
     public interface IService : IApplicationService { string Read(Query input); string Other(Query input); }
     public interface ISibling : IApplicationService { string Read(Query input); }
-    public sealed class Handler : ServiceOperation<Query, string>
+    public sealed class Handler : OperationHandler<Query, string>
     {
         public Handler() => throw new InvalidOperationException("Metadata must not construct handlers");
         [RequirePermission("read")]

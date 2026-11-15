@@ -1,7 +1,7 @@
-using System.Data;
 using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
+using System.Data;
 
 namespace NOF.Infrastructure;
 
@@ -346,7 +346,6 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
         CreatedAtUtc = row.CreatedAtUtc,
         RetryCount = row.RetryCount,
         MessageType = row.MessageType,
-        SchemaVersion = row.SchemaVersion,
         NextAttemptAtUtc = row.NextAttemptAtUtc,
         Payload = row.Payload.ToArray(),
         Headers = row.Headers,

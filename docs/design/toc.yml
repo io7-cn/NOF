@@ -83,3 +83,8 @@
   href: ../en/design/framework-simplification.md
 - name: 框架边界与原生平台 API
   href: ../zh-CN/design/framework-simplification.md
+
+- name: One-way operations and uniform Inbox
+  href: ../en/design/one-way-operations.md
+- name: 单向操作与统一 Inbox
+  href: ../zh-CN/design/one-way-operations.md

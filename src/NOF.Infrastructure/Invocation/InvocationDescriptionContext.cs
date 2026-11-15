@@ -19,7 +19,7 @@ public sealed class InvocationDescriptionContext
     }
     private readonly InvocationContext _invocation;
     /// <summary>Gets the selected operation.</summary>
-    public ServiceOperationDescriptor Operation => _invocation.Operation;
+    public OperationDescriptor Operation => _invocation.Operation;
     /// <summary>Gets the entry origin.</summary>
     public InvocationOrigin Origin => _invocation.Origin;
     /// <summary>Gets selected cases as a defensive snapshot.</summary>
@@ -27,7 +27,7 @@ public sealed class InvocationDescriptionContext
     /// <summary>Reads configuration or the most specific implementation/contract attribute.</summary>
     public TMetadata? GetMetadata<TMetadata>() where TMetadata : class
         => _metadata.OfType<TMetadata>().LastOrDefault()
-            ?? new MemberInfo[] { _invocation.HandlerMethodInfo, _invocation.HandlerType, Operation.MethodInfo, Operation.ServiceType }
+            ?? new MemberInfo[] { _invocation.HandlerMethodInfo, _invocation.HandlerType, Operation.MethodInfo, Operation.DeclaringType }
                 .SelectMany(member => member.GetCustomAttributes(inherit: true).OfType<TMetadata>()).FirstOrDefault();
     /// <summary>Includes a generated branch owned by this filter; undeclared types are rejected.</summary>
     public void Include<TFailure>()

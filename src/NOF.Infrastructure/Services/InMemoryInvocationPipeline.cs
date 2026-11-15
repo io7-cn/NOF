@@ -11,7 +11,7 @@ namespace NOF.Infrastructure;
 public sealed class InMemoryInvocationPipeline(IServiceProvider services, InvocationPlanFactory plans) : IInvocationPipeline
 {
     /// <inheritdoc />
-    public InvocationPlan Describe(ServiceOperationDescriptor operation, InvocationOrigin origin) => plans.Describe(operation, origin);
+    public InvocationPlan Describe(OperationDescriptor operation, InvocationOrigin origin) => plans.Describe(operation, origin);
     /// <inheritdoc />
     public InvocationPlan Describe(InvocationContext context) => plans.Describe(context);
     /// <inheritdoc />
@@ -76,7 +76,7 @@ public static class InMemoryInvocationPipelineExtensions
     {
         services.AddNOFAbstraction();
         services.AddOptions<TenantAuthorizationOptions>();
-        services.TryAddSingleton<ApplicationServiceRegistry>();
+        services.GetOrAddSingleton<ApplicationServiceRegistry>();
         services.GetOrAddSingleton<InvocationFilterRegistry>();
         services.TryAddSingleton(provider =>
         {

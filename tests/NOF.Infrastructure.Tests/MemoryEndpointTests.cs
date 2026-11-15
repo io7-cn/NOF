@@ -13,15 +13,15 @@ public sealed class MemoryEndpointTests
     {
         var registry = new MemoryEndpointRegistry();
         var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
-        var reference = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
-        Assert.False(ServiceOperationInspector.CanSubmit(reference));
+        var reference = new OperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
+        Assert.False(OperationInspector.CanSubmit(reference));
         // Even a manually forged success-only descriptor must not bypass the Contract declaration.
-        var descriptor = new ServiceOperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
-        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue("invalid.v1", descriptor));
-        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription("facts.v1", "invalid", descriptor));
+        var descriptor = new OperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue<Reply>("invalid.v1"));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription<Reply>("facts.v1", "invalid"));
     }
-    private static ServiceOperationDescriptor<Message, Empty> First => new(typeof(IService), nameof(IService.First));
-    private static ServiceOperationDescriptor<Message, Empty> Second => new(typeof(IService), nameof(IService.Second));
+    private static OperationDescriptor<Message> First => new(typeof(IService), nameof(IService.First));
+    private static OperationDescriptor<Message> Second => new(typeof(IService), nameof(IService.Second));
 
     [Fact]
     public void SharedInput_DifferentOperationsAndSubscriptions_HaveIndependentIdentities()
@@ -79,25 +79,26 @@ public sealed class MemoryEndpointTests
     public async Task OperationPolicies_ApplyToEveryOrigin_BeforeHandlerConstruction(InvocationOrigin origin)
     {
         var services = new ServiceCollection().UseInMemoryInvocationPipeline();
-        services.AddInvocationFilter<Reject>();
+        var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
+        var direct = new OperationDescriptor<Message>(typeof(Handler));
+        registry.AddOperation(new(typeof(Handler), typeof(Message), typeof(void)) { Descriptor = direct });
+        services.AddInvocationFilters(filters => filters.UseCase<Handler>().Use<Reject>());
         services.AddScoped<Handler>(_ => throw new InvalidOperationException("Constructed a rejected handler"));
         using var provider = services.BuildServiceProvider();
-        var registry = new ApplicationServiceRegistry();
-        registry.Add(new(typeof(IService), typeof(object))
-        {
-            HandlerMappings = new Dictionary<string, ServiceOperationMapping> { [nameof(IService.First)] = new(typeof(Handler), typeof(Message), typeof(Empty)) }
-        });
         var executor = new OperationExecutor(provider, registry);
-        var result = await executor.ExecuteAsync(First, new Message(), Context.Empty, origin);
+        var result = await executor.ExecuteInScopeAsync(direct, new Message(), Context.Empty, origin);
         Assert.Equal("403", Assert.IsType<Denied>(result).Title);
     }
 
     public interface IService : IApplicationService
     {
-        Empty First(Message input);
-        Empty Second(Message input);
+        void First(Message input);
+        void Second(Message input);
         [FailureCase("Rejected")]
         Empty MayFail(Message input);
+    }
+    public abstract class Reply : OperationHandler<Message, Empty>
+    {
     }
     public sealed record Message;
     public sealed record Denied(string Title) : IFailure { public string Detail => "Denied"; }
@@ -109,8 +110,8 @@ public sealed class MemoryEndpointTests
             return ValueTask.FromResult<object?>(new Denied("403"));
         }
     }
-    public sealed class Handler : ServiceOperation<Message, Empty>
+    public sealed class Handler : OperationHandler<Message>
     {
-        public override Task<Empty> HandleAsync(Message input, InvocationContext context, CancellationToken cancellationToken) => Task.FromResult(Empty.Instance);
+        public override Task HandleAsync(Message input, InvocationContext context, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

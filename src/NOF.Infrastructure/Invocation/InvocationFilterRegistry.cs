@@ -32,7 +32,7 @@ public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
     }
 
     /// <summary>Resolves only applicable rules, preserving outer positions and explicit re-enablement.</summary>
-    public IReadOnlyList<InvocationFilterRegistration> Resolve(Type serviceType, string operationId)
+    public IReadOnlyList<InvocationFilterRegistration> Resolve(Type? serviceType, string operationId)
     {
         var rules = Freeze();
         var active = new Dictionary<Type, InvocationFilterRegistration>();
@@ -79,11 +79,14 @@ public sealed class InvocationFiltersBuilder(IServiceCollection services, Invoca
         }
         return new(services, registry, InvocationFilterScope.Service, typeof(TService), null);
     }
+    /// <summary>Gets rules for a generated operation base or a standalone handler.</summary>
+    public InvocationFilterScopeBuilder UseCase<THandler>() where THandler : OperationHandler
+        => UseCase(services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(THandler)));
     /// <summary>Gets rules for a stable contract/operation identity.</summary>
-    public InvocationFilterScopeBuilder UseCase(ServiceOperationDescriptor operation)
+    public InvocationFilterScopeBuilder UseCase(OperationDescriptor operation)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        return new(services, registry, InvocationFilterScope.UseCase, operation.ServiceType, operation.Id);
+        return new(services, registry, InvocationFilterScope.UseCase, operation.ContractType, operation.Id);
     }
 }
 

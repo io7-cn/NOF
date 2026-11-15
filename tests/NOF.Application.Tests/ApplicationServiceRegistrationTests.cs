@@ -58,13 +58,13 @@ public class ApplicationServiceRegistrationTests
 
     public class FirstServer : ApplicationService<IRegistrationService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } = new Dictionary<string, ServiceOperationMapping>();
+        public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; } = new Dictionary<string, OperationMapping>();
 
     }
 
     public class ReplacementServer : ApplicationService<IRegistrationService>, IApplicationServiceImplementation
     {
-        public static IReadOnlyDictionary<string, ServiceOperationMapping> HandlerMappings { get; } = new Dictionary<string, ServiceOperationMapping>();
+        public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; } = new Dictionary<string, OperationMapping>();
 
     }
 }

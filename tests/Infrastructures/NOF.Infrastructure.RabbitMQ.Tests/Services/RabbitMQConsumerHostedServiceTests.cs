@@ -14,7 +14,7 @@ public class RabbitMQConsumerHostedServiceTests
     public void QueueRegistrations_SelectOperationsWithoutAnyExchangeTopology()
     {
         var endpoints = new RabbitMQBuilder(new ServiceCollection());
-        var descriptor = new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply));
+        var descriptor = new OperationDescriptor<TestCommand>(typeof(ITestService), nameof(ITestService.Apply));
         endpoints.MapQueue("work.v1", descriptor);
         endpoints.MapQueue("audit.v1", descriptor);
         Assert.Equal(new[] { "work.v1", "audit.v1" }, endpoints.Freeze().Endpoints.Select(endpoint => endpoint.QueueName));
@@ -29,12 +29,12 @@ public class RabbitMQConsumerHostedServiceTests
         manager.Dispose();
         var endpoints = new RabbitMQBuilder(new ServiceCollection());
         endpoints.MapQueue("work.v1",
-            new ServiceOperationDescriptor<TestCommand, Empty>(typeof(ITestService), nameof(ITestService.Apply)));
+            new OperationDescriptor<TestCommand>(typeof(ITestService), nameof(ITestService.Apply)));
         using var service = new RabbitMQConsumerHostedService(manager, endpoints,
             new ServiceCollection().BuildServiceProvider(), NullLogger<RabbitMQConsumerHostedService>.Instance);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.StartAsync(CancellationToken.None));
     }
 
-    public interface ITestService : IApplicationService { Empty Apply(TestCommand request); }
+    public interface ITestService : IApplicationService { void Apply(TestCommand request); }
     public sealed class TestCommand;
 }

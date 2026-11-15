@@ -22,7 +22,7 @@ public sealed class NotificationDispatchIntegrationTests
         builder.AddNativeTestPersistence();
         ConfigureMessages(builder.Services);
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new OperationDescriptor<OrderedNotification>(typeof(INotificationOperations), "Ordered")));
         var calls = new List<int>();
         builder.Services.AddSingleton(calls);
         builder.Services.AddInvocationFilter<CountingDeny>();
@@ -74,7 +74,7 @@ public sealed class NotificationDispatchIntegrationTests
         ConfigureMessages(builder.Services);
         builder.Services.AddInvocationFilter<ServiceOperationPipelineTests.Deny>();
         builder.Services.Configure<TransactionalMessageOptions>(options => options.Inbox.PollingInterval = TimeSpan.FromMilliseconds(10));
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "rejected", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "rejected", new OperationDescriptor<FailingNotification>(typeof(INotificationOperations), "Failing")));
         // The handler is deliberately unregistered: policy rejection must precede its construction.
         using var host = builder.Build();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -107,9 +107,9 @@ public sealed class NotificationDispatchIntegrationTests
             options.Outbox.PollingInterval = TimeSpan.FromMilliseconds(10);
         });
 
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "first", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "First")));
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "second", new ServiceOperationDescriptor<ConcreteNotification, Empty>(typeof(INotificationOperations), "Second")));
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.base.v1", "base", new ServiceOperationDescriptor<BaseNotification, Empty>(typeof(INotificationOperations), "Base")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "first", new OperationDescriptor<ConcreteNotification>(typeof(INotificationOperations), "First")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.concrete.v1", "second", new OperationDescriptor<ConcreteNotification>(typeof(INotificationOperations), "Second")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.base.v1", "base", new OperationDescriptor<BaseNotification>(typeof(INotificationOperations), "Base")));
 
         builder.Services.AddSingleton<NotificationDispatchProbe>();
         builder.Services.AddScoped<FirstConcreteNotificationHandler>();
@@ -162,7 +162,7 @@ public sealed class NotificationDispatchIntegrationTests
             options.Inbox.MaxRetryCount = 2;
         });
 
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "failing", new ServiceOperationDescriptor<FailingNotification, Empty>(typeof(INotificationOperations), "Failing")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.failing.v1", "failing", new OperationDescriptor<FailingNotification>(typeof(INotificationOperations), "Failing")));
         builder.Services.AddSingleton<FailingNotificationProbe>();
         builder.Services.AddScoped<FailingNotificationHandler>();
 
@@ -263,7 +263,7 @@ public sealed class NotificationDispatchIntegrationTests
             options.Inbox.BatchSize = 10;
         });
 
-        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new ServiceOperationDescriptor<OrderedNotification, Empty>(typeof(INotificationOperations), "Ordered")));
+        builder.Services.AddMemoryMessaging(bindings => bindings.MapSubscription("test.ordered.v1", "ordered", new OperationDescriptor<OrderedNotification>(typeof(INotificationOperations), "Ordered")));
         builder.Services.AddSingleton<OrderedNotificationProbe>();
         builder.Services.AddScoped<OrderedNotificationHandler>();
 
@@ -474,27 +474,27 @@ public sealed class NotificationDispatchIntegrationTests
     private static void ConfigureMessages(IServiceCollection services, bool failingDelivery = false)
     {
         services.AddOutbox();
-        services.AddOutboxHandler<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>("test.concrete.v1");
-        services.AddOutboxHandler<BaseNotification, NotificationOutboxHandler<BaseNotification>>("test.base.v1");
-        services.AddOutboxHandler<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>("test.ordered.v1");
+        services.AddOutboxHandler<ConcreteNotification, NotificationOutboxHandler<ConcreteNotification>>();
+        services.AddOutboxHandler<BaseNotification, NotificationOutboxHandler<BaseNotification>>();
+        services.AddOutboxHandler<OrderedNotification, NotificationOutboxHandler<OrderedNotification>>();
         if (failingDelivery)
         {
-            services.AddOutboxHandler<FailingNotification, AlwaysFailingOutboxHandler<FailingNotification>>("test.failing.v1");
+            services.AddOutboxHandler<FailingNotification, AlwaysFailingOutboxHandler<FailingNotification>>();
         }
         else
         {
-            services.AddOutboxHandler<FailingNotification, NotificationOutboxHandler<FailingNotification>>("test.failing.v1");
+            services.AddOutboxHandler<FailingNotification, NotificationOutboxHandler<FailingNotification>>();
         }
         var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
         registry.Add(new(typeof(INotificationOperations), typeof(object))
         {
-            HandlerMappings = new Dictionary<string, ServiceOperationMapping>
+            HandlerMappings = new Dictionary<string, OperationMapping>
             {
-                ["First"] = new(typeof(FirstConcreteNotificationHandler), typeof(ConcreteNotification), typeof(Empty)),
-                ["Second"] = new(typeof(SecondConcreteNotificationHandler), typeof(ConcreteNotification), typeof(Empty)),
-                ["Base"] = new(typeof(BaseNotificationHandler), typeof(BaseNotification), typeof(Empty)),
-                ["Failing"] = new(typeof(FailingNotificationHandler), typeof(FailingNotification), typeof(Empty)),
-                ["Ordered"] = new(typeof(OrderedNotificationHandler), typeof(OrderedNotification), typeof(Empty)),
+                ["First"] = new(typeof(FirstConcreteNotificationHandler), typeof(ConcreteNotification), typeof(void)),
+                ["Second"] = new(typeof(SecondConcreteNotificationHandler), typeof(ConcreteNotification), typeof(void)),
+                ["Base"] = new(typeof(BaseNotificationHandler), typeof(BaseNotification), typeof(void)),
+                ["Failing"] = new(typeof(FailingNotificationHandler), typeof(FailingNotification), typeof(void)),
+                ["Ordered"] = new(typeof(OrderedNotificationHandler), typeof(OrderedNotification), typeof(void)),
             }
         });
     }
@@ -512,37 +512,37 @@ public sealed class NotificationDispatchIntegrationTests
 
     private interface INotificationOperations : IApplicationService
     {
-        Empty First(ConcreteNotification request);
-        Empty Second(ConcreteNotification request);
-        Empty Base(BaseNotification request);
-        Empty Failing(FailingNotification request);
-        Empty Ordered(OrderedNotification request);
+        void First(ConcreteNotification request);
+        void Second(ConcreteNotification request);
+        void Base(BaseNotification request);
+        void Failing(FailingNotification request);
+        void Ordered(OrderedNotification request);
     }
 
-    private sealed class FirstConcreteNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<ConcreteNotification, Empty>
+    private sealed class FirstConcreteNotificationHandler(NotificationDispatchProbe probe) : OperationHandler<ConcreteNotification>
     {
-        public override Task<Empty> HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
+        public override Task HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkFirstConcrete();
-            return Task.FromResult(Empty.Instance);
+            return Task.CompletedTask;
         }
     }
 
-    private sealed class SecondConcreteNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<ConcreteNotification, Empty>
+    private sealed class SecondConcreteNotificationHandler(NotificationDispatchProbe probe) : OperationHandler<ConcreteNotification>
     {
-        public override Task<Empty> HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
+        public override Task HandleAsync(ConcreteNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkSecondConcrete();
-            return Task.FromResult(Empty.Instance);
+            return Task.CompletedTask;
         }
     }
 
-    private sealed class BaseNotificationHandler(NotificationDispatchProbe probe) : ServiceOperation<BaseNotification, Empty>
+    private sealed class BaseNotificationHandler(NotificationDispatchProbe probe) : OperationHandler<BaseNotification>
     {
-        public override Task<Empty> HandleAsync(BaseNotification notification, InvocationContext context, CancellationToken cancellationToken)
+        public override Task HandleAsync(BaseNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkBase();
-            return Task.FromResult(Empty.Instance);
+            return Task.CompletedTask;
         }
     }
 
@@ -571,12 +571,12 @@ public sealed class NotificationDispatchIntegrationTests
         }
     }
 
-    private sealed class OrderedNotificationHandler(OrderedNotificationProbe probe) : ServiceOperation<OrderedNotification, Empty>
+    private sealed class OrderedNotificationHandler(OrderedNotificationProbe probe) : OperationHandler<OrderedNotification>
     {
-        public override Task<Empty> HandleAsync(OrderedNotification notification, InvocationContext context, CancellationToken cancellationToken)
+        public override Task HandleAsync(OrderedNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.Add(notification.Value);
-            return Task.FromResult(Empty.Instance);
+            return Task.CompletedTask;
         }
     }
 
@@ -589,9 +589,9 @@ public sealed class NotificationDispatchIntegrationTests
         public void MarkAttempt() => Interlocked.Increment(ref _attemptCount);
     }
 
-    private sealed class FailingNotificationHandler(FailingNotificationProbe probe) : ServiceOperation<FailingNotification, Empty>
+    private sealed class FailingNotificationHandler(FailingNotificationProbe probe) : OperationHandler<FailingNotification>
     {
-        public override Task<Empty> HandleAsync(FailingNotification notification, InvocationContext context, CancellationToken cancellationToken)
+        public override Task HandleAsync(FailingNotification notification, InvocationContext context, CancellationToken cancellationToken)
         {
             probe.MarkAttempt();
             throw new InvalidOperationException("Notification failed.");

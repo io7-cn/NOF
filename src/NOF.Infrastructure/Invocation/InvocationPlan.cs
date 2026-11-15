@@ -8,7 +8,7 @@ namespace NOF.Infrastructure;
 public sealed class InvocationPlan
 {
     /// <summary>Creates an immutable host plan.</summary>
-    public InvocationPlan(ServiceOperationDescriptor operation, InvocationOrigin origin,
+    public InvocationPlan(OperationDescriptor operation, InvocationOrigin origin,
         IEnumerable<InvocationFilterRegistration> filters, IEnumerable<InvocationFailureCase> failures,
         InvocationAuthorizationPolicy? authorization = null)
     {
@@ -24,7 +24,7 @@ public sealed class InvocationPlan
         FailureCases = Array.AsReadOnly(entries.DistinctBy(item => item.CaseType).ToArray());
     }
     /// <summary>Gets the operation described by this plan.</summary>
-    public ServiceOperationDescriptor Operation { get; }
+    public OperationDescriptor Operation { get; }
     /// <summary>Gets the cached authorization snapshot; custom engines may supply their own effective policy.</summary>
     public InvocationAuthorizationPolicy? Authorization { get; }
     /// <summary>Gets its entry origin.</summary>
@@ -34,7 +34,7 @@ public sealed class InvocationPlan
     /// <summary>Gets only failures contributed by effective filters and their Describe selections.</summary>
     public IReadOnlyList<InvocationFailureCase> FailureCases { get; }
     /// <summary>Gets the operation's statically known business results.</summary>
-    public IReadOnlyList<ServiceOperationResultCase> BusinessCases => Operation.ResultCases;
+    public IReadOnlyList<OperationResultCase> BusinessCases => Operation.ResultCases;
     /// <summary>Validates an open result without translating expected failures into exceptions.</summary>
     public object? Validate(object? result)
     {
@@ -46,7 +46,7 @@ public sealed class InvocationPlan
             return FailureCases.Any(item => item.CaseType.IsInstanceOfType(branch)) ? result
                 : throw new InvalidOperationException($"Filter failure '{branch.GetType()}' was not declared by the effective invocation plan.");
         }
-        if (result is null ? Operation.AllowsNullResponse
+        if (result is null ? Operation.IsOneWay || Operation.AllowsNullResponse
             : Operation.ResponseType.IsInstanceOfType(result) || BusinessCases.Any(item => item.CaseType.IsInstanceOfType(result))
                 || FailureCases.Any(item => item.CaseType.IsInstanceOfType(result)))
         {

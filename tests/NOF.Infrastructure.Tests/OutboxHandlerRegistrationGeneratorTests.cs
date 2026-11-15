@@ -23,15 +23,12 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
             public abstract class Adapter<T> : OutboxHandler<T>;
             public sealed class Handler : Adapter<Work>
             {
-                public const string MessageType = "0042 / stable-work";
-                public const int SchemaVersion = 3;
                 public Handler() => throw new InvalidOperationException("Do not construct while registering or staging.");
                 public override ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken ct)
                     => throw new InvalidOperationException();
             }
             public sealed class TextHandler : OutboxHandler<string>
             {
-                public const string MessageType = "text";
                 public override ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken ct)
                     => ValueTask.CompletedTask;
             }
@@ -65,27 +62,23 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
         using var scope = provider.CreateScope();
         var registry = provider.GetRequiredService<OutboxRegistry>();
         var schema = registry.Get(assembly.GetType("Work")!);
-        Assert.Equal("0042 / stable-work", schema.MessageType);
-        Assert.Equal(3, schema.SchemaVersion);
-        Assert.Equal(1, registry.Get(typeof(string)).SchemaVersion);
+        Assert.Equal(assembly.GetType("Work")!.ToString(), schema.MessageType);
         var stage = assembly.GetType("Producer")!.GetMethod("Stage")!.CreateDelegate<Func<IOutbox, ValueTask<Guid>>>();
         await stage(scope.ServiceProvider.GetRequiredService<IOutbox>());
-        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == "0042 / stable-work" && record.SchemaVersion == 3)), Moq.Times.Once);
+        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == "Work")), Moq.Times.Once);
         await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync("value", Context.Empty);
-        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == "text")), Moq.Times.Once);
+        store.Verify(value => value.Stage(Moq.It.Is<NOFOutboxMessage>(record => record.MessageType == typeof(string).ToString())), Moq.Times.Once);
         using var second = new ServiceCollection().AddOutbox().BuildServiceProvider();
         Assert.Throws<InvalidOperationException>(() => second.GetRequiredService<OutboxRegistry>().Get(typeof(string)));
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("public static string MessageType => \"work\";")]
-    [InlineData("private const string MessageType = \"work\";")]
-    [InlineData("public const string MessageType = \" \";")]
-    [InlineData("public const string MessageType = null;")]
-    [InlineData("public const string MessageType = \"work\"; public const int SchemaVersion = 0;")]
-    [InlineData("public const string MessageType = \"work\"; public const string SchemaVersion = \"1\";")]
-    [InlineData("public enum Version { One = 1 } public const string MessageType = \"work\"; public const Version SchemaVersion = Version.One;")]
+    [InlineData("public const string MessageType = \"legacy\";")]
+    [InlineData("public const int SchemaVersion = 0;")]
+    [InlineData("public const int SchemaVersion = 1;")]
+    [InlineData("public const string SchemaVersion = \"1\";")]
+    [InlineData("private const int SchemaVersion = 1;")]
+    [InlineData("public enum Version { One = 1 } public const Version SchemaVersion = Version.One;")]
     public void InvalidMetadata_ReportsNOF330(string members)
     {
         var (_, diagnostics) = Generate($$"""
@@ -99,22 +92,18 @@ public sealed class OutboxHandlerRegistrationGeneratorTests
         Assert.Contains(diagnostics, item => item.Id == "NOF330" && item.Severity == DiagnosticSeverity.Error);
     }
 
-    [Theory]
-    [InlineData("string", "other")]
-    [InlineData("int", "work")]
-    public void DuplicateClrTypeOrSchema_ReportsNOF331(string secondType, string secondId)
+    [Fact]
+    public void DuplicateMessageType_ReportsNOF331()
     {
         var (_, diagnostics) = Generate($$"""
             public sealed class One : OutboxHandler<string>
             {
-                public const string MessageType = "work";
                 public override ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken ct)
                     => ValueTask.CompletedTask;
             }
-            public sealed class Two : OutboxHandler<{{secondType}}>
+            public sealed class Two : OutboxHandler<string>
             {
-                public const string MessageType = "{{secondId}}";
-                public override ValueTask HandleAsync({{secondType}} message, OutboxDeliveryContext context, CancellationToken ct)
+                public override ValueTask HandleAsync(string message, OutboxDeliveryContext context, CancellationToken ct)
                     => ValueTask.CompletedTask;
             }
             """, expectErrors: true);

@@ -10,18 +10,17 @@ ApplicationService is the only application operation model for HTTP, local invoc
 // Contract: no partial modifier is needed for plain operations.
 public interface IMailService : IApplicationService
 {
-    Empty Send(SendMail request);
+    void Send(SendMail request);
 }
 
 // Application: implementations still belong to ApplicationService.
 public partial class MailService : ApplicationService<IMailService>;
 public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 {
-    public override async Task<Empty> HandleAsync(
+    public override async Task HandleAsync(
         SendMail request, InvocationContext invocation, CancellationToken ct)
     {
         await gateway.SendAsync(request, ct);
-        return Empty.Instance;
     }
 }
 ```
@@ -42,14 +41,13 @@ builder.Services.ConfigureRabbitMQ(endpoints =>
 });
 ```
 
-RabbitMQ maps existing queues only, while Memory owns its independent endpoint API. Exchange topology and publishing use native RabbitMQ APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `ServiceOperationDescriptor<T, Empty>`. Registration rejects non-Empty outputs and declared failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
+RabbitMQ maps existing queues only, while Memory owns its independent endpoint API. Exchange topology and publishing use native RabbitMQ APIs. Generic `MapQueue<Operation>(queue)` selects the generated descriptor; the explicit overload accepts only `OperationDescriptor<T>`. Registration accepts only void contracts, without declared business failures. An operation returning a DTO or FailureCase union cannot silently discard that output through an asynchronous binding. Multiple operations can consume the same payload. Each subscription gets its own receipt, deduplication key and retries. Instances using the same subscription ID compete; distinct subscription IDs receive independent copies. Choose globally namespaced, stable subscription IDs; deployment/service names no longer implicitly prefix them.
 
 ## Calls and durable intents
 
 InvokeAsync waits for an application operation to finish. Immediate remote calls use a concrete client. Transactional work uses IOutbox.EnqueueAsync(message, context, options, ct), followed by saving the same IUnitOfWork; its return value is an intent ID, not a remote business result. Infrastructure registers a stable message ID/version and OutboxHandler<T>; the outbox knows neither queues nor service operations.
 
 ```csharp
-await MailService.Send.InvokeAsync(services, mail, context, ct);
 await memoryClient.SendAsync("mail.send.v1", mail, context, ct);
 await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
@@ -59,7 +57,7 @@ Inbound endpoints belong to concrete transport adapters. The shared MessageBindi
 
 ## One execution boundary
 
-`IOperationExecutor` executes a selected descriptor in the existing host scope and waits for completion. Local `IOperationInvoker` creates an isolated scope and copies verified identity; HTTP uses the request scope; Inbox uses its existing transaction scope so handler changes, receipt progress and newly staged messages commit together. No handler instance is constructed before invocation filters run.
+`IOperationExecutor.ExecuteAsync` creates an isolated local reply scope and copies verified identity. The same concrete `OperationExecutor.ExecuteInScopeAsync` runs host-owned entries; HTTP uses the request scope; Inbox uses its existing transaction scope so handler changes, receipt progress and newly staged messages commit together. No handler instance is constructed before invocation filters run.
 
 Application-owned `InvocationContext` composes semantic `Context` and supplies Operation, InvocationId, Origin (Local/Http/Message), implementation policy metadata. Filters may replace semantic context through WithContext/WithTenantId; views preserve invocation identity; results flow through returns. `Context.Current` contains the semantic Context, not the InvocationContext. Pass `invocation.Context` to nested semantic APIs. Identity has one source, scoped IUserContext.
 
@@ -73,7 +71,7 @@ The memory and RabbitMQ transports use the same MessageInboxReceiver. It establi
 
 TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests and RejectMismatchedTenantForRequests are renamed to RequireAuthenticatedTenant and RejectMismatchedTenant; their policies now apply to every operation origin.
 
-Replace old command/notification handlers with Empty-returning operations and explicit inbound Queue/Subscription bindings. InvocationContext plus Origin replaces the old context subclasses. Immediate calls use concrete clients; deferred APIs become IOutbox.EnqueueAsync and options. Old dispatcher and producer routing APIs have no compatibility adapter.
+Replace old command/notification handlers with void-returning one-way operations and explicit inbound Queue/Subscription bindings. InvocationContext plus Origin replaces the old context subclasses. Immediate calls use concrete clients; deferred APIs become IOutbox.EnqueueAsync and options. Old dispatcher and producer routing APIs have no compatibility adapter.
 
 The generic outbox requires a schema migration after draining legacy records. Follow the [outbox migration procedure](transactional-outbox.md). Earlier inbox/broker route-name changes still require draining or an explicit old-to-new receipt and subscription mapping in every tenant database. Back up, preserve deduplication history, and never guess unresolved routes.
 
@@ -104,3 +102,7 @@ The EF Core adapter applies field access only to relationships explicitly mapped
 [Current Contract/Application/Abstraction boundaries](contract-boundaries.md).
 
 RabbitMQ maps operations only to existing queues; see the [native topology sample](rabbitmq-sample.md).
+
+[One-way semantics and uniform Inbox](one-way-operations.md). Empty remains a reply-producing success type; void has no result-returning invocation API.
+
+Standalone OperationHandler classes use the same model without a Contract method; see [standalone reactions and executor migration](one-way-operations.md#standalone-application-reactions).

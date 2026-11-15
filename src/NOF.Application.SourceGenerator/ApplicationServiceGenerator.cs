@@ -69,13 +69,13 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
         sb.AppendLine($"partial class {classSymbol.Name} : global::NOF.Application.IApplicationServiceImplementation");
         sb.AppendLine("{");
 
-        sb.AppendLine("    private static readonly global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> __handlerMappings =");
-        sb.AppendLine("        new global::System.Collections.Generic.Dictionary<string, global::NOF.Application.ServiceOperationMapping>");
+        sb.AppendLine("    private static readonly global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.OperationMapping> __handlerMappings =");
+        sb.AppendLine("        new global::System.Collections.Generic.Dictionary<string, global::NOF.Application.OperationMapping>");
         sb.AppendLine("        {");
 
         foreach (var method in serviceMethods)
         {
-            if (method.Parameters.Length != 1)
+            if (method.Parameters.Length != 1 || method.ReturnsVoid && ExpectedFailureModel.Declarations(method).Length > 0)
             {
                 continue;
             }
@@ -85,17 +85,17 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var originalReturnTypeName = ExpectedFailureModel.Declarations(method).Length > 0
                 ? ExpectedFailureModel.ResultTypeName(method, classSymbol)
                 : method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.ServiceOperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})) {{ Descriptor = {method.Name}.Descriptor }},");
+            sb.AppendLine($"            [nameof({serviceTypeName}.{method.Name})] = new global::NOF.Application.OperationMapping(typeof({method.Name}), typeof({requestTypeName}), typeof({originalReturnTypeName})) {{ Descriptor = {method.Name}.Descriptor }},");
         }
         sb.AppendLine("        };");
         sb.AppendLine();
-        sb.AppendLine("    public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.ServiceOperationMapping> HandlerMappings => __handlerMappings;");
+        sb.AppendLine("    public static global::System.Collections.Generic.IReadOnlyDictionary<string, global::NOF.Application.OperationMapping> HandlerMappings => __handlerMappings;");
         sb.AppendLine();
         sb.AppendLine();
 
         foreach (var method in serviceMethods)
         {
-            if (method.Parameters.Length != 1
+            if (method.Parameters.Length != 1 || method.ReturnsVoid && ExpectedFailureModel.Declarations(method).Length > 0
                 || method.Parameters[0].Type is not INamedTypeSymbol requestType)
             {
                 continue;
@@ -105,8 +105,8 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             var requestTypeName = requestType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             var failureDeclarations = ExpectedFailureModel.Declarations(method);
-            var operationBase = $"global::NOF.Application.ServiceOperation<{requestTypeName}, {responseType}>";
-            sb.AppendLine($"    public abstract class {method.Name} : {operationBase}, global::NOF.Application.IServiceOperationDefinition");
+            var operationBase = method.ReturnsVoid ? $"global::NOF.Application.OperationHandler<{requestTypeName}>" : $"global::NOF.Application.OperationHandler<{requestTypeName}, {responseType}>";
+            sb.AppendLine($"    public abstract class {method.Name} : {operationBase}");
             sb.AppendLine("    {");
             foreach (var metadataInterface in serviceInterface.AllInterfaces.Append(serviceInterface)
                 .Where(type => type.GetMembers().OfType<IMethodSymbol>().Any(member => member.MethodKind == MethodKind.Ordinary)))
@@ -125,6 +125,13 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 FailureCaseEmitter.EmitMembers(sb, method, ExpectedFailureModel.OperationTypeName(method, classSymbol));
             }
             sb.AppendLine("        /// <summary>Gets this application's descriptor with its complete response type.</summary>");
+            if (method.ReturnsVoid)
+            {
+                sb.AppendLine($"        public static global::NOF.Application.OperationDescriptor<{requestTypeName}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}));");
+                sb.AppendLine("    }");
+                sb.AppendLine();
+                continue;
+            }
             var caseCatalog = new StringBuilder();
             caseCatalog.Append('[');
             var businessCases = BusinessCaseTypes(method.ReturnType);
@@ -144,18 +151,15 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 caseCatalog.Append(", new(typeof(").Append(caseName).Append("), true, ").Append(SymbolDisplay.FormatLiteral(caseName, true)).Append(')');
             }
             caseCatalog.Append(']');
-            sb.AppendLine($"        public static global::NOF.Application.ServiceOperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")}, resultCases: {caseCatalog});");
-            sb.AppendLine("        static global::NOF.Application.ServiceOperationDescriptor global::NOF.Application.IServiceOperationDefinition.Descriptor => Descriptor;");
-            sb.AppendLine("        /// <summary>Provides this operation's static type arguments to an adapter.</summary>");
-            sb.AppendLine("        public static TResult Describe<TResult>(global::NOF.Application.IServiceOperationDescriptorVisitor<TResult> visitor) => visitor.Visit(Descriptor);");
+            sb.AppendLine($"        public static global::NOF.Application.OperationDescriptor<{requestTypeName}, {responseType}> Descriptor {{ get; }} = new(typeof({serviceTypeName}), nameof({serviceTypeName}.{method.Name}), allowsNullResponse: {(allowNull ? "true" : "false")}, resultCases: {caseCatalog});");
             sb.AppendLine("        /// <summary>Invokes this server operation through the configured application pipelines.</summary>");
             sb.AppendLine($"        public static async global::System.Threading.Tasks.Task<object?> InvokeAsync(");
             sb.AppendLine($"            global::System.IServiceProvider services, {requestTypeName} request, global::NOF.Abstraction.Context context,");
             sb.AppendLine("            global::System.Threading.CancellationToken cancellationToken = default)");
             sb.AppendLine("        {");
             sb.AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);");
-            sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IOperationInvoker>(services);");
-            sb.AppendLine($"            var execution = await invoker.InvokeAsync(Descriptor, request, context, cancellationToken).ConfigureAwait(false);");
+            sb.AppendLine("            var invoker = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::NOF.Application.IOperationExecutor>(services);");
+            sb.AppendLine($"            var execution = await invoker.ExecuteAsync(Descriptor, request, context, cancellationToken).ConfigureAwait(false);");
             sb.AppendLine("            return execution;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
@@ -172,7 +176,8 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
         context.AddSource($"{classSymbol.ToDisplayString().Replace('.', '_')}.ApplicationService.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
     }
 
-    private static ITypeSymbol[] BusinessCaseTypes(ITypeSymbol type)
+    /// <summary>Reads native business-union branches from original source or referenced metadata.</summary>
+    public static ITypeSymbol[] BusinessCaseTypes(ITypeSymbol type)
     {
         var union = type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.UnionAttribute")
             || type.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax().Kind().ToString() == "UnionDeclaration");

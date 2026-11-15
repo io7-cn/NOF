@@ -10,18 +10,17 @@ HTTP、进程内调用和异步消费统一使用 ApplicationService。CommandHa
 // Contract：普通契约不需要 partial。
 public interface IMailService : IApplicationService
 {
-    Empty Send(SendMail request);
+    void Send(SendMail request);
 }
 
 // Application：操作实现入口仍然属于 ApplicationService。
 public partial class MailService : ApplicationService<IMailService>;
 public sealed class SendMailHandler(IMailGateway gateway) : MailService.Send
 {
-    public override async Task<Empty> HandleAsync(
+    public override async Task HandleAsync(
         SendMail request, InvocationContext invocation, CancellationToken ct)
     {
         await gateway.SendAsync(request, ct);
-        return Empty.Instance;
     }
 }
 ```
@@ -42,14 +41,13 @@ builder.Services.ConfigureRabbitMQ(endpoints =>
 });
 ```
 
-RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；Memory 使用独立端点 API；泛型写法选择生成的操作描述符，显式重载只接受 ServiceOperationDescriptor<T, Empty>，注册时拒绝非 Empty 或声明失败的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
+RabbitMQ 仅映射已有 Queue，Exchange 拓扑和发送由原生 API 处理；Memory 使用独立端点 API；泛型写法选择生成的操作描述符，显式重载只接受 OperationDescriptor<T>，注册时只接受 void 且无业务 FailureCase 的操作，不能静默丢弃 DTO 或 FailureCase union。相同消息可以绑定不同操作。每个订阅拥有独立的收件记录、去重键和重试；同一订阅的多个实例竞争消费，不同订阅各收到一份。订阅标识应带业务命名空间并保持稳定，不再隐式拼接部署服务名。
 
 ## 调用与可靠意图
 
 InvokeAsync 等待应用操作完成。即时远程调用使用具体客户端；事务性工作通过 IOutbox.EnqueueAsync(message, context, options, ct) 暂存，再保存同一 IUnitOfWork，返回的是意图 ID，不是远程业务结果。基础设施注册稳定消息标识/版本与 OutboxHandler<T>，Outbox 不认识队列或服务操作。
 
 ```csharp
-await MailService.Send.InvokeAsync(services, mail, context, ct);
 await memoryClient.SendAsync("mail.send.v1", mail, context, ct);
 await outbox.EnqueueAsync(mail, context, cancellationToken: ct);
 await unitOfWork.SaveChangesAsync(ct);
@@ -59,7 +57,7 @@ await unitOfWork.SaveChangesAsync(ct);
 
 ## 一个执行边界
 
-IOperationExecutor 在宿主现有作用域内执行已确定的操作并等待完成。IOperationInvoker 为本地调用创建新作用域并复制已验证身份；HTTP 复用请求作用域；Inbox 复用既有事务作用域，使业务修改、处理进度和新增 Outbox 一同提交。过滤器执行前不会构造 Handler。
+IOperationExecutor.ExecuteAsync 为本地回信调用创建新作用域并复制已验证身份。同一个 OperationExecutor 实现通过 ExecuteInScopeAsync 执行宿主拥有的入口；HTTP 复用请求作用域；Inbox 复用既有事务作用域，使业务修改、处理进度和新增 Outbox 一同提交。过滤器执行前不会构造 Handler。
 
 Application 中的 InvocationContext 组合语义 Context，提供 Operation、InvocationId、Origin（Local/Http/Message）、实现策略元数据。过滤器通过 WithContext/WithTenantId 替换语义信息，视图保留调用身份，结果通过返回值传播。Context.Current 保存语义 Context；向嵌套语义 API 传递 invocation.Context。身份唯一来源仍是作用域内的 IUserContext。
 
@@ -73,7 +71,7 @@ HTTP 状态码和认证挑战头由原生 HTTP 端点与 HTTP 响应映射处理
 
 TenantAuthorizationOptions.RequireAuthenticatedTenantForRequests 和 RejectMismatchedTenantForRequests 分别更名为 RequireAuthenticatedTenant 和 RejectMismatchedTenant，策略现在适用于所有操作来源。
 
-旧 Command/Notification Handler 改成返回 Empty 的操作与明确入站 Queue/Subscription 绑定，旧上下文子类改用 InvocationContext＋Origin。即时调用使用具体客户端；延迟 API 改为 IOutbox.EnqueueAsync 加选项。旧分派器与出站路由 API 不保留兼容层。
+旧 Command/Notification Handler 改成返回 void 的单向操作与明确入站 Queue/Subscription 绑定，旧上下文子类改用 InvocationContext＋Origin。即时调用使用具体客户端；延迟 API 改为 IOutbox.EnqueueAsync 加选项。旧分派器与出站路由 API 不保留兼容层。
 
 通用 Outbox 必须在排空旧记录后执行结构迁移，按[发件箱迁移步骤](transactional-outbox.md)部署。此前 Inbox/Broker 路由名变更仍需排空，或为所有租户显式映射旧记录与订阅，备份并保留去重历史，不猜测未解析路由。
 
@@ -104,3 +102,7 @@ EF Core 在应用完成关系配置后，仅为已明确声明的 OwnsMany 自�
 [当前 Contract/Application/Abstraction 边界](contract-boundaries.md)。
 
 RabbitMQ 仅将操作映射到已有队列，参见[原生拓扑示例](rabbitmq-sample.md)。
+
+[单向语义与统一 Inbox](one-way-operations.md)。Empty 仍是可回信的成功类型；void 不生成返回业务结果的调用入口。
+
+独立 OperationHandler 类无需 Contract 方法即可使用同一执行模型，参见[内部反应与 Executor 迁移](one-way-operations.md#application-内部反应)。

@@ -68,3 +68,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [契约授权与动态权限](design/authorization.md)
 
 - [框架边界与原生平台 API](design/framework-simplification.md)
+
+- [单向操作与统一 Inbox](design/one-way-operations.md)

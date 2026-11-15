@@ -21,7 +21,7 @@ public sealed class ApplicationServiceAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor InvalidServiceMethodSignature = new(
         "NOF207",
         "Invalid service method signature",
-        "Method '{0}' on service interface '{1}' must have exactly 1 request parameter, must not declare CancellationToken, must not end with Async, and must return a non-Task value",
+        "Method '{0}' on service interface '{1}' must have exactly 1 request parameter, must not declare CancellationToken, must not end with Async, and must declare void or a non-Task business return type",
         "RpcService",
         DiagnosticSeverity.Error,
         true);
@@ -34,16 +34,8 @@ public sealed class ApplicationServiceAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Error,
         true);
 
-    public static readonly DiagnosticDescriptor VoidReturnNotSupported = new(
-        "NOF209",
-        "Void return is not supported",
-        "Method '{0}' on service interface '{1}' must not return void. Return a business value, such as Empty when no payload is needed.",
-        "RpcService",
-        DiagnosticSeverity.Error,
-        true);
-
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [RequestMustBeReferenceType, InvalidServiceMethodSignature, ServiceMethodOverloadsNotSupported, VoidReturnNotSupported];
+        [RequestMustBeReferenceType, InvalidServiceMethodSignature, ServiceMethodOverloadsNotSupported];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -72,11 +64,6 @@ public sealed class ApplicationServiceAnalyzer : DiagnosticAnalyzer
         foreach (var method in methods)
         {
             var location = method.Locations.FirstOrDefault();
-            if (method.ReturnsVoid)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(VoidReturnNotSupported, location, method.Name, service.Name));
-                continue;
-            }
             var returnName = method.ReturnType.OriginalDefinition.ToDisplayString();
             if (method.Parameters.Length != 1 || method.Name.EndsWith("Async", StringComparison.Ordinal)
                 || method.Parameters.Any(static parameter => parameter.Type.ToDisplayString() == "System.Threading.CancellationToken")

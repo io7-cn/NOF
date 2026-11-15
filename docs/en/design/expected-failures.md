@@ -29,7 +29,7 @@ Handlers inherit Task<Result> and new Case(...). A result only accepts its decla
 
 Service.Operation.Descriptor carries the complete business Result. HandleAsync returns Task<Result>, while complete InvokeAsync returns Task<object?> because effective host filters may also return their own concrete failures. InvocationResult.Value unwraps the boxed business union. Default/uninitialized unions and undeclared failures are rejected at the invocation boundary. Plain nullable and native-union responses remain available on methods without FailureCase; native union case metadata is obtained from type declarations/constructors, never user control flow.
 
-Application operation bases implement IServiceOperationDefinition through static Descriptor/Describe, enabling `group.MapDelete<NodeService.Delete>("/{id}")`. HTTP defaults declared IFailure cases to 422 ProblemDetails; configure 404/409 explicitly by concrete case type. The wire body is a native resource or ProblemDetails, with no Result envelope and no duplicate code/message extensions. See [HTTP adaptation](http-adaptation.md).
+Application registers typed OperationDescriptor metadata, enabling `group.MapDelete<NodeService.Delete>("/{id}")`. HTTP defaults declared IFailure cases to 422 ProblemDetails; configure 404/409 explicitly by concrete case type. The wire body is a native resource or ProblemDetails, with no Result envelope and no duplicate code/message extensions. See [HTTP adaptation](http-adaptation.md).
 
 Partial filters can also declare FailureCase and generate static FailureCases catalogs, without a Filter.Result union. Effective invocation plans describe only enabled cases without constructing handlers or filters. See [invocation extensions](invocation-extensions.md).
 

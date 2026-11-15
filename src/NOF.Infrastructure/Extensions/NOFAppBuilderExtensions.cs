@@ -31,8 +31,8 @@ public static partial class NOFInfrastructureExtensions
             builder.Services.AddNOFApplication();
             builder.Services.TryAddScoped<MessageDelivery>();
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
-            builder.Services.TryAddScoped<IOperationInvoker, OperationInvoker>();
-            builder.Services.TryAddScoped<IOperationExecutor, OperationExecutor>();
+            builder.Services.TryAddScoped<OperationExecutor>();
+            builder.Services.TryAddScoped<IOperationExecutor>(services => services.GetRequiredService<OperationExecutor>());
             builder.Services.UseInMemoryInvocationPipeline();
             builder.Services.AddInvocationFilter<TracingInvocationFilter>(-400);
             builder.Services.AddInvocationFilter<InstrumentationInvocationFilter>(-300);

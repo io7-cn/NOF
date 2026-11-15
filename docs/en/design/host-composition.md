@@ -48,7 +48,7 @@ JwtBearer performs issuer/audience/lifetime/signature validation, metadata disco
 
 Local calls copy the caller's scoped identity into an isolated scope. Durable messages do not persist user identities. Generic authorization and tenant trust checks continue to run for every origin, before handler construction. Hosts must establish trusted identities at their own boundaries.
 
-UseHostTenantAttribute, HostTenantInvocationFilter and ServiceOperationInspector.RequiresHostTenant are removed. No method or magic metadata key bypasses tenant policy or silently changes execution to the host tenant. Select an explicit Context at the entry or install an application-owned filter through Global/Service/UseCase rules. Its position relative to authorization is an explicit application policy. RequireAuthenticatedTenant has no platform-operation exception; a distinct platform policy belongs in application filters. Ordinary missing tenant normalization remains unchanged.
+UseHostTenantAttribute, HostTenantInvocationFilter and OperationInspector.RequiresHostTenant are removed. No method or magic metadata key bypasses tenant policy or silently changes execution to the host tenant. Select an explicit Context at the entry or install an application-owned filter through Global/Service/UseCase rules. Its position relative to authorization is an explicit application policy. RequireAuthenticatedTenant has no platform-operation exception; a distinct platform policy belongs in application filters. Ordinary missing tenant normalization remains unchanged.
 
 ## Per-host JSON options
 

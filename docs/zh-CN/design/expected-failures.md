@@ -29,7 +29,7 @@ Handler 直接继承 Task<Result> 和 new Case(...) 的写法；Result 只接受
 
 Service.Operation.Descriptor 包含完整业务 Result。HandleAsync 返回 Task<Result>，完整 InvokeAsync 返回 Task<object?>，因为有效宿主 Filter 也可以返回自己的具体失败。InvocationResult.Value 解包业务 union。未初始化 union 和未声明的失败在调用边界被拒绝。不使用 FailureCase 的方法仍可返回可空值或原生 union；原生 union 分支目录来自类型声明及构造器，不分析用户控制流。
 
-操作基类通过静态 Descriptor/Describe 实现 IServiceOperationDefinition，因此可以写 `group.MapDelete<NodeService.Delete>("/{id}")`。HTTP 默认将声明的 IFailure 映射为 422 ProblemDetails；404/409 等按具体分支类型显式配置。线上只返回原生资源或 ProblemDetails，不套 Result 信封，不重复输出 code/message 扩展。参见 [HTTP 适配](http-adaptation.md)。
+Application 注册强类型 OperationDescriptor 元数据，因此可以写 `group.MapDelete<NodeService.Delete>("/{id}")`。HTTP 默认将声明的 IFailure 映射为 422 ProblemDetails；404/409 等按具体分支类型显式配置。线上只返回原生资源或 ProblemDetails，不套 Result 信封，不重复输出 code/message 扩展。参见 [HTTP 适配](http-adaptation.md)。
 
 partial Filter 也可以声明 FailureCase，生成静态 FailureCases 目录，但不生成 Filter.Result。有效调用计划只描述启用的失败，不构造 Handler 或 Filter。参见[调用扩展](invocation-extensions.md)。
 

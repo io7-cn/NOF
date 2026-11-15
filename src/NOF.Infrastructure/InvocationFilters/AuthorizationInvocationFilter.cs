@@ -39,7 +39,9 @@ public sealed partial class AuthorizationInvocationFilter(
             var result = await authorizationHandler.AuthorizeAsync(new InboundAuthorizationContext
             {
                 Policy = plans?.Describe(context.Operation, context.Origin).Authorization?.Authorization
-                    ?? AuthorizationPolicyResolver.Resolve(context.ServiceType, context.ServiceMethodInfo),
+                    ?? (context.ServiceType is { } contract
+                        ? AuthorizationPolicyResolver.Resolve(contract, context.ServiceMethodInfo)
+                        : AuthorizationPolicy.Anonymous),
                 User = userContext.User,
                 ExecutionContext = trusted.Context,
                 Input = input,

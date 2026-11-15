@@ -9,9 +9,10 @@ namespace NOF.Infrastructure;
 /// <summary>Assembles durable receipt storage and processing independently of any transport topology.</summary>
 public static class InboxServiceCollectionExtensions
 {
-    /// <summary>Enables Inbox storage, transactions, retry and cleanup; adapters supply keyed IInboxHandler entries.</summary>
+    /// <summary>Enables Inbox storage, transactions, retry and cleanup; adapters supply only stable receipt-to-void-operation metadata.</summary>
     public static IServiceCollection AddInbox(this IServiceCollection services)
     {
+        services.GetOrAddSingleton<InboxEndpointRegistry>();
         services.AddLogging();
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
         services.AddNOFJson();

@@ -61,7 +61,7 @@ HTTP 适配器重置作用域 IUserContext，只复制 HttpContext.User；不再
 本地调用把调用方作用域的身份复制到隔离作用域，持久化消息不保存用户身份。通用授权与租户信任检查仍在所有来源上、
 构造 Handler 之前执行。各宿主在自己的入口建立可信身份。
 
-UseHostTenantAttribute、HostTenantInvocationFilter 与 ServiceOperationInspector.RequiresHostTenant 全部删除。
+UseHostTenantAttribute、HostTenantInvocationFilter 与 OperationInspector.RequiresHostTenant 全部删除。
 不再通过方法或魔术元数据键绕过租户策略、隐式切到宿主租户。入口显式选择 Context，或通过 Global/Service/UseCase
 规则安装应用自有 Filter；它与授权的先后顺序是明确的应用策略。RequireAuthenticatedTenant 不再有平台操作例外，
 独立的平台策略由应用 Filter 表达。缺失租户的普通规范化规则保持不变。

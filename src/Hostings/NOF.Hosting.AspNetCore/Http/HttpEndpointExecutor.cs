@@ -54,7 +54,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
     public HttpEndpointBinding Binding { get; }
 
     /// <summary>Compiles metadata without invoking constructors, providers, handlers or selectors.</summary>
-    public static HttpEndpointExecutor<TRequest> Compile(EndpointBuilder endpoint, ServiceOperationDescriptor operation, IReadOnlyList<string> methods)
+    public static HttpEndpointExecutor<TRequest> Compile(EndpointBuilder endpoint, OperationDescriptor operation, IReadOnlyList<string> methods)
     {
         var services = endpoint.ApplicationServices;
         var json = services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
@@ -236,8 +236,8 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             context = context.WithTenantId(_tenant(http));
         }
 
-        var result = InvocationResult.Value(await http.RequestServices.GetRequiredService<IOperationExecutor>()
-            .ExecuteAsync(Binding.Operation, input!, context, InvocationOrigin.Http, http.RequestAborted));
+        var result = InvocationResult.Value(await http.RequestServices.GetRequiredService<OperationExecutor>()
+            .ExecuteInScopeAsync(Binding.Operation, input!, context, InvocationOrigin.Http, http.RequestAborted));
         var source = result is null ? typeof(void) : _responses.Keys.OrderBy(type => type == result.GetType() ? 0 : 1)
             .FirstOrDefault(type => type.IsInstanceOfType(result)) ?? result.GetType();
         var response = _responses.GetValueOrDefault(source) ?? new HttpResponseMapping(source, null, null, null, false);

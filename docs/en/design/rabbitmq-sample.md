@@ -45,7 +45,7 @@ builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, declare their stable MessageType constants (version 1), and are automatically registered by the application part. Each handler preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, need no MessageType/SchemaVersion metadata, and are automatically registered by the application part. Each handler preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
@@ -69,7 +69,7 @@ rabbit.Topology(async (channel, ct) =>
 })
 .MapQueue<MessageDemoService.SendMail>(RabbitMQDemoRoutes.MailQueue)
 .MapQueue<MessageDemoService.RecordOrder>(RabbitMQDemoRoutes.OrderAuditQueue)
-.MapQueue<MessageDemoService.CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
+.MapQueue<CountOrder>(RabbitMQDemoRoutes.OrderMetricsQueue);
 ```
 
 | Intent | Physical destination | Consumer operation |
@@ -114,7 +114,7 @@ ConfigureRabbitMQ is independent, fluent and repeatable before Build. Callbacks 
 
 MapQueue optionally accepts `configureChannel: async (channel, ct) => await channel.BasicQosAsync(0, 8, false, ct)` and `requeueOnFailure`; default consumer prefetch is 1 and receipt-storage failures requeue. These settings belong to the selected endpoint.
 
-The common Inbox still resolves scoped IInboxHandler entries through native keyed DI using opaque receipt Route values. It persists/deduplicates and executes in the existing tenant scope and transaction; it never interprets topology. RabbitMQ queue keys are `rabbitmq:queue:<queue>`; Memory has its own independent endpoints and keys. Native GUID MessageId is preferred, with the NOF envelope header as fallback.
+The common Inbox resolves only InboxEndpoint metadata by opaque receipt Route and directly executes the void UseCase, without transport-specific handlers. It persists/deduplicates and executes in the existing tenant scope and transaction; it never interprets topology. RabbitMQ queue keys are `rabbitmq:queue:<queue>`; Memory has its own independent endpoints and keys. Native GUID MessageId is preferred, with the NOF envelope header as fallback.
 
 Before upgrading, stop/drain old consumers and Inbox work and back up data. Map old `queue:`/`subscription:` (including the previous `rabbitmq:subscription:`) receipt keys to the selected queue key, updating Inbox.Route while retaining IDs and completed deduplication history. Remove old ordering state only through the explicit migration below. Drain or explicitly move deliveries from old subscription queues to the new order queues before retiring topology. Old queues may carry NOF-installed dead-letter arguments: compare declarations and intentionally retain/recreate them through native RabbitMQ setup while offline. NOF performs no automatic remapping, deletion, replay or topology repair. Outbox schemas stay v1; old payloads are not reinterpreted.
 
@@ -134,3 +134,5 @@ The handler forwards `OutboxDeliveryContext.Headers` through MessageDelivery int
 The Notifications sample uses EnsureCreated for its local SQLite file; it does not upgrade existing schemas. Stop the receiver and drain/migrate ordered receipts before upgrading. Back up the file and apply an explicit SQLite schema migration removing the two order-state tables, ordering indexes and the three columns on NOFInboxMessage while retaining receipt IDs and history. A disposable demo database may be deliberately recreated after backup; a persistent service must preserve deduplication history. PostgreSQL producer migrations do not migrate this separate receiver database.
 
 The producer selects native EF persistence and adds AddOidcEntityFrameworkCore for OIDC state. The receiver uses native EF Inbox stores in its existing SQLite context. Removing the unused Inbox classification column is an explicit migration for each existing producer/receiver database; receipt routes and message IDs do not change.
+
+CountOrder is an Application-private OperationHandler<OrderCreated>, not a Contract method. AddApplicationPart discovers it and MapQueue<CountOrder> binds it through the same Inbox/policy pipeline.

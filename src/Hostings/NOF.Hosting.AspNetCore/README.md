@@ -8,7 +8,7 @@ orders.MapGet<OrderService.Find>("/{id}")
     .Response<OrderService.Find.NotFound>(404);
 ```
 
-Operation bases implement static IServiceOperationDefinition. Typed Request/Response
+Operation descriptors retain static type arguments through IOperationDescriptorVisitor; registered generated bases and standalone OperationHandler classes can both be mapped. Typed Request/Response
 rules replace complete exact-type mappings on native groups/endpoints; no endpoint-module registration or
 client generation is required. AddNOF registers JSON, ProblemDetails and OpenAPI services.
 Call UseNOF, ordinary feature extensions, native health checks and host-owned identity endpoints
@@ -26,3 +26,5 @@ See the [English guide](../../../docs/en/design/http-adaptation.md),
 ## License
 
 Apache-2.0
+
+Generic operation response mappings accept reply-producing contracts only. Void operations require a native durable-acceptance endpoint with a transport acknowledgement, without returning consumer business results. See [one-way semantics](../../../docs/en/design/one-way-operations.md).

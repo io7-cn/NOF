@@ -11,7 +11,36 @@ namespace NOF.Infrastructure;
 public sealed class OperationExecutor(IServiceProvider services, ApplicationServiceRegistry registry) : IOperationExecutor
 {
     /// <inheritdoc />
-    public async Task<object?> ExecuteAsync(ServiceOperationDescriptor operation, object input,
+    public async Task<object?> ExecuteAsync(OperationDescriptor operation, object input,
+        Context context, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(operation);
+        if (operation.IsOneWay)
+        {
+            throw new InvalidOperationException("One-way operations must be submitted through a transport-owned acceptance endpoint, not a reply-producing local invocation.");
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out _))
+        {
+            context = context.WithTenantId(Context.Current.TenantId);
+        }
+        var caller = services.GetRequiredService<IUserContext>();
+        var identities = caller.User.Identities.Select(identity => identity.Clone()).ToArray();
+        await using var scope = services.CreateAsyncScope();
+        var user = scope.ServiceProvider.GetRequiredService<IUserContext>();
+        if (!ReferenceEquals(caller, user))
+        {
+            user.Logout();
+            user.User.AddIdentities(identities);
+        }
+        var result = await scope.ServiceProvider.GetRequiredService<OperationExecutor>()
+            .ExecuteInScopeAsync(operation, input, context, InvocationOrigin.Local, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>Executes in the host-owned scope without creating a second transaction or identity scope.</summary>
+    public async Task<object?> ExecuteInScopeAsync(OperationDescriptor operation, object input,
         Context context, InvocationOrigin origin, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -19,8 +48,7 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
         using var binding = services.BindNOF(context);
-        var mapping = registry.GetRegistration(operation.ServiceType).HandlerMappings.GetValueOrDefault(operation.OperationName)
-            ?? throw new InvalidOperationException($"No handler mapping for '{operation.Id}'.");
+        var mapping = registry.GetMapping(operation);
         if (mapping.RequestType != operation.RequestType || mapping.ReturnType != operation.ResponseType
             || !operation.RequestType.IsInstanceOfType(input))
         {
@@ -38,10 +66,10 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
         var plan = pipeline.Describe(invocation);
         var result = await pipeline.ExecuteAsync(invocation, input, async (current, value, ct) =>
         {
-            var handler = (ServiceOperation)services.GetRequiredService(mapping.HandlerType);
+            var handler = (OperationHandler)services.GetRequiredService(mapping.HandlerType);
             var business = await handler.HandleAsync(value, current, ct).ConfigureAwait(false);
             InvocationResult.ValidateInitialization(business);
-            if (business is null ? !operation.AllowsNullResponse : !operation.ResponseType.IsInstanceOfType(business))
+            if (operation.IsOneWay ? business is not null : business is null ? !operation.AllowsNullResponse : !operation.ResponseType.IsInstanceOfType(business))
             {
                 throw new InvalidOperationException($"The business response does not match '{operation.ResponseType}'.");
             }
@@ -64,7 +92,7 @@ public static class InboundContextReflection
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.NonPublicMethods)] Type handlerType,
         Type inputType)
         => handlerType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .FirstOrDefault(method => method.Name == nameof(ServiceOperation.HandleAsync)
+            .FirstOrDefault(method => method.Name == nameof(OperationHandler.HandleAsync)
                 && method.GetParameters() is [{ ParameterType: var input }, { ParameterType: var context }, { ParameterType: var token }]
                 && input == inputType && context == typeof(InvocationContext) && token == typeof(CancellationToken))
             ?? throw new InvalidOperationException($"No typed operation method on '{handlerType}'.");
