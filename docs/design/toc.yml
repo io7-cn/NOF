@@ -88,3 +88,7 @@
   href: ../en/design/one-way-operations.md
 - name: 单向操作与统一 Inbox
   href: ../zh-CN/design/one-way-operations.md
+- name: JSON execution context and durable delivery
+  href: ../en/design/execution-context.md
+- name: JSON 执行上下文与可靠投递
+  href: ../zh-CN/design/execution-context.md

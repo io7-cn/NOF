@@ -45,22 +45,22 @@ builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 通过 MessageDelivery 保留可信投递元数据，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 直接转发已准备好的 OutboxDeliveryContext.Headers，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
 await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
 ```
 
-宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 通过 `MessageDelivery.ExecuteAsync(..., deliveryContext)` 保留原 Outbox ID、租户/追踪和自定义 Headers，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
+宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 直接转发完整 `deliveryContext.Headers`，其中已含 JSON 上下文、原 Outbox ID、租户/追踪和自定义 Headers，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
 
 接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
 
 ```csharp
-builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString))
+    .ConfigureRabbitMQ(NotificationMessaging.Configure);
 
 // The feature module inlines its native topology and endpoint declarations.
-builder.Services.ConfigureRabbitMQ(NotificationMessaging.Configure);
 
 // NotificationMessaging.Configure:
 rabbit.Topology(async (channel, ct) =>
@@ -129,10 +129,12 @@ Builder 同时持有宿主配置，删除 RabbitMQConfiguration 和 RabbitMQConf
 
 合并保留队列名、负载 Schema 和回执键；移除框架顺序能力同时会删除 SQLite 模型中的顺序列与状态表。示例测试使用合并后的接收宿主，并链接生产者的真实客户端和 Handler，验证元数据完整传递及程序集依赖边界。
 
-处理器经 MessageDelivery 将 `OutboxDeliveryContext.Headers` 转为原生 RabbitMQ Headers，重试保留入队时的自定义头快照，NOF 补充 ID、租户与追踪。示例不保证邮件、审计、指标队列之间的先后关系。需要顺序时，由基础设施实现领取调度与消费协调，业务版本则放入负载。升级已有数据库前，执行[移除顺序模型的迁移](transactional-outbox.md#可靠处理与迁移)。
+处理器直接将 `OutboxDeliveryContext.Headers` 转为原生 RabbitMQ Headers，重试保留入队时的自定义头快照，NOF 补充 ID、租户与追踪。示例不保证邮件、审计、指标队列之间的先后关系。需要顺序时，由基础设施实现领取调度与消费协调，业务版本则放入负载。升级已有数据库前，执行[移除顺序模型的迁移](transactional-outbox.md#可靠处理与迁移)。
 
 Notifications 示例使用 EnsureCreated 创建本地 SQLite 文件，不升级已有结构。升级前停止接收者，排空或显式迁移顺序回执，备份文件，再通过显式 SQLite 迁移删除两张顺序状态表、顺序索引与 NOFInboxMessage 的三个顺序列，保留回执 ID 和历史。可丢弃的演示数据库可在备份后有意重建；持久服务必须保留去重历史。生产者的 PostgreSQL 迁移不会升级这个独立接收者数据库。
 
 生产者使用原生 EF 持久化，并通过 AddOidcEntityFrameworkCore 注册 OIDC 存储；接收者在原有 SQLite 上下文中使用原生 EF Inbox Store。已有生产者和接收者数据库需要显式迁移，删除未使用的 Inbox 分类列；回执路由与消息 ID 不变。
 
 CountOrder 是 Application 内部的 OperationHandler<OrderCreated>，无需 Contract 方法。AddApplicationPart 自动发现它，MapQueue<CountOrder> 绑定后仍走同一 Inbox 与策略管线。
+
+JSON Context、可直接发送的投递参数与链式注册参见[JSON 执行上下文](execution-context.md)。

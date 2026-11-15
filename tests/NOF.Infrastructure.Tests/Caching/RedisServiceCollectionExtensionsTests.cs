@@ -36,7 +36,7 @@ public sealed class RedisServiceCollectionExtensionsTests
         var services = new ServiceCollection();
 
         services.AddCacheService()
-            .Configure(options => options.KeyPrefix = "app:{tenantId}:")
+            .ConfigureCacheServiceOptions(options => options.KeyPrefix = "app:{tenantId}:")
             .AddRedisCache(
             new ConfigurationOptions
             {
@@ -44,7 +44,7 @@ public sealed class RedisServiceCollectionExtensionsTests
                 AbortOnConnectFail = false
             },
             options => options.MinimumLockRenewalDuration = TimeSpan.FromMinutes(3))
-            .Configure(options => options.LockRenewalIntervalFactor = 0.75);
+            .ConfigureCacheServiceOptions(options => options.LockRenewalIntervalFactor = 0.75);
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConnectionMultiplexer));
         Assert.Contains(services, descriptor =>

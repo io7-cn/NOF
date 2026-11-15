@@ -6,6 +6,8 @@ using NOF.Infrastructure;
 using System.Diagnostics;
 using System.Security.Claims;
 
+using System.Text.Json.Nodes;
+
 namespace NOF.Test;
 
 public sealed class NOFTestScope : IAsyncDisposable, IDisposable
@@ -69,17 +71,17 @@ public sealed class NOFTestScope : IAsyncDisposable, IDisposable
         return this;
     }
 
-    public NOFTestScope SetContextItem(object key, object? value)
+    public NOFTestScope SetContextItem(string key, JsonNode? value)
     {
         return SetContext(Context.WithItem(key, value));
     }
 
-    public NOFTestScope SetContextItems(IReadOnlyDictionary<object, object?> items)
+    public NOFTestScope SetContextItems(JsonObject items)
     {
         return SetContext(Context.WithItems(items));
     }
 
-    public NOFTestScope RemoveContextItem(object key)
+    public NOFTestScope RemoveContextItem(string key)
     {
         return SetContext(Context.WithoutItem(key));
     }

@@ -41,10 +41,24 @@ builder.Services.AddIdGenerator()
 builder.Services.AddObjectStorage()
     .AddFileSystemObjectStorage();
 builder.Services.AddCacheService()
-    .Configure(options => options.KeyPrefix = "nof-sample:{tenantId}:")
+    .ConfigureCacheServiceOptions(options => options.KeyPrefix = "nof-sample:{tenantId}:")
     .AddRedisCache(
         builder.Configuration.GetConnectionString("redis")
             ?? throw new InvalidOperationException("Connection string 'redis' is required."));
+
+builder.UseDbContext<ConfigurationDbContext>()
+    .WithTenantMode(TenantMode.DatabasePerTenant)
+    .WithSoftDelete(true)
+    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
+        ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."))
+    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
+    .MigrateOnStart();
+
+builder.Services.AddRabbitMQ(options =>
+    {
+        options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
+    });
+
 
 // Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
 builder.Logging.AddOpenTelemetry(options => { options.IncludeFormattedMessage = true; options.IncludeScopes = true; });
@@ -64,21 +78,7 @@ var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
 var sampleIssuer = $"{sampleOrigin}/oauth2";
 
 builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-
 builder.Services.AddSampleIdentity<ConfigurationDbContext>(new Uri(sampleIssuer + "/"), builder.Environment.IsDevelopment());
-
-builder.Services.AddRabbitMQ(options =>
-{
-    options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
-});
-
-builder.UseDbContext<ConfigurationDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithSoftDelete(true)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnStart();
 
 builder.Services.Replace(ServiceDescriptor.Scoped<ISampleApi, ServerSampleApi>());
 builder.Services.Replace(ServiceDescriptor.Scoped<IOAuthDemoApi, ServerOAuthDemoApi>());

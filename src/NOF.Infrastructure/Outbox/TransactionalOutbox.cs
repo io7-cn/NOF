@@ -16,8 +16,8 @@ public sealed class TransactionalOutbox(OutboxRegistry registry, IOutboxStore st
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
         var registration = registry.Get(typeof(TMessage));
-        var tenant = context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out var supplied)
-            && supplied is string requested ? TenantId.Normalize(requested) : Context.Current.TenantId;
+        var tenant = context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out _)
+            ? context.TenantId : Context.Current.TenantId;
         if (tenant != Context.Current.TenantId)
         {
             throw new InvalidOperationException("An outbox intent must use the tenant of its current unit of work.");
@@ -29,18 +29,22 @@ public sealed class TransactionalOutbox(OutboxRegistry registry, IOutboxStore st
             {
                 if (string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.MessageId, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.TenantId, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.TraceParent, StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.TraceParent, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(header.Key, NOFAbstractionConstants.Transport.Headers.Context, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new ArgumentException("Message ID, tenant and trace headers are managed by NOF.", nameof(headers));
+                    throw new ArgumentException("Message ID, tenant, trace and context headers are managed by NOF.", nameof(headers));
                 }
                 metadata.Add(header.Key, header.Value);
             }
         }
         metadata[NOFAbstractionConstants.Transport.Headers.TenantId] = tenant;
-        // Persist only explicitly supplied headers, never arbitrary Context.Items or the current identity.
+        metadata[NOFAbstractionConstants.Transport.Headers.Context] = context.WithTenantId(tenant).Items.ToJsonString();
+        var traceParent = Activity.Current?.ToTraceParent();
+        metadata[NOFAbstractionConstants.Transport.Headers.TraceParent] = traceParent;
         var record = NOFOutboxMessage.Create(registration.MessageType,
-            serializer.Serialize(message, typeof(TMessage)).ToArray(),
-            serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>)), Activity.Current?.ToTraceParent());
+            serializer.Serialize(message, typeof(TMessage)).ToArray(), string.Empty, traceParent);
+        metadata[NOFAbstractionConstants.Transport.Headers.MessageId] = record.Id.ToString();
+        record.Headers = serializer.SerializeToText(metadata, typeof(Dictionary<string, string?>));
         store.Stage(record);
         return ValueTask.FromResult(record.Id);
     }

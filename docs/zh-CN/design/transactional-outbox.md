@@ -19,9 +19,9 @@ await unitOfWork.SaveChangesAsync(ct);
 
 IOutbox.EnqueueAsync 返回 ValueTask<Guid>。该 ID 标识已暂存的快照，不代表外部副作用完成。入队时立即序列化，之后修改原对象不会改变意图。它不发起网络调用，也不保存或提交事务。必须保存同一作用域的工作单元；显式事务还需要 CommitAsync。未保存作用域的释放或事务回滚，会连同业务改动一起丢弃意图。
 
-以当前持久化租户为准，显式指定不一致租户会被拒绝。规范化租户和生产者追踪随显式 Headers 保存；不会复制当前身份、访问令牌、Claims 或任意 Context.Items。Headers 是持久化数据，调用方应明确选择可保存的值，不应复制整个请求头。每次尝试恢复新的 Context 并创建独立 DI 作用域，不模拟原请求用户。
+以当前持久化租户为准，显式不一致租户被拒绝。入队时保存所有 JSON 标量 Context 项、负载、显式 Headers、规范化租户、稳定消息 ID 和入队追踪；不序列化 IUserContext/Claims 或 DI/运行时状态。每次尝试都在构造 Handler 前还原并绑定 Context，使用新的 DI 作用域。
 
-第三个可选参数是 `IReadOnlyDictionary<string, string?> headers`。入队时立即复制并序列化字典，保留 null 值；每次尝试通过 `OutboxDeliveryContext.Headers` 提供只读快照。键按大小写不敏感处理。传入框架管理的 `X-Message-Id`、`X-Tenant-Id` 或 `traceparent` 会在暂存前报错。MessageDelivery 复制自定义头，再写入稳定消息 ID、当前持久化租户与本次追踪。
+第三个可选参数是 `IReadOnlyDictionary<string, string?> headers`，入队即复制并序列化，保留 null。OutboxDeliveryContext.Headers 只读且可直接发送，已包含 X-Message-Id、X-Tenant-Id、traceparent 和 X-NOF-Context 中的 JSON 快照；这些大小写不敏感的管理键不能被覆盖。原生适配器直接转发，无需 MessageDelivery，该服务已删除。
 
 ```csharp
 var messageId = await outbox.EnqueueAsync(message, invocation.Context,
@@ -117,3 +117,5 @@ builder.Services.Configure<TransactionalMessageOptions>(options => options.Outbo
 端点映射现由具体传输适配器负责。调整已有 Inbox 回执路由前，参见[适配器边界与回执键迁移](rabbitmq-sample.md#适配器边界与迁移)。
 
 Inbox 回执只按 ID 与不透明 Route 标识，删除未使用的 Command/Notification 标签和 Memory Rider 包装。分类列迁移及原生持久化配置见[持久化边界](persistence-boundaries.md)。默认内存后端只保存消息状态。
+
+JSON Context、可直接发送的投递参数与链式注册参见[JSON 执行上下文](execution-context.md)。

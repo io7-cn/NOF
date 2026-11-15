@@ -14,7 +14,7 @@ HTTP 的 AddNOF 重载还会注册适配器自身需要的 JSON、ProblemDetails
 ```csharp
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.Services.AddCacheService()
-    .Configure(options => options.KeyPrefix = "app:{tenantId}:")
+    .ConfigureCacheServiceOptions(options => options.KeyPrefix = "app:{tenantId}:")
     .AddMemoryCacheService();
 // 或 .AddRedisCache(connectionString)
 builder.Services.AddObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = "objects");
@@ -26,10 +26,10 @@ builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 
 入口注册公共策略，类型化 Selector 选择 Provider 并保留完整方法名。重复调用入口不会重复注册共享服务，
 自定义实现仍可直接使用 DI。选择缓存不会顺带启动传输或持久化 Worker。AddMemoryMessaging 开启内存消息；
-AddInbox/AddOutbox 按需安装消息专用内存持久化。AddNOF/AddOutbox/AddMemoryMessaging 自动以 Scoped 注册 MessageDelivery，原生 RabbitMQ 适配器只选择具体客户端与序列化器。
+AddInbox/AddOutbox 按需安装消息专用内存持久化。Outbox 自动保存并还原完整 JSON 标量上下文，直接提供可发送的 Headers；MessageDelivery 及其注册删除，适配器无需重放。
 EF/NHibernate 依然是独立选择。
 
-CacheServiceSelector.Configure 追加原生 CacheServiceOptions 配置并返回同一个 Selector，可在选择 Provider 前后使用，也可重复调用；回调按注册顺序执行，配置选项不会替换缓存 Provider。
+CacheServiceSelector.ConfigureCacheServiceOptions 追加原生 CacheServiceOptions 配置并返回同一个 Selector，可在选择 Provider 前后使用，也可重复调用；回调按注册顺序执行，配置选项不会替换缓存 Provider。
 
 SnowflakeIdGenerator 与 SnowflakeIdGeneratorOptions 移到 Infrastructure。Domain 只保留 IIdGenerator 和可空的
 IdGenerator.Current；未绑定时返回 null，调用方决定跳过、选择替代实现或抛出异常。生成的 New() 必须取得 ID，
@@ -123,3 +123,5 @@ PersistedSigningKey、RevokedRefreshToken 表保留在活动模型之外，不�
 凭据轮换，并重新认证，或另行设计并审查明确的过渡方案。Down 要求恢复匹配备份和包，不猜测反向转换。本轮源码验证不升级真实数据库。
 
 权限检查由 NOF.Abstraction 提供，Application 解析 Contract 声明，UI 无须引用 Contract。AddNOF/AddNOFUI 装配默认检查器与 Claim 授予来源，业务通过 IPermissionGrantProvider 查询当前授予，无需注册框架权限字典。权限仅声明在 Contract 接口/方法上，UI 直接按标识检查。见[授权指南](authorization.md)。
+
+JSON Context、可直接发送的投递参数与链式注册参见[JSON 执行上下文](execution-context.md)。

@@ -1,4 +1,5 @@
 using NOF.Abstraction;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace NOF.Abstraction.Tests;
@@ -11,7 +12,7 @@ public class ContextTests
         var context = Context.Empty.WithItem("x-tenant-id", "tenant-a");
 
         Assert.True(context.TryGetItem("X-Tenant-Id", out var tenantId));
-        Assert.Equal("tenant-a", tenantId);
+        Assert.Equal("tenant-a", tenantId?.GetValue<string>());
         Assert.True(context.Items.ContainsKey("X-TENANT-ID"));
     }
 
@@ -23,7 +24,7 @@ public class ContextTests
             .WithItem("x-tenant-id", "tenant-b");
 
         var item = Assert.Single(context.Items);
-        Assert.Equal("tenant-b", item.Value);
+        Assert.Equal("tenant-b", item.Value?.GetValue<string>());
     }
 
     [Fact]
@@ -37,17 +38,23 @@ public class ContextTests
     }
 
     [Fact]
-    public void NonStringItemKeys_ShouldKeepDefaultEqualitySemantics()
+    public void JsonSnapshots_PreserveScalarsAndRejectNestedValues_WithoutLeakingMutation()
     {
-        var firstKey = new object();
-        var secondKey = new object();
-        var context = Context.Empty
-            .WithItem(firstKey, "first")
-            .WithItem(secondKey, "second");
-
-        Assert.Equal("first", context[firstKey]);
-        Assert.Equal("second", context[secondKey]);
-        Assert.Equal(2, context.Items.Count);
+        var source = new JsonObject { ["text"] = "value", ["number"] = 123, ["boolean"] = true, ["null"] = null };
+        var context = Context.Empty.WithItems(source);
+        source["text"] = "changed";
+        var snapshot = context.Items;
+        snapshot["text"] = "changed again";
+        Assert.Null(context["text"]!.Parent);
+        Assert.Equal("value", context["text"]!.GetValue<string>());
+        var restored = Context.Empty.WithItems(JsonNode.Parse(context.Items.ToJsonString())!.AsObject());
+        Assert.Equal(123, restored["number"]!.GetValue<int>());
+        Assert.True(restored["boolean"]!.GetValue<bool>());
+        Assert.True(restored.TryGetItem("NULL", out var empty));
+        Assert.Null(empty);
+        Assert.Throws<ArgumentException>(() => context.WithItem("array", new JsonArray(1, 2)));
+        Assert.Throws<ArgumentException>(() => context.WithItem("object", new JsonObject { ["key"] = "value" }));
+        Assert.Throws<ArgumentException>(() => context.WithItem("invalid-number", double.NaN));
     }
 
     [Fact]

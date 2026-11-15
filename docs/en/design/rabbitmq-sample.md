@@ -45,22 +45,22 @@ builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, need no MessageType/SchemaVersion metadata, and are automatically registered by the application part. Each handler preserves the trusted envelope with MessageDelivery, and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations:
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, need no MessageType/SchemaVersion metadata, and are automatically registered by the application part. Each handler forwards the ready-to-send OutboxDeliveryContext.Headers and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations (forward deliveryContext.Headers directly):
 
 ```csharp
 await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
 await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
 ```
 
-The host client implementation uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. The Outbox handler uses `MessageDelivery.ExecuteAsync(..., deliveryContext)` to supply the original Outbox ID, tenant/trace and custom headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
+The host client implementation uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. The Outbox handler forwards complete `deliveryContext.Headers`, including the persisted JSON context, original ID, tenant/trace and custom headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
 
 The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure routes to operations:
 
 ```csharp
-builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString));
+builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString))
+    .ConfigureRabbitMQ(NotificationMessaging.Configure);
 
 // The feature module inlines its native topology and endpoint declarations.
-builder.Services.ConfigureRabbitMQ(NotificationMessaging.Configure);
 
 // NotificationMessaging.Configure:
 rabbit.Topology(async (channel, ct) =>
@@ -129,10 +129,12 @@ The builder is also the host-local configuration owner: RabbitMQConfiguration an
 
 Project consolidation preserves queue names, payload schemas and receipt keys; removing framework ordering also removes its SQLite model columns and state tables. The sample tests use the merged receiver and link the producer's actual client/handler files; they verify the full metadata path and assembly dependency boundaries.
 
-The handler forwards `OutboxDeliveryContext.Headers` through MessageDelivery into native RabbitMQ headers. Explicit headers retain their enqueue snapshot across retries; NOF supplies the ID, tenant and trace. The sample makes no ordering guarantee across mail/audit/metrics queues. If ordering is required, implement scheduling and consumer coordination in infrastructure, or carry a business version in the payload. See the [ordering removal migration](transactional-outbox.md#durable-processing-and-migration) before upgrading an existing database.
+The handler forwards `OutboxDeliveryContext.Headers` directly into native RabbitMQ headers. Explicit headers retain their enqueue snapshot across retries; NOF supplies the ID, tenant and trace. The sample makes no ordering guarantee across mail/audit/metrics queues. If ordering is required, implement scheduling and consumer coordination in infrastructure, or carry a business version in the payload. See the [ordering removal migration](transactional-outbox.md#durable-processing-and-migration) before upgrading an existing database.
 
 The Notifications sample uses EnsureCreated for its local SQLite file; it does not upgrade existing schemas. Stop the receiver and drain/migrate ordered receipts before upgrading. Back up the file and apply an explicit SQLite schema migration removing the two order-state tables, ordering indexes and the three columns on NOFInboxMessage while retaining receipt IDs and history. A disposable demo database may be deliberately recreated after backup; a persistent service must preserve deduplication history. PostgreSQL producer migrations do not migrate this separate receiver database.
 
 The producer selects native EF persistence and adds AddOidcEntityFrameworkCore for OIDC state. The receiver uses native EF Inbox stores in its existing SQLite context. Removing the unused Inbox classification column is an explicit migration for each existing producer/receiver database; receipt routes and message IDs do not change.
 
 CountOrder is an Application-private OperationHandler<OrderCreated>, not a Contract method. AddApplicationPart discovers it and MapQueue<CountOrder> binds it through the same Inbox/policy pipeline.
+
+See [JSON context and automatic durable delivery](execution-context.md) for the breaking Context API, ready-to-send headers and fluent registration.

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using NOF.Abstraction;
+using System.Text.Json.Nodes;
 
 namespace NOF.Hosting.AspNetCore;
 
@@ -7,11 +8,11 @@ namespace NOF.Hosting.AspNetCore;
 public sealed class HttpContextBuilder
 {
     /// <summary>Gets immutable-key context providers.</summary>
-    public Dictionary<object, Func<HttpContext, object?>> Items { get; } = new();
+    public Dictionary<string, Func<HttpContext, JsonNode?>> Items { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Gets the explicitly configured tenant source.</summary>
     public Func<HttpContext, string?>? Tenant { get; private set; }
     /// <summary>Gets external context input metadata.</summary>
-    public Dictionary<object, IReadOnlyList<HttpInputDescription>> Inputs { get; } = new();
+    public Dictionary<string, IReadOnlyList<HttpInputDescription>> Inputs { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Gets tenant input metadata, if the source is external.</summary>
     public HttpInputDescription? TenantInput { get; private set; }
 
@@ -32,9 +33,9 @@ public sealed class HttpContextBuilder
     }
 
     /// <summary>Configures one semantic key.</summary>
-    public HttpContextItemBuilder Item(object key)
+    public HttpContextItemBuilder Item(string key)
     {
-        if (key is string text && string.Equals(text, NOFAbstractionConstants.Transport.Headers.TenantId, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(key, NOFAbstractionConstants.Transport.Headers.TenantId, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("Use an explicit tenant source.", nameof(key));
         }
@@ -44,7 +45,7 @@ public sealed class HttpContextBuilder
 }
 
 /// <summary>Configures one explicit semantic context source.</summary>
-public sealed class HttpContextItemBuilder(HttpContextBuilder parent, object key)
+public sealed class HttpContextItemBuilder(HttpContextBuilder parent, string key)
 {
     /// <summary>Reads one HTTP header.</summary>
     public HttpContextBuilder FromHeader(string name)
@@ -64,29 +65,20 @@ public sealed class HttpContextItemBuilder(HttpContextBuilder parent, object key
     }
 
     /// <summary>Uses a semantic constant.</summary>
-    public HttpContextBuilder FromValue<T>(T value)
+    public HttpContextBuilder FromValue(JsonNode? value)
     {
-        var snapshot = Snapshot(value);
+        var snapshot = Context.Empty.WithItem(key, value)[key];
         parent.Items[key] = _ => snapshot;
         parent.Inputs.Remove(key);
         return parent;
     }
 
     /// <summary>Uses an opaque HTTP provider with an explicit external input contract.</summary>
-    public HttpContextBuilder FromHttp(Func<HttpContext, object?> provider, params HttpInputDescription[] inputs)
+    public HttpContextBuilder FromHttp(Func<HttpContext, JsonNode?> provider, params HttpInputDescription[] inputs)
     {
-        parent.Items[key] = http => Snapshot(provider(http));
+        parent.Items[key] = http => Context.Empty.WithItem(key, provider(http))[key];
         parent.Inputs[key] = Array.AsReadOnly(inputs.ToArray());
         return parent;
     }
 
-    private static object? Snapshot(object? value)
-    {
-        if (value is null or string or Uri or Guid or DateTime or DateTimeOffset or DateOnly or TimeOnly or TimeSpan or decimal || value.GetType().IsPrimitive || value.GetType().IsEnum)
-        {
-            return value;
-        }
-
-        throw new InvalidOperationException("HTTP semantic context values must be immutable scalars. Put returned business data in the outcome.");
-    }
 }

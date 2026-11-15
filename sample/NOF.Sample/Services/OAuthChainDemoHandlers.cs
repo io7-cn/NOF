@@ -6,13 +6,14 @@ using NOF.Sample.UI.Services;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace NOF.Sample.Services;
 
 public static class OAuthChainDemoContextKeys
 {
-    public static readonly object AccessToken = new();
+    public const string AccessToken = "sample.oauth.access-token";
 }
 
 public sealed class CreateClientHandler(OAuthChainDemoBackend backend) : OAuthChainDemoService.CreateClient
@@ -175,7 +176,7 @@ public sealed class OAuthChainDemoAccessTokenHandler : DelegatingHandler
         if (request.Headers.Authorization is null
             && request.Options.TryGetValue(NOF.Sample.UI.Services.SampleHttpApi.ContextKey, out var context)
             && context.TryGetItem(OAuthChainDemoContextKeys.AccessToken, out var tokenObject)
-            && tokenObject is string token && !string.IsNullOrWhiteSpace(token))
+            && tokenObject is JsonValue tokenValue && tokenValue.TryGetValue<string>(out var token) && !string.IsNullOrWhiteSpace(token))
         {
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }

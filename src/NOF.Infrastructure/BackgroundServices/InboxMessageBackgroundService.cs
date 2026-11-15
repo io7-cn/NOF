@@ -177,6 +177,15 @@ public sealed class InboxMessageBackgroundService : BackgroundService
             var input = _objectSerializer.Deserialize(pendingMessage.Payload, operation.RequestType)
                 ?? throw new InvalidOperationException($"Cannot deserialize message for '{operation.Id}'.");
             var context = Context.Empty.WithItems(InboundContextReflection.ReadHeaderItems(processingHeaders));
+            var snapshot = headers.FirstOrDefault(header => string.Equals(header.Key,
+                NOFAbstractionConstants.Transport.Headers.Context, StringComparison.OrdinalIgnoreCase)).Value;
+            if (snapshot is not null)
+            {
+                context = context.WithItems(System.Text.Json.Nodes.JsonNode.Parse(snapshot) as System.Text.Json.Nodes.JsonObject
+                    ?? throw new InvalidOperationException("The message context must be a JSON object."));
+            }
+            context = context.WithTenantId(Context.Current.TenantId)
+                .WithItem(NOFAbstractionConstants.Transport.Headers.MessageId, pendingMessage.Id.ToString());
             var outcome = await services.GetRequiredService<OperationExecutor>()
                 .ExecuteInScopeAsync(operation, input, context, InvocationOrigin.Message, cancellationToken).ConfigureAwait(false);
 

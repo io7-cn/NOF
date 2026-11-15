@@ -83,10 +83,10 @@ public class NOFTestHostTests
         using var scope = host.CreateScope();
 
         scope.SetContextItem("case", "scope")
-            .SetContextItems(new Dictionary<object, object?> { ["step"] = 2 })
+            .SetContextItems(new System.Text.Json.Nodes.JsonObject { ["step"] = 2 })
             .RemoveContextItem("step");
 
-        Assert.Equal("scope", scope.Context["case"]);
+        Assert.Equal("scope", scope.Context["case"]?.GetValue<string>());
         Assert.False(scope.Context.TryGetItem("step", out _));
         Assert.Same(scope.Context, Context.Current);
     }
@@ -113,7 +113,7 @@ public class NOFTestHostTests
                 .SetUser("user-2")
                 .SetContextItem("flow", "execute");
 
-            return Task.FromResult(scope.Context["flow"]);
+            return Task.FromResult(scope.Context["flow"]?.GetValue<string>());
         });
 
         Assert.Equal("execute", result);

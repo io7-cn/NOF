@@ -57,8 +57,8 @@ public sealed class ApplicationServiceInvocationAuthorizationTests
         await using var callerScope = provider.CreateAsyncScope();
         var callerUser = callerScope.ServiceProvider.GetRequiredService<IUserContext>();
         callerUser.User.AddIdentity(TestPrincipalFactory.CreateAuthenticatedIdentity((ClaimTypes.Permission, "fleet.read")));
-        var key = new object();
-        var value = new object();
+        var key = "correlation";
+        var value = "original";
         var context = Context.Empty.WithTenantId("tenant-a").WithItem(key, value);
         var invoker = callerScope.ServiceProvider.GetRequiredService<IOperationExecutor>();
 
@@ -177,13 +177,13 @@ public interface IProtectedFleetService : IApplicationService
     Testing.TestOutcome InspectContext(ContextCheckRequest request);
 }
 
-public sealed record ContextCheckRequest(object Key, object Value);
+public sealed record ContextCheckRequest(string Key, string Value);
 
 public sealed class ContextCheckHandler(IUserContext user) : OperationHandler<ContextCheckRequest, Testing.TestOutcome>
 {
     public override Task<Testing.TestOutcome> HandleAsync(ContextCheckRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        Assert.Same(request.Value, context.Context[request.Key]);
+        Assert.Equal(request.Value, context.Context[request.Key]?.GetValue<string>());
         Assert.Same(context.Context, Context.Current);
         Assert.Equal("tenant-a", context.TenantId);
         Assert.True(user.User.IsAuthenticated);

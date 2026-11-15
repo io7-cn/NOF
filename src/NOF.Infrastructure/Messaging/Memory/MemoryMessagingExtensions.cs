@@ -11,7 +11,6 @@ public static class MemoryMessagingExtensions
     {
         ArgumentNullException.ThrowIfNull(configure);
         services.AddInbox();
-        services.TryAddScoped<MessageDelivery>();
         services.TryAddScoped<MemoryMessageClient>();
         configure(new(services, services.GetOrAddSingleton<MemoryEndpointRegistry>()));
         return services;

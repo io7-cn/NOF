@@ -48,11 +48,14 @@ using (var scope = app.Services.CreateScope())
 {
     using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
     var messageId = await scope.ServiceProvider.GetRequiredService<IOutbox>()
-        .EnqueueAsync(new SmokeIntent("typed"), Context.Empty);
+        .EnqueueAsync(new SmokeIntent("typed"), Context.Empty.WithItem("correlation", "aot").WithItem("count", 3));
     var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
         ?? throw new InvalidOperationException("The outbox did not stage its snapshot");
     Expect(record.Id == messageId && record.MessageType == typeof(SmokeIntent).ToString(),
         "Outbox identity or schema was lost");
+    var stagedHeaders = scope.ServiceProvider.GetRequiredService<IObjectSerializer>().Deserialize<Dictionary<string, string?>>(record.Headers)!;
+    var stagedContext = System.Text.Json.Nodes.JsonNode.Parse(stagedHeaders[NOFAbstractionConstants.Transport.Headers.Context]!)!.AsObject();
+    Expect(stagedContext["count"]!.GetValue<int>() == 3, "The Outbox did not persist the complete JSON context");
     await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType)
         .Deliver(scope.ServiceProvider, record, new OutboxDeliveryContext
         {
@@ -90,7 +93,11 @@ using (var scope = app.Services.CreateScope())
 }
 var receiptId = Guid.NewGuid();
 var oneWayPayload = app.Services.GetRequiredService<IObjectSerializer>().Serialize(new SmokeIntent("one-way"), typeof(SmokeIntent));
-await app.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(receiptId, oneWayPayload, "memory:queue:one-way", null, default);
+await app.Services.GetRequiredService<MessageInboxReceiver>().ReceiveAsync(receiptId, oneWayPayload, "memory:queue:one-way",
+    new Dictionary<string, string?>
+    {
+        [NOFAbstractionConstants.Transport.Headers.Context] = Context.Empty.WithItem("correlation", "aot").WithItem("count", 3).Items.ToJsonString()
+    }, default);
 Expect(!ReceiveOneWaySmoke.Completed.Task.IsCompleted, "Inbox acceptance unexpectedly executed the business handler");
 await app.StartAsync();
 await ReceiveOneWaySmoke.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -420,7 +427,8 @@ public sealed class ReceiveOneWaySmoke : OperationHandler<SmokeIntent>
     public static TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public override Task HandleAsync(SmokeIntent request, InvocationContext context, CancellationToken cancellationToken)
     {
-        if (request.Value != "one-way")
+        if (request.Value != "one-way" || context.Context["correlation"]?.GetValue<string>() != "aot"
+            || context.Context["count"]?.GetValue<int>() != 3)
         {
             throw new InvalidOperationException("The one-way Inbox payload changed.");
         }

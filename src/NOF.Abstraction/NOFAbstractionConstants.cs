@@ -30,6 +30,8 @@ public static class NOFAbstractionConstants
             public const string TenantId = "X-Tenant-Id";
             public const string TraceParent = "traceparent";
             public const string MessageId = "X-Message-Id";
+            /// <summary>The serialized JSON scalar execution-context snapshot carried by durable messages.</summary>
+            public const string Context = "X-NOF-Context";
         }
     }
 }

@@ -47,6 +47,8 @@ The event registration generator also emits native Replace. Provider selectors k
 
 Scoped Lazy<T> resolution, explicit capability selectors, application-part discovery, typed business failures, invocation filters, minimal persistence ports and reliable Inbox/Outbox remain because they have concrete callers or enforce framework semantics. OutboxPermanentFailureException still signals a terminal delivery failure; replacing it with an undifferentiated exception would lose the retry decision.
 
-Update runtime packages, providers and generators together. Permission directories and their display DTOs belong to the application; AddPermissions, PermissionCatalog and PermissionDefinition are removed. Cached plans never cache grant decisions; each check calls its provider for current data. AddNOF/AddOutbox/AddMemoryMessaging automatically register scoped MessageDelivery without activating workers.
+Update runtime packages, providers and generators together. Permission directories and their display DTOs belong to the application; AddPermissions, PermissionCatalog and PermissionDefinition are removed. Cached plans never cache grant decisions; each check calls its provider for current data. Outbox persists every JSON-scalar Context item and prepares complete immutable delivery Headers; fresh attempt scopes bind the restored Context before handler construction. Native clients forward OutboxDeliveryContext.Headers directly; MessageDelivery and its registrations are removed.
 
 Import NOF.Abstraction for shared permission types and NOF.Application for AuthorizationPolicyResolver. These API changes require no database migration and do not reinterpret persisted messages.
+
+See [JSON context and automatic durable delivery](execution-context.md) for the breaking Context API, ready-to-send headers and fluent registration.

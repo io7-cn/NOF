@@ -4,6 +4,7 @@ using NOF.Application;
 using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 namespace NOF.Infrastructure;
 
@@ -83,9 +84,11 @@ public sealed class OperationExecutor(IServiceProvider services, ApplicationServ
 public static class InboundContextReflection
 {
     /// <summary>Decodes permitted transport headers into semantic items.</summary>
-    public static IReadOnlyDictionary<object, object?> ReadHeaderItems(IEnumerable<KeyValuePair<string, string?>>? headers)
-        => headers?.Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
-            .ToDictionary(pair => (object)pair.Key, pair => (object?)pair.Value) ?? [];
+    public static JsonObject ReadHeaderItems(IEnumerable<KeyValuePair<string, string?>>? headers)
+        => new(headers?.Where(pair => !string.IsNullOrWhiteSpace(pair.Key)
+                && !string.Equals(pair.Key, NOFAbstractionConstants.Transport.Headers.Context, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => new KeyValuePair<string, JsonNode?>(pair.Key, JsonValue.Create(pair.Value))) ?? [],
+            new JsonNodeOptions { PropertyNameCaseInsensitive = true });
 
     /// <summary>Resolves the typed implementation method for policy metadata.</summary>
     public static MethodInfo ResolveHandlerMethodInfo(

@@ -30,13 +30,13 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
     private readonly JsonSerializerOptions _json;
     private readonly Func<HttpRequestReadContext, ValueTask<TRequest>>? _constructor;
     private readonly IReadOnlyList<HttpBoundMember> _members;
-    private readonly IReadOnlyDictionary<object, Func<HttpContext, object?>> _items;
+    private readonly IReadOnlyDictionary<string, Func<HttpContext, JsonNode?>> _items;
     private readonly Func<HttpContext, string?>? _tenant;
     private readonly IReadOnlyDictionary<Type, HttpResponseMapping> _responses;
     private readonly InvocationPlan _plan;
     private readonly StringComparison _queryComparison;
     private readonly StringComparison _routeComparison;
-    private HttpEndpointExecutor(JsonSerializerOptions json, Func<HttpRequestReadContext, ValueTask<TRequest>>? constructor, IReadOnlyList<HttpBoundMember> members, IReadOnlyDictionary<object, Func<HttpContext, object?>> items, Func<HttpContext, string?>? tenant, IReadOnlyDictionary<Type, HttpResponseMapping> responses, InvocationPlan plan, HttpEndpointBinding binding, StringComparison queryComparison, StringComparison routeComparison)
+    private HttpEndpointExecutor(JsonSerializerOptions json, Func<HttpRequestReadContext, ValueTask<TRequest>>? constructor, IReadOnlyList<HttpBoundMember> members, IReadOnlyDictionary<string, Func<HttpContext, JsonNode?>> items, Func<HttpContext, string?>? tenant, IReadOnlyDictionary<Type, HttpResponseMapping> responses, InvocationPlan plan, HttpEndpointBinding binding, StringComparison queryComparison, StringComparison routeComparison)
     {
         _json = json;
         _constructor = constructor;
@@ -147,10 +147,10 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             throw new InvalidOperationException("A complete request constructor names a missing route parameter.");
         }
 
-        var items = new Dictionary<object, Func<HttpContext, object?>>();
+        var items = new Dictionary<string, Func<HttpContext, JsonNode?>>(StringComparer.OrdinalIgnoreCase);
         Func<HttpContext, string?>? tenant = null;
         HttpInputDescription? tenantInput = null;
-        var contextInputs = new Dictionary<object, IReadOnlyList<HttpInputDescription>>();
+        var contextInputs = new Dictionary<string, IReadOnlyList<HttpInputDescription>>(StringComparer.OrdinalIgnoreCase);
         foreach (var context in endpoint.Metadata.OfType<HttpContextBuilder>())
         {
             foreach (var item in context.Items)

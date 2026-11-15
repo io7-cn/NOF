@@ -49,4 +49,6 @@ Scoped Lazy<T>、显式能力 Selector、ApplicationPart 发现、强类型业�
 
 运行时、Provider 与生成器需同步更新。共享权限类型改用 NOF.Abstraction，AuthorizationPolicyResolver 改用 NOF.Application。这批 API 调整不需要数据库迁移，也不重新解释已存消息。
 
-权限目录与展示 DTO 归业务所有，AddPermissions、PermissionCatalog 和 PermissionDefinition 删除；缓存执行计划不缓存授予结果，每次检查都调用来源查询当前数据。AddNOF/AddOutbox/AddMemoryMessaging 自动以 Scoped 注册 MessageDelivery，注册辅助服务本身不启用消息工作进程。
+权限目录与展示 DTO 归业务所有，AddPermissions、PermissionCatalog 和 PermissionDefinition 删除；缓存执行计划不缓存授予结果，每次检查都调用来源查询当前数据。Outbox 自动保存并还原完整 JSON 标量上下文，直接提供可发送的 Headers；MessageDelivery 及其注册删除。
+
+JSON Context、可直接发送的投递参数与链式注册参见[JSON 执行上下文](execution-context.md)。

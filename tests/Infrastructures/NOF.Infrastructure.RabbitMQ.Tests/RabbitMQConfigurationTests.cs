@@ -13,13 +13,14 @@ public sealed class RabbitMQConfigurationTests
     public void RepeatedDeclarations_ComposeWithOneLifecycle_AndFreezeTogether()
     {
         var services = new ServiceCollection();
-        services.ConfigureRabbitMQ(rabbit => rabbit.Topology((_, _) => Task.CompletedTask));
-        services.ConfigureRabbitMQ(rabbit => rabbit.Topology((_, _) => Task.CompletedTask)
-            .MapQueue<RabbitMQEndpointTests.Input>("first", new(typeof(RabbitMQEndpointTests.IWork), nameof(RabbitMQEndpointTests.IWork.First))));
-        services.ConfigureRabbitMQ(rabbit => rabbit.MapQueue<RabbitMQEndpointTests.Input>("second",
-            new(typeof(RabbitMQEndpointTests.IWork), nameof(RabbitMQEndpointTests.IWork.Second))));
-        services.AddRabbitMQ(factory => factory.Uri = new Uri("amqps://user:password@broker.test:5671/demo"));
-        services.AddRabbitMQ(factory => factory.ClientProvidedName = "native-settings");
+        var chain = services.AddRabbitMQ(factory => factory.Uri = new Uri("amqps://user:password@broker.test:5671/demo"))
+            .ConfigureRabbitMQ(rabbit => rabbit.Topology((_, _) => Task.CompletedTask))
+            .ConfigureRabbitMQ(rabbit => rabbit.Topology((_, _) => Task.CompletedTask)
+                .MapQueue<RabbitMQEndpointTests.Input>("first", new(typeof(RabbitMQEndpointTests.IWork), nameof(RabbitMQEndpointTests.IWork.First))))
+            .ConfigureRabbitMQ(rabbit => rabbit.MapQueue<RabbitMQEndpointTests.Input>("second",
+                new(typeof(RabbitMQEndpointTests.IWork), nameof(RabbitMQEndpointTests.IWork.Second))))
+            .AddRabbitMQ(factory => factory.ClientProvidedName = "native-settings");
+        Assert.Same(services, chain);
         using var provider = services.BuildServiceProvider();
         var factory = Assert.IsType<ConnectionFactory>(provider.GetRequiredService<IConnectionFactory>());
         Assert.True(factory.Ssl.Enabled);

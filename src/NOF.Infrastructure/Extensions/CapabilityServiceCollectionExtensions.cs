@@ -28,7 +28,7 @@ public static class CapabilityServiceCollectionExtensions
     }
 
     /// <summary>Appends cache policy configuration and keeps the provider-selection chain.</summary>
-    public static CacheServiceSelector Configure(this CacheServiceSelector selector, Action<CacheServiceOptions> configure)
+    public static CacheServiceSelector ConfigureCacheServiceOptions(this CacheServiceSelector selector, Action<CacheServiceOptions> configure)
     {
         selector.Services.Configure(configure);
         return selector;

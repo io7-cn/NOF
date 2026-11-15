@@ -11,7 +11,7 @@ The HTTP AddNOF overload also registers its adapter prerequisites: JSON, Problem
 ```csharp
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.Services.AddCacheService()
-    .Configure(options => options.KeyPrefix = "app:{tenantId}:")
+    .ConfigureCacheServiceOptions(options => options.KeyPrefix = "app:{tenantId}:")
     .AddMemoryCacheService();
 // Or: .AddRedisCache(connectionString);
 builder.Services.AddObjectStorage().AddFileSystemObjectStorage(options => options.RootPath = "objects");
@@ -21,9 +21,9 @@ builder.Services.AddBackplane().AddMemoryBackplane();
 builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
 ```
 
-The entry installs common policy; its typed Selector chooses a provider and retains complete method names. Repeated entry calls do not duplicate shared services. Custom implementations can still use ordinary DI. Selecting one capability does not enable another transport or durable worker. Memory messaging is enabled by AddMemoryMessaging; AddInbox/AddOutbox install message-only persistence as needed. AddNOF/AddOutbox/AddMemoryMessaging automatically register scoped MessageDelivery; native publishing adapters select their concrete client and serializer. Native EF/NHibernate remain independent provider choices.
+The entry installs common policy; its typed Selector chooses a provider and retains complete method names. Repeated entry calls do not duplicate shared services. Custom implementations can still use ordinary DI. Selecting one capability does not enable another transport or durable worker. Memory messaging is enabled by AddMemoryMessaging; AddInbox/AddOutbox install message-only persistence as needed. Outbox persists every JSON-scalar Context item and prepares complete immutable delivery Headers; fresh attempt scopes bind the restored Context before handler construction. Native clients forward OutboxDeliveryContext.Headers directly; MessageDelivery and its registrations are removed. Native EF/NHibernate remain independent provider choices.
 
-CacheServiceSelector.Configure appends a native CacheServiceOptions callback and returns the same selector. It works before or after provider selection and supports repeated calls in registration order; no cache provider is replaced by configuring options.
+CacheServiceSelector.ConfigureCacheServiceOptions appends a native CacheServiceOptions callback and returns the same selector. It works before or after provider selection and supports repeated calls in registration order; no cache provider is replaced by configuring options.
 
 SnowflakeIdGenerator and SnowflakeIdGeneratorOptions live in Infrastructure. Domain keeps IIdGenerator and the nullable IdGenerator.Current convenience accessor. Missing ambient registration returns null; the caller decides whether to skip, use an alternative, or throw. Generated New() requires an ID and reports the missing provider at that call site; New(IIdGenerator) remains explicit. AddNOFDomain is removed because Domain has no runtime registration responsibilities. AddNOFTest explicitly selects memory cache/object storage and Snowflake for its test conveniences.
 
@@ -86,4 +86,6 @@ The Sample's 20261114200000_UseOpenIddict migration follows RemoveInboxClassific
 
 Permission checking uses NOF.Abstraction; Application resolves Contract declarations and UI needs no Contract reference. AddNOF/AddNOFUI install the default checker and claim-grant provider; application-owned IPermissionGrantProvider implementations query current grants without registering a framework permission dictionary. Contract interfaces/methods are the only declaration source; UI checks IDs directly. See [authorization](authorization.md).
 
-MessageDelivery is registered idempotently by AddNOF, AddOutbox and AddMemoryMessaging. Hosts do not register it themselves; registering the helper does not activate Inbox/Outbox, transports or workers.
+Outbox persists every JSON-scalar Context item and prepares complete immutable delivery Headers; fresh attempt scopes bind the restored Context before handler construction. Native clients forward OutboxDeliveryContext.Headers directly; MessageDelivery and its registrations are removed.
+
+See [JSON context and automatic durable delivery](execution-context.md) for the breaking Context API, ready-to-send headers and fluent registration.

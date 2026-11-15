@@ -5,6 +5,8 @@ using NOF.Abstraction;
 using NOF.Application;
 using NOF.Hosting;
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests;
@@ -29,14 +31,14 @@ public sealed class GenericOutboxTests
     }
 
     [Fact]
-    public async Task Enqueue_SnapshotsPayloadAndAllowedMetadata_WithoutSavingOrConstructingHandler()
+    public async Task Enqueue_SnapshotsPayloadAndCompleteJsonContext_WithoutSavingOrConstructingHandler()
     {
         using var host = CreateHost();
         using var scope = host.Services.CreateScope();
         var value = new Work { Value = "before" };
         var headers = new Dictionary<string, string?> { ["partition"] = "before", ["nullable"] = null };
         var id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(value,
-            Context.Empty.WithItem("Authorization", "secret").WithItem("arbitrary", "private"), headers);
+            Context.Empty.WithItem("correlation", "original").WithItem("count", 7).WithItem("enabled", true).WithItem("empty", null), headers);
         headers["partition"] = "after";
         value.Value = "after";
         using (var observer = host.Services.CreateScope())
@@ -48,12 +50,17 @@ public sealed class GenericOutboxTests
         var record = await ReadAsync(host, id);
         Assert.Equal(typeof(Work).ToString(), record.MessageType);
         Assert.Equal("before", host.Services.GetRequiredService<IObjectSerializer>().Deserialize<Work>(record.Payload)!.Value);
-        Assert.DoesNotContain("secret", record.Headers);
-        Assert.DoesNotContain("private", record.Headers);
         Assert.Equal(id, record.Id);
         var metadata = host.Services.GetRequiredService<IObjectSerializer>().Deserialize<Dictionary<string, string?>>(record.Headers)!;
         Assert.Equal("before", metadata["partition"]);
         Assert.Null(metadata["nullable"]);
+        Assert.Equal(id.ToString(), metadata[NOFAbstractionConstants.Transport.Headers.MessageId]);
+        var snapshot = JsonNode.Parse(metadata[NOFAbstractionConstants.Transport.Headers.Context]!)!.AsObject();
+        Assert.Equal("original", snapshot["correlation"]!.GetValue<string>());
+        Assert.Equal(7, snapshot["count"]!.GetValue<int>());
+        Assert.True(snapshot["enabled"]!.GetValue<bool>());
+        Assert.True(snapshot.ContainsKey("empty"));
+        Assert.Null(snapshot["empty"]);
     }
 
     [Fact]
@@ -63,8 +70,10 @@ public sealed class GenericOutboxTests
         Guid id;
         using (var scope = host.Services.CreateScope())
         {
+            using var producer = new Activity("enqueue").Start();
             var headers = new Dictionary<string, string?> { ["partition"] = "unchanged", ["nullable"] = null };
-            id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work { Value = "retry" }, Context.Empty, headers);
+            id = await scope.ServiceProvider.GetRequiredService<IOutbox>().EnqueueAsync(new Work { Value = "retry" },
+                Context.Empty.WithItem("correlation", "unchanged").WithItem("count", 7), headers);
             headers["partition"] = "mutated";
             await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         }
@@ -72,7 +81,8 @@ public sealed class GenericOutboxTests
         await host.StartAsync(timeout.Token);
         try
         {
-            await WaitForAsync(host, id, OutboxMessageStatus.Sent, timeout.Token);
+            var sent = await WaitForAsync(host, id, OutboxMessageStatus.Sent, timeout.Token);
+            Assert.NotNull(sent.TraceParent);
             var attempts = host.Services.GetRequiredService<Probe>().Attempts.ToArray();
             Assert.Equal([1, 2], attempts.Select(attempt => attempt.Number));
             Assert.All(attempts, attempt => Assert.Equal(id, attempt.Id));
@@ -86,6 +96,10 @@ public sealed class GenericOutboxTests
                 Assert.Null(headers["nullable"]);
                 Assert.Equal(id.ToString(), headers[NOFAbstractionConstants.Transport.Headers.MessageId]);
                 Assert.Equal("host", headers[NOFAbstractionConstants.Transport.Headers.TenantId]);
+                Assert.Equal(sent.TraceParent, headers[NOFAbstractionConstants.Transport.Headers.TraceParent]);
+                var snapshot = JsonNode.Parse(headers[NOFAbstractionConstants.Transport.Headers.Context]!)!.AsObject();
+                Assert.Equal("unchanged", snapshot["correlation"]!.GetValue<string>());
+                Assert.Equal(7, snapshot["count"]!.GetValue<int>());
             });
         }
         finally
@@ -127,6 +141,39 @@ public sealed class GenericOutboxTests
         finally
         {
             await host.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"nested\":{\"key\":1}}")]
+    [InlineData("{\"X-Tenant-Id\":\"another-tenant\"}")]
+    [InlineData("invalid json")]
+    public async Task InvalidPersistedContext_IsPermanentBeforeHandlerConstruction(string snapshot)
+    {
+        using var host = CreateHost();
+        var id = await StageAsync(host, new Work { Value = "corrupt context" });
+        var record = await ReadAsync(host, id);
+        var serializer = host.Services.GetRequiredService<IObjectSerializer>();
+        var headers = serializer.Deserialize<Dictionary<string, string?>>(record.Headers)!;
+        headers[NOFAbstractionConstants.Transport.Headers.Context] = snapshot;
+        using (var scope = host.Services.CreateScope())
+        {
+            var json = serializer.SerializeToText(headers, typeof(Dictionary<string, string?>));
+            await scope.ServiceProvider.GetRequiredService<DbContext>().Set<NOFOutboxMessage>()
+                .Where(message => message.Id == id).ExecuteUpdateAsync(update => update.SetProperty(message => message.Headers, json));
+        }
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await host.StartAsync(timeout.Token);
+        try
+        {
+            var failed = await WaitForAsync(host, id, OutboxMessageStatus.Failed, timeout.Token);
+            Assert.Equal(1, failed.RetryCount);
+            Assert.Empty(host.Services.GetRequiredService<Probe>().Attempts);
+        }
+        finally
+        {
+            await host.StopAsync();
         }
     }
 
@@ -235,6 +282,7 @@ public sealed class GenericOutboxTests
     [InlineData("x-message-id")]
     [InlineData("x-tenant-id")]
     [InlineData("TRACEPARENT")]
+    [InlineData("x-nof-context")]
     public async Task Enqueue_RejectsManagedHeaderOverrides_BeforeStaging(string name)
     {
         using var host = CreateHost();
@@ -336,7 +384,7 @@ public sealed class GenericOutboxTests
         public ConcurrentQueue<Dictionary<string, string?>> Envelopes { get; } = new();
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
-    public sealed class Handler(Probe probe, MessageDelivery delivery) : OutboxHandler<Work>
+    public sealed class Handler(Probe probe) : OutboxHandler<Work>
     {
         private readonly Guid _scope = Guid.NewGuid();
         public override async ValueTask HandleAsync(Work message, OutboxDeliveryContext context, CancellationToken cancellationToken)
@@ -345,13 +393,11 @@ public sealed class GenericOutboxTests
             {
                 Assert.Equal("unchanged", context.Headers["PARTITION"]);
                 Assert.Throws<NotSupportedException>(() => ((IDictionary<string, string?>)context.Headers)["partition"] = "changed");
+                Assert.Equal("unchanged", context.Context["correlation"]!.GetValue<string>());
+                Assert.Equal(7, Context.Current["count"]!.GetValue<int>());
             }
             probe.Attempts.Enqueue(new(context.MessageId, context.Attempt, _scope, message.Value, context.Context.TenantId, Context.Current.TenantId));
-            await delivery.ExecuteAsync(message, context.Context, (headers, _) =>
-            {
-                probe.Envelopes.Enqueue(headers);
-                return ValueTask.CompletedTask;
-            }, cancellationToken, context);
+            probe.Envelopes.Enqueue(new(context.Headers));
             if (message.Value == "retry" && context.Attempt == 1)
             {
                 throw new InvalidOperationException("Try again");

@@ -19,9 +19,9 @@ await unitOfWork.SaveChangesAsync(ct);
 
 IOutbox.EnqueueAsync returns ValueTask<Guid>. Its ID identifies a staged snapshot, not a completed side effect. Payload serialization happens at enqueue time; later mutation of the original object cannot change the intent. It performs no network call and does not save or commit. Save the same scoped unit of work; an explicit transaction also requires CommitAsync. Disposing or rolling back an unsaved scope discards its intents with its business changes.
 
-The current persistence tenant is authoritative. An explicit mismatching tenant is rejected. The normalized tenant and producer trace accompany explicitly supplied headers; the current identity, access tokens, claims and arbitrary Context.Items are not copied. Headers are durable data: callers must deliberately choose safe values rather than copying request headers wholesale. Delivery restores a fresh Context and a fresh DI scope for each attempt, without impersonating the original request user.
+The current persistence tenant is authoritative; explicit mismatches are rejected. Enqueue snapshots every JSON-scalar Context item, payload, explicit Headers, normalized tenant, stable message ID and enqueue trace. No IUserContext/claims or DI/runtime state is serialized. Each attempt binds the restored Context before constructing the handler in a fresh DI scope.
 
-Pass optional `IReadOnlyDictionary<string, string?> headers` as the third argument. Enqueue copies and serializes the dictionary immediately, including null values. `OutboxDeliveryContext.Headers` exposes a read-only snapshot on every attempt. Header keys are case-insensitive; attempts to supply NOF-managed `X-Message-Id`, `X-Tenant-Id` or `traceparent` fail before staging. MessageDelivery copies custom headers and supplies the stable message ID, authoritative tenant and current attempt trace.
+Pass optional `IReadOnlyDictionary<string, string?> headers` as the third argument; enqueue snapshots the dictionary immediately, including null. OutboxDeliveryContext.Headers is read-only and ready to forward, including X-Message-Id, X-Tenant-Id, traceparent and the JSON snapshot in X-NOF-Context. These case-insensitive managed keys cannot be overridden. Native adapters forward this metadata directly; MessageDelivery is removed.
 
 ```csharp
 var messageId = await outbox.EnqueueAsync(message, invocation.Context,
@@ -117,3 +117,5 @@ Capability configuration does not edit existing model snapshots or execute table
 Transport adapters now own their endpoint mappings. See the [adapter boundary and receipt-key migration](rabbitmq-sample.md#adapter-boundary-and-migration) before changing existing Inbox receipt routes.
 
 Inbox receipts now use only ID and opaque Route; the unused Command/Notification label and Memory Rider wrappers are removed. Apply the explicit classification-column migration and select native persistence as described in [persistence boundaries](persistence-boundaries.md). The default memory backend stores message state only.
+
+See [JSON context and automatic durable delivery](execution-context.md) for the breaking Context API, ready-to-send headers and fluent registration.

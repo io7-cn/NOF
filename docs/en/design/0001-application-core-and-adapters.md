@@ -88,7 +88,7 @@ business handler and context normalization can precede scoped dependency resolut
 Request/response outbound pipelines are removed with client generation. Local calls
 carry Context and an isolated caller-identity snapshot directly into the inbound
 application policies. Remote HTTP behavior belongs to native DelegatingHandler and
-.NET tracing. MessageDelivery prepares outbound metadata directly; hosts own invocation extension execution.
+.NET tracing. Outbox automatically prepares complete context and outbound metadata; hosts own invocation extension execution.
 
 ### Responsibility profile
 
@@ -178,3 +178,5 @@ Update: native builders and lifecycle services now replace NOF host wrappers and
 Update: the [persistence boundary](persistence-boundaries.md) now uses aggregate repositories, DTO query ports and IUnitOfWork. The generic ORM facade is absent from core.
 
 Update: execution-policy failures now return generated filter-owned cases through the same open invocation result path as business values. Handlers retain closed typed returns. Infrastructure owns three-scope filter plans, Use/Exclude and static FailureCases/Describe; mutable context outcomes and rejection exceptions are removed. This supersedes the separate execution-outcome model above. See [current invocation extensions](invocation-extensions.md). HTTP binding/response/runtime OpenAPI is implemented in [HTTP adaptation](http-adaptation.md).
+
+See [JSON context and automatic durable delivery](execution-context.md) for the breaking Context API, ready-to-send headers and fluent registration.

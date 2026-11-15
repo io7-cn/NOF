@@ -1,6 +1,7 @@
 using NOF.Abstraction;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 namespace NOF.Application;
 
@@ -43,17 +44,17 @@ public sealed class InvocationContext
     /// <summary>Gets the semantic tenant.</summary>
     public string TenantId => Context.TenantId;
     /// <summary>Gets semantic context items.</summary>
-    public IReadOnlyDictionary<object, object?> Items => Context.Items;
+    public JsonObject Items => Context.Items;
     /// <summary>Reads a semantic context item.</summary>
-    public bool TryGetItem(object key, out object? value) => Context.TryGetItem(key, out value);
+    public bool TryGetItem(string key, out JsonNode? value) => Context.TryGetItem(key, out value);
     /// <summary>Creates an execution view carrying different semantic items and the same invocation identity.</summary>
     public InvocationContext WithContext(Context context) => new(this, context);
     /// <summary>Creates a view with one semantic item.</summary>
-    public InvocationContext WithItem(object key, object? value) => WithContext(Context.WithItem(key, value));
+    public InvocationContext WithItem(string key, JsonNode? value) => WithContext(Context.WithItem(key, value));
     /// <summary>Creates a view with additional semantic items.</summary>
-    public InvocationContext WithItems(IReadOnlyDictionary<object, object?> items) => WithContext(Context.WithItems(items));
+    public InvocationContext WithItems(JsonObject items) => WithContext(Context.WithItems(items));
     /// <summary>Creates a view with an item removed.</summary>
-    public InvocationContext WithoutItem(object key) => WithContext(Context.WithoutItem(key));
+    public InvocationContext WithoutItem(string key) => WithContext(Context.WithoutItem(key));
     /// <summary>Creates a view with a normalized tenant.</summary>
     public InvocationContext WithTenantId(string? tenantId) => WithContext(Context.WithTenantId(tenantId));
     /// <summary>Creates an execution context.</summary>

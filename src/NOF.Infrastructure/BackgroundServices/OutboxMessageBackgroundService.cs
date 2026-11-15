@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Hosting;
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace NOF.Infrastructure;
 
@@ -107,21 +109,39 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
         var tenant = Context.Current.TenantId;
         using var ambient = Context.PushCurrent(Context.Empty.WithTenantId(tenant));
         await using var scope = services.CreateAsyncScope();
-        using var ambientBinding = scope.ServiceProvider.BindNOF(Context.Current);
         var serializer = scope.ServiceProvider.GetRequiredService<IObjectSerializer>();
-        var headers = serializer.Deserialize<Dictionary<string, string?>>(record.Headers)
-            ?? throw new OutboxPermanentFailureException("Missing outbox metadata.");
-        var persistedTenant = headers.FirstOrDefault(pair => string.Equals(pair.Key,
-            NOFAbstractionConstants.Transport.Headers.TenantId, StringComparison.OrdinalIgnoreCase)).Value;
-        if (TenantId.Normalize(persistedTenant) != tenant)
+        Dictionary<string, string?> headers;
+        Context restored;
+        try
+        {
+            headers = new(serializer.Deserialize<Dictionary<string, string?>>(record.Headers)
+                ?? throw new OutboxPermanentFailureException("Missing outbox metadata."), StringComparer.OrdinalIgnoreCase);
+            restored = headers.TryGetValue(NOFAbstractionConstants.Transport.Headers.Context, out var snapshot) && snapshot is not null
+                ? Context.Empty.WithItems(JsonNode.Parse(snapshot) as JsonObject
+                    ?? throw new OutboxPermanentFailureException("Outbox context must be a JSON object."))
+                : Context.Empty;
+        }
+        catch (Exception error) when (error is JsonException or ArgumentException)
+        {
+            throw new OutboxPermanentFailureException("The outbox context metadata is invalid.", error);
+        }
+        var persistedTenant = headers.GetValueOrDefault(NOFAbstractionConstants.Transport.Headers.TenantId);
+        if (TenantId.Normalize(persistedTenant) != tenant
+            || restored.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out _) && restored.TenantId != tenant)
         {
             throw new OutboxPermanentFailureException("Outbox metadata does not match its persistence tenant.");
         }
+        restored = restored.WithTenantId(tenant);
+        headers[NOFAbstractionConstants.Transport.Headers.MessageId] = record.Id.ToString();
+        headers[NOFAbstractionConstants.Transport.Headers.TenantId] = tenant;
+        headers[NOFAbstractionConstants.Transport.Headers.TraceParent] = record.TraceParent;
+        headers[NOFAbstractionConstants.Transport.Headers.Context] = restored.Items.ToJsonString();
+        using var ambientBinding = scope.ServiceProvider.BindNOF(restored);
         var registration = scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType);
         var context = new OutboxDeliveryContext
         {
             MessageId = record.Id,
-            Context = Context.Current,
+            Context = restored,
             Attempt = record.RetryCount,
             Headers = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string?>(
                 new Dictionary<string, string?>(headers, StringComparer.OrdinalIgnoreCase))

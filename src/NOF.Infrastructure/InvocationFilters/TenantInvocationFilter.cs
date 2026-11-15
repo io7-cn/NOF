@@ -11,8 +11,7 @@ public sealed class TenantInvocationFilter : IInvocationFilter
     /// <inheritdoc />
     public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
     {
-        var tenantId = context.TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out var value) && value is string tenant
-            ? TenantId.Normalize(tenant) : TenantId.Normalize(null);
+        var tenantId = context.Context.TenantId;
         Activity.Current?.SetTag(NOFInfrastructureConstants.InboundPipeline.Tags.TenantId, tenantId);
         return next((InvocationContext)context.WithTenantId(tenantId), input, cancellationToken);
     }
