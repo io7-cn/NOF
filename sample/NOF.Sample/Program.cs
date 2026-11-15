@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,13 +26,13 @@ builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
 builder.AddApplicationService<NOFSampleService>();
 builder.AddApplicationService<MessageDispatchService>();
 builder.AddApplicationService<PermissionDemoService>();
-builder.AddApplicationService<OAuthChainDemoService>();
-builder.AddApplicationService<DemoDownstreamService>();
 
 builder.Services.AddOutbox();
 builder.Services.Configure<OutboxOptions>(options =>
 {
     options.PollingInterval = TimeSpan.FromSeconds(1);
+    options.RetryDelay = TimeSpan.FromSeconds(5);
+    options.MaxRetryCount = 20;
 });
 
 builder.Services.AddIdGenerator()
@@ -73,22 +74,16 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
     builder.Services.AddOpenTelemetry().UseOtlpExporter();
 }
 
-var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
-var sampleIssuer = $"{sampleOrigin}/oauth2";
-
-builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
-builder.Services.AddSampleIdentity<ConfigurationDbContext>(new Uri(sampleIssuer + "/"), builder.Environment.IsDevelopment());
-
+builder.Services.AddSampleIdentity(builder.Configuration, builder.Environment);
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
+builder.Services.AddSingleton<DemoDeliveryControl>();
+builder.Services.AddSingleton<DemoObservations>();
+builder.Services.AddInvocationFilter<DemoInvocationFilter>();
+builder.Services.AddHttpClient("notifications", client => client.BaseAddress = new Uri(
+    builder.Configuration["Notifications:BaseUrl"] ?? "http://localhost:55893"));
 builder.Services.Replace(ServiceDescriptor.Scoped<ISampleApi, ServerSampleApi>());
-builder.Services.Replace(ServiceDescriptor.Scoped<IOAuthDemoApi, ServerOAuthDemoApi>());
 builder.Services.AddScoped<SampleMessageService>();
-
-builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-
-builder.Services.AddTransient<OAuthChainDemoAccessTokenHandler>();
-builder.Services.AddHttpClient<IDemoDownstreamApi, DownstreamApi>(client => client.BaseAddress = new Uri(sampleOrigin))
-    .AddHttpMessageHandler<OAuthChainDemoAccessTokenHandler>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
@@ -101,11 +96,8 @@ app.UseNOF();
 app.MapConfigNodeEndpoints();
 app.MapMessageDispatchEndpoints();
 app.MapPermissionDemoEndpoints();
-if (app.Environment.IsDevelopment())
-{
-    app.MapOAuthDemoEndpoints();
-}
-app.MapSampleIdentity(app.Environment.IsDevelopment());
+app.MapSampleIdentity();
+app.MapDemoCapabilities();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/alive");
 
@@ -122,20 +114,3 @@ app.MapRazorComponents<App>()
         typeof(NOF.Sample.Wasm.WasmMarker).Assembly);
 
 await app.RunAsync();
-
-static string ResolveSampleOrigin(IConfiguration configuration)
-{
-    var urls = configuration["ASPNETCORE_URLS"];
-    if (!string.IsNullOrWhiteSpace(urls))
-    {
-        var candidate = urls
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
-        if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
-        {
-            return $"{uri.Scheme}://{uri.Authority}";
-        }
-    }
-
-    return "http://localhost";
-}

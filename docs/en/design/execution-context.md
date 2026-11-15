@@ -24,7 +24,7 @@ await outbox.EnqueueAsync(new OrderCreated(orderId), invocation.Context,
     new Dictionary<string, string?> { ["partition"] = orderId.ToString() }, ct);
 await unitOfWork.SaveChangesAsync(ct);
 
-public sealed class ForwardOrder(IMessageClient client) : OutboxHandler<OrderCreated>
+public sealed class ForwardOrder(RabbitMQMessageClient client) : OutboxHandler<OrderCreated>
 {
     public override ValueTask HandleAsync(OrderCreated message, OutboxDeliveryContext delivery, CancellationToken ct)
         => client.PublishAsync("orders", "created", message, delivery.Headers, ct);

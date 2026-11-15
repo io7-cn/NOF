@@ -69,7 +69,7 @@ See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [ar
 
 - [RabbitMQ two-service routing sample](design/rabbitmq-sample.md)
 
-The shared Sample UI uses native Blazor event binding and HTML controls, with no third-party component library. Configuration editing, streaming, OIDC and OAuth chain demos share the same UI in server and WebAssembly rendering modes. Start the AppHost as described in the [RabbitMQ sample](design/rabbitmq-sample.md).
+The shared Sample UI uses native Blazor event binding and HTML controls, with no third-party component library. Configuration editing, streaming and permission components use interactive server rendering with the external identity principal. The browser workbench exposes live cache, storage, events, IDs, Outbox and cross-service delivery controls. Start the AppHost as described in the [RabbitMQ sample](design/rabbitmq-sample.md).
 
 - [Host composition and identity ownership](design/host-composition.md)
 
@@ -80,3 +80,5 @@ The shared Sample UI uses native Blazor event binding and HTML controls, with no
 - [One-way operations and uniform Inbox](design/one-way-operations.md)
 - [JSON execution context and durable delivery](design/execution-context.md)
 - [Native EF Core configuration and NOF policy](design/efcore-configuration.md)
+
+- [Interactive Sample capability workbench](design/sample-workbench.md)

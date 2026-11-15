@@ -4,9 +4,7 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.7.2" />
-    <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
-
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="[11.0.0,11.1.0)" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="[11.0.0,11.1.0)" />
     <!-- SourceGenerator -->
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />

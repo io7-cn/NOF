@@ -26,68 +26,6 @@ namespace NOF.Sample.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("NOF.Infrastructure.NOFInboxMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Route")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<DateTime?>("ClaimExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ClaimedBy")
-                        .IsConcurrencyToken()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<DateTime?>("FailedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Headers")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<byte[]>("Payload")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<DateTime?>("ProcessedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("Id", "Route");
-
-                    b.HasIndex("ClaimedBy");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.HasIndex("Status", "ClaimExpiresAtUtc");
-
-                    b.HasIndex("Status", "CreatedAtUtc");
-
-                    b.ToTable("NOFInboxMessage", (string)null);
-                });
-
             modelBuilder.Entity("NOF.Infrastructure.NOFOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")

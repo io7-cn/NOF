@@ -12,7 +12,7 @@ public static partial class NOFInfrastructureRabbitMQExtensions
 {
     extension(IServiceCollection services)
     {
-        /// <summary>Registers lazy native connection access; no topology, persistence or consumers are enabled.</summary>
+        /// <summary>Registers lazy native connection access and the JSON publishing client; no topology, persistence or consumers are enabled.</summary>
         public IServiceCollection AddRabbitMQ(Action<ConnectionFactory>? configureConnection = null)
         {
             var options = services.AddOptions<ConnectionFactory>();
@@ -22,6 +22,8 @@ public static partial class NOFInfrastructureRabbitMQExtensions
             }
             services.TryAddSingleton<IConnectionFactory>(provider => provider.GetRequiredService<IOptions<ConnectionFactory>>().Value);
             services.TryAddSingleton<RabbitMQConnection>();
+            services.AddNOFJson();
+            services.TryAddSingleton<RabbitMQMessageClient>();
             return services;
         }
 

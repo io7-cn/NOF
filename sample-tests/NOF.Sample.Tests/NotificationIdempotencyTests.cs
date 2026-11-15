@@ -14,6 +14,37 @@ namespace NOF.Sample.Tests;
 
 public sealed class NotificationIdempotencyTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReceiverSchemaUpgrade_PreservesDataAndRejectsUnresolvedDuplicates(bool duplicate)
+    {
+        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "CREATE TABLE Receipts (Id TEXT, OrderId TEXT, Kind INTEGER, TenantId TEXT); INSERT INTO Receipts VALUES ('first', 'ABC', 1, 'host');";
+        if (duplicate)
+        {
+            command.CommandText += "INSERT INTO Receipts VALUES ('second', 'ABC', 1, 'host');";
+        }
+        await command.ExecuteNonQueryAsync();
+        command.CommandText = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "UpgradeBusinessIdempotency.sql"));
+        if (duplicate)
+        {
+            await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() => command.ExecuteNonQueryAsync());
+            command.CommandText = "ROLLBACK;";
+            await command.ExecuteNonQueryAsync();
+            command.CommandText = "SELECT COUNT(*) FROM Receipts;";
+            Assert.Equal(2L, await command.ExecuteScalarAsync());
+        }
+        else
+        {
+            await command.ExecuteNonQueryAsync();
+            command.CommandText = "SELECT IdempotencyKey FROM Receipts;";
+            Assert.Equal("order:abc", await command.ExecuteScalarAsync());
+        }
+    }
+
     [Fact]
     public async Task RepeatedDeliveries_UseBusinessUniqueness_WithoutFrameworkReceipts()
     {

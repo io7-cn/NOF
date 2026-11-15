@@ -12,3 +12,9 @@ public sealed class GetPermissionOverview(IUserContext user) : PermissionDemoSer
     public override Task<PermissionDemoOverview> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
         => Task.FromResult(new PermissionDemoOverview(user.User.Id, SamplePermissions.Definitions));
 }
+
+public sealed class ManagePermissionDemo(IUserContext user) : PermissionDemoService.Manage
+{
+    public override Task<PermissionDemoOverview> HandleAsync(Empty request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult(new PermissionDemoOverview(user.User.Id, SamplePermissions.Definitions));
+}

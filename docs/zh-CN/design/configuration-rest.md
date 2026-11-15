@@ -89,7 +89,7 @@ var app = builder.Build();
 app.UseNOF();
 app.MapConfigNodeEndpoints();
 app.MapOAuthDemoEndpoints();
-app.MapSampleIdentity(app.Environment.IsDevelopment());
+app.MapSampleIdentity();
 app.MapHealthChecks("/health");
 app.MapOpenApi();
 ```

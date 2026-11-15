@@ -9,7 +9,7 @@ Aspire 示例现在包含生产者 `NOF.Sample` 和接收者 `NOF.Sample.Notific
 在仓库根目录执行，确保 Docker 正在运行且已安装固定版本的 .NET SDK：
 
 ```sh
-dotnet run --project sample/NOF.Sample.AppHost
+dotnet run --project sample/NOF.Sample.AppHost -c Release --launch-profile http -p:AspireUseCliBundle=false
 ```
 
 AppHost 先启动 RabbitMQ 和接收服务，再启动生产者。在 Aspire Dashboard 中找到 `NOF-Sample`、`sample-notifications` 的 HTTP 地址，分别设置为 `PRODUCER`、`RECEIVER`，端口可能不同。
@@ -37,24 +37,23 @@ await outbox.EnqueueAsync(new SendEmail(email, "Created", "Order created.", Orde
 await unitOfWork.SaveChangesAsync(ct);
 ```
 
-生产者明确选择基础设施适配器，以及稳定的逻辑消息标识和版本：
+生产者明确启用 Outbox，并自动发现基础设施处理器：
 
 ```csharp
-builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 分别继承 OutboxHandler<TMessage>，无需 MessageType/SchemaVersion 元数据，通过 ApplicationPart 自动注册。每个 Handler 直接转发已准备好的 OutboxDeliveryContext.Headers，再经 Application.IMessageClient 选择目的地。宿主在 Services/RabbitMQMessageClient.cs 实现该接口，使用原生 Channel 和发布确认：
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` 与 `OrderCreatedOutboxHandler.cs` 继承 OutboxHandler<TMessage>，由 ApplicationPart 自动发现。它们在基础设施层选择路由，将完整 OutboxDeliveryContext.Headers 交给集成包中的具体 RabbitMQMessageClient。AddRabbitMQ 自动注册该惰性客户端，不开启消费者、拓扑、Outbox 或持久化。
 
 ```csharp
-await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
-await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
+await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext.Headers, ct);
+await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext.Headers, ct);
 ```
 
-宿主客户端实现使用原生 `IChannel.BasicPublishAsync`，通过 `CreateChannelOptions` 开启 publisher confirms/tracking，发布时指定 `mandatory: true`。OutboxHandler 直接转发完整 `deliveryContext.Headers`，其中已含 JSON 上下文、原 Outbox ID、租户/追踪和自定义 Headers，BasicProperties.MessageId 同时写入原 ID。Return/Nack 异常直接交给 Outbox 重试。发送时不自动声明任何 Exchange、队列或转发拓扑。
+客户端使用持久化 JSON、原生发布确认和 mandatory 路由，Return/Nack 会使发件尝试失败，不声明任何 Exchange、Queue 或 Binding。需要更多原生设置时，直接使用 RabbitMQConnection.GetAsync 和 Channel。Application 只通过 IOutbox 暂存业务意图，不需要通用消息客户端接口。
 
-接收宿主在 `NotificationMessaging.cs` 明确绑定物理路由与操作：
+接收宿主的 NotificationMessaging.Configure 显式声明原生拓扑并将队列映射到操作：
 
 ```csharp
 builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connectionString))
@@ -88,8 +87,6 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 两个绑定的订单队列各收到一份消息；扩容同一队列的消费者只会竞争处理。Contract/Application 仍保持传输无关，路由、拓扑、序列化和原生发布属性都属于示例基础设施。
 
-两个宿主都通过 `AddRabbitMQ` 使用 Aspire 注入的 `rabbitmq` 连接字符串。接收者的队列映射自动装配事务性消息，并通过 `Outbox.RunWorkers=false` 停止发件 Worker。生产者调用 `AddOutbox`，通过 `Inbox.RunWorkers=false` 停止收件 Worker，不配置消费者。两侧均保留完整消息模型，包括生产者已有的 PostgreSQL 迁移模型。接收处理器通过 `INotificationReceipts` 暂存投影，不独立保存；Inbox Worker 在同一 SQLite 工作单元中提交业务记录和处理状态。Broker 的 ACK 表示消息已持久化进入 Inbox，并不表示业务处理器已完成。
-
 ## 持久化与验证
 
 生产者选择原生 EF/PostgreSQL，调用 AddOutbox，在同一业务工作单元中保存两条意图。接收者选择 EF/SQLite 仅用于业务投影，MapQueue 不安装 Outbox/Inbox 持久化。操作直接等待 INotificationReceipts.RecordAsync；该端口使用参数化 SQLite INSERT ... ON CONFLICT DO NOTHING，依赖 按租户隔离的 (IdempotencyKey, Kind, TenantId) 唯一索引。订单 ID 是业务键；无订单的邮件使用稳定消息 ID。同一订单即使有不同传输 ID，每种投影也只生成一次，不使用先查询后插入。
@@ -111,3 +108,6 @@ AddRabbitMQ 配置原生 ConnectionFactory；可重复链式 ConfigureRabbitMQ �
 NOF.Sample.Notifications 是一个服务项目，包含操作、业务投影端口和原生 SQLite 实现。共享载荷/路由常量位于 NOF.Sample.Contract；发件客户端接口位于 Application，原生实现与 Outbox Handler 位于 NOF.Sample。CountOrder 仍是独立 OperationHandler 表达的内部反应，不声明为 Contract 方法。
 
 NotificationsDbContext 的 EnsureCreated 只创建新本地文件，不升级旧文件。旧接收库需审查 IdempotencyKey 与唯一索引迁移：为已知订单投影推导订单键、显式处理重复记录，并为旧的无订单/消息 ID 邮件决定业务键。删除旧表前备份 Inbox 历史并解决未完成工作，不要通过删除已有文件伪装迁移。示例业务投影是可观测数据，不是重新包装的通用 NOF Inbox。
+
+
+可见操作入口、外部 Keycloak 账号、Outbox 暂停/重试/重复投递与旧 SQLite 文件的一次升级脚本用法见[能力工作台指南](sample-workbench.md)。Application 不再声明 IMessageClient，Sample 的 OutboxHandler 保留基础设施路由。运行本地 AppHost 会应用开发数据库迁移；接收端的 EnsureCreated 不负责升级旧文件。

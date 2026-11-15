@@ -9,5 +9,8 @@ namespace NOF.Sample.Endpoints;
 public static class PermissionDemoEndpoints
 {
     public static void MapPermissionDemoEndpoints(this IEndpointRouteBuilder endpoints)
-        => endpoints.MapGet<PermissionDemoService.GetOverview>("/api/permissions/overview").WithTags("Permissions");
+    {
+        endpoints.MapGet<PermissionDemoService.GetOverview>("/api/permissions/overview").WithTags("Permissions");
+        endpoints.MapPost<PermissionDemoService.Manage>("/api/permissions/manage").WithTags("Permissions");
+    }
 }

@@ -15,7 +15,7 @@
 - **OpenTelemetry** - Built-in tracing, metrics, and logging integration.
 - **Redis Cache** - Optional Redis-backed `ICacheService` via `NOF.Infrastructure.StackExchangeRedis`.
 - **RabbitMQ Transport** - Optional command and notification transport via `NOF.Infrastructure.RabbitMQ`.
-- **Native Identity** - Host-owned OpenIddict or an external identity provider.
+- **Native Identity** - External identity-provider integration with native ASP.NET Core authentication.
 - **UI & Test Helpers** - Blazor UI primitives and test-host utilities for application integration tests.
 
 ## Getting Started

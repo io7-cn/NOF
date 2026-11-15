@@ -135,7 +135,7 @@ public sealed class RabbitMQDispatchTests
         await using var producer = CreateProducer(connection, MemoryDatabase());
         await producer.StartAsync();
         using var scope = producer.Services.CreateScope();
-        var publisher = scope.ServiceProvider.GetRequiredService<IMessageClient>();
+        var publisher = scope.ServiceProvider.GetRequiredService<RabbitMQMessageClient>();
         var headers = new Dictionary<string, string?> { [NOFAbstractionConstants.Transport.Headers.MessageId] = Guid.NewGuid().ToString() };
         var error = await Assert.ThrowsAsync<PublishException>(() => publisher.PublishAsync(string.Empty,
             "sample.unroutable." + Guid.NewGuid().ToString("N"), new SendEmail("demo@example.test", "Test", "Test"), headers, default).AsTask());
@@ -221,9 +221,9 @@ public sealed class RabbitMQDispatchTests
         var builder = Builder();
         builder.AddApplicationPart(typeof(MessageDispatchService).Assembly);
         builder.AddApplicationService<MessageDispatchService>();
-        builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
         builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
         builder.Services.AddOutbox();
+        builder.Services.AddSingleton<DemoDeliveryControl>();
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
         builder.UseDbContext<ProducerDbContext>((_, ef) => ef.UseSqlite(database))
             .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);

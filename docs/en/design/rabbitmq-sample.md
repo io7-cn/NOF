@@ -2,14 +2,14 @@
 
 [简体中文](../../zh-CN/design/rabbitmq-sample.md) · [Transactional outbox](transactional-outbox.md)
 
-The Aspire sample runs a producer (`NOF.Sample`) and a receiver (`NOF.Sample.Notifications`) against the same RabbitMQ resource. RabbitMQ was already declared by AppHost; it now carries the sample messages instead of the in-process memory client. The producer retains PostgreSQL, Redis and the existing UI/OIDC features. The receiver owns a separate SQLite database for its application-owned idempotent projections.
+The Aspire sample runs a producer (`NOF.Sample`) and a receiver (`NOF.Sample.Notifications`) against the same RabbitMQ resource. RabbitMQ was already declared by AppHost; it now carries the sample messages instead of the in-process memory client. The producer retains PostgreSQL, Redis and the UI and external Keycloak identity integration. The receiver owns a separate SQLite database for its application-owned idempotent projections.
 
 ## Run and observe
 
 From the repository root, with Docker running and the pinned .NET SDK installed:
 
 ```sh
-dotnet run --project sample/NOF.Sample.AppHost
+dotnet run --project sample/NOF.Sample.AppHost -c Release --launch-profile http -p:AspireUseCliBundle=false
 ```
 
 AppHost starts RabbitMQ and the receiving service before the producer. Open the producer's HTTP endpoint from the Aspire dashboard. Set `PRODUCER` and `RECEIVER` to the HTTP addresses shown for `NOF-Sample` and `sample-notifications` (their ports may vary).
@@ -40,19 +40,18 @@ await unitOfWork.SaveChangesAsync(ct);
 The producer explicitly selects scoped infrastructure adapters and stable logical schemas:
 
 ```csharp
-builder.Services.AddScoped<IMessageClient, RabbitMQMessageClient>();
 builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
 builder.Services.AddOutbox();
 ```
 
-`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` each derive from OutboxHandler<TMessage>, need no MessageType/SchemaVersion metadata, and are automatically registered by the application part. Each handler forwards the ready-to-send OutboxDeliveryContext.Headers and chooses destinations through Application.IMessageClient. The host implements that port in Services/RabbitMQMessageClient.cs, using native channel properties and confirmations (forward deliveryContext.Headers directly):
+`NOF.Sample/Services/SendEmailOutboxHandler.cs` and `OrderCreatedOutboxHandler.cs` derive from OutboxHandler<TMessage> and are automatically discovered. They choose infrastructure routes and forward the complete OutboxDeliveryContext.Headers through the integration's concrete RabbitMQMessageClient. AddRabbitMQ registers this lazy client without consumers, topology or Outbox workers:
 
 ```csharp
-await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, headers, ct);
-await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, headers, ct);
+await client.PublishAsync(string.Empty, RabbitMQDemoRoutes.MailQueue, message, deliveryContext.Headers, ct);
+await client.PublishAsync(RabbitMQDemoRoutes.OrderEventsExchange, RabbitMQDemoRoutes.OrderCreatedRoutingKey, message, deliveryContext.Headers, ct);
 ```
 
-The host client implementation uses native `IChannel.BasicPublishAsync`, not a NOF send/publish client. It creates a native channel with publisher confirmations/tracking enabled and publishes with `mandatory: true`. The Outbox handler forwards complete `deliveryContext.Headers`, including the persisted JSON context, original ID, tenant/trace and custom headers; native BasicProperties also receives MessageId. Return/nack errors propagate to the Outbox attempt. No exchange, queue or forwarding topology is declared while publishing.
+The client publishes persistent JSON with native publisher confirmations/tracking and mandatory routing. Return/nack errors fail the Outbox attempt. It creates no exchange, queue, binding or forwarding topology. Use RabbitMQConnection.GetAsync and native channels directly for settings beyond this convenience method. The Application layer needs no generic publishing interface: it stages business intents through IOutbox; host Outbox handlers own RabbitMQ dependencies.
 
 The receiving host's `NotificationMessaging.cs` explicitly binds infrastructure routes to operations:
 
@@ -88,7 +87,7 @@ await channel.QueueBindAsync(queue, RabbitMQDemoRoutes.OrderEventsExchange, "ord
 
 Each bound order queue receives its own copy. Scaling consumers of the same queue adds competing workers, not additional recipients. Contract/Application remain transport independent. Routing, topology, serialization and native publish properties stay in sample infrastructure.
 
-Both hosts call `AddRabbitMQ` with the `rabbitmq` connection string injected by Aspire. Queue mappings automatically assemble transactional messaging for the receiver, which stops Outbox workers with `Outbox.RunWorkers=false`. The producer calls `AddOutbox` and stops Inbox workers with `Inbox.RunWorkers=false`; it has no consumers. Both retain the complete message model, including the producer's existing PostgreSQL migration model. Receiver handlers stage projections through `INotificationReceipts`; they do not save independently. The Inbox worker commits those changes with its processed receipt in the same SQLite unit of work. Acknowledgement at the broker means durable Inbox acceptance, not completion of the business handler.
+Both hosts call AddRabbitMQ with the connection string injected by Aspire. The producer explicitly calls AddOutbox; the receiver enables no Outbox/Inbox persistence. Its native SQLite port atomically commits idempotent projections before RabbitMQ ACK. See [the workbench guide](sample-workbench.md) for visible submit, pause/resume, fail-once and replay controls.
 
 ## Persistence and verification
 
@@ -104,10 +103,10 @@ AddRabbitMQ configures native ConnectionFactory; repeatable fluent ConfigureRabb
 
 Each delivery restores Context in a fresh scope and executes the selected operation directly. No InboxEndpointRegistry, receipt route, claim, retry counter or consumer database exists in the framework. Missing transport MessageId stays missing; native IDs override the legacy header without Guid coercion. Direct Memory dispatch has the same execution boundary and propagates failure, but does not promise broker-like restart durability.
 
-Before switching binaries, stop old consumers/Inbox workers and back up tenant databases. Resolve Pending/Failed work using the old runtime or explicitly export/replay reviewed records; old messages may already have been ACKed. Export completion history if needed. The producer's guarded 20261116000000_RemoveInbox migration refuses unfinished records and drops only the retired Inbox table, leaving Outbox and identity data intact. No live database changes are performed by the source update.
+Before switching binaries, stop old consumers/Inbox workers and back up tenant databases. Resolve Pending/Failed work using the old runtime or explicitly export/replay reviewed records; old messages may already have been ACKed. Export completion history if needed. The producer's guarded 20261116000000_RemoveInbox migration refuses unfinished records and drops only the retired Inbox table, leaving Outbox and identity data intact. Launching AppHost applies migrations to the local development producer database.
 
 ## Sample project boundaries
 
-NOF.Sample.Notifications is one service project with its operations, application-owned projection port and native SQLite implementation. Shared payloads/routes remain in NOF.Sample.Contract; the publishing client interface belongs to Application and its native implementation/Outbox handlers to NOF.Sample. CountOrder remains an internal reaction expressed as a standalone OperationHandler, not a Contract method.
+NOF.Sample.Notifications is one service project with its operations, application-owned projection port and native SQLite implementation. Shared payloads/routes remain in NOF.Sample.Contract; RabbitMQMessageClient belongs to NOF.Infrastructure.RabbitMQ and routing Outbox handlers remain in NOF.Sample. CountOrder remains an internal reaction expressed as a standalone OperationHandler, not a Contract method.
 
-NotificationsDbContext uses EnsureCreated for a fresh local file; it does not upgrade existing files. An existing receiver needs a reviewed schema upgrade for IdempotencyKey and its unique index: derive order keys for known order projections, explicitly resolve duplicates, and decide keys for older mail lacking an order/message ID. Back up old Inbox history and resolve unfinished work before removing its table. Do not drop a populated file to simulate migration. The sample business row is observability/projection data, not a generic NOF Inbox replacement.
+NotificationsDbContext uses EnsureCreated for a fresh local file; it does not upgrade existing files. An existing receiver needs a reviewed schema upgrade for IdempotencyKey and its unique index (the one-time UpgradeBusinessIdempotency.sql script and error-stopping instructions are in the workbench guide): derive order keys for known order projections, explicitly resolve duplicates, and decide keys for older mail lacking an order/message ID. Back up old Inbox history and resolve unfinished work before removing its table. Do not drop a populated file to simulate migration. The sample business row is observability/projection data, not a generic NOF Inbox replacement.

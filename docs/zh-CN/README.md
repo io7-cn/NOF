@@ -61,7 +61,7 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 
 - [RabbitMQ 双服务手动路由示例](design/rabbitmq-sample.md)
 
-共享 Sample UI 使用原生 Blazor 事件绑定和 HTML 控件，不依赖第三方组件库。配置编辑、流式传输、OIDC 和 OAuth 链路演示在服务端及 WebAssembly 渲染模式下共享同一套 UI。按 [RabbitMQ 示例](design/rabbitmq-sample.md)中的说明启动 AppHost。
+共享 Sample UI 使用原生 Blazor 事件绑定和 HTML 控件，不依赖第三方组件库。配置编辑、流式响应和权限组件使用交互式服务端渲染与外部身份；能力工作台提供缓存、存储、事件、ID、Outbox 和跨服务投递的实际操作入口。按 [RabbitMQ 示例](design/rabbitmq-sample.md)中的说明启动 AppHost。
 
 - [宿主装配与身份职责](design/host-composition.md)
 
@@ -72,3 +72,5 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 - [单向操作与统一 Inbox](design/one-way-operations.md)
 - [JSON 执行上下文与可靠投递](design/execution-context.md)
 - [原生 EF Core 配置与 NOF 策略](design/efcore-configuration.md)
+
+- [交互式 Sample 能力工作台](design/sample-workbench.md)

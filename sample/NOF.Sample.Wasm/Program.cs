@@ -6,7 +6,6 @@ var builder = Microsoft.AspNetCore.Components.WebAssembly.Hosting.WebAssemblyHos
 
 builder.Services.AddScoped<SampleMessageService>();
 builder.Services.AddScoped<ISampleApi, HttpSampleApi>();
-builder.Services.AddScoped<IOAuthDemoApi, HttpOAuthDemoApi>();
 builder.Services.AddScoped(_ => new HttpClient
 {
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)

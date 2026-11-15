@@ -96,3 +96,8 @@
   href: ../en/design/efcore-configuration.md
 - name: 原生 EF Core 配置与 NOF 策略
   href: ../zh-CN/design/efcore-configuration.md
+
+- name: Interactive Sample capability workbench
+  href: ../en/design/sample-workbench.md
+- name: 交互式 Sample 能力工作台
+  href: ../zh-CN/design/sample-workbench.md

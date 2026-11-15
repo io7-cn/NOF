@@ -165,6 +165,38 @@ public sealed class ConfigNodeRestTests
         Assert.NotEmpty(failure.ExpectFailure().Detail);
     }
 
+    [Fact]
+    public async Task ServerUiBridge_DoesNotRunDomainEventsOnTheCircuitContext()
+    {
+        await using var app = await CreateAppAsync();
+        using var scope = app.Services.CreateScope();
+        var api = new Services.ServerSampleApi(scope.ServiceProvider);
+        var original = SynchronizationContext.Current;
+        Task<UiResponse> pending;
+        var circuit = new CircuitContext();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(circuit);
+            pending = api.CreateConfigNodeAsync(new() { Name = "server-ui" }, Context.Empty);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(original);
+        }
+        Assert.IsType<Empty>((await pending.WaitAsync(TimeSpan.FromSeconds(10))).Value);
+        Assert.Equal(0, circuit.Posts);
+    }
+
+    public sealed class CircuitContext : SynchronizationContext
+    {
+        public int Posts;
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Interlocked.Increment(ref Posts);
+            base.Post(callback, state);
+        }
+    }
+
     private static async Task<long> CreateAsync(HttpClient http, string name, long? parentId = null)
     {
         using var response = await http.PostAsJsonAsync("/api/config-nodes", new { name, parentId });

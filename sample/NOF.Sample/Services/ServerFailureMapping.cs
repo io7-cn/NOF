@@ -11,7 +11,7 @@ public static class ServerFailureMapping
     public static Failure From(IFailure failure) => new(failure.Title, failure.Detail);
 
     public static async Task<UiResponse> Command(Task<object?> invocation)
-        => InvocationResult.Value(await invocation) switch
+        => InvocationResult.Value(await invocation.ConfigureAwait(false)) switch
         {
             IFailure failure => From(failure),
             null => throw new InvalidOperationException("The command returned no value."),
@@ -19,7 +19,7 @@ public static class ServerFailureMapping
         };
 
     public static async Task<UiResponse<T>> Resource<T>(Task<object?> invocation)
-        => InvocationResult.Value(await invocation) switch
+        => InvocationResult.Value(await invocation.ConfigureAwait(false)) switch
         {
             IFailure failure => From(failure),
             T value => value,

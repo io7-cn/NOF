@@ -55,7 +55,7 @@ configuration nor native sessions.
 
 ## Identity persistence
 
-The OIDC protocol and store integration packages are removed. Hosts use upstream providers directly. The Sample adds OpenIddict models to its existing ConfigurationDbContext and migration chain, disabling business soft deletion for those entities. Its new migration preserves legacy identity tables for an explicitly reviewed transition. See [host composition and identity migration](host-composition.md).
+The OIDC protocol and store integration packages are removed. Hosts use upstream providers directly. The Sample consumes Keycloak through native authentication handlers; identity data is owned by the provider. Its EF model no longer contains OpenIddict entities, and the model-only transition preserves historical physical identity tables for a reviewed retention decision. See [host composition and identity migration](host-composition.md).
 
 ## Memory messages and tests
 

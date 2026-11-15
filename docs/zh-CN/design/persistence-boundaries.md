@@ -46,8 +46,7 @@ NHibernate 扩展注册 Action<ModelMapper> 回调，直接使用原生 Mapping 
 
 ## 身份持久化
 
-OIDC 协议与存储集成包已移除，宿主直接使用上游方案。Sample 将 OpenIddict 模型并入现有 ConfigurationDbContext 与迁移链，
-为其关闭业务软删除约定。新迁移保留旧身份表，凭据与会话过渡须显式审查。参见[宿主装配与身份迁移](host-composition.md)。
+OIDC 协议与存储集成包已移除，宿主直接使用上游方案。Sample 通过原生认证处理器接入 Keycloak，身份数据由提供者持有。活动 EF 模型不再包含 OpenIddict 实体；模型迁移保留历史物理身份表，后续清理由独立的数据保留决策确定。见[宿主装配与身份迁移](host-composition.md)。
 
 ## 内存消息与测试
 

@@ -1,0 +1,33 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Authentication
+@inject NOF.Abstraction.IUserContext UserContext
+@using NOF.Sample.UI.Components
+@implements IDisposable
+
+@if (_ready)
+{
+    <Routes />
+}
+
+@code {
+    private bool _ready;
+    protected override async Task OnInitializedAsync()
+    {
+        Authentication.AuthenticationStateChanged += AuthenticationChanged;
+        Apply(await Authentication.GetAuthenticationStateAsync());
+    }
+    private void Apply(AuthenticationState state)
+    {
+        var principal = state.User;
+        UserContext.Logout();
+        UserContext.User.AddIdentities(principal.Identities.Select(identity => identity.Clone()));
+        _ready = true;
+    }
+    private void AuthenticationChanged(Task<AuthenticationState> state)
+        => _ = InvokeAsync(async () =>
+        {
+            Apply(await state);
+            StateHasChanged();
+        });
+    public void Dispose() => Authentication.AuthenticationStateChanged -= AuthenticationChanged;
+}

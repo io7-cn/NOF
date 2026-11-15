@@ -14,8 +14,6 @@ public class NativeSampleUiTests
     [Theory]
     [InlineData(typeof(UI.Pages.Index), "配置中心")]
     [InlineData(typeof(StreamingDemo), "开始流式调用")]
-    [InlineData(typeof(OidcDemo), "Authorize URL Builder")]
-    [InlineData(typeof(OAuthChainDemo), "生成 Client")]
     [InlineData(typeof(PermissionsDemo), "sample.permissions.read")]
     public async Task DemoPagesRenderWithNativeControls(Type component, string expectedText)
     {
@@ -26,7 +24,6 @@ public class NativeSampleUiTests
         services.AddSingleton<NavigationManager, SampleNavigationManager>();
         services.AddScoped(_ => new HttpClient(new RootNodesHandler()) { BaseAddress = new Uri("http://localhost/") });
         services.AddScoped<ISampleApi, HttpSampleApi>();
-        services.AddScoped<IOAuthDemoApi, HttpOAuthDemoApi>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
 

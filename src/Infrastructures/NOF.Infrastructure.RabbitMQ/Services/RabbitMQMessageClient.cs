@@ -1,16 +1,14 @@
 using NOF.Abstraction;
-using NOF.Infrastructure;
-using NOF.Infrastructure.RabbitMQ;
-using NOF.Sample.Application;
 using RabbitMQ.Client;
 
-namespace NOF.Sample.Services;
+namespace NOF.Infrastructure.RabbitMQ;
 
-/// <summary>Sample infrastructure combines NOF delivery metadata with native RabbitMQ publishing.</summary>
-public sealed class RabbitMQMessageClient(RabbitMQConnection connection, IObjectSerializer serializer) : IMessageClient
+/// <summary>Publishes JSON messages with native mandatory routing and publisher confirmations, without declaring topology.</summary>
+public sealed class RabbitMQMessageClient(RabbitMQConnection connection, IObjectSerializer serializer)
 {
+    /// <summary>Publishes one persistent JSON message with explicit routing and headers; broker rejection or unroutable delivery fails the call.</summary>
     public async ValueTask PublishAsync<T>(string exchange, string routingKey, T message,
-        IReadOnlyDictionary<string, string?> headers, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, string?> headers, CancellationToken cancellationToken = default)
     {
         var nativeConnection = await connection.GetAsync(cancellationToken);
         await using var channel = await nativeConnection.CreateChannelAsync(

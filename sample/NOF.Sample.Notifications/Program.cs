@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.AddApplicationPart(typeof(MessageDemoService).Assembly);
 builder.AddApplicationService<MessageDemoService>();
 
-
 builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq")
     ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required.")))
     .ConfigureRabbitMQ(NotificationMessaging.Configure);

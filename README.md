@@ -157,7 +157,7 @@ builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.T
 
 Standalone JsonSerializerOptions.CreateNOF() returns fresh defaults. No mutable process-wide JSON configuration remains. Native AOT requires generated metadata for application DTOs; missing metadata reports its runtime type.
 
-AddNOF selects execution only. Select concrete cache, object storage, backplane and ID providers through typed Selectors, such as services.AddCacheService().AddMemoryCacheService(). Snowflake belongs to Infrastructure; IdGenerator.Current returns null when absent. Native hosts own JwtBearer, endpoint authorization, telemetry and identity-provider integration. NOF no longer maintains an OIDC protocol package; Sample uses OpenIddict directly in its existing database and migration chain. See [host composition and migration](docs/en/design/host-composition.md) ([简体中文](docs/zh-CN/design/host-composition.md)).
+AddNOF selects execution only. Select concrete cache, object storage, backplane and ID providers through typed Selectors, such as services.AddCacheService().AddMemoryCacheService(). Snowflake belongs to Infrastructure; IdGenerator.Current returns null when absent. Native hosts own JwtBearer, endpoint authorization, telemetry and identity-provider integration. NOF no longer maintains an OIDC protocol package; Sample consumes a Keycloak container managed by AppHost through native Cookie/OpenIdConnect/JwtBearer handlers. Explore its [interactive capability workbench](docs/en/design/sample-workbench.md) ([简体中文](docs/zh-CN/design/sample-workbench.md)). See [host composition and migration](docs/en/design/host-composition.md) ([简体中文](docs/zh-CN/design/host-composition.md)).
 
 ## Testing
 

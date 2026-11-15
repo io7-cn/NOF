@@ -84,29 +84,13 @@ JsonSerializerOptions.CreateNOF() 获得新实例，不影响 DI 或其他宿主
 用于字节与 JSON 元数据边界以及禁用反射的执行。应用负载应注册源生成上下文，并插入到反射回退之前；只有运行时明确开启
 反射时才默认提供反射回退。
 
-## OIDC 交给现成协议实现
+## OIDC：接入外部身份提供者
 
-NOF 不再维护 OAuth/OIDC Server，也不为其增加新的包装包。三个 OidcServer 包、端点接口、协议模型、密钥轮换、令牌仓储
-和 ORM 集成均已删除。宿主直接接入现有身份服务，或直接使用 OpenIddict。
-[OpenIddict 官方说明](https://documentation.openiddict.com/introduction)明确把协议与原生存储交给库，把登录、同意和应用授权留给宿主。
+NOF 提供业务鉴权，不承担身份协议和用户存储。Sample AppHost 运行官方 Keycloak 容器并导入 `Realms/nof-realm.json`。应用通过原生 ASP.NET Core Cookie/OpenIdConnect 完成浏览器登录，通过 JwtBearer 接受 API Bearer 令牌。Issuer、Audience、签名和有效期由原生认证处理器验证；Development 之外必须使用 HTTPS 元数据。
 
-Sample 直接引用 OpenIddict.Server.AspNetCore、OpenIddict.EntityFrameworkCore，API 使用 JwtBearer。演示覆盖授权码与 PKCE、
-客户端凭据、刷新、设备授权、发现/JWKS、内省/吊销、UserInfo 和 Token Exchange。Identity 模块只包含演示用户/同意决策与
-客户端初始化，是应用代码。OAuth 演示管理端点与固定用户批准仅在 Development 开启；实际部署应提供自己的登录/同意策略
-和持久化签名、加密凭据，不能使用演示决策或开发证书作为生产配置。
+Keycloak 签发 `entitlements` 权限声明与 `nof.tenant_id` 租户声明。NOF 使用已验证身份检查 Contract 上的权限声明，UI AuthGuard 直接检查权限标识，不需要注册框架权限目录。账号、同意、会话、凭据和协议升级均由身份提供者负责。测试账号与权限场景见[能力工作台](sample-workbench.md)。
 
-Identity 并入现有 ConfigurationDbContext、数据库连接与迁移链，新增四张原生表。原生实体明确关闭业务软删除约定，
-保留上游吊销/清理语义。既有数据库迁移生命周期完成后才初始化演示客户端。DatabasePerTenant 共用迁移链，身份请求使用宿主
-上下文，应用的租户路由仍须明确配置。
-
-Token Exchange 保留上游 Presenter/Audience 限制。演示通过明确的 delegate_to 指定已注册、具备交换权限的接收客户端，
-将其写入批准的 Resources，只允许 Subject 与 Actor 共同拥有的 Scope。UI 获取用户令牌时传入 RecipientClientId；这是演示
-同意策略，不是允许任意客户端交换窃取的令牌。JwtBearer 离线验证 JWT，内省能观察吊销；需要 API 即时观察吊销时，应由宿主
-选择在线验证策略，否则访问令牌的接受窗口由有效期约束。客户端管理直接使用原生 ApplicationManager，Sample 不提供动态
-注册协议端点。
-
-本仓通过真实原生协议与 SQLite 集成测试验证所选 OpenIddict 版本在 .NET 11 下的行为；上游支持表目前明确列到 .NET 10。
-框架禁用反射的 Smoke 测试不代表所有第三方身份服务都支持 Native AOT。
+Sample 不再引用 OpenIddict，也不再提供授权、令牌、UserInfo 服务端点。旧的协议管理与 OAuth 链路演示页面已移除。更换身份提供者时，使用宿主原生 API 配置 Authority、ClientId、ClientSecret 和 API Audience。仓库中的 Realm 和客户端凭据仅用于本地演示，不能用于部署。
 
 ## 迁移
 
@@ -114,10 +98,7 @@ Token Exchange 保留上游 Presenter/Audience 限制。演示通过明确的 de
 Snowflake 改为 NOF.Infrastructure 命名空间；检查 IdGenerator.Current 的可空处理。JWT 改为原生 AddAuthentication/AddJwtBearer
 及对应中间件顺序，移除 Context.Items 凭据与宿主租户注解；特殊租户选择由应用显式实现。
 
-20261114200000_UseOpenIddict 接在 RemoveInboxClassification 之后，仅创建四张原生身份表及索引。旧 OAuthClient、
-PersistedSigningKey、RevokedRefreshToken 表保留在活动模型之外，不修改业务与消息的负载、Headers、ID、租约或去重历史。
-不能把旧哈希、加密密钥、授权码或刷新令牌直接解释为 OpenIddict 记录。停止旧程序、备份各数据库后，审查新客户端和权限配置、
-凭据轮换，并重新认证，或另行设计并审查明确的过渡方案。Down 要求恢复匹配备份和包，不猜测反向转换。本轮源码验证不升级真实数据库。
+历史 `20261114200000_UseOpenIddict` 迁移保留在链内。`20261117000000_ExternalIdentityProvider` 将这些实体移出活动 EF 模型，不删除物理身份表，也不改写历史凭据；业务与 Outbox 数据保留。升级前备份数据库、审查外部提供者的账号和权限配置，并重新登录，不自动转换凭据或令牌。以后清理旧身份表需要单独审查保留策略。启动本地 AppHost 会通过 MigrateOnStart 应用开发数据库迁移。
 
 权限检查由 NOF.Abstraction 提供，Application 解析 Contract 声明，UI 无须引用 Contract。AddNOF/AddNOFUI 装配默认检查器与 Claim 授予来源，业务通过 IPermissionGrantProvider 查询当前授予，无需注册框架权限字典。权限仅声明在 Contract 接口/方法上，UI 直接按标识检查。见[授权指南](authorization.md)。
 
