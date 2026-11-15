@@ -46,7 +46,7 @@ public sealed class MemoryMessageMetadataTests
     {
         using var listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name == NOFHostingConstants.Outbound.Source.Name,
+            ShouldListenTo = source => source.Name == NOFHostingConstants.Outbound.ActivitySourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
         };
         ActivitySource.AddActivityListener(listener);

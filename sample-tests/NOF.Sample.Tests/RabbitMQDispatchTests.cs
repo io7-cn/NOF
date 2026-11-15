@@ -218,7 +218,8 @@ public sealed class RabbitMQDispatchTests
         builder.AddApplicationPart(typeof(SendEmailOutboxHandler).Assembly);
         builder.Services.AddOutbox();
         builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
-        builder.UseDbContext<ProducerDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
+        builder.UseDbContext<ProducerDbContext>((_, ef) => ef.UseSqlite(database))
+            .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
         var app = builder.Build();
         app.UseNOF();
         app.MapMessageDispatchEndpoints();
@@ -245,7 +246,8 @@ public sealed class RabbitMQDispatchTests
             builder.Services.AddRabbitMQ(factory => factory.Uri = new Uri(connection));
             builder.Services.ConfigureRabbitMQ(endpoints => endpoints.MapQueue<ConsumerService.SendMail>(missingQueue));
         }
-        builder.UseDbContext<NotificationsDbContext>().WithTenantMode(TenantMode.SharedDatabase).WithConnectionString(database).WithOptions((options, value) => options.UseSqlite(value));
+        builder.UseDbContext<NotificationsDbContext>((_, ef) => ef.UseSqlite(database))
+            .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
         var app = builder.Build();
         app.UseNOF();
         app.MapGet<ConsumerService.GetReceipts>("/api/messages/receipts");

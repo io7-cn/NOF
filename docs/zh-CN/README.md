@@ -71,3 +71,4 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 
 - [单向操作与统一 Inbox](design/one-way-operations.md)
 - [JSON 执行上下文与可靠投递](design/execution-context.md)
+- [原生 EF Core 配置与 NOF 策略](design/efcore-configuration.md)

@@ -32,7 +32,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     protected NOFDbContextFactory(IServiceProvider serviceProvider)
         : this(
             serviceProvider,
-            serviceProvider.GetRequiredService<IOptions<DbContextConfigurationOptions>>(),
+            serviceProvider.GetRequiredService<IOptions<NOFDbContextOptions>>(),
             serviceProvider.GetServices<IEFCoreModelConfiguration>(),
             serviceProvider.GetRequiredService<ILogger<NOFDbContextFactory<TDbContext>>>())
     {
@@ -42,12 +42,12 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// Initializes a tenant-aware database context factory.
     /// </summary>
     /// <param name="serviceProvider">The scoped service provider used to construct contexts.</param>
-    /// <param name="dbContextConfigurationOptions">The configured database context options.</param>
+    /// <param name="dbContextConfigurationOptions">The configured NOF tenant and soft-delete policy.</param>
     /// <param name="modelCreatingContributors">The registered model contributors.</param>
     /// <param name="logger">The factory logger.</param>
     public NOFDbContextFactory(
         IServiceProvider serviceProvider,
-        IOptions<DbContextConfigurationOptions> dbContextConfigurationOptions,
+        IOptions<NOFDbContextOptions> dbContextConfigurationOptions,
         IEnumerable<IEFCoreModelConfiguration> modelCreatingContributors,
         ILogger<NOFDbContextFactory<TDbContext>> logger)
     {
@@ -63,9 +63,9 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     protected IServiceProvider ServiceProvider { get; }
 
     /// <summary>
-    /// Gets the configured database context options.
+    /// Gets the configured NOF tenant and soft-delete policy.
     /// </summary>
-    protected DbContextConfigurationOptions ConfigurationOptions { get; }
+    protected NOFDbContextOptions ConfigurationOptions { get; }
 
     /// <summary>
     /// Gets the model contributors applied to created contexts.
@@ -112,20 +112,13 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         };
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(modelCreatingExtension);
 
-        var resolutionContext = new DbContextConnectionStringResolutionContext(
-            ServiceProvider,
-            typeof(TDbContext),
-            tenantId,
-            ConfigurationOptions.TenantMode,
-            ConfigurationOptions.ConnectionStringTemplate);
-        var resolver = ConfigurationOptions.ConnectionStringResolver
-            ?? throw new InvalidOperationException("The database context connection-string resolver is not configured.");
-        var connectionString = resolver(resolutionContext)
-            ?? throw new InvalidOperationException(
-                $"The connection-string resolver returned null for DbContext '{typeof(TDbContext).FullName}' and tenant '{tenantId}'.");
-        ConfigurationOptions.Configure(optionsBuilder, connectionString);
         optionsBuilder.ReplaceService<IModelCustomizer, NOFModelCustomizer>();
         optionsBuilder.ReplaceService<IValueConverterSelector, ValueObjectValueConverterSelector>();
+        var creation = new DbContextCreationContext(ServiceProvider, typeof(TDbContext), tenantId, ConfigurationOptions.TenantMode);
+        foreach (var configure in ServiceProvider.GetServices<Action<DbContextCreationContext, DbContextOptionsBuilder<TDbContext>>>())
+        {
+            configure(creation, optionsBuilder);
+        }
 
         var dbContext = ActivatorUtilities.CreateInstance<TDbContext>(ServiceProvider, optionsBuilder.Options);
         EnsureSqliteInMemoryConnectionIsKeptAlive(dbContext);

@@ -1,4 +1,3 @@
-using System.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NHibernate.Dialect;
@@ -7,6 +6,7 @@ using NOF.Application;
 using NOF.Hosting;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Infrastructure.NHibernate;
+using System.Data;
 using Xunit;
 
 namespace NOF.Infrastructure.Tests.Persistence;
@@ -82,8 +82,7 @@ public sealed class NHibernateNativeStoreTests
             }
             else
             {
-                builder.UseDbContext<NOFDbContext>().WithConnectionString($"Data Source={file};Pooling=False")
-                    .WithOptions((options, connection) => options.UseSqlite(connection));
+                builder.UseDbContext<NOFDbContext>((_, ef) => ef.UseSqlite($"Data Source={file};Pooling=False"));
             }
             using var host = builder.Build();
             using var firstScope = host.Services.CreateScope();

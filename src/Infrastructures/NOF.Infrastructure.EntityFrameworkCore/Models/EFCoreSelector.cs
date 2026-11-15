@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -16,61 +15,11 @@ public readonly struct EFCoreSelector
         DbContextType = dbContextType;
     }
 
-    public EFCoreSelector WithTenantMode(TenantMode tenantMode)
-    {
-        Builder.Services.Configure<DbContextConfigurationOptions>(options =>
-        {
-            options.TenantMode = tenantMode;
-        });
-        return this;
-    }
-
-    public EFCoreSelector WithSoftDelete(bool enabled)
-    {
-        Builder.Services.Configure<DbContextConfigurationOptions>(options =>
-        {
-            options.SoftDeleteEnabled = enabled;
-        });
-        return this;
-    }
-
-    public EFCoreSelector WithConnectionString(string connectionStringTemplate)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionStringTemplate);
-
-        Builder.Services.Configure<DbContextConfigurationOptions>(options =>
-        {
-            options.ConnectionStringTemplate = connectionStringTemplate;
-        });
-        return this;
-    }
-
-    /// <summary>
-    /// Configures a connection-string resolver that runs in the current database context scope.
-    /// The resolver can use the tenant, database context type, tenant mode, fallback template,
-    /// and scoped services.
-    /// </summary>
-    /// <param name="resolver">The connection-string resolver.</param>
-    /// <returns>The current selector.</returns>
-    public EFCoreSelector WithConnectionStringResolver(DbContextConnectionStringResolver resolver)
-    {
-        ArgumentNullException.ThrowIfNull(resolver);
-
-        Builder.Services.Configure<DbContextConfigurationOptions>(options =>
-        {
-            options.ConnectionStringResolver = resolver;
-        });
-        return this;
-    }
-
-    public EFCoreSelector WithOptions(Action<DbContextOptionsBuilder, string> configure)
+    /// <summary>Configures NOF-owned tenant and soft-delete policy; provider settings use the native EF builder callback.</summary>
+    public EFCoreSelector ConfigureNOFDbContextOptions(Action<NOFDbContextOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(configure);
-
-        Builder.Services.Configure<DbContextConfigurationOptions>(options =>
-        {
-            options.Configure = configure;
-        });
+        Builder.Services.Configure(configure);
         return this;
     }
 

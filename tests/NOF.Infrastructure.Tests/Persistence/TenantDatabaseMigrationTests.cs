@@ -257,7 +257,7 @@ public sealed class TenantDatabaseMigrationTests
         }
 
         public TenantDatabaseMigrationBackgroundService CreateService(ITenantProvider provider, TenantMode mode = TenantMode.DatabasePerTenant)
-            => new(Host.Services, [Step], provider, Options.Create(new DbContextConfigurationOptions { TenantMode = mode }),
+            => new(Host.Services, [Step], provider, Options.Create(new NOFDbContextOptions { TenantMode = mode }),
                 Host.Services.GetRequiredService<IHostApplicationLifetime>(), NullLogger<TenantDatabaseMigrationBackgroundService>.Instance);
 
         public void Dispose()

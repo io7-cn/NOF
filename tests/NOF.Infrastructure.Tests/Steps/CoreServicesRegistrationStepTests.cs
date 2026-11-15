@@ -59,7 +59,7 @@ public class NOFInfrastructureTests
             service.ServiceType == typeof(IHostedService) &&
             service.ImplementationType == typeof(OutboxCleanupBackgroundService));
         Assert.NotNull(provider.GetRequiredService<IOptions<TransactionalMessageOptions>>());
-        Assert.Equal(TenantMode.DatabasePerTenant, provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value.TenantMode);
+        Assert.Equal(TenantMode.DatabasePerTenant, provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value.TenantMode);
         Assert.Null(provider.GetService<IBackplane>());
         Assert.IsType<InMemoryEventPublisher>(provider.GetRequiredService<IEventPublisher>());
         Assert.Null(provider.GetService<MemoryMessageClient>());
@@ -82,10 +82,10 @@ public class NOFInfrastructureTests
     {
         var builder = new TestServiceRegistrationContext();
         builder.AddNOF();
-        builder.UseDbContext<NOFDbContext>().WithTenantMode(TenantMode.SharedDatabase);
+        builder.UseDbContext<NOFDbContext>().ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.SharedDatabase);
 
         using var provider = BuildServiceProvider(builder);
-        var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
+        var options = provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value;
         Assert.Equal(TenantMode.SharedDatabase, options.TenantMode);
     }
 
@@ -96,7 +96,7 @@ public class NOFInfrastructureTests
         builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
-        var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
+        var options = provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value;
         Assert.Equal(TenantMode.DatabasePerTenant, options.TenantMode);
     }
 
@@ -107,7 +107,7 @@ public class NOFInfrastructureTests
         builder.AddNOF();
 
         using var provider = BuildServiceProvider(builder);
-        var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
+        var options = provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value;
         Assert.False(options.SoftDeleteEnabled);
     }
 
@@ -116,10 +116,10 @@ public class NOFInfrastructureTests
     {
         var builder = new TestServiceRegistrationContext();
         builder.AddNOF();
-        builder.UseDbContext<NOFDbContext>().WithSoftDelete(true);
+        builder.UseDbContext<NOFDbContext>().ConfigureNOFDbContextOptions(options => options.SoftDeleteEnabled = true);
 
         using var provider = BuildServiceProvider(builder);
-        var options = provider.GetRequiredService<IOptions<DbContextConfigurationOptions>>().Value;
+        var options = provider.GetRequiredService<IOptions<NOFDbContextOptions>>().Value;
         Assert.True(options.SoftDeleteEnabled);
     }
 

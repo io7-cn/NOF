@@ -127,8 +127,9 @@ public sealed class NOFSampleHarnessTests
     private static Task<NOFTestHost> CreateHostAsync()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        builder.UseDbContext<RestConfigDbContext>().WithConnectionString($"Data Source=harness-{Guid.NewGuid():N}-{{TenantId}};Mode=Memory;Cache=Shared")
-            .WithOptions((options, connection) => options.UseSqlite(connection));
+        var database = $"harness-{Guid.NewGuid():N}";
+        builder.UseDbContext<RestConfigDbContext>((creation, ef) =>
+            ef.UseSqlite($"Data Source={database}-{creation.TenantId};Mode=Memory;Cache=Shared"));
         builder.AddApplicationPartOf<NOFSampleService>();
         builder.AddApplicationPart(typeof(SampleHarnessMappings).Assembly);
         builder.AddApplicationPart(typeof(Persistence.ConfigNodePersistence).Assembly);

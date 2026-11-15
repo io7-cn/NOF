@@ -92,3 +92,7 @@
   href: ../en/design/execution-context.md
 - name: JSON 执行上下文与可靠投递
   href: ../zh-CN/design/execution-context.md
+- name: Native EF Core configuration and NOF policy
+  href: ../en/design/efcore-configuration.md
+- name: 原生 EF Core 配置与 NOF 策略
+  href: ../zh-CN/design/efcore-configuration.md

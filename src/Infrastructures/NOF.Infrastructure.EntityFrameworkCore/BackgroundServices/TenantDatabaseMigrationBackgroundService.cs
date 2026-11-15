@@ -15,7 +15,7 @@ public sealed class TenantDatabaseMigrationBackgroundService(
     IServiceProvider services,
     IEnumerable<DbContextMigration> migrations,
     ITenantProvider tenantProvider,
-    IOptions<DbContextConfigurationOptions> options,
+    IOptions<NOFDbContextOptions> options,
     IHostApplicationLifetime applicationLifetime,
     ILogger<TenantDatabaseMigrationBackgroundService> logger) : BackgroundService
 {

@@ -125,11 +125,10 @@ var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.AddApplicationPart(typeof(AppService).Assembly);
 builder.AddApplicationService<AppService>();
 
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
+builder.UseDbContext<AppDbContext>((creation, ef) => ef.UseNpgsql(
+        DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("postgres")
+            ?? throw new InvalidOperationException("Connection string 'postgres' not found."), creation.TenantId)))
+    .ConfigureNOFDbContextOptions(nof => nof.TenantMode = TenantMode.DatabasePerTenant)
     .MigrateOnStart();
 
 var app = builder.Build();

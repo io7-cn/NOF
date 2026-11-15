@@ -10,8 +10,7 @@ public static class NativePersistenceTestSetup
 {
     public static void AddNativeTestPersistence(this IHostApplicationBuilder builder)
     {
-        builder.UseDbContext<NOFDbContext>()
-            .WithConnectionString($"Data Source=nof-test-{Guid.NewGuid():N};Mode=Memory;Cache=Shared")
-            .WithOptions((options, connection) => options.UseSqlite(connection));
+        var connection = $"Data Source=nof-test-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        builder.UseDbContext<NOFDbContext>((_, ef) => ef.UseSqlite(connection));
     }
 }

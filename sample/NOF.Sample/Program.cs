@@ -46,19 +46,20 @@ builder.Services.AddCacheService()
         builder.Configuration.GetConnectionString("redis")
             ?? throw new InvalidOperationException("Connection string 'redis' is required."));
 
-builder.UseDbContext<ConfigurationDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithSoftDelete(true)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
+builder.UseDbContext<ConfigurationDbContext>((creation, ef) => ef.UseNpgsql(
+        DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("postgres")
+            ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."), creation.TenantId)))
+    .ConfigureNOFDbContextOptions(options =>
+    {
+        options.TenantMode = TenantMode.DatabasePerTenant;
+        options.SoftDeleteEnabled = true;
+    })
     .MigrateOnStart();
 
 builder.Services.AddRabbitMQ(options =>
-    {
-        options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
-    });
-
+{
+    options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
+});
 
 // Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
 builder.Logging.AddOpenTelemetry(options => { options.IncludeFormattedMessage = true; options.IncludeScopes = true; });

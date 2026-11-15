@@ -24,15 +24,15 @@ dotnet add package NOF.Infrastructure.EntityFrameworkCore
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
+builder.UseDbContext<AppDbContext>((creation, ef) => ef.UseNpgsql(
+        DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("postgres")
+            ?? throw new InvalidOperationException("Connection string 'postgres' not found."), creation.TenantId)))
+    .ConfigureNOFDbContextOptions(nof => nof.TenantMode = TenantMode.DatabasePerTenant)
     .MigrateOnStart();
 ```
 
@@ -94,27 +94,25 @@ This corrects earlier registrations that created separate contexts for those ser
 types. Code relying on independent change trackers must explicitly create separate
 contexts instead. Select the tenant before resolving any scoped persistence service.
 
-`WithConnectionString(...)` remains the simple default and supports the `{tenantId}` placeholder. Use `WithConnectionStringResolver(...)` when the connection must come from a tenant catalog, secret store, shard map, or another scoped service:
+Configure the native provider in UseDbContext<T>((creation, ef) => ...). A tenant catalog, secret store or shard map can be resolved from the current scoped services directly:
 
 ```csharp
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionStringResolver(context =>
-    {
-        var catalog = context.Services.GetRequiredService<ITenantDatabaseCatalog>();
-        return catalog.GetConnectionString(context.DbContextType, context.TenantId);
-    })
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnStart();
+builder.UseDbContext<AppDbContext>((creation, ef) =>
+{
+    var catalog = creation.Services.GetRequiredService<ITenantDatabaseCatalog>();
+    ef.UseNpgsql(catalog.GetConnectionString(creation.DbContextType, creation.TenantId));
+})
+.ConfigureNOFDbContextOptions(nof => nof.TenantMode = TenantMode.DatabasePerTenant)
+.MigrateOnStart();
 ```
 
-The resolution context exposes the normalized tenant identifier, concrete `DbContext` type, tenant mode, fallback template, and the current scoped service provider. Resolution is synchronous because the native tenant-aware EF context factory creates contexts synchronously; cache remotely acquired secrets or connection metadata in the resolver's dependency.
+DbContextCreationContext exposes normalized explicit TenantId, DbContextType, TenantMode and scoped Services; ef is the original typed DbContextOptionsBuilder<T>. The callback runs for every context creation. Native callbacks compose in registration order for each context type, without leaking between types. Cache remotely acquired connection metadata in an application dependency when synchronous creation needs it.
 
 ## Custom tenant migration orchestration
 
 `UseDbContext<TDbContext>()` registers `ITenantDbContextFactory<TDbContext>`. It creates a strongly
 typed context for an explicit tenant without changing `Context.Current`, and reuses the configured
-tenant connection-string resolver and provider options. The `MigrateAsync` extension makes it
+native typed options callback for that explicit tenant. The `MigrateAsync` extension makes it
 convenient to build a deployment job around an application-owned tenant catalog:
 
 ```csharp
@@ -155,7 +153,7 @@ locks do not coordinate application backfills or status publication.
 
 `NOFDbContextFactory<TDbContext>` is public and its typed context creation methods are virtual.
 Register a derived factory with the two-type-parameter `UseDbContext` overload when context creation
-requires behavior beyond connection-string resolution:
+requires behavior beyond native options configuration:
 
 ```csharp
 public sealed class AppDbContextFactory(
@@ -170,26 +168,24 @@ public sealed class AppDbContextFactory(
     }
 }
 
-builder.UseDbContext<AppDbContext, AppDbContextFactory>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionStringResolver(/* ... */)
-    .WithOptions(/* ... */);
+builder.UseDbContext<AppDbContext, AppDbContextFactory>((creation, ef) =>
+    ef.UseNpgsql(creation.Services.GetRequiredService<ITenantDatabaseCatalog>()
+        .GetConnectionString(creation.DbContextType, creation.TenantId)));
 ```
 
-The custom factory is registered as itself and as `NOFDbContextFactory<TDbContext>`,
-`ITenantDbContextFactory<TDbContext>`, EF Core's `IDbContextFactory<TDbContext>`, and NOF's
-native `IDbContextFactory<TDbContext>`. Prefer `WithConnectionStringResolver(...)` when only database
-routing differs; derive the factory when the context creation lifecycle itself must change.
+The custom factory is registered as itself, `NOFDbContextFactory<TDbContext>`,
+`ITenantDbContextFactory<TDbContext>` and EF Core's `IDbContextFactory<TDbContext>`.
+Use the native options callback when only database routing differs; derive the factory when the context creation lifecycle itself must change.
 
 ## Soft delete
 
-Soft delete is disabled by default. Enable it explicitly for every supported root entity type in a `DbContext` with `WithSoftDelete(true)`, or opt in an individual root entity type with `HasSoftDelete()`:
+Soft delete is disabled by default. Enable it explicitly for every supported root entity type in a `DbContext` with `ConfigureNOFDbContextOptions(nof => nof.SoftDeleteEnabled = true)`, or opt in an individual root entity type with `HasSoftDelete()`:
 
 ```csharp
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 builder.UseDbContext<AppDbContext>()
-    .WithSoftDelete(true);
+    .ConfigureNOFDbContextOptions(nof => nof.SoftDeleteEnabled = true);
 
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
@@ -205,7 +201,11 @@ protected override void OnModelCreating(ModelBuilder modelBuilder)
 The entity-level setting takes precedence over the `DbContext` setting. Call `HasSoftDelete(false)` to opt a root entity type out when soft delete is enabled for the context. Owned entity types inherit the lifecycle of their owner and cannot be configured independently.
 
 Applications upgrading from a version where soft delete was enabled by default should add
-`WithSoftDelete(true)` before generating or applying further migrations if they intend to preserve
+`ConfigureNOFDbContextOptions(nof => nof.SoftDeleteEnabled = true)` before generating or applying further migrations if they intend to preserve
 their existing delete columns, indexes, filters, and behavior.
 
 Business handlers use aggregate repositories, DTO query ports and IUnitOfWork. Infrastructure adapters use native DbContext and EF query/mapping APIs. The cross-ORM session/query/model layer is removed; EF-specific model extensions implement IEFCoreModelConfiguration with ModelBuilder. See [persistence boundaries](../../../docs/en/design/persistence-boundaries.md).
+
+## Native configuration boundary and migration
+
+WithTenantMode/WithSoftDelete/WithConnectionString/WithConnectionStringResolver/WithOptions and DbContextConfigurationOptions are removed. Configure NOF feature flags through ConfigureNOFDbContextOptions and the two-property NOFDbContextOptions; configure all EF/provider settings directly in UseDbContext<T>'s native callback. DbContextCreationContext replaces the string-resolution-only context/delegate. Preserve existing feature flags and native mappings; no schema/data migration is introduced. See [native EF configuration](../../../docs/en/design/efcore-configuration.md) and its [Chinese edition](../../../docs/zh-CN/design/efcore-configuration.md).
