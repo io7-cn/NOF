@@ -86,7 +86,3 @@ public sealed class RabbitMQBuilder
         }
     }
 }
-
-/// <summary>One queue consumer and its native channel settings.</summary>
-public sealed record RabbitMQEndpoint(string QueueName, OperationDescriptor Operation,
-    Func<IChannel, CancellationToken, Task>? ConfigureChannel = null, bool RequeueOnFailure = true);

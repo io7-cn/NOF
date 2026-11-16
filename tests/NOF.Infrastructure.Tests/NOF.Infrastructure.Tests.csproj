@@ -1,12 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);NU1608;CS8620</NoWarn>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore\NOF.Hosting.AspNetCore.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -23,7 +21,6 @@
     </PackageReference>
     <PackageReference Include="Moq" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Infrastructure\NOF.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.StackExchangeRedis\NOF.Infrastructure.StackExchangeRedis.csproj" />
@@ -44,11 +41,9 @@
     <ProjectReference Include="..\..\src\NOF.Hosting\NOF.Hosting.csproj" />
     <ProjectReference Include="..\..\src\NOF.Test\NOF.Test.csproj" />
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="..\Common\SourceGenerator\*.cs" Link="SourceGenerator\%(Filename)%(Extension)" />
   </ItemGroup>
-
   <ItemGroup>
   </ItemGroup>
 </Project>

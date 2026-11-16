@@ -16,7 +16,7 @@ public class ApplicationServiceGeneratorTests
     [InlineData(true)]
     public void NativeUnionCases_AreDescribedWithoutControlFlowAnalysis(bool metadataOnly)
     {
-        const string contract = """
+        const string Contract = """
             using NOF.Contract;
             using NOF.Abstraction;
             namespace HttpUnion;
@@ -25,11 +25,11 @@ public class ApplicationServiceGeneratorTests
             public union Decision(Reply, Failure);
             public interface IService : IApplicationService { Decision Read(Query input); }
             """;
-        var declarations = CSharpCompilation.CreateCompilation("UnionContract", contract, true, typeof(IApplicationService), typeof(Failure));
+        var declarations = CSharpCompilation.CreateCompilation("UnionContract", Contract, true, typeof(IApplicationService), typeof(Failure));
         var source = "public partial class Service : global::NOF.Application.ApplicationService<global::HttpUnion.IService>;";
         var compilation = metadataOnly
             ? CSharpCompilation.CreateCompilation("UnionApplication", source, true, declarations.CreateMetadataReference())
-            : CSharpCompilation.CreateCompilation("UnionApplication", contract + "\n" + source, true, typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions));
+            : CSharpCompilation.CreateCompilation("UnionApplication", Contract + "\n" + source, true, typeof(ApplicationService<>), typeof(ServiceProviderServiceExtensions));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ApplicationServiceGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
         Assert.DoesNotContain(output.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -41,7 +41,7 @@ public class ApplicationServiceGeneratorTests
     [Fact]
     public void GeneratedOperations_PreservePlainAndNullableResponseTypes_WithSharedModels()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Application;
             using NOF.Contract;
@@ -58,7 +58,7 @@ public class ApplicationServiceGeneratorTests
             }
             public partial class Orders : ApplicationService<IOrders>;
             """;
-        var result = Generate(source,
+        var result = Generate(Source,
             typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>), typeof(IApplicationService), typeof(OperationHandler<,>));
         Assert.Empty(result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
         var code = result.GeneratedTrees.Single(tree => tree.FilePath.EndsWith(".ApplicationService.g.cs", StringComparison.Ordinal)).GetRoot().ToFullString();
@@ -87,7 +87,7 @@ public class ApplicationServiceGeneratorTests
     [Fact]
     public void GeneratedCode_SplitsRpcInterfaceIntoPerMethodAbstractClasses()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             using NOF.Abstraction;
@@ -110,7 +110,7 @@ public class ApplicationServiceGeneratorTests
             }
             """;
 
-        var result = Generate(source,
+        var result = Generate(Source,
             typeof(Context), typeof(ServiceProviderServiceExtensions), typeof(ApplicationService<>),
             typeof(OperationHandler<,>),
             typeof(AutoInjectAttribute),

@@ -20,8 +20,9 @@ public sealed class OutboxMessageBackgroundService(IServiceProvider services, IO
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.RunWorkers)
-        { return; }
-
+        {
+            return;
+        }
         logger.LogInformation("Outbox intent processor started");
         while (!stoppingToken.IsCancellationRequested)
         {

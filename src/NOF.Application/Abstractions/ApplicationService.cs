@@ -4,46 +4,6 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Application;
 
-[EditorBrowsable(EditorBrowsableState.Never)]
-public interface IApplicationServiceType
-{
-    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.Interfaces)]
-    static abstract Type ServiceType { get; }
-}
-
-public interface IApplicationServiceImplementation : IApplicationServiceType
-{
-    static abstract IReadOnlyDictionary<string, OperationMapping> HandlerMappings { get; }
-}
-
-/// <summary>
-/// One application operation mapping entry.
-/// </summary>
-public sealed record OperationMapping(
-    [param: DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors
-        | DynamicallyAccessedMemberTypes.PublicMethods
-        | DynamicallyAccessedMemberTypes.NonPublicMethods)]
-    [property: DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors
-        | DynamicallyAccessedMemberTypes.PublicMethods
-        | DynamicallyAccessedMemberTypes.NonPublicMethods)]
-    Type HandlerType,
-    [param: DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors
-        | DynamicallyAccessedMemberTypes.PublicProperties)]
-    [property: DynamicallyAccessedMembers(
-        DynamicallyAccessedMemberTypes.PublicConstructors
-        | DynamicallyAccessedMemberTypes.PublicProperties)]
-    Type RequestType,
-    [param: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
-    [property: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)]
-    Type ReturnType)
-{
-    /// <summary>Gets the complete generated descriptor for construction-free plan validation.</summary>
-    public OperationDescriptor? Descriptor { get; init; }
-}
-
 /// <summary>
 /// Base type for source-generated application service containers.
 /// </summary>

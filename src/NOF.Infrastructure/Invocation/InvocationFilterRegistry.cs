@@ -7,11 +7,6 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Infrastructure;
 
-/// <summary>One immutable Use/Exclude declaration at a specific application scope.</summary>
-public sealed record InvocationFilterRule(InvocationFilterScope Scope, Type? ServiceType, string? OperationId,
-    Type FilterType, bool Excluded, int? Order, Func<IServiceProvider, IInvocationFilter>? Resolve,
-    Action<InvocationDescriptionContext>? Describe, IReadOnlyList<InvocationFailureCase> FailureCases);
-
 /// <summary>Host-local application rules frozen when execution plans are built.</summary>
 public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
 {
@@ -21,7 +16,9 @@ public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
         var existing = Items.ToList().FindIndex(rule => rule.Scope == item.Scope && rule.ServiceType == item.ServiceType
             && rule.OperationId == item.OperationId && rule.FilterType == item.FilterType);
         if (Items.IsFrozen)
-        { throw new InvalidOperationException("Invocation rules are frozen."); }
+        {
+            throw new InvalidOperationException("Invocation rules are frozen.");
+        }
         if (existing >= 0)
         {
             var previous = Items[existing];
@@ -62,52 +59,5 @@ public sealed class InvocationFilterRegistry : Registry<InvocationFilterRule>
             }
         }
         return Array.AsReadOnly(active.Values.OrderBy(item => item.Scope).ThenBy(item => item.Order).ThenBy(item => item.Sequence).ToArray());
-    }
-}
-
-/// <summary>Configures the three application scopes without referencing handler implementation classes.</summary>
-public sealed class InvocationFiltersBuilder(IServiceCollection services, InvocationFilterRegistry registry)
-{
-    /// <summary>Gets rules applied to every operation.</summary>
-    public InvocationFilterScopeBuilder Global => new(services, registry, InvocationFilterScope.Global, null, null);
-    /// <summary>Gets rules for one service contract.</summary>
-    public InvocationFilterScopeBuilder Service<TService>() where TService : IApplicationService
-    {
-        if (!typeof(TService).IsInterface)
-        {
-            throw new ArgumentException("Filter service scopes must name an application service interface.");
-        }
-        return new(services, registry, InvocationFilterScope.Service, typeof(TService), null);
-    }
-    /// <summary>Gets rules for a generated operation base or a standalone handler.</summary>
-    public InvocationFilterScopeBuilder UseCase<THandler>() where THandler : OperationHandler
-        => UseCase(services.GetOrAddSingleton<ApplicationServiceRegistry>().GetOperation(typeof(THandler)));
-    /// <summary>Gets rules for a stable contract/operation identity.</summary>
-    public InvocationFilterScopeBuilder UseCase(OperationDescriptor operation)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        return new(services, registry, InvocationFilterScope.UseCase, operation.ContractType, operation.Id);
-    }
-}
-
-/// <summary>Adds or excludes filters within a single scope.</summary>
-public sealed class InvocationFilterScopeBuilder(IServiceCollection services, InvocationFilterRegistry registry,
-    InvocationFilterScope scope, Type? serviceType, string? operationId)
-{
-    /// <summary>Uses a scoped filter and captures its static description without instantiating it.</summary>
-    public InvocationFilterScopeBuilder Use<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TFilter>(int? order = null)
-        where TFilter : class, IInvocationFilter
-    {
-        registry.Add(new(scope, serviceType, operationId, typeof(TFilter), false, order,
-            static provider => provider.GetRequiredService<TFilter>(), static description => TFilter.Describe(description),
-            Array.AsReadOnly(TFilter.FailureCases.ToArray())));
-        services.TryAddScoped<TFilter>();
-        return this;
-    }
-    /// <summary>Excludes an inherited filter in this scope and its descendants.</summary>
-    public InvocationFilterScopeBuilder Exclude<TFilter>() where TFilter : class, IInvocationFilter
-    {
-        registry.Add(new(scope, serviceType, operationId, typeof(TFilter), true, null, null, null, []));
-        return this;
     }
 }

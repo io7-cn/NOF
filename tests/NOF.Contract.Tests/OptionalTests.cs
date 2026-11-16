@@ -154,9 +154,9 @@ public class OptionalJsonTests
     [Fact]
     public void Deserialize_PresentProperty_SetsHasValue()
     {
-        const string json = """{"name":{"hasValue":true,"value":"Bob"},"age":{"hasValue":true,"value":25}}""";
+        const string Json = """{"name":{"hasValue":true,"value":"Bob"},"age":{"hasValue":true,"value":25}}""";
         var opts = Options();
-        var dto = JsonSerializer.Deserialize<DtoWithOptional>(json, opts)!;
+        var dto = JsonSerializer.Deserialize<DtoWithOptional>(Json, opts)!;
         Assert.True(dto.Name.HasValue, "converter should set HasValue=true for present property");
         Assert.Equal("Bob", dto.Name.Value);
         Assert.True(dto.Age.HasValue);
@@ -166,9 +166,9 @@ public class OptionalJsonTests
     [Fact]
     public void Deserialize_MissingProperty_LeavesDefault()
     {
-        const string json = """{"name":{"hasValue":true,"value":"Bob"}}""";
+        const string Json = """{"name":{"hasValue":true,"value":"Bob"}}""";
         var opts = Options();
-        var dto = JsonSerializer.Deserialize<DtoWithOptional>(json, opts)!;
+        var dto = JsonSerializer.Deserialize<DtoWithOptional>(Json, opts)!;
         Assert.True(dto.Name.HasValue);
         Assert.False(dto.Age.HasValue);
     }
@@ -176,9 +176,9 @@ public class OptionalJsonTests
     [Fact]
     public void Deserialize_NullProperty_SetsHasValue_WithNullValue()
     {
-        const string json = """{"name":{"hasValue":true,"value":null}}""";
+        const string Json = """{"name":{"hasValue":true,"value":null}}""";
         var opts = Options();
-        var dto = JsonSerializer.Deserialize<DtoWithOptional>(json, opts)!;
+        var dto = JsonSerializer.Deserialize<DtoWithOptional>(Json, opts)!;
         Assert.True(dto.Name.HasValue);
         Assert.Null(dto.Name.Value);
     }

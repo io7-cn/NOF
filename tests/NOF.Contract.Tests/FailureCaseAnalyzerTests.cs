@@ -56,7 +56,7 @@ public sealed class FailureCaseAnalyzerTests
     [Fact]
     public async Task ValidNonPartialContract_CompilesWithoutGeneratedOutcomeMembers()
     {
-        const string source = """
+        const string Source = """
             using NOF.Contract;
             public interface IService : IApplicationService
             {
@@ -65,8 +65,8 @@ public sealed class FailureCaseAnalyzerTests
                 Empty Run(object request);
             }
             """;
-        var compilation = Create(source);
-        Assert.Empty(await Analyze(source));
+        var compilation = Create(Source);
+        Assert.Empty(await Analyze(Source));
         Assert.Empty(compilation.GetTypeByMetadataName("IService")!.GetTypeMembers());
         Assert.DoesNotContain(compilation.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(typeof(IApplicationService).Assembly.GetReferencedAssemblies(), reference => reference.Name == "NOF.Application");

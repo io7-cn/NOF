@@ -26,7 +26,10 @@ public sealed class NHibernateNativeStoreTests
                 .WithOptions((configuration, _) =>
                 {
                     configuration.DataBaseIntegration(database =>
-                    { database.Driver<MicrosoftDataSqliteTestDriver>(); database.Dialect<SQLiteDialect>(); });
+{
+    database.Driver<MicrosoftDataSqliteTestDriver>();
+    database.Dialect<SQLiteDialect>();
+});
                     configuration.SetProperty("hbm2ddl.auto", "create-drop");
                     configuration.SetProperty("hbm2ddl.keywords", "none");
                 });
@@ -48,7 +51,9 @@ public sealed class NHibernateNativeStoreTests
         finally
         {
             if (File.Exists(file))
-            { File.Delete(file); }
+            {
+                File.Delete(file);
+            }
         }
     }
 

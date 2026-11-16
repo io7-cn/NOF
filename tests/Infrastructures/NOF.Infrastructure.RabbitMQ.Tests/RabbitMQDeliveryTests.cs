@@ -77,7 +77,9 @@ public sealed class RabbitMQDeliveryTests
             probe.Started.TrySetResult();
             await probe.Release.Task.WaitAsync(cancellationToken);
             if (probe.Fail)
-            { throw new InvalidOperationException("Business failure"); }
+            {
+                throw new InvalidOperationException("Business failure");
+            }
         }
     }
 }

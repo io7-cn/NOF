@@ -15,7 +15,7 @@ public sealed class OneWayOperationGeneratorTests
     [InlineData(true)]
     public void VoidAndEmpty_GenerateDistinctHandlerAndInvocationSurfaces(bool separateContract)
     {
-        const string contract = """
+        const string Contract = """
             using NOF.Contract;
             namespace OneWay;
             public sealed record Message;
@@ -26,7 +26,7 @@ public sealed class OneWayOperationGeneratorTests
                 Empty Reply(Message request);
             }
             """;
-        const string application = """
+        const string Application = """
             using System.Threading;
             using System.Threading.Tasks;
             using NOF.Application;
@@ -42,8 +42,8 @@ public sealed class OneWayOperationGeneratorTests
                     => Task.FromResult<Result>(new Denied());
             }
             """;
-        var declarations = CSharpCompilation.CreateCompilation("OneWayContract", contract, true, typeof(IApplicationService));
-        var compilation = CSharpCompilation.CreateCompilation("OneWayApplication", application, true,
+        var declarations = CSharpCompilation.CreateCompilation("OneWayContract", Contract, true, typeof(IApplicationService));
+        var compilation = CSharpCompilation.CreateCompilation("OneWayApplication", Application, true,
             typeof(ApplicationService<>), typeof(Context), typeof(ServiceProviderServiceExtensions),
             typeof(System.Text.Json.Serialization.JsonUnionAttribute));
         compilation = separateContract ? compilation.AddReferences(declarations.CreateMetadataReference())

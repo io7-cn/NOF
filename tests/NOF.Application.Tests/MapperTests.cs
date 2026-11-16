@@ -40,7 +40,7 @@ public class MapperTests
         var first = CreateMapper(value => "first:" + value);
         var second = CreateMapper(value => "second:" + value);
 
-        static async Task AssertAmbientAsync(IMapper expected)
+        static async Task assertAmbientAsync(IMapper expected)
         {
             using var _ = Mapper.PushCurrent(expected);
             await Task.Yield();
@@ -48,8 +48,8 @@ public class MapperTests
         }
 
         await Task.WhenAll(
-            Task.Run(() => AssertAmbientAsync(first)),
-            Task.Run(() => AssertAmbientAsync(second)));
+            Task.Run(() => assertAmbientAsync(first)),
+            Task.Run(() => assertAmbientAsync(second)));
     }
 
     [Fact]

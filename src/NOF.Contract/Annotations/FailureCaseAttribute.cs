@@ -7,10 +7,15 @@ public sealed class FailureCaseAttribute : Attribute
     /// <summary>Declares a failure whose summary defaults to the branch name.</summary>
     public FailureCaseAttribute(string name) : this(name, name) { }
     /// <summary>Declares a named failure with a summary.</summary>
-    public FailureCaseAttribute(string name, string title) { Name = name; Title = title; }
-    /// <summary>Declares a named failure with a summary and typed error data.</summary>
-    public FailureCaseAttribute(string name, string title, Type errorType) : this(name, title) { ErrorType = errorType; }
-    /// <summary>Gets the required valid C# branch identifier.</summary>
+    public FailureCaseAttribute(string name, string title)
+    {
+        Name = name;
+        Title = title;
+    }    /// <summary>Declares a named failure with a summary and typed error data.</summary>
+    public FailureCaseAttribute(string name, string title, Type errorType) : this(name, title)
+    {
+        ErrorType = errorType;
+    }    /// <summary>Gets the required valid C# branch identifier.</summary>
     public string Name { get; }
     /// <summary>Gets the failure summary, independent of HTTP status.</summary>
     public string Title { get; }

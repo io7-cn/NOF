@@ -71,8 +71,3 @@ public static class ConfigNodeEndpoints
     }
 
 }
-
-public sealed record MoveConfigNodeBody
-{
-    public required long? ParentId { get; init; }
-}

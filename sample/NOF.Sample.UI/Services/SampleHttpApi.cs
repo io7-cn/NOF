@@ -31,7 +31,9 @@ public abstract class SampleHttpApi(HttpClient httpClient)
         => SendAsync(method, uri, request, context, static async (response, token) =>
         {
             if (response.IsSuccessStatusCode)
-            { return (HttpTransportResponse<TPayload>)await ReadResourceAsync<TPayload>(response, token); }
+            {
+                return (HttpTransportResponse<TPayload>)await ReadResourceAsync<TPayload>(response, token);
+            }
             var problem = await ReadProblemAsync(response, token);
             return new HttpTransportFailure(response.StatusCode, problem.Title, problem.Detail);
         }, ct);

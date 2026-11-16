@@ -42,7 +42,7 @@ public sealed class HostJsonOptionsTests
     private static ServiceProvider CreateHost(JsonNamingPolicy? naming, bool beforeRegistration)
     {
         var services = new ServiceCollection();
-        void Configure(JsonSerializerOptions options)
+        void configure(JsonSerializerOptions options)
         {
             options.PropertyNamingPolicy = naming;
             options.TypeInfoResolverChain.Clear();
@@ -50,12 +50,12 @@ public sealed class HostJsonOptionsTests
         }
         if (beforeRegistration)
         {
-            services.Configure<JsonSerializerOptions>(Configure);
+            services.Configure<JsonSerializerOptions>(configure);
             services.AddNOFJson();
         }
         else
         {
-            services.AddNOFJson(Configure);
+            services.AddNOFJson(configure);
         }
         services.AddNOFJson();
         return services.BuildServiceProvider();

@@ -4,10 +4,6 @@ using System.Collections.Concurrent;
 
 namespace NOF.Infrastructure;
 
-/// <summary>Frozen host configuration used only for description, never request identity.</summary>
-public sealed record InvocationPlanHostConfiguration(bool CustomAuthorization,
-    bool RequireAuthenticatedTenant, bool RejectMismatchedTenant, bool UsesDefaultEngine);
-
 /// <summary>Builds and caches execution and description from the same effective rule set.</summary>
 public sealed class InvocationPlanFactory(InvocationFilterRegistry rules, ApplicationServiceRegistry services,
     InvocationPlanHostConfiguration configuration)

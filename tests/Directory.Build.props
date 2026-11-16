@@ -6,4 +6,3 @@
     <Compile Include="$(MSBuildThisFileDirectory)Common\Assertions\*.cs" Link="Assertions\%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
-

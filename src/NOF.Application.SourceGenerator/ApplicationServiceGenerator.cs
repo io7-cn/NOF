@@ -138,11 +138,15 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
             foreach (var businessCase in businessCases)
             {
                 if (caseCatalog.Length > 1)
-                { caseCatalog.Append(", "); }
+                {
+                    caseCatalog.Append(", ");
+                }
                 var isFailure = businessCase.AllInterfaces.Any(type => type.ToDisplayString() == "NOF.Abstraction.IFailure");
                 caseCatalog.Append("new(typeof(").Append(businessCase.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append(')');
                 if (isFailure)
-                { caseCatalog.Append(", true"); }
+                {
+                    caseCatalog.Append(", true");
+                }
                 caseCatalog.Append(')');
             }
             foreach (var failure in failureDeclarations)
@@ -187,52 +191,11 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
                 && (method.MethodKind == MethodKind.Constructor || method.MethodKind == MethodKind.Conversion && SymbolEqualityComparer.Default.Equals(method.ReturnType, type)))
                 .Select(method => method.Parameters[0].Type).Distinct(SymbolEqualityComparer.Default).OfType<ITypeSymbol>().ToArray();
             if (cases.Length > 0)
-            { return cases; }
+            {
+                return cases;
+            }
         }
         return [type];
     }
 
-}
-
-[DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class ApplicationServiceAnalyzer : DiagnosticAnalyzer
-{
-    public static readonly DiagnosticDescriptor ApplicationServiceMustBePartial = new(
-        "NOF300",
-        "RPC server class must be partial",
-        "Class '{0}' inheriting ApplicationService<TService> must be declared partial",
-        "ApplicationService",
-        DiagnosticSeverity.Error,
-        true);
-
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-    [
-        ApplicationServiceMustBePartial
-    ];
-
-    public override void Initialize(AnalysisContext context)
-    {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
-        context.EnableConcurrentExecution();
-        context.RegisterSymbolAction(AnalyzeNamedType, SymbolKind.NamedType);
-    }
-
-    private static void AnalyzeNamedType(SymbolAnalysisContext context)
-    {
-        var type = (INamedTypeSymbol)context.Symbol;
-        if (type.TypeKind != TypeKind.Class || !ApplicationServiceSymbolHelper.TryGetServiceInterface(type, out _))
-        {
-            return;
-        }
-
-        var location = type.Locations.FirstOrDefault() ?? Location.None;
-        var isPartial = type.DeclaringSyntaxReferences
-            .Select(r => r.GetSyntax())
-            .OfType<ClassDeclarationSyntax>()
-            .Any(c => c.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)));
-        if (!isPartial)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(ApplicationServiceMustBePartial, location, type.Name));
-        }
-    }
 }

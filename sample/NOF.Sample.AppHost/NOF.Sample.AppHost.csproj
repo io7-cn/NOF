@@ -1,23 +1,19 @@
 <Project Sdk="Aspire.AppHost.Sdk/13.6.5">
-
-	<PropertyGroup>
-		<OutputType>Exe</OutputType>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <AspireUseCliBundle>true</AspireUseCliBundle>
-		<TargetFramework>net11.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<PackageReference Include="Aspire.Hosting.Garnet" />
-		<PackageReference Include="Aspire.Hosting.PostgreSQL" />
-		<PackageReference Include="Aspire.Hosting.RabbitMQ" />
-		<PackageReference Include="MessagePack" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <ProjectReference Include="..\NOF.Sample\NOF.Sample.csproj" />
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Garnet" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NOF.Sample\NOF.Sample.csproj" />
     <ProjectReference Include="..\NOF.Sample.Notifications\NOF.Sample.Notifications.csproj" />
-	</ItemGroup>
-
+  </ItemGroup>
 </Project>

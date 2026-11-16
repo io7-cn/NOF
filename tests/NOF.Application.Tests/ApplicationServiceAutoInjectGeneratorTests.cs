@@ -14,7 +14,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_RegistersServiceOperationsOnly()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Abstraction;
             using NOF.Contract;
@@ -40,7 +40,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             }
             """;
 
-        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+        var compilation = CSharpCompilation.CreateCompilation("App", Source, isDll: true,
             typeof(ApplicationService<>),
             typeof(OperationHandler<,>),
             typeof(IApplicationService),
@@ -72,7 +72,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_DoesNotRegister_UnrelatedInterfaces()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             using NOF.Abstraction;
@@ -100,7 +100,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             }
             """;
 
-        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+        var compilation = CSharpCompilation.CreateCompilation("App", Source, isDll: true,
             typeof(ApplicationService<>),
             typeof(OperationHandler<,>),
             typeof(IApplicationService),
@@ -126,7 +126,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_DoesNotRequireApplicationServiceGeneratorOutputAsInput()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             using NOF.Abstraction;
@@ -145,7 +145,7 @@ public class ApplicationServiceAutoInjectGeneratorTests
             public sealed class PingHandler : MyService.Ping;
             """;
 
-        var compilation = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+        var compilation = CSharpCompilation.CreateCompilation("App", Source, isDll: true,
             typeof(ApplicationService<>),
             typeof(OperationHandler<,>),
             typeof(IApplicationService),

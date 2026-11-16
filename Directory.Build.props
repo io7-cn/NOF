@@ -5,21 +5,18 @@
     <Company>NOF</Company>
     <Product>NOF Framework</Product>
     <Copyright>Copyright © $(Company) $([System.DateTime]::Now.Year)</Copyright>
-    <PackageProjectUrl>https://github.com/XmmShp/NOF</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/XmmShp/NOF</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/io7-cn/NOF</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/io7-cn/NOF</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>nof;framework;dotnet;aspnetcore</PackageTags>
-    
     <!-- Version -->
     <VersionPrefix>12.0.0</VersionPrefix>
     <VersionSuffix Condition="'$(Configuration)' == 'Debug'">dev</VersionSuffix>
-    
     <!-- Build Properties -->
     <LangVersion>15.0</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    
     <!-- Symbol Package -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>

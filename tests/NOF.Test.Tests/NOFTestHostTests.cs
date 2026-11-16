@@ -55,19 +55,19 @@ public class NOFTestHostTests
     public async Task Scope_ShouldAllowSettingTenantAndUser()
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
-        const string traceId = "0123456789abcdef0123456789abcdef";
-        const string spanId = "0123456789abcdef";
+        const string TraceId = "0123456789abcdef0123456789abcdef";
+        const string SpanId = "0123456789abcdef";
 
         await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         scope.SetTenant("tenanta")
-            .SetTracing(traceId, spanId)
+            .SetTracing(TraceId, SpanId)
             .SetUser("user-1", "Alice", ["orders.read", "orders.write"]);
         Assert.Equal("tenanta", scope.Context.TenantId);
         Assert.NotNull(Activity.Current);
-        Assert.Equal(traceId, Activity.Current.TraceId.ToString());
-        Assert.Equal(spanId, Activity.Current.ParentSpanId.ToString());
+        Assert.Equal(TraceId, Activity.Current.TraceId.ToString());
+        Assert.Equal(SpanId, Activity.Current.ParentSpanId.ToString());
         Assert.Equal("user-1", scope.UserContext.User.Id);
         Assert.Equal("Alice", scope.UserContext.User.Name);
         Assert.Contains("orders.read", scope.UserContext.User.Permissions);
@@ -205,18 +205,18 @@ public class NOFTestHostTests
 
     private sealed class LazyProbe
     {
-        private static int _createdCount;
+        private static int CreationCount;
 
         public LazyProbe()
         {
-            Interlocked.Increment(ref _createdCount);
+            Interlocked.Increment(ref CreationCount);
         }
 
-        public static int CreatedCount => _createdCount;
+        public static int CreatedCount => CreationCount;
 
         public static void Reset()
         {
-            Interlocked.Exchange(ref _createdCount, 0);
+            Interlocked.Exchange(ref CreationCount, 0);
         }
     }
 }

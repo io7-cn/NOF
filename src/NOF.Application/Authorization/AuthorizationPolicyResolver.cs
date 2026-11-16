@@ -42,11 +42,11 @@ public static class AuthorizationPolicyResolver
 
     private static AuthorizationPolicy? MostSpecific(IEnumerable<MemberInfo> members)
     {
-        static Type Owner(MemberInfo source) => source as Type ?? source.DeclaringType!;
+        static Type owner(MemberInfo source) => source as Type ?? source.DeclaringType!;
         var declarations = members.Select(source => (Source: source, Policy: Read(source))).Where(entry => entry.Policy is not null).ToArray();
         // Only an actual descendant declaration can replace an ancestor. A shorter sibling path cannot erase another branch.
-        var policies = declarations.Where(entry => !declarations.Any(other => Owner(entry.Source) != Owner(other.Source)
-            && Owner(entry.Source).IsAssignableFrom(Owner(other.Source)))).Select(entry => entry.Policy!).ToArray();
+        var policies = declarations.Where(entry => !declarations.Any(other => owner(entry.Source) != owner(other.Source)
+            && owner(entry.Source).IsAssignableFrom(owner(other.Source)))).Select(entry => entry.Policy!).ToArray();
         if (policies.Length == 0)
         {
             return null;
@@ -62,11 +62,11 @@ public static class AuthorizationPolicyResolver
 
     private static bool Equivalent(AuthorizationPolicy left, AuthorizationPolicy right)
     {
-        static bool Same(PermissionRequirement first, PermissionRequirement second) => first.Match == second.Match
+        static bool same(PermissionRequirement first, PermissionRequirement second) => first.Match == second.Match
             && first.Permissions.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(second.Permissions);
         return left.RequiresAuthentication == right.RequiresAuthentication
-            && left.Requirements.All(first => right.Requirements.Any(second => Same(first, second)))
-            && right.Requirements.All(second => left.Requirements.Any(first => Same(first, second)));
+            && left.Requirements.All(first => right.Requirements.Any(second => same(first, second)))
+            && right.Requirements.All(second => left.Requirements.Any(first => same(first, second)));
     }
 
     [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Operation descriptors root Contract methods; generated operation initializers explicitly root inherited interface methods with DynamicDependency. Standalone trimmed callers must likewise preserve their selected Contract method declarations.")]

@@ -42,11 +42,11 @@ public sealed class NativeHostingTests
     public async Task ApplicationParts_AreExplicitAndIdempotentAcrossRegistrationEntryPoints()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
-        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(__TypeResolverSynchronizationProbe));
-        builder.AddApplicationPart(typeof(__TypeResolverSynchronizationProbe).Assembly);
-        builder.Services.AddApplicationPart(typeof(__TypeResolverSynchronizationProbe).Assembly);
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(TypeResolverSynchronizationProbe));
+        builder.AddApplicationPart(typeof(TypeResolverSynchronizationProbe).Assembly);
+        builder.Services.AddApplicationPart(typeof(TypeResolverSynchronizationProbe).Assembly);
         await using var app = builder.Build();
-        Assert.Single(app.Services.GetServices<__TypeResolverSynchronizationProbe>());
+        Assert.Single(app.Services.GetServices<TypeResolverSynchronizationProbe>());
     }
 
     [Fact]

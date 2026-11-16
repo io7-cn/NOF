@@ -1,28 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
-
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Hosting.BlazorWebAssembly</PackageId>
     <Description>NOF client registration extensions for native Blazor WebAssembly builders.</Description>
   </PropertyGroup>
-
   <ItemGroup>
     <SupportedPlatform Include="browser" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\NOF.Hosting\NOF.Hosting.csproj" />
     <ProjectReference Include="..\..\NOF.UI\NOF.UI.csproj" />
   </ItemGroup>
-
 </Project>

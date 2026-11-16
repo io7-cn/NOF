@@ -22,7 +22,7 @@ public static class OutboxRegistrationExtensions
         services.TryAddSingleton<ITenantProvider, HostTenantProvider>();
         services.AddNOFJson();
         services.AddOptions<OutboxOptions>()
-            .Validate(options => IsValid(options), "Outbox transactional message options are invalid.")
+            .Validate(options => isValid(options), "Outbox transactional message options are invalid.")
             .ValidateOnStart();
         services.AddInMemoryMessagingPersistence();
         services.TryAddScoped<IOutboxStore>(sp => sp.GetRequiredKeyedService<IOutboxStore>(typeof(IOutboxStore)));
@@ -31,7 +31,7 @@ public static class OutboxRegistrationExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxCleanupBackgroundService>());
         return services;
 
-        static bool IsValid(OutboxOptions options) => !options.RunWorkers ||
+        static bool isValid(OutboxOptions options) => !options.RunWorkers ||
             options.PollingInterval > TimeSpan.Zero && options.BatchSize > 0
             && options.MaxRetryCount > 0 && options.RetryDelay >= TimeSpan.Zero
             && options.ClaimTimeout > TimeSpan.Zero && options.CleanupInterval > TimeSpan.Zero

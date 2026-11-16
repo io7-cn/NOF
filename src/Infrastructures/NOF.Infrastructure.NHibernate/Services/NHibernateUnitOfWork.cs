@@ -29,18 +29,3 @@ public sealed class NHibernateUnitOfWork(global::NHibernate.ISession session) : 
         return Task.FromResult<ITransaction>(new NHibernateApplicationTransaction(session.BeginTransaction()));
     }
 }
-
-/// <summary>Projects a native transaction onto the application transaction boundary without wrapping failures.</summary>
-public sealed class NHibernateApplicationTransaction(global::NHibernate.ITransaction transaction) : ITransaction
-{
-    /// <inheritdoc />
-    public Task CommitAsync(CancellationToken cancellationToken = default) => transaction.CommitAsync(cancellationToken);
-    /// <inheritdoc />
-    public Task RollbackAsync(CancellationToken cancellationToken = default) => transaction.RollbackAsync(cancellationToken);
-    /// <inheritdoc />
-    public ValueTask DisposeAsync()
-    {
-        transaction.Dispose();
-        return ValueTask.CompletedTask;
-    }
-}

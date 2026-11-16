@@ -17,7 +17,7 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class GeneralCodeFixProviderTests
 {
-    private static readonly Type[] _forceLoadedAssemblies =
+    private static readonly Type[] ForceLoadedAssemblies =
     [
         typeof(IValueObject<>),
         typeof(IApplicationService),
@@ -52,7 +52,7 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task NullableUnderlyingTypeFix_RemovesNullableAnnotation()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test;
@@ -60,7 +60,7 @@ public sealed class GeneralCodeFixProviderTests
             """;
 
         var changed = await ApplyFirstFixAsync(
-            source,
+            Source,
             "NOF011",
             "Name",
             new TypeDeclarationCodeFixProvider());
@@ -72,13 +72,13 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task RequestTypeFix_ConvertsReadonlyStructToClass()
     {
-        const string source = """
+        const string Source = """
             namespace Test;
             public readonly struct Request { }
             """;
 
         var changed = await ApplyFirstFixAsync(
-            source,
+            Source,
             "NOF200",
             "Request",
             new TypeDeclarationCodeFixProvider());
@@ -90,7 +90,7 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task DbContextFix_ReplacesDirectEfCoreBase()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.EntityFrameworkCore;
             namespace Test;
             public class Context : DbContext
@@ -100,7 +100,7 @@ public sealed class GeneralCodeFixProviderTests
             """;
 
         var changed = await ApplyFirstFixAsync(
-            source,
+            Source,
             "NOF304",
             "Context",
             new TypeDeclarationCodeFixProvider());
@@ -111,14 +111,14 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task DbContextFix_WithoutCompatibleConstructor_IsNotOffered()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.EntityFrameworkCore;
             namespace Test;
             public class Context : DbContext { }
             """;
 
         var (_, actions) = await GetCodeActionsAsync(
-            source,
+            Source,
             "NOF304",
             "Context",
             new TypeDeclarationCodeFixProvider());
@@ -130,14 +130,14 @@ public sealed class GeneralCodeFixProviderTests
     [InlineData("NOF020")]
     public async Task AttributeRemovalFix_RemovesDiagnosedAttribute(string diagnosticId)
     {
-        const string source = """
+        const string Source = """
             namespace Test;
             [System.Obsolete]
             public interface IService { }
             """;
 
         var changed = await ApplyFirstFixAsync(
-            source,
+            Source,
             diagnosticId,
             "System.Obsolete",
             new AttributeRemovalCodeFixProvider());
@@ -176,7 +176,7 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task NormalizeFix_ForNestedInvocation_IsNotOffered()
     {
-        const string source = """
+        const string Source = """
             namespace Test;
             public static class Value
             {
@@ -186,7 +186,7 @@ public sealed class GeneralCodeFixProviderTests
             """;
 
         var (_, actions) = await GetCodeActionsAsync(
-            source,
+            Source,
             "NOF013",
             "From(value)",
             new RemoveNormalizeInvocationCodeFixProvider());
@@ -197,7 +197,7 @@ public sealed class GeneralCodeFixProviderTests
     [Fact]
     public async Task OrderingFix_CastsExpressionLambdaToPrimitive()
     {
-        const string source = """
+        const string Source = """
             using System.Linq;
             namespace Test;
             public static class Query
@@ -211,7 +211,7 @@ public sealed class GeneralCodeFixProviderTests
             .Add("NullableKey", "false");
 
         var changed = await ApplyFirstFixAsync(
-            source,
+            Source,
             "NOF015",
             "item => item.Name",
             new ValueObjectOrderingCodeFixProvider(),
@@ -340,7 +340,7 @@ public sealed class GeneralCodeFixProviderTests
         CodeFixProvider provider,
         ImmutableDictionary<string, string?>? properties = null)
     {
-        _ = _forceLoadedAssemblies.Length;
+        _ = ForceLoadedAssemblies.Length;
         var workspace = new AdhocWorkspace();
         var projectId = ProjectId.CreateNewId();
         var documentId = DocumentId.CreateNewId(projectId);
@@ -382,7 +382,7 @@ public sealed class GeneralCodeFixProviderTests
 
     private static async Task<ImmutableArray<string>> ApplySolutionFixAllAsync(SolutionFixAllCase testCase)
     {
-        _ = _forceLoadedAssemblies.Length;
+        _ = ForceLoadedAssemblies.Length;
         using var workspace = new AdhocWorkspace();
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(static assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))

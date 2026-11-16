@@ -46,7 +46,9 @@ public sealed class DirectMessageEndpointTests
         var context = Context.Empty.WithItem("correlation", "original").WithItem("number", 7)
             .WithItem("enabled", true).WithItem("empty", null);
         if (explicitTenant)
-        { context = context.WithTenantId("explicit"); }
+        {
+            context = context.WithTenantId("explicit");
+        }
         await scope.ServiceProvider.GetRequiredService<MemoryMessageClient>().SendAsync("work", new Work("context"), context);
         var call = Assert.Single(host.Services.GetRequiredService<Probe>().Calls);
         Assert.Equal(expectedTenant, call.TenantAtConstruction);
@@ -179,12 +181,18 @@ public sealed class DirectMessageEndpointTests
         private readonly string _tenant = Context.Current.TenantId;
         private readonly string? _correlation = Context.Current["correlation"]?.GetValue<string>();
         private readonly Guid _scope = Guid.NewGuid();
-        public Receive(Probe probe) { _probe = probe; Interlocked.Increment(ref probe.Constructed); }
+        public Receive(Probe probe)
+        {
+            _probe = probe;
+            Interlocked.Increment(ref probe.Constructed);
+        }
         public override async Task HandleAsync(Work request, InvocationContext context, CancellationToken cancellationToken)
         {
             _probe.Calls.Add(new(_scope, _tenant, _correlation, context.Items, context.Origin));
             if (request.Text == "fail")
-            { throw _probe.Failure; }
+            {
+                throw _probe.Failure;
+            }
             if (request.Text == "wait")
             {
                 _probe.Started.TrySetResult();

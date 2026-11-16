@@ -1558,15 +1558,13 @@ public class SqliteInMemoryPersistenceTests
         claimed[0].ClaimExpiresAtUtc = null;
         await db.SaveChangesAsync();
 
-        using (var verify = services.CreateScope())
-        {
-            SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-            var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
-            var stored = await verifyDb.FindAsync<NOFOutboxMessage>([id]);
-            Assert.NotNull(stored);
-            Assert.Equal(OutboxMessageStatus.Sent, stored.Status);
-            Assert.NotNull(stored.SentAtUtc);
-        }
+        using var verify = services.CreateScope();
+        SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
+        var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
+        var stored = await verifyDb.FindAsync<NOFOutboxMessage>([id]);
+        Assert.NotNull(stored);
+        Assert.Equal(OutboxMessageStatus.Sent, stored.Status);
+        Assert.NotNull(stored.SentAtUtc);
     }
 
     [Fact]
@@ -1691,15 +1689,13 @@ public class SqliteInMemoryPersistenceTests
         claimed[0].ClaimExpiresAtUtc = null;
         await db.SaveChangesAsync();
 
-        using (var verify = services.CreateScope())
-        {
-            SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-            var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
-            var stored = await verifyDb.FindAsync<NOFOutboxMessage>([id]);
-            Assert.NotNull(stored);
-            Assert.Equal(OutboxMessageStatus.Failed, stored.Status);
-            Assert.Equal("boom", stored.ErrorMessage);
-        }
+        using var verify = services.CreateScope();
+        SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
+        var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
+        var stored = await verifyDb.FindAsync<NOFOutboxMessage>([id]);
+        Assert.NotNull(stored);
+        Assert.Equal(OutboxMessageStatus.Failed, stored.Status);
+        Assert.Equal("boom", stored.ErrorMessage);
     }
 
     [Fact]
@@ -1828,12 +1824,10 @@ public class SqliteInMemoryPersistenceTests
 
         await db.Database.ExecuteSqlInterpolatedAsync($"delete from TestOrder where Id = {9L}");
         // Query in a fresh scope to avoid first-level cache.
-        using (var verify = services.CreateScope())
-        {
-            SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
-            var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
-            Assert.Null(await verifyDb.FindAsync<TestOrder>([9L]));
-        }
+        using var verify = services.CreateScope();
+        SetTenant(verify.ServiceProvider, NOFAbstractionConstants.Tenant.HostId);
+        var verifyDb = verify.ServiceProvider.GetRequiredService<TestDbContext>();
+        Assert.Null(await verifyDb.FindAsync<TestOrder>([9L]));
     }
 
     private static EFCoreSelector ConfigureSqliteInMemory<TDbContext>(TestServiceRegistrationContext builder, string databaseName)
@@ -1981,8 +1975,8 @@ public class SqliteInMemoryPersistenceTests
 
     private static void DeleteDirectoryWithRetry(string directory)
     {
-        const int maxAttempts = 5;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        const int MaxAttempts = 5;
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             try
             {
@@ -1993,11 +1987,11 @@ public class SqliteInMemoryPersistenceTests
 
                 return;
             }
-            catch (IOException) when (attempt < maxAttempts)
+            catch (IOException) when (attempt < MaxAttempts)
             {
                 Thread.Sleep(100 * attempt);
             }
-            catch (UnauthorizedAccessException) when (attempt < maxAttempts)
+            catch (UnauthorizedAccessException) when (attempt < MaxAttempts)
             {
                 Thread.Sleep(100 * attempt);
             }

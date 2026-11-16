@@ -133,12 +133,12 @@ public sealed class PermissionCheckerTests
         using var scope = provider.CreateScope();
         scope.ServiceProvider.GetRequiredService<IUserContext>().User.AddIdentity(new ClaimsIdentity("test"));
         var checks = scope.ServiceProvider.GetRequiredService<IPermissionChecker>();
-        const string permission = "created.at.runtime";
-        Assert.False(await checks.IsGrantedAsync(permission));
-        grants.Permissions.Add(permission);
-        Assert.True(await checks.IsGrantedAsync(permission));
+        const string Permission = "created.at.runtime";
+        Assert.False(await checks.IsGrantedAsync(Permission));
+        grants.Permissions.Add(Permission);
+        Assert.True(await checks.IsGrantedAsync(Permission));
         grants.Permissions.Clear();
-        Assert.False(await checks.IsGrantedAsync(permission));
+        Assert.False(await checks.IsGrantedAsync(Permission));
     }
 
     public sealed class DynamicGrants : IPermissionGrantProvider

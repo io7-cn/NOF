@@ -10,45 +10,32 @@
     </head>
     <body>
         <header class="demo-nav">
-            <a href="/demo.html" class="demo-brand"
-                >NOF <span>能力工作台</span></a
-            >
+            <a href="/demo.html" class="demo-brand">NOF <span>能力工作台</span></a>
             <nav>
                 <a href="/">配置中心</a><a href="/streaming-demo">流式响应</a
                 ><a href="/permissions-demo">权限组件</a
-                ><a href="/openapi/v1.json" target="_blank" rel="noopener"
-                    >OpenAPI</a
-                >
+                ><a href="/openapi/v1.json" target="_blank" rel="noopener">OpenAPI</a>
             </nav>
         </header>
         <main class="demo-main">
             <section class="demo-hero">
                 <div>
-                    <div class="demo-eyebrow">
-                        BUSINESS FIRST · NATIVE INTEGRATIONS
-                    </div>
+                    <div class="demo-eyebrow">BUSINESS FIRST · NATIVE INTEGRATIONS</div>
                     <h1>从业务操作，到跨服务交付。</h1>
                     <p>
-                        真实的 Keycloak 登录、NOF 权限检查、PostgreSQL Outbox 与
-                        RabbitMQ 消息分发。每个按钮都连接正在运行的服务。
+                        真实的 Keycloak 登录、NOF 权限检查、PostgreSQL Outbox 与 RabbitMQ
+                        消息分发。每个按钮都连接正在运行的服务。
                     </p>
                 </div>
                 <div class="demo-health" id="identityBadge">正在连接服务…</div>
             </section>
-            <div
-                id="notice"
-                class="demo-notice"
-                role="status"
-                aria-live="polite"
-            >
+            <div id="notice" class="demo-notice" role="status" aria-live="polite">
                 选择一项能力开始测试。演示数据保存在本地开发环境。
             </div>
             <section class="demo-card" id="identity">
                 <div class="demo-card-heading">
                     <div>
-                        <span class="demo-step"
-                            >01 / IDENTITY & AUTHORIZATION</span
-                        >
+                        <span class="demo-step">01 / IDENTITY & AUTHORIZATION</span>
                         <h2>外部身份，统一业务鉴权</h2>
                     </div>
                     <a
@@ -69,10 +56,8 @@
                             <dd>加载中</dd>
                         </dl>
                         <div class="demo-actions">
-                            <button data-permission="read">
-                                检查目录读取权限</button
-                            ><button data-permission="manage">
-                                检查目录管理权限</button
+                            <button data-permission="read">检查目录读取权限</button
+                            ><button data-permission="manage">检查目录管理权限</button
                             ><button id="logout">退出登录 / 切换账号</button>
                         </div>
                         <output id="permissionResult"></output>
@@ -81,13 +66,8 @@
                         <strong>本地测试账号</strong>
                         <p><code>alice / AliceDemo!2026</code> · 读取 + 管理</p>
                         <p><code>bob / BobDemo!2026</code> · 仅读取</p>
-                        <p>
-                            <code>charlie / CharlieDemo!2026</code> · 无目录权限
-                        </p>
-                        <p>
-                            账号只属于本机演示 Realm。NOF 不颁发令牌，也不管理
-                            OIDC 协议。
-                        </p>
+                        <p><code>charlie / CharlieDemo!2026</code> · 无目录权限</p>
+                        <p>账号只属于本机演示 Realm。NOF 不颁发令牌，也不管理 OIDC 协议。</p>
                     </div>
                 </div>
             </section>
@@ -97,15 +77,11 @@
                         <span class="demo-step">02 / TRANSACTIONAL OUTBOX</span>
                         <h2>一次提交，三条跨服务业务投影</h2>
                     </div>
-                    <span id="deliveryBadge" class="demo-badge"
-                        >发件运行中</span
-                    >
+                    <span id="deliveryBadge" class="demo-badge">发件运行中</span>
                 </div>
                 <div class="demo-flow">
-                    <span>提交订单</span><b>→</b
-                    ><span>PostgreSQL Outbox × 2</span><b>→</b
-                    ><span>RabbitMQ</span><b>→</b
-                    ><span>Notifications 投影 × 3</span>
+                    <span>提交订单</span><b>→</b><span>PostgreSQL Outbox × 2</span><b>→</b
+                    ><span>RabbitMQ</span><b>→</b><span>Notifications 投影 × 3</span>
                 </div>
                 <div class="demo-actions">
                     <label
@@ -113,21 +89,18 @@
                             id="email"
                             type="email"
                             value="demo@example.test" /></label
-                    ><button id="submitOrder" class="primary">
-                        提交订单并暂存 Outbox</button
+                    ><button id="submitOrder" class="primary">提交订单并暂存 Outbox</button
                     ><button id="refreshMessages">刷新交付状态</button>
                 </div>
                 <div class="demo-actions">
                     <button data-delivery="pause">暂停示例发件</button
                     ><button data-delivery="resume">恢复示例发件</button
-                    ><button data-delivery="fail-next">
-                        让下一次投递失败一次</button
+                    ><button data-delivery="fail-next">让下一次投递失败一次</button
                     ><button id="redeliver">重复投递当前订单</button>
                 </div>
                 <p class="demo-muted">
-                    暂停后提交仍会保存意图；恢复后继续投递。单次失败会触发
-                    Outbox 重试。重复投递使用新的消息
-                    ID，相同订单仍只有三条业务投影。接收端直接执行
+                    暂停后提交仍会保存意图；恢复后继续投递。单次失败会触发 Outbox
+                    重试。重复投递使用新的消息 ID，相同订单仍只有三条业务投影。接收端直接执行
                     Handler，幂等性由业务唯一键保证。
                 </p>
                 <label
@@ -162,9 +135,7 @@
                     <div>
                         <h3>
                             接收服务投影
-                            <span id="receiptCount" class="demo-count"
-                                >0 / 3</span
-                            >
+                            <span id="receiptCount" class="demo-count">0 / 3</span>
                         </h3>
                         <div class="demo-table-wrap">
                             <table>
@@ -199,9 +170,7 @@
                             <option value="host">host</option>
                             <option value="tenant-a">tenant-a</option>
                         </select></label
-                    ><label
-                        >缓存内容<input id="cacheValue" value="Hello from NOF"
-                    /></label>
+                    ><label>缓存内容<input id="cacheValue" value="Hello from NOF" /></label>
                     <div class="demo-actions">
                         <button data-cache="write">写入缓存</button
                         ><button data-cache="read">读取缓存</button
@@ -227,15 +196,8 @@ NOF object storage demo</textarea>
                 <section class="demo-card">
                     <span class="demo-step">05 / DOMAIN VALUES & IDS</span>
                     <h2>值对象与 ID 生成</h2>
-                    <p>
-                        验证真实 ConfigNodeName 的规范化与失败消息，或生成五个
-                        Snowflake ID。
-                    </p>
-                    <label
-                        >配置节点名称<input
-                            id="valueObjectInput"
-                            value="demo-node"
-                    /></label>
+                    <p>验证真实 ConfigNodeName 的规范化与失败消息，或生成五个 Snowflake ID。</p>
+                    <label>配置节点名称<input id="valueObjectInput" value="demo-node" /></label>
                     <div class="demo-actions">
                         <button id="validateValue">验证值对象</button
                         ><button id="generateIds">生成五个 ID</button>
@@ -246,14 +208,9 @@ NOF object storage demo</textarea>
                     <span class="demo-step">06 / LOCAL EVENTS</span>
                     <h2>进程内事件</h2>
                     <p>
-                        事件发布器直接调用自动发现的
-                        LocalEventHandler，与可靠跨服务消息分工清晰。
+                        事件发布器直接调用自动发现的 LocalEventHandler，与可靠跨服务消息分工清晰。
                     </p>
-                    <label
-                        >事件内容<input
-                            id="eventValue"
-                            value="Hello event handlers"
-                    /></label>
+                    <label>事件内容<input id="eventValue" value="Hello event handlers" /></label>
                     <div class="demo-actions">
                         <button id="publishEvent">发布本地事件</button>
                     </div>
@@ -263,17 +220,14 @@ NOF object storage demo</textarea>
             <section class="demo-card">
                 <div class="demo-card-heading">
                     <div>
-                        <span class="demo-step"
-                            >07 / OPERATIONS, FILTERS & TRACES</span
-                        >
+                        <span class="demo-step">07 / OPERATIONS, FILTERS & TRACES</span>
                         <h2>统一执行管道</h2>
                     </div>
                     <button id="refreshInvocations">刷新调用记录</button>
                 </div>
                 <p>
-                    配置中心、权限操作和消息提交均经过操作执行器。此处是示例自己的
-                    Filter 观测记录；完整 Trace 与服务日志可在 Aspire Dashboard
-                    查看。
+                    配置中心、权限操作和消息提交均经过操作执行器。此处是示例自己的 Filter
+                    观测记录；完整 Trace 与服务日志可在 Aspire Dashboard 查看。
                 </p>
                 <div class="demo-table-wrap">
                     <table>
@@ -297,15 +251,11 @@ NOF object storage demo</textarea>
             <section class="demo-links">
                 <a href="/"
                     ><strong>配置中心 CRUD →</strong
-                    ><span
-                        >值对象、失败联合类型、映射、原生 EF 与工作单元</span
-                    ></a
+                    ><span>值对象、失败联合类型、映射、原生 EF 与工作单元</span></a
                 ><a href="/streaming-demo"
-                    ><strong>流式响应 →</strong
-                    ><span>标准 SSE、取消和增量显示</span></a
+                    ><strong>流式响应 →</strong><span>标准 SSE、取消和增量显示</span></a
                 ><a href="/permissions-demo"
-                    ><strong>权限 UI 组件 →</strong
-                    ><span>AuthGuard 与 Contract 权限检查</span></a
+                    ><strong>权限 UI 组件 →</strong><span>AuthGuard 与 Contract 权限检查</span></a
                 >
             </section>
         </main>

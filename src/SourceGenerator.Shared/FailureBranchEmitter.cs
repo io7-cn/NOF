@@ -20,7 +20,9 @@ internal static class FailureBranchEmitter
             source.AppendLine("        [global::System.Text.Json.Serialization.JsonUnmappedMemberHandling(global::System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]");
             source.Append("        public sealed record ").Append(name).Append(" : global::NOF.Abstraction.IFailure");
             if (custom)
-            { source.Append('<').Append(error).Append('>'); }
+            {
+                source.Append('<').Append(error).Append('>');
+            }
             source.AppendLine("\n        {");
             source.AppendLine("            /// <inheritdoc />");
             source.Append("            public string Title { get => ").Append(title).Append("; init { if (value != ").Append(title).AppendLine(") { throw new global::System.Text.Json.JsonException(\"Unexpected failure title.\"); } } }");
@@ -37,11 +39,15 @@ internal static class FailureBranchEmitter
             source.AppendLine("            [global::System.Text.Json.Serialization.JsonConstructor]");
             source.Append("            public ").Append(name).Append('(');
             if (custom)
-            { source.Append(error).Append(" error, "); }
+            {
+                source.Append(error).Append(" error, ");
+            }
             source.AppendLine("string detail = \"\")\n            {");
             source.AppendLine("                global::System.ArgumentNullException.ThrowIfNull(detail); Detail = detail;");
             if (custom)
-            { source.AppendLine("                global::System.ArgumentNullException.ThrowIfNull(error); Error = error;"); }
+            {
+                source.AppendLine("                global::System.ArgumentNullException.ThrowIfNull(error); Error = error;");
+            }
             source.AppendLine("            }");
             source.AppendLine("            /// <summary>Gets the reserved union discriminator.</summary>");
             source.AppendLine("            [global::System.Text.Json.Serialization.JsonPropertyName(\"$failure\")]");

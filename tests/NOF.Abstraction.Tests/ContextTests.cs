@@ -88,13 +88,13 @@ public class ContextTests
     public async Task PushCurrent_ShouldIsolateParallelAsyncFlows()
     {
         var tenantIds = await Task.WhenAll(
-            ObserveTenantAsync("tenanta"),
-            ObserveTenantAsync("tenantb"));
+            observeTenantAsync("tenanta"),
+            observeTenantAsync("tenantb"));
 
         Assert.Equal(["tenanta", "tenantb"], tenantIds);
         Assert.Same(Context.Empty, Context.Current);
 
-        static async Task<string> ObserveTenantAsync(string tenantId)
+        static async Task<string> observeTenantAsync(string tenantId)
         {
             using var _ = Context.PushCurrent(Context.Empty.WithTenantId(tenantId));
             await Task.Yield();

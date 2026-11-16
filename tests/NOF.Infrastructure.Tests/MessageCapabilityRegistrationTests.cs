@@ -108,7 +108,10 @@ public sealed class MessageCapabilityRegistrationTests
             await Task.WhenAll(workers.Select(worker => worker.ExecuteTask!)).WaitAsync(TimeSpan.FromSeconds(5));
             store.VerifyNoOtherCalls();
         }
-        finally { await host.StopAsync(); }
+        finally
+        {
+            await host.StopAsync();
+        }
     }
 
     [Fact]

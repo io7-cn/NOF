@@ -9,13 +9,13 @@ namespace NOF.Application;
 /// </remarks>
 public static class Mapper
 {
-    private static readonly AsyncLocal<Func<IMapper?>?> _currentMapper = new();
+    private static readonly AsyncLocal<Func<IMapper?>?> CurrentMapper = new();
 
     /// <summary>
     /// Gets the ambient <see cref="IMapper"/> for the current async flow.
     /// </summary>
     public static IMapper Current
-        => _currentMapper.Value?.Invoke() ?? throw new InvalidOperationException(
+        => CurrentMapper.Value?.Invoke() ?? throw new InvalidOperationException(
             "No ambient IMapper is available for the current async flow. " +
             "Enter services.BindNOF(context) or use an explicit IMapper.");
 
@@ -27,8 +27,8 @@ public static class Mapper
 
     private static IDisposable PushFactory(Func<IMapper?> resolve)
     {
-        var previous = _currentMapper.Value;
-        _currentMapper.Value = resolve;
+        var previous = CurrentMapper.Value;
+        CurrentMapper.Value = resolve;
         return new AmbientMapperScope(previous);
     }
 
@@ -53,7 +53,7 @@ public static class Mapper
                 return;
             }
 
-            _currentMapper.Value = previous;
+            CurrentMapper.Value = previous;
             _disposed = true;
         }
     }

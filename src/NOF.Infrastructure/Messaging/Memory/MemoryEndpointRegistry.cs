@@ -4,10 +4,6 @@ using NOF.Contract;
 
 namespace NOF.Infrastructure;
 
-/// <summary>One Memory adapter endpoint targeting a one-way operation.</summary>
-public sealed record MemoryEndpoint(string Route, string ConsumerId, Type MessageType,
-    OperationDescriptor Operation, bool IsSubscription);
-
 /// <summary>Owns only Memory endpoint topology; entries freeze on first use.</summary>
 public sealed class MemoryEndpointRegistry : Registry<MemoryEndpoint>
 {

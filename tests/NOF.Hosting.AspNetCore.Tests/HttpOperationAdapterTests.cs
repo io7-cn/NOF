@@ -27,7 +27,9 @@ public sealed class HttpOperationAdapterTests
         await using var app = builder.Build();
         app.UseNOF();
         if (registerModule)
-        { new EchoEndpoints().Map(app); }
+        {
+            new EchoEndpoints().Map(app);
+        }
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/alive");
         await app.StartAsync();

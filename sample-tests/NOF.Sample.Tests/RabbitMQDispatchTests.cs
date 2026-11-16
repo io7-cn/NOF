@@ -196,7 +196,9 @@ public sealed class RabbitMQDispatchTests
         {
             var result = await next(context, input, ct);
             if (context.Origin == InvocationOrigin.Message)
-            { probe.Items.Add(context.Items); }
+            {
+                probe.Items.Add(context.Items);
+            }
             return result;
         }
     }

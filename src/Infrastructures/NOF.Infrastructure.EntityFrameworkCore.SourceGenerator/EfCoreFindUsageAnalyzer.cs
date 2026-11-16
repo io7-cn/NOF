@@ -9,7 +9,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore.SourceGenerator;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
 {
-    private static readonly DiagnosticDescriptor _dbSetFindAsyncDescriptor = new(
+    private static readonly DiagnosticDescriptor DbSetFindAsyncDescriptor = new(
         id: "NOF302",
         title: "Avoid calling FindAsync on EF Core persistence types",
         messageFormat: "Calling FindAsync(...) can bypass provider-level query rules such as filters. Prefer FirstOrDefaultAsync(...) instead. If you need an in-memory tracked instance, publish that instance as an event payload via PublishAsEvent(...).",
@@ -17,7 +17,7 @@ public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _dbSetFindDescriptor = new(
+    private static readonly DiagnosticDescriptor DbSetFindDescriptor = new(
         id: "NOF303",
         title: "Avoid calling Find on EF Core persistence types",
         messageFormat: "Calling Find(...) can bypass provider-level query rules such as filters. Prefer FirstOrDefault(...) instead. If you need an in-memory tracked instance, publish that instance as an event payload via PublishAsEvent(...).",
@@ -25,7 +25,7 @@ public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _dbContextInheritanceDescriptor = new(
+    private static readonly DiagnosticDescriptor DbContextInheritanceDescriptor = new(
         id: "NOF304",
         title: "Prefer inheriting NOFDbContext",
         messageFormat: "DbContext implementations should prefer inheriting NOFDbContext so tenant, soft-delete, and NOF persistence conventions remain active",
@@ -34,7 +34,7 @@ public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [_dbSetFindAsyncDescriptor, _dbSetFindDescriptor, _dbContextInheritanceDescriptor];
+        [DbSetFindAsyncDescriptor, DbSetFindDescriptor, DbContextInheritanceDescriptor];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -64,13 +64,13 @@ public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
 
         if (methodSymbol.Name == "FindAsync" && IsFindAsyncOnPersistenceType(methodSymbol.ContainingType))
         {
-            context.ReportDiagnostic(Diagnostic.Create(_dbSetFindAsyncDescriptor, invocation.Syntax.GetLocation()));
+            context.ReportDiagnostic(Diagnostic.Create(DbSetFindAsyncDescriptor, invocation.Syntax.GetLocation()));
             return;
         }
 
         if (methodSymbol.Name == "Find" && IsFindOnPersistenceType(methodSymbol.ContainingType))
         {
-            context.ReportDiagnostic(Diagnostic.Create(_dbSetFindDescriptor, invocation.Syntax.GetLocation()));
+            context.ReportDiagnostic(Diagnostic.Create(DbSetFindDescriptor, invocation.Syntax.GetLocation()));
         }
     }
 
@@ -94,7 +94,7 @@ public sealed class EfCoreFindUsageAnalyzer : DiagnosticAnalyzer
 
         if (ImplementsOrInherits(namedType, IsEfCoreDbContextType))
         {
-            context.ReportDiagnostic(Diagnostic.Create(_dbContextInheritanceDescriptor, namedType.Locations[0]));
+            context.ReportDiagnostic(Diagnostic.Create(DbContextInheritanceDescriptor, namedType.Locations[0]));
         }
     }
 

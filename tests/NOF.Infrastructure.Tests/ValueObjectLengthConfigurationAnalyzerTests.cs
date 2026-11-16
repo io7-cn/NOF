@@ -18,7 +18,7 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class ValueObjectLengthConfigurationAnalyzerTests
 {
-    private static readonly Type[] _refs =
+    private static readonly Type[] Refs =
     [
         typeof(IValueObject<>),
         typeof(ValueObjectLengthAttribute),
@@ -183,12 +183,12 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
     [Fact]
     public async Task CodeFix_MovesMissingLengthAcrossProjects()
     {
-        const string domainSource = """
+        const string DomainSource = """
             using NOF.Domain;
             namespace Test;
             public readonly struct Name : IValueObject<string> { }
             """;
-        const string infrastructureSource = """
+        const string InfrastructureSource = """
             using NOF.Infrastructure.EntityFrameworkCore;
             using Microsoft.EntityFrameworkCore;
             namespace Test;
@@ -219,12 +219,12 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
             .AddProject(domainProjectId, "Domain", "Domain", LanguageNames.CSharp)
             .WithProjectCompilationOptions(domainProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(domainProjectId, references)
-            .AddDocument(domainDocumentId, "Name.cs", SourceText.From(domainSource))
+            .AddDocument(domainDocumentId, "Name.cs", SourceText.From(DomainSource))
             .AddProject(infrastructureProjectId, "Infrastructure", "Infrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(infrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(infrastructureProjectId, references)
             .AddProjectReference(infrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(infrastructureDocumentId, "Mapping.cs", SourceText.From(infrastructureSource));
+            .AddDocument(infrastructureDocumentId, "Mapping.cs", SourceText.From(InfrastructureSource));
         Assert.True(workspace.TryApplyChanges(solution));
 
         var infrastructureDocument = workspace.CurrentSolution.GetDocument(infrastructureDocumentId)!;
@@ -253,13 +253,13 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
     [Fact]
     public async Task FixAllInSolution_MovesEachLengthOnceAndRemovesAllConfigurations()
     {
-        const string domainSource = """
+        const string DomainSource = """
             using NOF.Domain;
             namespace Test;
             public readonly struct Name : IValueObject<string> { }
             public readonly struct Code : IValueObject<string> { }
             """;
-        const string firstInfrastructureSource = """
+        const string FirstInfrastructureSource = """
             using NOF.Infrastructure.EntityFrameworkCore;
             using Microsoft.EntityFrameworkCore;
             namespace Test;
@@ -285,7 +285,7 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 }
             }
             """;
-        const string secondInfrastructureSource = """
+        const string SecondInfrastructureSource = """
             using NOF.Infrastructure.EntityFrameworkCore;
             using Microsoft.EntityFrameworkCore;
             namespace Test;
@@ -318,17 +318,17 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
             .AddProject(domainProjectId, "Domain", "Domain", LanguageNames.CSharp)
             .WithProjectCompilationOptions(domainProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(domainProjectId, references)
-            .AddDocument(domainDocumentId, "ValueObjects.cs", SourceText.From(domainSource))
+            .AddDocument(domainDocumentId, "ValueObjects.cs", SourceText.From(DomainSource))
             .AddProject(firstInfrastructureProjectId, "FirstInfrastructure", "FirstInfrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(firstInfrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(firstInfrastructureProjectId, references)
             .AddProjectReference(firstInfrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(firstInfrastructureDocumentId, "FirstMapping.cs", SourceText.From(firstInfrastructureSource))
+            .AddDocument(firstInfrastructureDocumentId, "FirstMapping.cs", SourceText.From(FirstInfrastructureSource))
             .AddProject(secondInfrastructureProjectId, "SecondInfrastructure", "SecondInfrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(secondInfrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(secondInfrastructureProjectId, references)
             .AddProjectReference(secondInfrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(secondInfrastructureDocumentId, "SecondMapping.cs", SourceText.From(secondInfrastructureSource));
+            .AddDocument(secondInfrastructureDocumentId, "SecondMapping.cs", SourceText.From(SecondInfrastructureSource));
         Assert.True(workspace.TryApplyChanges(solution));
 
         var diagnosticsByProject = ImmutableDictionary.CreateBuilder<ProjectId, ImmutableArray<Diagnostic>>();
@@ -416,7 +416,7 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
 
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source, bool useEfCore)
     {
-        var extraReferences = _refs.Select(type => type.ToMetadataReference()).ToArray();
+        var extraReferences = Refs.Select(type => type.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
         DiagnosticAnalyzer analyzer = new ValueObjectLengthConfigurationAnalyzer();
 

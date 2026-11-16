@@ -11,8 +11,6 @@ using System.Text;
 
 namespace NOF.Sample.Endpoints;
 
-public sealed record DemoInput(string Value = "NOF demo", string Tenant = "host", Guid? OrderId = null, string Email = "demo@example.test");
-
 public static class DemoCapabilities
 {
     public static void MapDemoCapabilities(this WebApplication app)
@@ -33,7 +31,10 @@ public static class DemoCapabilities
                 {
                     await context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context.HttpContext);
                 }
-                catch (AntiforgeryValidationException) { return Results.Problem("Refresh the page and try again.", statusCode: 400); }
+                catch (AntiforgeryValidationException)
+                {
+                    return Results.Problem("Refresh the page and try again.", statusCode: 400);
+                }
             }
             return await next(context);
         });
@@ -92,40 +93,44 @@ public static class DemoCapabilities
         group.MapPost("/cache/{action}", async (string action, DemoInput input, ICacheService cache, CancellationToken ct) =>
         {
             using var context = Context.PushCurrent(Context.Empty.WithTenantId(input.Tenant));
-            const string key = "capabilities:value";
+            const string Key = "capabilities:value";
             if (action == "write")
-            { await cache.SetAsync(key, input.Value, new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) }, ct); }
+            {
+                await cache.SetAsync(Key, input.Value, new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) }, ct);
+            }
             else if (action == "delete")
             {
-                await cache.RemoveAsync(key, ct);
+                await cache.RemoveAsync(Key, ct);
             }
             else if (action != "read")
             {
                 return Results.BadRequest();
             }
-            var value = await cache.GetAsync<string>(key, ct);
+            var value = await cache.GetAsync<string>(Key, ct);
             return Results.Ok(new { tenant = input.Tenant, present = value.HasValue, value = value.HasValue ? value.Value : null });
         });
         group.MapPost("/storage/{action}", async (string action, DemoInput input, IObjectStorage storage, CancellationToken ct) =>
         {
-            const string bucket = "capabilities";
-            const string key = "demo.txt";
+            const string Bucket = "capabilities";
+            const string Key = "demo.txt";
             if (action == "write")
             {
                 await using var stream = new MemoryStream(Encoding.UTF8.GetBytes(input.Value));
-                await storage.PutAsync(bucket, key, stream, cancellationToken: ct);
+                await storage.PutAsync(Bucket, Key, stream, cancellationToken: ct);
             }
             else if (action == "delete")
             {
-                await storage.DeleteAsync(bucket, key, ct);
+                await storage.DeleteAsync(Bucket, Key, ct);
             }
             else if (action != "read")
             {
                 return Results.BadRequest();
             }
-            var stored = await storage.OpenReadAsync(bucket, key, ct);
+            var stored = await storage.OpenReadAsync(Bucket, Key, ct);
             if (!stored.HasValue)
-            { return Results.Ok(new { exists = false, value = (string?)null }); }
+            {
+                return Results.Ok(new { exists = false, value = (string?)null });
+            }
             await using var content = stored.Value.Content;
             using var reader = new StreamReader(content);
             return Results.Ok(new { exists = true, value = await reader.ReadToEndAsync(ct) });

@@ -61,7 +61,11 @@ builder.Services.AddRabbitMQ(options =>
 });
 
 // Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
-builder.Logging.AddOpenTelemetry(options => { options.IncludeFormattedMessage = true; options.IncludeScopes = true; });
+builder.Logging.AddOpenTelemetry(options =>
+{
+    options.IncludeFormattedMessage = true;
+    options.IncludeScopes = true;
+});
 builder.Services.AddOpenTelemetry()
     .WithTracing(tracing => tracing
         .AddSource(NOFInfrastructureConstants.InboundPipeline.ActivitySourceName, NOFInfrastructureConstants.OutboundPipeline.ActivitySourceName)

@@ -49,9 +49,13 @@ public sealed class InMemoryServiceCollectionExtensionsTests
         var reader = observer.ServiceProvider.GetRequiredService<IOutboxStore>();
         Assert.Empty(await reader.AtomicClaimPendingMessagesAsync().ToListAsync());
         if (commit)
-        { await transaction.CommitAsync(); }
+        {
+            await transaction.CommitAsync();
+        }
         else
-        { await transaction.RollbackAsync(); }
+        {
+            await transaction.RollbackAsync();
+        }
         Assert.Equal(commit ? 1 : 0, (await reader.AtomicClaimPendingMessagesAsync().ToListAsync()).Count);
     }
 
@@ -61,13 +65,20 @@ public sealed class InMemoryServiceCollectionExtensionsTests
         using var provider = CreateProvider();
         using (Context.PushCurrent(Context.Empty.WithTenantId("first")))
         using (var scope = provider.CreateScope())
-        { scope.ServiceProvider.GetRequiredService<IOutboxStore>().Stage(Intent()); await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync(); }
+        {
+            scope.ServiceProvider.GetRequiredService<IOutboxStore>().Stage(Intent());
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
         using (Context.PushCurrent(Context.Empty.WithTenantId("second")))
         using (var scope = provider.CreateScope())
-        { Assert.Empty(await scope.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync()); }
+        {
+            Assert.Empty(await scope.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync());
+        }
         using (Context.PushCurrent(Context.Empty.WithTenantId("first")))
         using (var scope = provider.CreateScope())
-        { Assert.Single(await scope.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync()); }
+        {
+            Assert.Single(await scope.ServiceProvider.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync());
+        }
     }
 
 }

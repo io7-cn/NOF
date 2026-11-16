@@ -20,11 +20,11 @@ namespace NOF.CodeFixes;
 public sealed class MoveValueObjectLengthToDomainCodeFixProvider : CodeFixProvider
 {
     private const string EquivalenceKey = "MoveValueObjectLengthToDomain";
-    private static readonly FixAllProvider _fixAllProvider = new MoveValueObjectLengthToDomainFixAllProvider();
+    private static readonly FixAllProvider FixAllProvider = new MoveValueObjectLengthToDomainFixAllProvider();
 
     public override ImmutableArray<string> FixableDiagnosticIds => ["NOF308"];
 
-    public override FixAllProvider GetFixAllProvider() => _fixAllProvider;
+    public override FixAllProvider GetFixAllProvider() => FixAllProvider;
 
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {

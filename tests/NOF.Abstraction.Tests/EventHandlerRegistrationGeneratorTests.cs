@@ -11,7 +11,7 @@ public class EventHandlerRegistrationGeneratorTests
     [Fact]
     public void GeneratedCode_EventHandler_RegistersToEventHandlerRegistry()
     {
-        const string source = """
+        const string Source = """
             using NOF.Abstraction;
             namespace App
             {
@@ -23,7 +23,7 @@ public class EventHandlerRegistrationGeneratorTests
             }
             """;
 
-        var comp = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+        var comp = CSharpCompilation.CreateCompilation("App", Source, isDll: true,
             typeof(IServiceCollection),
             typeof(InitializedTypes),
             typeof(LocalEventHandler<>),

@@ -40,7 +40,7 @@ public sealed class AllSourceGeneratorsMonolithTests
     [InlineData(true)]
     public void AllGenerators_InOneCompilation_DoNotConsumeOtherGeneratorOutputs(bool reverseOrder)
     {
-        const string source = """
+        const string Source = """
             using Microsoft.Extensions.DependencyInjection;
             using NOF.Abstraction;
             using NOF.Application;
@@ -126,7 +126,7 @@ public sealed class AllSourceGeneratorsMonolithTests
 
         var compilation = CSharpCompilation.CreateCompilation(
             "Monolith",
-            source,
+            Source,
             isDll: true,
             typeof(IServiceCollection),
             typeof(AutoInjectAttribute),

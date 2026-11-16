@@ -29,14 +29,3 @@ public sealed class EfCoreUnitOfWork(DbContext context) : IUnitOfWork, ITransact
     public async Task<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         => new EfCoreDbContextTransactionAdapter(await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
 }
-
-/// <summary>Adapts the native transaction to the application's minimal transaction boundary without wrapping failures.</summary>
-public sealed class EfCoreDbContextTransactionAdapter(EfDbContextTransaction transaction) : ITransaction
-{
-    /// <inheritdoc />
-    public Task CommitAsync(CancellationToken cancellationToken = default) => transaction.CommitAsync(cancellationToken);
-    /// <inheritdoc />
-    public Task RollbackAsync(CancellationToken cancellationToken = default) => transaction.RollbackAsync(cancellationToken);
-    /// <inheritdoc />
-    public ValueTask DisposeAsync() => transaction.DisposeAsync();
-}

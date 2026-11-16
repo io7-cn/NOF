@@ -15,10 +15,10 @@ public class TenantInvocationFilterTests
         var inboundContext = CreateContext(message.GetType());
         var tenantDuringNext = string.Empty;
 
-        await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
+        await middleware.InvokeAsync(inboundContext, message, captureNextContext, default);
         Assert.Equal(NOFAbstractionConstants.Tenant.HostId, tenantDuringNext);
 
-        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> captureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
@@ -36,10 +36,10 @@ public class TenantInvocationFilterTests
             .WithItem(NOFAbstractionConstants.Transport.Headers.TenantId, "tenanta");
         var tenantDuringNext = string.Empty;
 
-        await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
+        await middleware.InvokeAsync(inboundContext, message, captureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> captureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;
@@ -57,10 +57,10 @@ public class TenantInvocationFilterTests
             .WithItem("x-tenant-id", "tenanta");
         var tenantDuringNext = string.Empty;
 
-        await middleware.InvokeAsync(inboundContext, message, CaptureNextContext, default);
+        await middleware.InvokeAsync(inboundContext, message, captureNextContext, default);
         Assert.Equal("tenanta", tenantDuringNext);
 
-        ValueTask<object?> CaptureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
+        ValueTask<object?> captureNextContext(InvocationContext context, object forwardedMessage, CancellationToken cancellationToken)
         {
             _ = forwardedMessage;
             _ = cancellationToken;

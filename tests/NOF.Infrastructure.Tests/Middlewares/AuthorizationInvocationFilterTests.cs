@@ -19,9 +19,9 @@ public sealed class AuthorizationInvocationFilterTests
         var middleware = CreateMiddleware(new UserContext(), new UninitializedAuthorizationHandler());
         var nextCalled = false;
 
-        async Task InvokeAsync()
+        async Task invokeAsync()
         {
-            var invocation = CreateRequestContext(nameof(TestService.AllowAnonymousMethod), origin: kind);
+            var invocation = CreateRequestContext(nameof(ITestService.AllowAnonymousMethod), origin: kind);
             await middleware.InvokeAsync(invocation, new TestRequest(), (_, _, _) =>
             {
                 nextCalled = true;
@@ -29,7 +29,7 @@ public sealed class AuthorizationInvocationFilterTests
             }, default);
         }
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(InvokeAsync);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(invokeAsync);
         Assert.Contains("uninitialized", exception.Message);
         Assert.False(nextCalled);
     }
@@ -61,7 +61,7 @@ public sealed class AuthorizationInvocationFilterTests
             RequireAuthenticatedTenant = true,
             RejectMismatchedTenant = true
         });
-        var context = (InvocationContext)CreateRequestContext(nameof(TestService.LoginOnlyMethod))
+        var context = (InvocationContext)CreateRequestContext(nameof(ITestService.LoginOnlyMethod))
             .WithTenantId(requestTenant);
         string? forwardedTenant = null;
 
@@ -89,7 +89,7 @@ public sealed class AuthorizationInvocationFilterTests
         {
             RequireAuthenticatedTenant = true
         });
-        var context = CreateRequestContext(nameof(TestService.AllowAnonymousMethod));
+        var context = CreateRequestContext(nameof(ITestService.AllowAnonymousMethod));
         var nextCalled = false;
         var outcome = await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) =>
         {
@@ -111,7 +111,7 @@ public sealed class AuthorizationInvocationFilterTests
             RequireAuthenticatedTenant = true,
             RejectMismatchedTenant = true
         });
-        var deniedContext = CreateRequestContext(nameof(TestService.HostMethod));
+        var deniedContext = CreateRequestContext(nameof(ITestService.HostMethod));
         var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) =>
             throw new InvalidOperationException("An unauthorized host handler must not run"), default);
         Assert.Equal("Permission denied", AsFailure(deniedOutcome).Title);
@@ -119,7 +119,7 @@ public sealed class AuthorizationInvocationFilterTests
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "platform.manage", ClaimTypes.TenantId, "tenant-a"));
         var nextCalled = false;
-        await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.HostMethod)), new TestRequest(), (_, _, _) =>
+        await middleware.InvokeAsync(CreateRequestContext(nameof(ITestService.HostMethod)), new TestRequest(), (_, _, _) =>
         {
             nextCalled = true;
             return ValueTask.FromResult<object?>(Empty.Instance);
@@ -154,7 +154,7 @@ public sealed class AuthorizationInvocationFilterTests
         userContext.User.AddIdentity(CreateAuthenticatedIdentity());
         var middleware = CreateMiddleware(userContext);
         var context = (InvocationContext)CreateRequestContext(
-            nameof(TestService.LoginOnlyMethod)).WithTenantId("untrusted");
+            nameof(ITestService.LoginOnlyMethod)).WithTenantId("untrusted");
 
         string? forwardedTenant = null;
         var outcome = await middleware.InvokeAsync(context, new TestRequest(), (forwarded, _, _) =>
@@ -175,7 +175,7 @@ public sealed class AuthorizationInvocationFilterTests
         var request = new TestRequest();
 
         var nextCalled = false;
-        await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.AllowAnonymousMethod)), request, (_, _, _) =>
+        await middleware.InvokeAsync(CreateRequestContext(nameof(ITestService.AllowAnonymousMethod)), request, (_, _, _) =>
         {
             nextCalled = true;
             return ValueTask.FromResult<object?>(Empty.Instance);
@@ -190,7 +190,7 @@ public sealed class AuthorizationInvocationFilterTests
         var userContext = new UserContext();
         var middleware = CreateMiddleware(userContext);
 
-        var context = CreateRequestContext(nameof(TestService.LoginOnlyMethod));
+        var context = CreateRequestContext(nameof(ITestService.LoginOnlyMethod));
         var outcome = await middleware.InvokeAsync(context, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         var response = AsFailure(outcome);
@@ -206,7 +206,7 @@ public sealed class AuthorizationInvocationFilterTests
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-type"));
         var middleware = CreateMiddleware(userContext);
 
-        var deniedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
+        var deniedContext = CreateRequestContext(nameof(ITestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
         var deniedOutcome = await middleware.InvokeAsync(deniedContext, new TestRequest(), (_, _, _) => ValueTask.FromResult<object?>(Empty.Instance), default);
 
         var denied = AsFailure(deniedOutcome);
@@ -214,7 +214,7 @@ public sealed class AuthorizationInvocationFilterTests
 
         userContext.Logout();
         userContext.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-method"));
-        var allowedContext = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
+        var allowedContext = CreateRequestContext(nameof(ITestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
         var nextCalled = false;
         await middleware.InvokeAsync(allowedContext, new TestRequest(), (_, _, _) =>
         {
@@ -232,7 +232,7 @@ public sealed class AuthorizationInvocationFilterTests
         user.User.AddIdentity(CreateAuthenticatedIdentity(ClaimTypes.Permission, "input-method"));
         var middleware = CreateMiddleware(user);
         var executed = false;
-        await middleware.InvokeAsync(CreateRequestContext(nameof(TestService.OverridePermissionMethod),
+        await middleware.InvokeAsync(CreateRequestContext(nameof(ITestService.OverridePermissionMethod),
             handlerMethodName: nameof(TestHandler.ExecutePermissionHandler)), new TestRequest(), (_, _, _) =>
         {
             executed = true;
@@ -248,7 +248,7 @@ public sealed class AuthorizationInvocationFilterTests
         userContext.User.AddIdentity(CreateAuthenticatedIdentity("scope", "input-method"));
         var middleware = CreateMiddleware(userContext);
 
-        var context = CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
+        var context = CreateRequestContext(nameof(ITestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.AllowAnonymousHandler));
         var outcome = await middleware.InvokeAsync(
             context,
             new TestRequest(),
@@ -268,7 +268,7 @@ public sealed class AuthorizationInvocationFilterTests
             ClaimTypes.TenantId, "tenantb"));
         var middleware = CreateMiddleware(userContext);
         var context = (InvocationContext)CreateRequestContext(
-            nameof(TestService.OverridePermissionMethod),
+            nameof(ITestService.OverridePermissionMethod),
             handlerMethodName: nameof(TestHandler.AllowAnonymousHandler)).WithTenantId("tenanta");
 
         var tenantDuringNext = string.Empty;
@@ -328,7 +328,7 @@ public sealed class AuthorizationInvocationFilterTests
 
         var nextCalled = false;
         await middleware.InvokeAsync(
-            CreateRequestContext(nameof(TestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler)),
+            CreateRequestContext(nameof(ITestService.OverridePermissionMethod), handlerMethodName: nameof(TestHandler.ExecutePermissionHandler)),
             request,
             (_, forwardedRequest, _) =>
             {
@@ -340,10 +340,10 @@ public sealed class AuthorizationInvocationFilterTests
 
         Assert.True(nextCalled);
         Assert.NotNull(handler.LastContext);
-        Assert.Equal(typeof(TestService), handler.LastContext!.ServiceType);
+        Assert.Equal(typeof(ITestService), handler.LastContext!.ServiceType);
         Assert.Same(request, handler.LastContext.Input);
-        Assert.Equal(typeof(TestService), handler.LastContext.ServiceType);
-        Assert.Equal(nameof(TestService.OverridePermissionMethod), handler.LastContext.ServiceMethodInfo?.Name);
+        Assert.Equal(typeof(ITestService), handler.LastContext.ServiceType);
+        Assert.Equal(nameof(ITestService.OverridePermissionMethod), handler.LastContext.ServiceMethodInfo?.Name);
         Assert.Equal(typeof(TestHandler), handler.LastContext.HandlerType);
         Assert.Equal(nameof(TestHandler.ExecutePermissionHandler), handler.LastContext.HandlerMethodInfo.Name);
         Assert.Equal(typeof(TestRequest), handler.LastContext.InputType);
@@ -359,13 +359,13 @@ public sealed class AuthorizationInvocationFilterTests
 
     private static InvocationContext CreateRequestContext(string serviceMethodName, Type? responseType = null, string? handlerMethodName = null, InvocationOrigin origin = InvocationOrigin.Http)
     {
-        var serviceMethod = typeof(TestService).GetMethod(serviceMethodName)!;
+        var serviceMethod = typeof(ITestService).GetMethod(serviceMethodName)!;
         var handlerMethod = typeof(TestHandler).GetMethod(handlerMethodName ?? nameof(TestHandler.AllowAnonymousHandler))!;
         return new InvocationContext
         {
             HandlerType = typeof(TestHandler),
             HandlerMethodInfo = handlerMethod,
-            Operation = new InvocationTestDescriptor(typeof(TestService), (serviceMethod).Name, typeof(TestRequest), responseType ?? typeof(Testing.TestOutcome)),
+            Operation = new InvocationTestDescriptor(typeof(ITestService), (serviceMethod).Name, typeof(TestRequest), responseType ?? typeof(Testing.TestOutcome)),
             Origin = origin
         };
     }
@@ -376,7 +376,7 @@ public sealed class AuthorizationInvocationFilterTests
         {
             HandlerMethodInfo = handlerType.GetMethod(methodName)!,
             HandlerType = handlerType,
-            Operation = new InvocationTestDescriptor(typeof(TestMessageService), nameof(TestMessageService.Handle), messageType, typeof(Empty)),
+            Operation = new InvocationTestDescriptor(typeof(ITestMessageService), nameof(ITestMessageService.Handle), messageType, typeof(Empty)),
             Origin = InvocationOrigin.Message
         };
     }
@@ -387,7 +387,7 @@ public sealed class AuthorizationInvocationFilterTests
         {
             HandlerMethodInfo = handlerType.GetMethod(methodName)!,
             HandlerType = handlerType,
-            Operation = new InvocationTestDescriptor(typeof(TestMessageService), nameof(TestMessageService.Handle), messageType, typeof(Empty)),
+            Operation = new InvocationTestDescriptor(typeof(ITestMessageService), nameof(ITestMessageService.Handle), messageType, typeof(Empty)),
             Origin = InvocationOrigin.Message
         };
     }
@@ -418,10 +418,10 @@ public sealed class AuthorizationInvocationFilterTests
     }
 
     [RequirePermission("message")]
-    private interface TestMessageService { void Handle(object input); }
+    private interface ITestMessageService { void Handle(object input); }
 
     [RequirePermission("input-type")]
-    private interface TestService
+    private interface ITestService
     {
         [RequirePermission("platform.manage")]
         void HostMethod(TestRequest request);

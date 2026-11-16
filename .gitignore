@@ -323,3 +323,6 @@ appsettings.Development.json
 .dotnet/
 # Persistent local data for the standalone notification demo
 sample/NOF.Sample.Notifications/notifications.db*
+
+# Repository frontend formatting tools
+/node_modules/

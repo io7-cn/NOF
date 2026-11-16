@@ -6,7 +6,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 
 public class NOFDbContext : DbContext
 {
-    private static long _lastDeletedAtUnixTime;
+    private static long LastDeletedAtUnixTime;
 
     private readonly NOFTenantDbContextOptionsExtension _tenantOptions;
     private readonly NOFModelCreatingDbContextOptionsExtension _modelCreatingOptions;
@@ -160,9 +160,9 @@ public class NOFDbContext : DbContext
 
         while (true)
         {
-            var lastUnixTime = Volatile.Read(ref _lastDeletedAtUnixTime);
+            var lastUnixTime = Volatile.Read(ref LastDeletedAtUnixTime);
             var nextUnixTime = Math.Max(unixTime, lastUnixTime + 1);
-            if (Interlocked.CompareExchange(ref _lastDeletedAtUnixTime, nextUnixTime, lastUnixTime) == lastUnixTime)
+            if (Interlocked.CompareExchange(ref LastDeletedAtUnixTime, nextUnixTime, lastUnixTime) == lastUnixTime)
             {
                 return nextUnixTime;
             }

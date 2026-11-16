@@ -54,7 +54,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
     [Fact]
     public async Task ExplicitUnderlyingDefaultConvertedToNullable_ReportsNOF018()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -65,7 +65,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF018");
     }
@@ -73,7 +73,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
     [Fact]
     public async Task NullableValueObjectDefault_DoesNotReportNOF018()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -85,7 +85,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF018");
     }
@@ -93,7 +93,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
     [Fact]
     public async Task ImplicitAndGenericZeroInitialization_DoNotReportNOF018()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System;
             namespace Test;
@@ -110,7 +110,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF018");
     }
@@ -118,7 +118,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
     [Fact]
     public async Task FactoryAndUnrelatedStructInitialization_DoNotReportNOF018()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -132,7 +132,7 @@ public sealed class ValueObjectInitializationAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF018");
     }

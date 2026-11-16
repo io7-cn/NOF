@@ -18,7 +18,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
     private const string NewableAttributeMetadataName = "NOF.Domain.NewableValueObjectAttribute";
     private const string LengthAttributeMetadataName = "NOF.Domain.ValueObjectLengthAttribute";
 
-    private static readonly DiagnosticDescriptor _mustBePartialDescriptor = new(
+    private static readonly DiagnosticDescriptor MustBePartialDescriptor = new(
         id: "NOF010",
         title: "ValueObject struct must be partial",
         messageFormat: "'{0}' implements IValueObject<T> but is not declared as partial",
@@ -26,7 +26,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _newableMustBeLongDescriptor = new(
+    private static readonly DiagnosticDescriptor NewableMustBeLongDescriptor = new(
         id: "NOF012",
         title: "[NewableValueObject] requires IValueObject<long>",
         messageFormat: "'{0}' is annotated with [NewableValueObject] but its primitive type is '{1}'. Only IValueObject<long> is supported.",
@@ -34,7 +34,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _nullableUnderlyingTypeDescriptor = new(
+    private static readonly DiagnosticDescriptor NullableUnderlyingTypeDescriptor = new(
         id: "NOF011",
         title: "ValueObject underlying type should not be nullable",
         messageFormat: "'{0}' uses a nullable underlying type. Use a non-nullable underlying type and apply nullable at the usage site instead.",
@@ -42,7 +42,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _lengthRequiresStringDescriptor = new(
+    private static readonly DiagnosticDescriptor LengthRequiresStringDescriptor = new(
         id: "NOF016",
         title: "[ValueObjectLength] requires IValueObject<string>",
         messageFormat: "'{0}' is annotated with [ValueObjectLength] but does not implement IValueObject<string>",
@@ -50,7 +50,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor _invalidLengthDescriptor = new(
+    private static readonly DiagnosticDescriptor InvalidLengthDescriptor = new(
         id: "NOF017",
         title: "[ValueObjectLength] requires a valid length range",
         messageFormat: "'{0}' declares an invalid length range [{1}, {2}]. MinimumLength must be non-negative and cannot exceed the positive maximum length.",
@@ -129,7 +129,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
             {
                 var invalidResult = new ValueObjectResult();
                 invalidResult.Diagnostics.Add(Diagnostic.Create(
-                    _lengthRequiresStringDescriptor,
+                    LengthRequiresStringDescriptor,
                     syntax.Identifier.GetLocation(),
                     symbol.Name));
                 return invalidResult;
@@ -143,7 +143,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         // Must be partial
         if (syntax.Modifiers.All(m => m.Text != "partial"))
         {
-            result.Diagnostics.Add(Diagnostic.Create(_mustBePartialDescriptor, syntax.Identifier.GetLocation(), symbol.Name));
+            result.Diagnostics.Add(Diagnostic.Create(MustBePartialDescriptor, syntax.Identifier.GetLocation(), symbol.Name));
             return result; // no code gen
         }
 
@@ -163,7 +163,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         if (primitiveNullableAnnotation == NullableAnnotation.Annotated || primitiveIsNullableValueType)
         {
             result.Diagnostics.Add(Diagnostic.Create(
-                _nullableUnderlyingTypeDescriptor,
+                NullableUnderlyingTypeDescriptor,
                 syntax.Identifier.GetLocation(),
                 symbol.Name));
         }
@@ -175,7 +175,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
         if (hasNewableAttribute && primitiveType.SpecialType != SpecialType.System_Int64)
         {
             result.Diagnostics.Add(Diagnostic.Create(
-                _newableMustBeLongDescriptor,
+                NewableMustBeLongDescriptor,
                 syntax.Identifier.GetLocation(),
                 symbol.Name, primitiveName));
             return result; // no code gen
@@ -189,7 +189,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
                 || primitiveNullableAnnotation == NullableAnnotation.Annotated)
             {
                 result.Diagnostics.Add(Diagnostic.Create(
-                    _lengthRequiresStringDescriptor,
+                    LengthRequiresStringDescriptor,
                     syntax.Identifier.GetLocation(),
                     symbol.Name));
                 return result;
@@ -202,7 +202,7 @@ public class ValueObjectGenerator : IIncrementalGenerator
             if (maximumLength is null or <= 0 || minimumLength < 0 || minimumLength > maximumLength)
             {
                 result.Diagnostics.Add(Diagnostic.Create(
-                    _invalidLengthDescriptor,
+                    InvalidLengthDescriptor,
                     syntax.Identifier.GetLocation(),
                     symbol.Name,
                     minimumLength,

@@ -1,27 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Library</OutputType>
-
     <!-- AOT Compatibility -->
     <IsAotCompatible>true</IsAotCompatible>
     <VerifyReferenceAotCompatibility>true</VerifyReferenceAotCompatibility>
-    
     <!-- NuGet Package Settings -->
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Contract</PackageId>
     <Description>Contract layer for the NOF Framework — transport-independent application service contracts, messages and declared expected business outcomes.</Description>
-  </PropertyGroup>	
-
-	<ItemGroup>
-		<None Include="..\NOF.Contract.SourceGenerator\bin\$(Configuration)\netstandard2.0\NOF.Contract.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-	</ItemGroup>
-
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\NOF.Contract.SourceGenerator\bin\$(Configuration)\netstandard2.0\NOF.Contract.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
   </ItemGroup>
-
 </Project>

@@ -10,7 +10,7 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class ValueObjectNormalizeAnalyzerTests
 {
-    private static readonly Type[] _refs =
+    private static readonly Type[] Refs =
     [
         typeof(IValueObject<>),
         typeof(NewableValueObjectAttribute),
@@ -19,7 +19,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
 
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
-        var extraReferences = _refs.Select(t => t.ToMetadataReference()).ToArray();
+        var extraReferences = Refs.Select(t => t.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
 
         var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ValueObjectNormalizeAnalyzer());
@@ -72,7 +72,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
     [Fact]
     public async Task Normalize_CallingFrom_ReportsNOF013()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -82,14 +82,14 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF013" && d.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
     public async Task Normalize_CallingIsValid_ReportsNOF014()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -105,14 +105,14 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF014" && d.Severity == DiagnosticSeverity.Warning);
     }
 
     [Fact]
     public async Task Normalize_WithPureNormalization_DoesNotReportDiagnostics()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -122,7 +122,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.DoesNotContain(diagnostics, d => d.Id is "NOF013" or "NOF014");
     }
 }

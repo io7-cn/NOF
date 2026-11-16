@@ -1,24 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-
     <IsAotCompatible>true</IsAotCompatible>
-
     <PackageId>NOF.Hosting</PackageId>
     <Description>Native host integration for NOF — application parts, deployment options, and lazy services.</Description>
   </PropertyGroup>
-
   <ItemGroup>
     <InternalsVisibleTo Include="NOF.Infrastructure" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
   </ItemGroup>
-
-
 </Project>

@@ -69,7 +69,11 @@ public sealed class AmbientBindingTests
     {
         string? observedTenant = null;
         var services = new ServiceCollection();
-        services.AddScoped<IIdGenerator>(_ => { observedTenant = Context.Current.TenantId; return new TestGenerator(); });
+        services.AddScoped<IIdGenerator>(_ =>
+        {
+            observedTenant = Context.Current.TenantId;
+            return new TestGenerator();
+        });
         services.AddScoped<IMapper>(_ => throw new InvalidOperationException("factory failed"));
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();

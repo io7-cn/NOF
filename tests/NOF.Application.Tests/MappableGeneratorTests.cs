@@ -16,7 +16,7 @@ public class MappableGeneratorTests
     // Helpers
     // -----------------------------------------------------------------------
 
-    private static readonly Type[] _extraRefs =
+    private static readonly Type[] ExtraRefs =
     [
         typeof(IServiceCollection),
         typeof(InitializedTypes),
@@ -29,15 +29,15 @@ public class MappableGeneratorTests
     ];
 
     private static GeneratorDriverRunResult RunGenerator(string source)
-        => new MappableGenerator().GetResult(source, _extraRefs);
+        => new MappableGenerator().GetResult(source, ExtraRefs);
 
     private static GeneratorDriverRunResult RunGeneratorPostGen(string source)
-        => new MappableGenerator().GetResultPostGen(source, _extraRefs);
+        => new MappableGenerator().GetResultPostGen(source, ExtraRefs);
 
     private static (GeneratorDriverRunResult Result, IReadOnlyList<Diagnostic> Diagnostics)
         RunGeneratorWithDiagnostics(string source)
     {
-        var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
+        var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, ExtraRefs);
 
         var driver = CSharpGeneratorDriver.Create([new MappableGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
@@ -54,7 +54,7 @@ public class MappableGeneratorTests
     [Fact]
     public void SimplePropertyMapping_GeneratesAdd()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -66,7 +66,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         Assert.Single(result.GeneratedTrees);
 
         var code = result.GeneratedTrees.Single().GetText().ToString();
@@ -84,7 +84,7 @@ public class MappableGeneratorTests
     [Fact]
     public void RecordConstructorMatching_UsesCtorParams()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -96,7 +96,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("new global::Test.OrderDto(src.Id, src.Name)", code);
     }
@@ -104,7 +104,7 @@ public class MappableGeneratorTests
     [Fact]
     public void UnmatchedRequiredConstructorParameter_EmitsNOF024()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -116,7 +116,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (_, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (_, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF024");
     }
@@ -128,7 +128,7 @@ public class MappableGeneratorTests
     [Fact]
     public void ExplicitDirections_GenerateBothMappings()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -141,7 +141,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("MappingRegistration.Of<global::Test.Order, global::Test.OrderDto>", code);
         Assert.Contains("MappingRegistration.Of<global::Test.OrderDto, global::Test.Order>", code);
@@ -154,7 +154,7 @@ public class MappableGeneratorTests
     [Fact]
     public void DuplicateMapping_EmitsNOF020()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -167,7 +167,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (_, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (_, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF020");
     }
 
@@ -178,7 +178,7 @@ public class MappableGeneratorTests
     [Fact]
     public void ExplicitDuplicate_EmitsNOF020()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -191,7 +191,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (_, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (_, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF020");
     }
 
@@ -202,7 +202,7 @@ public class MappableGeneratorTests
     [Fact]
     public void NonPartialStatic_EmitsNOF021()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -214,7 +214,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (_, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (_, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF021");
     }
 
@@ -225,7 +225,7 @@ public class MappableGeneratorTests
     [Fact]
     public void GenericAttribute_Works()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -237,7 +237,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("MappingRegistration.Of<global::Test.Order, global::Test.OrderDto>", code);
     }
@@ -249,7 +249,7 @@ public class MappableGeneratorTests
     [Fact]
     public void PartialDeclarations_MergeIntoOneMethod()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -265,7 +265,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         // Should produce exactly one generated file for the class
         Assert.Single(result.GeneratedTrees);
 
@@ -283,7 +283,7 @@ public class MappableGeneratorTests
     [Fact]
     public void IntToString_EmitsNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -295,7 +295,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF023");
         Assert.Contains("MappingReference.Map<", code);
@@ -309,7 +309,7 @@ public class MappableGeneratorTests
     [Fact]
     public void StringToInt_EmitsNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -321,7 +321,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF023");
         Assert.DoesNotContain("Parse(src.Id)", code);
@@ -334,7 +334,7 @@ public class MappableGeneratorTests
     [Fact]
     public void NumericToEnum_GeneratesCast()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -347,7 +347,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // int -> enum: cast
         Assert.Contains("(global::Test.Status)(src.StatusCode)", code);
@@ -356,7 +356,7 @@ public class MappableGeneratorTests
     [Fact]
     public void DirectEnumToEnumMapping_GeneratesCompilableConditionalMapping()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -368,7 +368,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGeneratorPostGen(source);
+        var result = RunGeneratorPostGen(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
 
         Assert.Contains("MappingRegistration.Of<global::Test.SourceStatus, global::Test.DestinationStatus>", code);
@@ -382,7 +382,7 @@ public class MappableGeneratorTests
     [Fact]
     public void EnumPropertyMapping_WithRegisteredEnumMapping_UsesNestedReference()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -398,7 +398,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
 
         Assert.DoesNotContain(diagnostics, d => d.Id == "NOF023");
@@ -409,7 +409,7 @@ public class MappableGeneratorTests
     [Fact]
     public void EnumPropertyMapping_WithoutRegisteredEnumMapping_EmitsNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -424,7 +424,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
 
         Assert.Contains(diagnostics, d => d.Id == "NOF023");
@@ -438,7 +438,7 @@ public class MappableGeneratorTests
     [Fact]
     public void UnknownType_EmitsNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -452,7 +452,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF023");
         Assert.Contains("MappingReference.Map<global::Test.Address, global::Test.AddressDto>(src.Addr)", code);
@@ -465,7 +465,7 @@ public class MappableGeneratorTests
     [Fact]
     public void BestConstructorSelection_PicksMostMatched()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -484,7 +484,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should pick the 2-param constructor (id, name) since it matches more
         Assert.Contains("new global::Test.OrderDto(src.Id, src.Name)", code);
@@ -499,14 +499,14 @@ public class MappableGeneratorTests
     [Fact]
     public void NoAttributes_NoGeneration()
     {
-        const string source = """
+        const string Source = """
             namespace Test
             {
                 public class Order { public int Id { get; set; } }
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         Assert.Empty(
         result.GeneratedTrees);
     }
@@ -522,7 +522,7 @@ public class MappableGeneratorTests
     [Fact]
     public void OptionalUnwrap_ToNullable_GeneratesDotValue()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Application;
             using NOF.Contract;
@@ -536,7 +536,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("src.Name.Value", code);
     }
@@ -548,7 +548,7 @@ public class MappableGeneratorTests
     [Fact]
     public void OptionalUnwrap_ToNonNullable_EmitsWarningNOF022()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Application;
             using NOF.Contract;
@@ -562,7 +562,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF022");
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("MappingReference.Map<", code);
@@ -575,7 +575,7 @@ public class MappableGeneratorTests
     [Fact]
     public void OptionalWrap_ImplicitConversion()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             namespace Test
@@ -588,7 +588,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // T 閳?Optional<T> via implicit operator 閳?direct assignment, no Optional.Of
         Assert.Contains("Name = src.Name", code);
@@ -602,7 +602,7 @@ public class MappableGeneratorTests
     [Fact]
     public void OptionalToOptional_SameType_NoConversion()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             namespace Test
@@ -615,7 +615,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Same type 閳?direct assignment, no .Value or Optional.Of
         Assert.Contains("Score = src.Score", code);
@@ -729,7 +729,7 @@ public class MappableGeneratorTests
     [Fact]
     public void IntToValueObject_WrapsViaOf()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Domain;
             namespace Test
@@ -751,7 +751,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("Score.From(src.Score)", code);
     }
@@ -763,7 +763,7 @@ public class MappableGeneratorTests
     [Fact]
     public void ValueObjectToValueObject_DifferentVoTypes_FallsBackToMapper()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Domain;
             namespace Test
@@ -793,7 +793,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF023");
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should NOT auto-unwrap and rewrap; should fall back to mapper
@@ -931,7 +931,7 @@ public class MappableGeneratorTests
     [Fact]
     public void MapperFallback_UnregisteredPair_EmitsNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -945,7 +945,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF023");
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("MappingReference.Map<", code);
@@ -958,7 +958,7 @@ public class MappableGeneratorTests
     [Fact]
     public void MapperFallback_RegisteredPair_NoNOF023()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             namespace Test
             {
@@ -973,7 +973,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
         Assert.DoesNotContain(diagnostics, d => d.Id == "NOF023");
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains("MappingReference.Map<", code);
@@ -990,7 +990,7 @@ public class MappableGeneratorTests
     [Fact]
     public void NullableValueObject_ToNullablePrimitive_UnwrapsWithHasValue()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Domain;
             namespace Test
@@ -1012,7 +1012,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should unwrap Nullable<NodeId> via .HasValue / .Value, then explicit cast to long
         Assert.Contains(".HasValue", code);
@@ -1026,7 +1026,7 @@ public class MappableGeneratorTests
     [Fact]
     public void NullablePrimitive_ToNullableValueObject_WrapsWithOf()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Domain;
             namespace Test
@@ -1048,7 +1048,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Should unwrap Nullable<long>, then wrap via NodeId.Of
         Assert.Contains(".HasValue", code);
@@ -1066,7 +1066,7 @@ public class MappableGeneratorTests
     [Fact]
     public void ListToList_RecursiveElementConversion()
     {
-        const string source = """
+        const string Source = """
             using System.Collections.Generic;
             using NOF.Application;
             namespace Test
@@ -1082,7 +1082,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Expression trees use LINQ materialization rather than collection expressions.
         Assert.Contains(".Select(", code);
@@ -1096,7 +1096,7 @@ public class MappableGeneratorTests
     [Fact]
     public void IReadOnlyListToList_RecursiveElementConversion()
     {
-        const string source = """
+        const string Source = """
             using System.Collections.Generic;
             using NOF.Application;
             namespace Test
@@ -1112,7 +1112,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         Assert.Contains(".Select(", code);
         Assert.Contains(".ToList()", code);
@@ -1155,7 +1155,7 @@ public class MappableGeneratorTests
     [Fact]
     public void ListToList_SameElementType_DirectAssignment()
     {
-        const string source = """
+        const string Source = """
             using System.Collections.Generic;
             using NOF.Application;
             namespace Test
@@ -1168,7 +1168,7 @@ public class MappableGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = result.GeneratedTrees.Single().GetText().ToString();
         // Same element type 閳?no .Select needed, just direct assignment
         Assert.Contains("Scores = src.Scores", code);

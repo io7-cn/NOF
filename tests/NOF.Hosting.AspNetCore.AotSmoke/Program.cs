@@ -15,12 +15,12 @@ using System.Text.Json.Serialization;
 
 var smokeJson = JsonSerializerOptions.CreateNOF();
 smokeJson.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default);
-Expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
-Expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
-Expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
+expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
+expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
+expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
     "Custom IsValid message was lost by TryFrom");
 var nameJson = JsonSerializer.Serialize(nodeName, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
-Expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
+expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
     "Value-object From conversion did not round-trip without reflection");
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
@@ -50,11 +50,11 @@ using (var scope = app.Services.CreateScope())
         .EnqueueAsync(new SmokeIntent("typed"), Context.Empty.WithItem("correlation", "aot").WithItem("count", 3));
     var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
         ?? throw new InvalidOperationException("The outbox did not stage its snapshot");
-    Expect(record.Id == messageId && record.MessageType == typeof(SmokeIntent).ToString(),
+    expect(record.Id == messageId && record.MessageType == typeof(SmokeIntent).ToString(),
         "Outbox identity or schema was lost");
     var stagedHeaders = scope.ServiceProvider.GetRequiredService<IObjectSerializer>().Deserialize<Dictionary<string, string?>>(record.Headers)!;
     var stagedContext = System.Text.Json.Nodes.JsonNode.Parse(stagedHeaders[NOFAbstractionConstants.Transport.Headers.Context]!)!.AsObject();
-    Expect(stagedContext["count"]!.GetValue<int>() == 3, "The Outbox did not persist the complete JSON context");
+    expect(stagedContext["count"]!.GetValue<int>() == 3, "The Outbox did not persist the complete JSON context");
     await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType)
         .Deliver(scope.ServiceProvider, record, new OutboxDeliveryContext
         {
@@ -63,7 +63,7 @@ using (var scope = app.Services.CreateScope())
             Attempt = 1,
             Headers = new Dictionary<string, string?>()
         }, CancellationToken.None);
-    Expect(SmokeIntentHandler.Delivered == "typed", "The statically registered outbox handler did not run");
+    expect(SmokeIntentHandler.Delivered == "typed", "The statically registered outbox handler did not run");
 }
 app.Urls.Add("http://127.0.0.1:0");
 using (var scope = app.Services.CreateScope())
@@ -71,23 +71,23 @@ using (var scope = app.Services.CreateScope())
     using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
     var plan = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>()
         .Describe(OrderServer.Read.Descriptor, InvocationOrigin.Http);
-    Expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
+    expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
         "Generated filter catalog was not captured without reflection");
-    Expect(ValidateReadOrder.FailureCases.Single().Title == "order.page", "Filter error code was lost");
+    expect(ValidateReadOrder.FailureCases.Single().Title == "order.page", "Filter error code was lost");
     var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(preview is OrderDto { Label: "preview" }, "Operations sharing request/response types lost their identity");
+    expect(preview is OrderDto { Label: "preview" }, "Operations sharing request/response types lost their identity");
     var plain = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(plain is OrderDto { Label: "local" }, "Local invocation failed");
-    Expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
+    expect(plain is OrderDto { Label: "local" }, "Local invocation failed");
+    expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
         "Nullable local response was rejected");
     var decision = await PlainOrderService.Decide.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
-    Expect(InvocationResult.Value(decision) is Failure { Title: "order.missing" }, "Business union invocation failed");
+    expect(InvocationResult.Value(decision) is Failure { Title: "order.missing" }, "Business union invocation failed");
     var missing = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
-    Expect(InvocationResult.Value(missing) is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
+    expect(InvocationResult.Value(missing) is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
     var conflict = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
         new ReadOrderRequest { Id = Guid.Empty, Page = 0 }, Context.Empty);
-    Expect(InvocationResult.Value(conflict) is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
+    expect(InvocationResult.Value(conflict) is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
         "Typed expected failure data was lost");
 }
 var receiptId = Guid.NewGuid();
@@ -97,96 +97,96 @@ await app.Services.ExecuteMessageAsync(app.Services.GetRequiredService<Applicati
     {
         [NOFAbstractionConstants.Transport.Headers.Context] = Context.Empty.WithItem("correlation", "aot").WithItem("count", 3).Items.ToJsonString()
     }, default);
-Expect(ReceiveOneWaySmoke.Completed.Task.IsCompleted, "The endpoint did not execute its handler directly");
+expect(ReceiveOneWaySmoke.Completed.Task.IsCompleted, "The endpoint did not execute its handler directly");
 await app.StartAsync();
 await ReceiveOneWaySmoke.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
 var oneWayOperation = app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke));
-Expect(oneWayOperation.IsOneWay && oneWayOperation.ResultCases.Count == 0 && oneWayOperation.ContractType is null,
+expect(oneWayOperation.IsOneWay && oneWayOperation.ResultCases.Count == 0 && oneWayOperation.ContractType is null,
     "One-way metadata exposed a business reply case");
 using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 var id = Guid.NewGuid();
-Expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
+expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
     "Inherited failure types changed Contract identity");
-Expect(typeof(ExpectedOrderService.Evaluate.Result).Assembly == typeof(ExpectedOrderService).Assembly,
+expect(typeof(ExpectedOrderService.Evaluate.Result).Assembly == typeof(ExpectedOrderService).Assembly,
     "Generated result is not owned by Application");
-Expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(ExpectedOrderService.Evaluate.Missing),
+expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(ExpectedOrderService.Evaluate.Missing),
     "Inherited constructor did not return the canonical failure type");
 var conflictData = new OrderConflict(id);
-Expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
+expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
     "Inherited constructor replaced error data");
-Expect(new ExpectedOrderService.Evaluate.Missing().Title == "404", "Inherited failure lost its declared Title");
+expect(new ExpectedOrderService.Evaluate.Missing().Title == "404", "Inherited failure lost its declared Title");
 var savedJson = JsonSerializer.Serialize(Empty.Instance, smokeJson.GetRequiredTypeInfo<Empty>());
-Expect(savedJson == "{}", "Payload-free success serialized metadata");
-Expect(JsonSerializer.Deserialize(savedJson, smokeJson.GetRequiredTypeInfo<Empty>()) is Empty,
+expect(savedJson == "{}", "Payload-free success serialized metadata");
+expect(JsonSerializer.Deserialize(savedJson, smokeJson.GetRequiredTypeInfo<Empty>()) is Empty,
     "Payload-free union did not round-trip without reflection");
 using var update = await http.PutAsync($"/native/orders/{id}", new StringContent(
     $$"""{"id":"{{Guid.NewGuid()}}","state":"shipped"}""", Encoding.UTF8, "application/json"));
 update.EnsureSuccessStatusCode();
 var updated = await update.Content.ReadFromJsonAsync(smokeJson.GetRequiredTypeInfo<OrderDto>());
-Expect(updated == new OrderDto(id, "shipped", "default"), "Path identity/body binding did not survive AOT");
+expect(updated == new OrderDto(id, "shipped", "default"), "Path identity/body binding did not survive AOT");
 var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", smokeJson.GetRequiredTypeInfo<OrderDto>());
-Expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
+expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
 using var nullable = await http.GetAsync($"/native/nullable/{id}");
-Expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
+expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
 using var directNullable = await http.GetAsync($"/native/internal/{id}");
-Expect(directNullable.StatusCode == HttpStatusCode.OK && await directNullable.Content.ReadAsStringAsync() == "null",
+expect(directNullable.StatusCode == HttpStatusCode.OK && await directNullable.Content.ReadAsStringAsync() == "null",
     "Standalone nullable handler did not survive static discovery and trimming");
 using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
-Expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
+expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
 var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", smokeJson.GetRequiredTypeInfo<OrderReadReceipt>());
-Expect(withMessage!.Order.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
+expect(withMessage!.Order.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
 using var denied = await http.GetAsync($"/native/protected/{id}");
-Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count == 0,
+expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count == 0,
     "Application authorization must not invent an unconfigured authentication challenge");
 using var invalid = await http.GetAsync($"/native/orders/{id}?page=-1");
-Expect(invalid.StatusCode == HttpStatusCode.BadRequest, "Inbound policy rejection was lost");
+expect(invalid.StatusCode == HttpStatusCode.BadRequest, "Inbound policy rejection was lost");
 using var problem = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
-Expect(problem.RootElement.GetProperty("title").GetString() == "order.page", "Policy rejection details were lost");
+expect(problem.RootElement.GetProperty("title").GetString() == "order.page", "Policy rejection details were lost");
 using var failure = await http.PutAsJsonAsync($"/native/orders/{id}", new UpdateBody { State = "fail" }, smokeJson.GetRequiredTypeInfo<UpdateBody>());
-Expect(failure.StatusCode == HttpStatusCode.BadRequest, "Business failure was not mapped");
+expect(failure.StatusCode == HttpStatusCode.BadRequest, "Business failure was not mapped");
 using var badBody = await http.PutAsync($"/native/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
-Expect(badBody.StatusCode == HttpStatusCode.BadRequest, "Required body member was omitted");
+expect(badBody.StatusCode == HttpStatusCode.BadRequest, "Required body member was omitted");
 using var badPath = await http.GetAsync("/native/orders/invalid");
-Expect(badPath.StatusCode == HttpStatusCode.NotFound, "Guid route constraint was ignored");
+expect(badPath.StatusCode == HttpStatusCode.NotFound, "Guid route constraint was ignored");
 foreach (var path in new[] { "/Read", "/rpc", $"/orders/{id}" })
 {
     using var missing = await http.GetAsync(path);
-    Expect(missing.StatusCode == HttpStatusCode.NotFound, "An implicit legacy route was exposed");
+    expect(missing.StatusCode == HttpStatusCode.NotFound, "An implicit legacy route was exposed");
 }
 using var expectedMissing = await http.GetAsync($"/native/expected/{id}?page=-1");
-Expect(expectedMissing.StatusCode == HttpStatusCode.NotFound, "Declared missing case did not map to 404");
+expect(expectedMissing.StatusCode == HttpStatusCode.NotFound, "Declared missing case did not map to 404");
 using var expectedConflict = await http.GetAsync($"/native/expected/{id}?page=0");
-Expect(expectedConflict.StatusCode == HttpStatusCode.Conflict, "Declared typed conflict did not map to 409");
+expect(expectedConflict.StatusCode == HttpStatusCode.Conflict, "Declared typed conflict did not map to 409");
 NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result deleteOutcome =
     new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.HasChildren(new NOF.Sample.NodeHasChildrenError(42));
 var deleteJson = JsonSerializer.Serialize(deleteOutcome,
     smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredDelete = JsonSerializer.Deserialize(deleteJson,
     smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
-Expect(restoredDelete.Match(_ => 0L, _ => -1L, error => error.Error.NodeId) == 42,
+expect(restoredDelete.Match(_ => 0L, _ => -1L, error => error.Error.NodeId) == 42,
     "Source-generated expected-outcome metadata did not round-trip custom failure data without reflection");
 deleteOutcome = new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.NotFound("Missing node");
 var missingJson = JsonSerializer.Serialize(deleteOutcome,
     smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
 var restoredMissing = JsonSerializer.Deserialize(missingJson,
     smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
-Expect(restoredMissing.Match(_ => "success", error => error.Detail, _ => "children") == "Missing node",
+expect(restoredMissing.Match(_ => "success", error => error.Detail, _ => "children") == "Missing node",
     "Source-generated expected-outcome metadata lost default Error data");
 using var openApi = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
 var put = openApi.RootElement.GetProperty("paths").GetProperty("/native/orders/{id}").GetProperty("put");
 var parameter = put.GetProperty("parameters").EnumerateArray().Single();
-Expect(parameter.GetProperty("name").GetString() == "id", "OpenAPI omitted the path parameter");
+expect(parameter.GetProperty("name").GetString() == "id", "OpenAPI omitted the path parameter");
 var schema = put.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema");
 if (schema.TryGetProperty("$ref", out var reference))
 {
     schema = openApi.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(reference.GetString()!.Split('/')[^1]);
 }
 var properties = schema.GetProperty("properties");
-Expect(properties.TryGetProperty("state", out _) && !properties.TryGetProperty("id", out _), "OpenAPI leaked path identity into body");
+expect(properties.TryGetProperty("state", out _) && !properties.TryGetProperty("id", out _), "OpenAPI leaked path identity into body");
 await app.StopAsync();
 Console.WriteLine("Native HTTP endpoint module smoke test passed.");
 
-static void Expect(bool condition, string message)
+static void expect(bool condition, string message)
 {
     if (!condition)
     {

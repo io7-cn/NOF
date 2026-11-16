@@ -29,7 +29,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task QueryableSelectCallingMapperMap_ReportsNOF026()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -45,7 +45,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         var diagnostic = Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
         Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
@@ -55,7 +55,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task StaticQueryableSelectCallingMapperMap_ReportsNOF026()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -71,7 +71,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
     }
@@ -79,7 +79,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task EnumerableSelectCallingMapperMap_DoesNotReportNOF026()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Collections.Generic;
             using System.Linq;
@@ -96,7 +96,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
     }
@@ -104,7 +104,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task SelectMappingTransformedValue_DoesNotReportNOF026()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -120,7 +120,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
     }
@@ -128,7 +128,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task SelectUsingNamedMapping_DoesNotReportNOF026()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -144,7 +144,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
     }
@@ -152,7 +152,7 @@ public sealed class SelectMapProjectionAnalyzerTests
     [Fact]
     public async Task UnrelatedMapMethod_DoesNotReportNOF026()
     {
-        const string source = """
+        const string Source = """
             using System.Linq;
 
             namespace Test;
@@ -171,7 +171,7 @@ public sealed class SelectMapProjectionAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF026");
     }

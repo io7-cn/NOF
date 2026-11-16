@@ -12,20 +12,57 @@ public static class MessageModelConfigurations
         {
             map.Table(nameof(NOFOutboxMessage));
             map.Lazy(false);
-            map.Id(value => value.Id, id => { id.Generator(Generators.Assigned); });
-            map.Property(value => value.CreatedAtUtc, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_CreatedAtUtc")); });
+            map.Id(value => value.Id, id =>
+            {
+                id.Generator(Generators.Assigned);
+            });
+            map.Property(value => value.CreatedAtUtc, property =>
+            {
+                property.Column(column => column.Index("IX_NOFOutboxMessage_Status_CreatedAtUtc"));
+            });
             map.Property(value => value.RetryCount, property => { });
-            map.Property(value => value.MessageType, property => { property.Length(512); property.NotNullable(true); });
-            map.Property(value => value.NextAttemptAtUtc, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_NextAttemptAtUtc")); });
-            map.Property(value => value.Payload, property => { property.Type(global::NHibernate.NHibernateUtil.BinaryBlob); });
-            map.Property(value => value.Headers, property => { property.Type(global::NHibernate.NHibernateUtil.StringClob); property.NotNullable(true); });
+            map.Property(value => value.MessageType, property =>
+            {
+                property.Length(512);
+                property.NotNullable(true);
+            });
+            map.Property(value => value.NextAttemptAtUtc, property =>
+            {
+                property.Column(column => column.Index("IX_NOFOutboxMessage_Status_NextAttemptAtUtc"));
+            });
+            map.Property(value => value.Payload, property =>
+            {
+                property.Type(global::NHibernate.NHibernateUtil.BinaryBlob);
+            });
+            map.Property(value => value.Headers, property =>
+            {
+                property.Type(global::NHibernate.NHibernateUtil.StringClob);
+                property.NotNullable(true);
+            });
             map.Property(value => value.SentAtUtc, property => { });
             map.Property(value => value.FailedAtUtc, property => { });
-            map.Property(value => value.ErrorMessage, property => { property.Length(2048); });
-            map.Property(value => value.ClaimedBy, property => { property.Length(256); property.Column(column => column.Index("IX_NOFOutboxMessage_ClaimedBy")); });
-            map.Property(value => value.ClaimExpiresAtUtc, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_ClaimExpiresAtUtc")); });
-            map.Property(value => value.Status, property => { property.Column(column => column.Index("IX_NOFOutboxMessage_Status_CreatedAtUtc,IX_NOFOutboxMessage_Status_ClaimExpiresAtUtc,IX_NOFOutboxMessage_Status_NextAttemptAtUtc")); });
-            map.Property(value => value.TraceParent, property => { property.Length(128); property.Column(column => column.Index("IX_NOFOutboxMessage_TraceParent")); });
+            map.Property(value => value.ErrorMessage, property =>
+            {
+                property.Length(2048);
+            });
+            map.Property(value => value.ClaimedBy, property =>
+            {
+                property.Length(256);
+                property.Column(column => column.Index("IX_NOFOutboxMessage_ClaimedBy"));
+            });
+            map.Property(value => value.ClaimExpiresAtUtc, property =>
+            {
+                property.Column(column => column.Index("IX_NOFOutboxMessage_Status_ClaimExpiresAtUtc"));
+            });
+            map.Property(value => value.Status, property =>
+            {
+                property.Column(column => column.Index("IX_NOFOutboxMessage_Status_CreatedAtUtc,IX_NOFOutboxMessage_Status_ClaimExpiresAtUtc,IX_NOFOutboxMessage_Status_NextAttemptAtUtc"));
+            });
+            map.Property(value => value.TraceParent, property =>
+            {
+                property.Length(128);
+                property.Column(column => column.Index("IX_NOFOutboxMessage_TraceParent"));
+            });
         });
     }
 }

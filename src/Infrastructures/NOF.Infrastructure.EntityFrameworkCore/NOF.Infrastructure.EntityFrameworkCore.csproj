@@ -1,34 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-
     <IsAotCompatible>false</IsAotCompatible>
-
     <PackageId>NOF.Infrastructure.EntityFrameworkCore</PackageId>
     <Description>Entity Framework Core persistence integration for the NOF Framework.</Description>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
-
   <ItemGroup>
     <InternalsVisibleTo Include="NOF.Infrastructure.Tests" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\NOF.Application\NOF.Application.csproj" />
     <ProjectReference Include="..\..\NOF.Hosting\NOF.Hosting.csproj" />
     <ProjectReference Include="..\..\NOF.Infrastructure\NOF.Infrastructure.csproj" />
     <ProjectReference Include="..\NOF.Infrastructure.EntityFrameworkCore.SourceGenerator\NOF.Infrastructure.EntityFrameworkCore.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-
     <None Include="..\NOF.Infrastructure.EntityFrameworkCore.SourceGenerator\bin\$(Configuration)\netstandard2.0\NOF.Infrastructure.EntityFrameworkCore.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
-
 </Project>

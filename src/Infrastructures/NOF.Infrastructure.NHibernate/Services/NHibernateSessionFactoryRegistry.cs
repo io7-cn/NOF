@@ -13,9 +13,9 @@ namespace NOF.Infrastructure.NHibernate;
 
 public sealed class NHibernateSessionFactoryRegistry : IDisposable
 {
-    private readonly ConcurrentDictionary<string, Lazy<ISessionFactory>> SessionFactories = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> SchemaLocks = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, byte> InitializedSchemas = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Lazy<ISessionFactory>> _sessionFactories = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _schemaLocks = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _initializedSchemas = new(StringComparer.Ordinal);
     private readonly NHibernateConfigurationOptions _options;
     private readonly IEnumerable<Action<ModelMapper>> _configurations;
     private readonly Microsoft.Extensions.DependencyInjection.IServiceProviderIsService _capabilities;
@@ -37,7 +37,7 @@ public sealed class NHibernateSessionFactoryRegistry : IDisposable
     {
         tenantId = TenantId.Normalize(tenantId);
         var key = GetFactoryKey(tenantId);
-        var sessionFactory = SessionFactories.GetOrAdd(
+        var sessionFactory = _sessionFactories.GetOrAdd(
             key,
             _ => new Lazy<ISessionFactory>(() => BuildSessionFactory(tenantId), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
@@ -64,10 +64,13 @@ public sealed class NHibernateSessionFactoryRegistry : IDisposable
 
         var mapper = new ModelMapper();
         if (_capabilities.IsService(typeof(IOutboxStore)))
-        { MessageModelConfigurations.Outbox(mapper); }
+        {
+            MessageModelConfigurations.Outbox(mapper);
+        }
         foreach (var configure in _configurations)
-        { configure(mapper); }
-
+        {
+            configure(mapper);
+        }
         configuration.AddMapping(mapper.CompileMappingForAllExplicitlyAddedEntities());
         EnsureSchemaInitialized(configuration, connectionString);
 
@@ -84,22 +87,22 @@ public sealed class NHibernateSessionFactoryRegistry : IDisposable
         }
 
         var key = connectionString;
-        if (InitializedSchemas.ContainsKey(key))
+        if (_initializedSchemas.ContainsKey(key))
         {
             return;
         }
 
-        var schemaLock = SchemaLocks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        var schemaLock = _schemaLocks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
         schemaLock.Wait();
         try
         {
-            if (InitializedSchemas.ContainsKey(key))
+            if (_initializedSchemas.ContainsKey(key))
             {
                 return;
             }
 
             new SchemaUpdate(configuration).Execute(false, true);
-            InitializedSchemas.TryAdd(key, 0);
+            _initializedSchemas.TryAdd(key, 0);
         }
         finally
         {
@@ -113,10 +116,12 @@ public sealed class NHibernateSessionFactoryRegistry : IDisposable
     /// <summary>Releases the native factories owned by this host.</summary>
     public void Dispose()
     {
-        foreach (var factory in SessionFactories.Values)
+        foreach (var factory in _sessionFactories.Values)
         {
             if (factory.IsValueCreated)
-            { factory.Value.Dispose(); }
+            {
+                factory.Value.Dispose();
+            }
         }
     }
 }

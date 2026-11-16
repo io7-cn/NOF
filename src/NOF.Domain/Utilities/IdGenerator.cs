@@ -9,12 +9,12 @@ namespace NOF.Domain;
 /// </remarks>
 public static class IdGenerator
 {
-    private static readonly AsyncLocal<Func<IIdGenerator?>?> _currentGenerator = new();
+    private static readonly AsyncLocal<Func<IIdGenerator?>?> CurrentGenerator = new();
 
     /// <summary>
     /// Gets the ambient <see cref="IIdGenerator"/> for the current async flow, or null when none is bound.
     /// </summary>
-    public static IIdGenerator? Current => _currentGenerator.Value?.Invoke();
+    public static IIdGenerator? Current => CurrentGenerator.Value?.Invoke();
 
     /// <summary>
     /// Pushes an ambient <see cref="IIdGenerator"/> into the current async flow for convenience API usage.
@@ -24,8 +24,8 @@ public static class IdGenerator
 
     private static IDisposable PushFactory(Func<IIdGenerator?> resolve)
     {
-        var previous = _currentGenerator.Value;
-        _currentGenerator.Value = resolve;
+        var previous = CurrentGenerator.Value;
+        CurrentGenerator.Value = resolve;
         return new AmbientIdGeneratorScope(previous);
     }
 
@@ -56,7 +56,7 @@ public static class IdGenerator
                 return;
             }
 
-            _currentGenerator.Value = _previousGenerator;
+            CurrentGenerator.Value = _previousGenerator;
             _disposed = true;
         }
     }

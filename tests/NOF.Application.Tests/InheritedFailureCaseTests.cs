@@ -17,7 +17,7 @@ public sealed class InheritedFailureCaseTests
     [InlineData(true)]
     public async Task InheritedTypes_ShouldBelongToApplication(bool reverseOrder)
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using NOF.Contract;
             using System.Linq;
@@ -71,7 +71,7 @@ public sealed class InheritedFailureCaseTests
                 }
             }
             """;
-        var compilation = CSharpCompilation.CreateCompilation("InheritedFailures_" + Guid.NewGuid().ToString("N"), source, true,
+        var compilation = CSharpCompilation.CreateCompilation("InheritedFailures_" + Guid.NewGuid().ToString("N"), Source, true,
             typeof(ApplicationService<>), typeof(OperationHandler<,>), typeof(FailureCaseAttribute), typeof(Context),
             typeof(ServiceProviderServiceExtensions), typeof(System.Text.Json.Serialization.JsonUnionAttribute));
         ISourceGenerator[] generators = [new ApplicationServiceAutoInjectGenerator().AsSourceGenerator(), new ApplicationServiceGenerator().AsSourceGenerator()];

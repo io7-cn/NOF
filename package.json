@@ -1,0 +1,17 @@
+{
+  "name": "nof-development-tools",
+  "private": true,
+  "description": "Pinned formatting tools for maintained NOF frontend assets.",
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=22.14.0 <23",
+    "npm": ">=10 <11"
+  },
+  "scripts": {
+    "format:frontend": "prettier --write \"**/*.{js,css,html}\"",
+    "check:frontend": "prettier --check \"**/*.{js,css,html}\""
+  },
+  "devDependencies": {
+    "prettier": "3.10.1"
+  }
+}

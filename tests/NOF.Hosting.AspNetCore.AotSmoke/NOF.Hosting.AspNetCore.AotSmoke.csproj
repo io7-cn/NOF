@@ -7,7 +7,6 @@
     <PublishAot>true</PublishAot>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\sample\NOF.Sample.Application\NOF.Sample.Application.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />

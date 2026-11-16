@@ -36,8 +36,9 @@ public sealed class OutboxCleanupBackgroundService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.RunWorkers)
-        { return; }
-
+        {
+            return;
+        }
         _logger.LogInformation(
             "Outbox cleanup service started. Cleanup interval: {Interval}, Retention period: {Retention}",
             _options.CleanupInterval, _options.RetentionPeriod);

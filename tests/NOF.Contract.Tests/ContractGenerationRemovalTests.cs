@@ -15,7 +15,7 @@ public sealed class ContractGenerationRemovalTests
         Assert.Equal("NOF.Contract.SourceGenerator", assembly.GetName().Name);
         Assert.DoesNotContain(assembly.GetTypes(), type => typeof(IIncrementalGenerator).IsAssignableFrom(type)
             || typeof(ISourceGenerator).IsAssignableFrom(type) || type.IsDefined(typeof(GeneratorAttribute), false));
-        const string source = """
+        const string Source = """
             using NOF.Contract;
             public sealed record Query;
             public interface IService : IApplicationService
@@ -24,7 +24,7 @@ public sealed class ContractGenerationRemovalTests
                 Empty Run(Query request);
             }
             """;
-        var compilation = CSharpCompilation.CreateCompilation("DeclarationsOnly", source, true, typeof(IApplicationService));
+        var compilation = CSharpCompilation.CreateCompilation("DeclarationsOnly", Source, true, typeof(IApplicationService));
         compilation = compilation.RemoveReferences(compilation.References.Where(reference =>
             Path.GetFileNameWithoutExtension(reference.Display) is { } name
             && name.StartsWith("NOF.", StringComparison.Ordinal) && name != "NOF.Contract"));

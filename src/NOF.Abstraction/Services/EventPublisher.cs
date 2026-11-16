@@ -11,7 +11,7 @@ namespace NOF.Abstraction;
 /// </remarks>
 public static class EventPublisher
 {
-    private static readonly AsyncLocal<Func<IEventPublisher?>?> _currentPublisher = new();
+    private static readonly AsyncLocal<Func<IEventPublisher?>?> CurrentPublisher = new();
 
     /// <summary>
     /// Pushes an ambient <see cref="IEventPublisher"/> into the current async flow for convenience API usage.
@@ -21,8 +21,8 @@ public static class EventPublisher
 
     private static IDisposable PushFactory(Func<IEventPublisher?> resolve)
     {
-        var previous = _currentPublisher.Value;
-        _currentPublisher.Value = resolve;
+        var previous = CurrentPublisher.Value;
+        CurrentPublisher.Value = resolve;
         return new AmbientPublisherScope(previous);
     }
 
@@ -99,7 +99,7 @@ public static class EventPublisher
     }
 
     private static IEventPublisher GetCurrentPublisher()
-        => _currentPublisher.Value?.Invoke()
+        => CurrentPublisher.Value?.Invoke()
             ?? throw new InvalidOperationException("No ambient IEventPublisher is available for the current async flow.");
 
     private sealed class AmbientPublisherScope : IDisposable
@@ -119,7 +119,7 @@ public static class EventPublisher
                 return;
             }
 
-            _currentPublisher.Value = _previous;
+            CurrentPublisher.Value = _previous;
             _disposed = true;
         }
     }

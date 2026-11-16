@@ -24,7 +24,7 @@ public sealed class PureServiceContractTests
     [Fact]
     public async Task PlainContract_AllowsConstructedRequestsAndNullableBusinessResponses()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Contract;
             public sealed class Query(long id) { public long Id { get; } = id; }
@@ -37,7 +37,7 @@ public sealed class PureServiceContractTests
                 NOF.Testing.TestOutcome<Dto> Save(Query request);
             }
             """;
-        Assert.Empty(await DiagnoseAsync(source));
+        Assert.Empty(await DiagnoseAsync(Source));
     }
 
     [Theory]

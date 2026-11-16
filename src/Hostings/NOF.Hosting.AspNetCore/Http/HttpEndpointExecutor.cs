@@ -21,9 +21,6 @@ using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 
 namespace NOF.Hosting.AspNetCore;
 
-/// <summary>One resolved CLR/JSON member and external source.</summary>
-public sealed record HttpBoundMember(string ClrName, string JsonName, Type ValueType, HttpInputLocation Source, string SourceName, bool Required, bool AllowsNull, bool HasDefault, object? DefaultValue);
-
 /// <summary>A frozen typed operation binding, built only after native endpoint conventions finish.</summary>
 public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicConstructors)] TRequest>
 {
@@ -182,7 +179,9 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         foreach (var mapping in mappings.Where(item => item.Endpoint))
         {
             if (!cases.Contains(mapping.SourceType))
-            { throw new InvalidOperationException($"Response '{mapping.SourceType}' cannot occur in '{operation.Id}'."); }
+            {
+                throw new InvalidOperationException($"Response '{mapping.SourceType}' cannot occur in '{operation.Id}'.");
+            }
         }
         var selected = cases.ToFrozenDictionary(type => type, type => mappings.LastOrDefault(item => item.SourceType == type)
             ?? new HttpResponseMapping(type, null, null, null, false));

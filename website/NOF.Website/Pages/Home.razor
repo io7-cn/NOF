@@ -28,7 +28,8 @@
         <a href="#principles">Why NOF</a>
         <a href="#architecture">Architecture</a>
         <a href="#quickstart">Quick start</a>
-        <a href="design/">Design</a>
+        <a href="en/design/index.html">Design</a>
+        <a href="zh-CN/overview.html">中文文档</a>
         <a class="nav-docs" href="api/">API Reference <span aria-hidden="true">↗</span></a>
     </nav>
 </header>
@@ -45,7 +46,7 @@
             </p>
             <div class="hero-actions">
                 <a class="button button-primary" href="#quickstart">Start building <span aria-hidden="true">→</span></a>
-                <a class="button button-secondary" href="https://github.com/XmmShp/NOF" target="_blank" rel="noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
+                <a class="button button-secondary" href="https://github.com/io7-cn/NOF" target="_blank" rel="noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
             </div>
             <p class="hero-note"><span>Apache 2.0</span><span>Open source</span><span>Convention-driven</span></p>
         </div>
@@ -57,23 +58,24 @@
                     <span>Program.cs</span>
                     <span class="code-status">NOF / READY</span>
                 </div>
-                <pre><code><span class="code-keyword">var</span> builder = <span class="code-type">NOFWebApplicationBuilder</span>
-    .<span class="code-method">Create</span>(args);
+                <pre><code><span class="code-keyword">var</span> builder = <span class="code-type">WebApplication</span>
+    .<span class="code-method">CreateBuilder</span>(args).<span class="code-method">AddNOF</span>();
 
 builder.<span class="code-method">AddApplicationPart</span>(
     <span class="code-keyword">typeof</span>(OrderService).Assembly);
-
-builder.<span class="code-method">UseDbContext</span>&lt;OrdersDbContext&gt;()
-    .<span class="code-method">WithTenantMode</span>(TenantMode.DatabasePerTenant)
-    .<span class="code-method">MigrateOnInitialize</span>();
-
 builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&gt;();
 
-<span class="code-keyword">var</span> app = <span class="code-keyword">await</span> builder.<span class="code-method">BuildAsync</span>();
+builder.<span class="code-method">UseDbContext</span>&lt;OrdersDbContext&gt;(
+    (_, ef) =&gt; ef.<span class="code-method">UseNpgsql</span>(connectionString))
+    .<span class="code-method">MigrateOnStart</span>();
+
+<span class="code-keyword">var</span> app = builder.<span class="code-method">Build</span>();
+app.<span class="code-method">UseNOF</span>();
+app.<span class="code-method">MapOrderEndpoints</span>();
 <span class="code-keyword">await</span> app.<span class="code-method">RunAsync</span>();</code></pre>
                 <div class="code-footer">
                     <span><i></i> Source generators active</span>
-                    <span>12 lines to a real service</span>
+                    <span>Native host · explicit endpoints</span>
                 </div>
             </div>
             <div class="orbit orbit-one" aria-hidden="true"></div>
@@ -101,7 +103,7 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
                 <span class="card-index">01</span>
                 <div class="card-symbol" aria-hidden="true">{ }</div>
                 <h3>Contract first</h3>
-                <p>Define typed RPC contracts once. NOF generates clients, servers, HTTP endpoints, and dispatch wiring at compile time.</p>
+                <p>Define typed business contracts. NOF generates operation bases and registrations; native endpoint modules own HTTP exposure.</p>
                 <ul>
                     <li>Typed request and response models</li>
                     <li>Streaming RPC with SSE</li>
@@ -113,11 +115,11 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
                 <span class="card-index">02</span>
                 <div class="card-symbol" aria-hidden="true">→□</div>
                 <h3>Reliable by design</h3>
-                <p>Inbox/outbox, ordered delivery, commands, and notifications are part of one model—not a collection of afterthoughts.</p>
+                <p>Stage transactional Outbox intents, publish through native transports, and enforce idempotency in the consuming business operation.</p>
                 <ul>
                     <li>Transactional message dispatch</li>
                     <li>RabbitMQ and in-memory transports</li>
-                    <li>Idempotent inbound processing</li>
+                    <li>Business-owned consumer idempotency</li>
                 </ul>
             </article>
 
@@ -144,7 +146,7 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
                     Each layer has a job. Dependencies point inward. Infrastructure stays replaceable,
                     while source generators keep the boundaries fast and explicit.
                 </p>
-                <a class="text-link" href="design/">Explore the design notes <span aria-hidden="true">→</span></a>
+                <a class="text-link" href="en/design/index.html">Explore the design notes <span aria-hidden="true">→</span></a>
             </div>
 
             <div class="layer-stack" aria-label="NOF framework layers">
@@ -155,7 +157,7 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
                     <span>03</span><div><strong>Infrastructure</strong><small>Persistence · Messaging · Auth · Telemetry</small></div><i>adapters</i>
                 </article>
                 <article class="layer layer-application">
-                    <span>02</span><div><strong>Application</strong><small>RPC · Handlers · State machines · Pipelines</small></div><i>use cases</i>
+                    <span>02</span><div><strong>Application</strong><small>Operations · Outcomes · Mapping · Filters</small></div><i>use cases</i>
                 </article>
                 <article class="layer layer-domain">
                     <span>01</span><div><strong>Domain</strong><small>Value objects · Failures · Business rules</small></div><i>core</i>
@@ -174,11 +176,11 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
         </div>
 
         <div class="capability-list">
-            <article><span class="capability-number">01</span><h3>CQRS & messaging</h3><p>Typed commands, notifications, RPC, streaming, and handler pipelines.</p><span class="capability-mark">↗</span></article>
+            <article><span class="capability-number">01</span><h3>CQRS & messaging</h3><p>Typed business operations, direct queue consumption, streaming, and invocation filters.</p><span class="capability-mark">↗</span></article>
             <article><span class="capability-number">02</span><h3>Source generation</h3><p>Move registration and transport plumbing from runtime reflection to compile time.</p><span class="capability-mark">⌁</span></article>
-            <article><span class="capability-number">03</span><h3>Transactional data</h3><p>EF Core and NHibernate integration with inbox/outbox and unit-of-work semantics.</p><span class="capability-mark">◇</span></article>
-            <article><span class="capability-number">04</span><h3>Identity & tenancy</h3><p>Authorization, OIDC endpoints, propagated context, and tenant-aware persistence.</p><span class="capability-mark">◎</span></article>
-            <article><span class="capability-number">05</span><h3>State machines</h3><p>Declarative transitions with persistent state and event-driven workflows.</p><span class="capability-mark">⇄</span></article>
+            <article><span class="capability-number">03</span><h3>Transactional data</h3><p>Native EF Core and NHibernate integration with Outbox and shared unit-of-work semantics.</p><span class="capability-mark">◇</span></article>
+            <article><span class="capability-number">04</span><h3>Identity & tenancy</h3><p>Contract authorization, external identity providers, immutable context, and tenant-aware persistence.</p><span class="capability-mark">◎</span></article>
+            <article><span class="capability-number">05</span><h3>Cache & storage</h3><p>Explicit providers for tenant-aware caching, streaming object storage, and transient broadcasts.</p><span class="capability-mark">⇄</span></article>
             <article><span class="capability-number">06</span><h3>Observability</h3><p>Tracing, metrics, and structured logs that follow work across service boundaries.</p><span class="capability-mark">∿</span></article>
         </div>
     </section>
@@ -227,7 +229,7 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
             <h2>Your domain deserves<br />better infrastructure.</h2>
             <p>Start with NOF and spend your engineering time on the decisions that make your system different.</p>
             <div class="hero-actions">
-                <a class="button button-light" href="https://github.com/XmmShp/NOF" target="_blank" rel="noreferrer">Explore the repository <span aria-hidden="true">↗</span></a>
+                <a class="button button-light" href="https://github.com/io7-cn/NOF" target="_blank" rel="noreferrer">Explore the repository <span aria-hidden="true">↗</span></a>
                 <a class="button button-outline-light" href="api/">Read the API docs <span aria-hidden="true">→</span></a>
             </div>
         </div>
@@ -242,8 +244,9 @@ builder.<span class="code-method">AddApplicationService</span>&lt;OrderService&g
     <p>Open source under Apache 2.0.<br />Built for modern .NET systems.</p>
     <div class="footer-links">
         <a href="api/">API Reference</a>
-        <a href="design/">Design</a>
-        <a href="https://github.com/XmmShp/NOF" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="en/design/index.html">Design</a>
+        <a href="zh-CN/overview.html">中文文档</a>
+        <a href="https://github.com/io7-cn/NOF" target="_blank" rel="noreferrer">GitHub</a>
         <a href="https://www.nuget.org/profiles/XmmShp" target="_blank" rel="noreferrer">NuGet</a>
     </div>
 </footer>

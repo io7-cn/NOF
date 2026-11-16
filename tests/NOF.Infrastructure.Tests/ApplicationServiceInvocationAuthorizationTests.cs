@@ -229,8 +229,8 @@ public sealed class InvocationRecorder
 
 public sealed class ProtectedFleetServer : ApplicationService<IProtectedFleetService>
 {
-    public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings => _mappings;
-    private static readonly IReadOnlyDictionary<string, OperationMapping> _mappings =
+    public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings => Mappings;
+    private static readonly IReadOnlyDictionary<string, OperationMapping> Mappings =
         new Dictionary<string, OperationMapping>
         {
             [nameof(IProtectedFleetService.GetFleetOverview)] =

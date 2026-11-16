@@ -139,8 +139,3 @@ public sealed partial class AuthorizationInvocationFilter(
         return context.WithTenantId(tenantId);
     }
 }
-
-/// <summary>Authorization failure data, independent of HTTP status and header presentation.</summary>
-public sealed record PermissionDeniedDetails(IReadOnlyList<string> RequiredPermissions);
-/// <summary>Custom authorization provider denial data.</summary>
-public sealed record PolicyDeniedDetails(string Reason);

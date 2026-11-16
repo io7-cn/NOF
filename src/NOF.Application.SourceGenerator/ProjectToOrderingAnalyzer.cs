@@ -18,7 +18,7 @@ public sealed class ProjectToOrderingAnalyzer : DiagnosticAnalyzer
     private const string QueryableMetadataName = "System.Linq.IQueryable";
     private const string MappingExtensionsMetadataName = "System.Linq.MappingQueryableExtensions";
 
-    private static readonly ImmutableHashSet<string> _transparentQueryMethods =
+    private static readonly ImmutableHashSet<string> TransparentQueryMethods =
         ImmutableHashSet.Create(
             StringComparer.Ordinal,
             "AsQueryable",
@@ -26,7 +26,7 @@ public sealed class ProjectToOrderingAnalyzer : DiagnosticAnalyzer
             "TagWith",
             "TagWithCallSite");
 
-    private static readonly ImmutableHashSet<string> _terminalMethodsWithQueryLogic =
+    private static readonly ImmutableHashSet<string> TerminalMethodsWithQueryLogic =
         ImmutableHashSet.Create(
             StringComparer.Ordinal,
             "All",
@@ -139,7 +139,7 @@ public sealed class ProjectToOrderingAnalyzer : DiagnosticAnalyzer
             return true;
         }
 
-        return _terminalMethodsWithQueryLogic.Contains(methodName)
+        return TerminalMethodsWithQueryLogic.Contains(methodName)
             && invocation.Arguments.Any(static argument =>
                 argument.Parameter?.Name is "predicate" or "selector");
     }
@@ -327,7 +327,7 @@ public sealed class ProjectToOrderingAnalyzer : DiagnosticAnalyzer
             && ExtensionMemberSymbol.IsDeclaredBy(method, mappingExtensionsType);
 
     private static bool IsTransparentQueryMethod(IMethodSymbol method)
-        => _transparentQueryMethods.Contains(method.Name);
+        => TransparentQueryMethods.Contains(method.Name);
 
     private static bool IsQueryable(ITypeSymbol? type, INamedTypeSymbol queryableType)
     {

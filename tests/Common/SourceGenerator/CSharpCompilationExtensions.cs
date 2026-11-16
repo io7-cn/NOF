@@ -6,11 +6,11 @@ namespace Microsoft.CodeAnalysis.CSharp;
 
 public static class CSharpCompilationExtensions
 {
-    private static readonly Assembly[] _appDomainAssemblies;
+    private static readonly Assembly[] AppDomainAssemblies;
 
     static CSharpCompilationExtensions()
     {
-        _appDomainAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+        AppDomainAssemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location)).ToArray();
     }
 
@@ -27,7 +27,7 @@ public static class CSharpCompilationExtensions
             // Union declarations require the C# 15 preview parser in the independently shipped Roslyn test package.
             var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview));
 
-            var references = _appDomainAssemblies.Select(
+            var references = AppDomainAssemblies.Select(
                     assembly => MetadataReference.CreateFromFile(assembly.Location))
                 .Cast<MetadataReference>()
                 .ToList();

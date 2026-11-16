@@ -50,20 +50,20 @@ public class SnowflakeIdGeneratorTests
     [Fact]
     public void NextId_EmbedsApplicationIdAndInstanceId_InCorrectBitPosition()
     {
-        const uint applicationId = 7;
-        const uint instanceId = 9;
-        var gen = CreateGenerator(applicationId: applicationId, instanceId: instanceId);
+        const uint ApplicationId = 7;
+        const uint InstanceId = 9;
+        var gen = CreateGenerator(applicationId: ApplicationId, instanceId: InstanceId);
         var id = gen.NextId();
 
-        const int sequenceBits = 8;
-        const int instanceIdBits = 6;
-        const int applicationIdBits = 8;
-        const long maxInstanceId = (1L << instanceIdBits) - 1;
-        const long maxApplicationId = (1L << applicationIdBits) - 1;
-        var extractedInstanceId = (uint)((id >> sequenceBits) & maxInstanceId);
-        var extractedApplicationId = (uint)((id >> (sequenceBits + instanceIdBits)) & maxApplicationId);
-        Assert.Equal(instanceId, extractedInstanceId);
-        Assert.Equal(applicationId, extractedApplicationId);
+        const int SequenceBits = 8;
+        const int InstanceIdBits = 6;
+        const int ApplicationIdBits = 8;
+        const long MaxInstanceId = (1L << InstanceIdBits) - 1;
+        const long MaxApplicationId = (1L << ApplicationIdBits) - 1;
+        var extractedInstanceId = (uint)((id >> SequenceBits) & MaxInstanceId);
+        var extractedApplicationId = (uint)((id >> (SequenceBits + InstanceIdBits)) & MaxApplicationId);
+        Assert.Equal(InstanceId, extractedInstanceId);
+        Assert.Equal(ApplicationId, extractedApplicationId);
     }
 
     // -----------------------------------------------------------------------
@@ -73,26 +73,26 @@ public class SnowflakeIdGeneratorTests
     [Fact]
     public void CustomBitLayout_EmbedsApplicationIdAndInstanceId_Correctly()
     {
-        const int applicationIdBits = 6;
-        const int instanceIdBits = 7;
-        const int sequenceBits = 8;
-        const uint applicationId = 5;
-        const uint instanceId = 13;
+        const int ApplicationIdBits = 6;
+        const int InstanceIdBits = 7;
+        const int SequenceBits = 8;
+        const uint ApplicationId = 5;
+        const uint InstanceId = 13;
 
         var gen = CreateGenerator(new SnowflakeIdGeneratorOptions
         {
-            ApplicationIdBits = applicationIdBits,
-            InstanceIdBits = instanceIdBits,
-            SequenceBits = sequenceBits,
-        }, applicationId, instanceId);
+            ApplicationIdBits = ApplicationIdBits,
+            InstanceIdBits = InstanceIdBits,
+            SequenceBits = SequenceBits,
+        }, ApplicationId, InstanceId);
 
         var id = gen.NextId();
-        var maxInstanceId = (1L << instanceIdBits) - 1;
-        var maxApplicationId = (1L << applicationIdBits) - 1;
-        var extractedInstanceId = (uint)((id >> sequenceBits) & maxInstanceId);
-        var extractedApplicationId = (uint)((id >> (sequenceBits + instanceIdBits)) & maxApplicationId);
-        Assert.Equal(instanceId, extractedInstanceId);
-        Assert.Equal(applicationId, extractedApplicationId);
+        var maxInstanceId = (1L << InstanceIdBits) - 1;
+        var maxApplicationId = (1L << ApplicationIdBits) - 1;
+        var extractedInstanceId = (uint)((id >> SequenceBits) & maxInstanceId);
+        var extractedApplicationId = (uint)((id >> (SequenceBits + InstanceIdBits)) & maxApplicationId);
+        Assert.Equal(InstanceId, extractedInstanceId);
+        Assert.Equal(ApplicationId, extractedApplicationId);
     }
 
     [Fact]

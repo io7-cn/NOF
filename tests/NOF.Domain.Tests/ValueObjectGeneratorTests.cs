@@ -16,7 +16,7 @@ public class ValueObjectGeneratorTests
     // Helpers
     // -----------------------------------------------------------------------
 
-    private static readonly Type[] _extraRefs =
+    private static readonly Type[] ExtraRefs =
     [
         typeof(IValueObject<>),
         typeof(Failure),
@@ -27,7 +27,7 @@ public class ValueObjectGeneratorTests
     ];
 
     private static GeneratorDriverRunResult RunGenerator(string source)
-        => new ValueObjectGenerator().GetResultPostGen(source, _extraRefs);
+        => new ValueObjectGenerator().GetResultPostGen(source, ExtraRefs);
 
     private static string GetVoCode(GeneratorDriverRunResult result)
         => result.GeneratedTrees
@@ -40,7 +40,7 @@ public class ValueObjectGeneratorTests
             $"ValueObjectRuntimeTests_{Guid.NewGuid():N}",
             source,
             true,
-            _extraRefs);
+            ExtraRefs);
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
@@ -245,7 +245,7 @@ public class ValueObjectGeneratorTests
     private static (GeneratorDriverRunResult Result, IReadOnlyList<Diagnostic> Diagnostics)
         RunGeneratorWithDiagnostics(string source)
     {
-        var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, _extraRefs);
+        var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, ExtraRefs);
 
         var driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver = (CSharpGeneratorDriver)driver.RunGenerators(compilation);
@@ -262,7 +262,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NonPartialStruct_EmitsNOF010_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -270,7 +270,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Single(diagnostics, d => d.Id == "NOF010");
         Assert.Empty(
@@ -284,7 +284,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NewableOnStringVo_EmitsNOF012_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -293,7 +293,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Single(diagnostics, d => d.Id == "NOF012");
         Assert.Empty(
@@ -303,7 +303,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NewableOnIntVo_EmitsNOF012_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -312,7 +312,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Single(diagnostics, d => d.Id == "NOF012");
         Assert.Empty(
@@ -326,7 +326,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void StringVo_GeneratesExpectedMembers()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -335,7 +335,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         Assert.Single(result.GeneratedTrees);
         var code = GetVoCode(result);
@@ -361,14 +361,14 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void DefaultValueObject_CannotMasqueradeAsValidatedValue_OrExposePrimitive()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
             public readonly partial struct Score : IValueObject<int>;
             """;
 
-        var assembly = CompileGeneratedAssembly(source);
+        var assembly = CompileGeneratedAssembly(Source);
         var valueObjectType = Assert.IsAssignableFrom<Type>(assembly.GetType("Test.Score"));
         var factory = Assert.IsAssignableFrom<MethodInfo>(
             valueObjectType.GetMethod("From", BindingFlags.Public | BindingFlags.Static, [typeof(int)]));
@@ -401,7 +401,7 @@ public class ValueObjectGeneratorTests
     public void ValueTypeVo_DoesNotEmitNullGuard()
     {
         // Value types (int, long, etc.) never need a null guard
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -410,7 +410,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         var code = GetVoCode(result);
         Assert.DoesNotContain("ArgumentNullException.ThrowIfNull", code);
@@ -419,7 +419,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void LongVo_GeneratesNullableOverload_AndNoNullGuard()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -427,7 +427,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         var code = GetVoCode(result);
         Assert.Contains("public static OrderId? From(long? value)", code);
@@ -441,7 +441,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NullableReferenceUnderlyingType_EmitsNOF011_ButStillGeneratesSource()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -450,7 +450,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, d => d.Id == "NOF011" && d.Severity == DiagnosticSeverity.Warning);
         Assert.Single(result.GeneratedTrees);
@@ -459,7 +459,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NullableValueUnderlyingType_EmitsNOF011_ButStillGeneratesSource()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -468,7 +468,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, d => d.Id == "NOF011" && d.Severity == DiagnosticSeverity.Warning);
         Assert.Single(result.GeneratedTrees);
@@ -478,7 +478,7 @@ public class ValueObjectGeneratorTests
     public void AlwaysCallsIsValidInTryFrom()
     {
         // IsValid is a static virtual hook called once after normalization.
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -486,7 +486,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         var code = GetVoCode(result);
         Assert.Contains("value = __CallNormalize<OrderId>(value);", code);
@@ -496,7 +496,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void UserOverriddenIsValid_IsCalledInTryFrom()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -507,7 +507,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         var code = GetVoCode(result);
         Assert.Contains("value = __CallNormalize<OrderId>(value);", code);
@@ -517,7 +517,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void Normalize_IsCalledBeforeIsValid()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -529,7 +529,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = GetVoCode(result);
 
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
@@ -541,7 +541,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void NewableOnLongVo_GeneratesNewMethod()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -550,7 +550,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
 
         var code = GetVoCode(result);
         Assert.Contains("public static EntityId New(global::NOF.Domain.IIdGenerator generator)", code);
@@ -563,7 +563,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void StringVo_NullGuardBeforeNormalizationAndIsValid()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -572,7 +572,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = GetVoCode(result);
 
         // null guard must come before Normalize/IsValid
@@ -586,7 +586,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void StringVoWithLength_GeneratesLengthValidationAfterNormalize()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -595,7 +595,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = GetVoCode(result);
 
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
@@ -611,7 +611,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void StringVoWithMinimumLength_GeneratesRangeValidationAfterNormalize()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -620,7 +620,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(Source);
         var code = GetVoCode(result);
 
         var normalizeIdx = code.IndexOf("__CallNormalize<Name>(value);", StringComparison.Ordinal);
@@ -638,7 +638,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void LengthOnNonStringValueObject_EmitsNOF016_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -647,7 +647,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF016" && diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Empty(result.GeneratedTrees);
@@ -656,7 +656,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void LengthOnNullableStringValueObject_EmitsNOF016_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             #nullable enable
             using NOF.Domain;
             namespace Test
@@ -666,7 +666,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF016" && diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Empty(result.GeneratedTrees);
@@ -675,7 +675,7 @@ public class ValueObjectGeneratorTests
     [Fact]
     public void LengthOnNonValueObject_EmitsNOF016_AndNoSource()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test
             {
@@ -684,7 +684,7 @@ public class ValueObjectGeneratorTests
             }
             """;
 
-        var (result, diagnostics) = RunGeneratorWithDiagnostics(source);
+        var (result, diagnostics) = RunGeneratorWithDiagnostics(Source);
 
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF016" && diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.Empty(result.GeneratedTrees);

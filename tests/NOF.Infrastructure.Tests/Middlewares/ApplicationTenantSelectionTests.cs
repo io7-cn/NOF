@@ -143,8 +143,8 @@ public sealed class TenantProbeHandler : OperationHandler<Empty, Testing.TestOut
 
 public sealed class HostTenantTestServer : ApplicationService<IHostTenantTestService>
 {
-    public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings => _mappings;
-    private static readonly IReadOnlyDictionary<string, OperationMapping> _mappings =
+    public static IReadOnlyDictionary<string, OperationMapping> HandlerMappings => Mappings;
+    private static readonly IReadOnlyDictionary<string, OperationMapping> Mappings =
         new Dictionary<string, OperationMapping>
         {
             [nameof(IHostTenantTestService.Host)] = new(typeof(TenantProbeHandler), typeof(Empty), typeof(Testing.TestOutcome)),

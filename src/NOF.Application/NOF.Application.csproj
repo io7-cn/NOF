@@ -1,23 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    
     <!-- NuGet Package Settings -->
     <IsAotCompatible>true</IsAotCompatible>
     <IsPackable>true</IsPackable>
     <PackageId>NOF.Application</PackageId>
     <Description>Application layer for the NOF Framework — handlers, state machines, caching, object storage, and unit of work.</Description>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
     <ProjectReference Include="..\NOF.Contract\NOF.Contract.csproj" />
     <ProjectReference Include="..\NOF.Domain\NOF.Domain.csproj" />
-
     <None Include="..\NOF.Application.SourceGenerator\bin\$(Configuration)\netstandard2.0\NOF.Application.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
-
 </Project>
