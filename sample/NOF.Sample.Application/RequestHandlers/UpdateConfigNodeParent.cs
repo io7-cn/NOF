@@ -7,51 +7,55 @@ namespace NOF.Sample.Application.RequestHandlers;
 
 public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
 {
-    private readonly IDbContext _dbContext;
+    private readonly IConfigNodeRepository _nodes;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICacheService _cache;
 
     public UpdateConfigNodeParent(
-        IDbContext dbContext,
+        IConfigNodeRepository nodes, IUnitOfWork unitOfWork,
         ICacheService cache)
     {
-        _dbContext = dbContext;
+        _nodes = nodes;
+        _unitOfWork = unitOfWork;
         _cache = cache;
     }
 
-    public override async Task<Result> HandleAsync(UpdateConfigNodeParentRequest request, Context context, CancellationToken cancellationToken)
+    public override async Task<Result> HandleAsync(UpdateConfigNodeParentRequest request, InvocationContext context, CancellationToken cancellationToken)
     {
-        var nodeId = ConfigNodeId.Of(request.NodeId);
-        var node = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == nodeId, cancellationToken);
+        var nodeId = ConfigNodeId.From(request.NodeId);
+        var node = await _nodes.GetAsync(nodeId, cancellationToken);
 
         if (node is null)
         {
-            return Result.Fail("404", "Node not found.");
+            return new NotFound("Node not found.");
         }
 
         var newParentId = request.NewParentId.HasValue
-            ? ConfigNodeId.Of(request.NewParentId.Value)
+            ? ConfigNodeId.From(request.NewParentId.Value)
             : (ConfigNodeId?)null;
 
         // Check whether the target parent exists (unless moving to root).
         if (newParentId.HasValue)
         {
-            var parentNode = await _dbContext.Set<ConfigNode>()
-                .FirstOrDefaultAsync(configNode => configNode.Id == newParentId.Value, cancellationToken);
+            if (newParentId.Value == nodeId)
+            {
+                return new ParentCycle("Cannot move a node under itself.");
+            }
+            var parentNode = await _nodes.GetAsync(newParentId.Value, cancellationToken);
             if (parentNode is null)
             {
-                return Result.Fail("404", "Target parent node not found.");
+                return new ParentNotFound("Target parent node not found.");
             }
 
             // Prevent cyclic parent relationship.
             if (await IsDescendant(nodeId, newParentId.Value, cancellationToken))
             {
-                return Result.Fail("400", "Cannot move a node under its descendant.");
+                return new ParentCycle("Cannot move a node under its descendant.");
             }
         }
 
         node.UpdateParent(newParentId);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 写后删：清除相关缓存
         await _cache.RemoveAsync(new ConfigNodeByIdCacheKey(nodeId), cancellationToken);
@@ -62,13 +66,12 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30) },
             cancellationToken);
 
-        return Result.Success();
+        return Empty.Instance;
     }
 
     private async Task<bool> IsDescendant(ConfigNodeId ancestorId, ConfigNodeId nodeId, CancellationToken cancellationToken)
     {
-        var current = await _dbContext.Set<ConfigNode>()
-            .FirstOrDefaultAsync(configNode => configNode.Id == nodeId, cancellationToken);
+        var current = await _nodes.GetAsync(nodeId, cancellationToken);
 
         while (current?.ParentId != null)
         {
@@ -76,8 +79,7 @@ public class UpdateConfigNodeParent : NOFSampleService.UpdateConfigNodeParent
             {
                 return true;
             }
-            current = await _dbContext.Set<ConfigNode>()
-                .FirstOrDefaultAsync(configNode => configNode.Id == current.ParentId.Value, cancellationToken);
+            current = await _nodes.GetAsync(current.ParentId.Value, cancellationToken);
         }
 
         return false;

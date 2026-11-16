@@ -11,23 +11,22 @@ public class EventHandlerRegistrationGeneratorTests
     [Fact]
     public void GeneratedCode_EventHandler_RegistersToEventHandlerRegistry()
     {
-        const string source = """
+        const string Source = """
             using NOF.Abstraction;
-            using NOF.Contract;
             namespace App
             {
                 public record MyEvent;
-                public class MyEventHandler : InMemoryEventHandler<MyEvent>
+                public class MyEventHandler : LocalEventHandler<MyEvent>
                 {
                     public override System.Threading.Tasks.Task HandleAsync(MyEvent @event, Context context, System.Threading.CancellationToken cancellationToken) => throw new System.NotImplementedException();
                 }
             }
             """;
 
-        var comp = CSharpCompilation.CreateCompilation("App", source, isDll: true,
+        var comp = CSharpCompilation.CreateCompilation("App", Source, isDll: true,
             typeof(IServiceCollection),
             typeof(InitializedTypes),
-            typeof(InMemoryEventHandler<>),
+            typeof(LocalEventHandler<>),
             typeof(EventHandlerRegistration));
 
         var result = new EventHandlerRegistrationGenerator().GetResult(comp);

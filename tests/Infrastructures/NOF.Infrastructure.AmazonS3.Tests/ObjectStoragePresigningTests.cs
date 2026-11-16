@@ -3,6 +3,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
 using Moq;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using Xunit;

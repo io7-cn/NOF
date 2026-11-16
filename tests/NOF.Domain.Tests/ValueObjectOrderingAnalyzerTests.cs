@@ -19,7 +19,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             typeof(IValueObject<>),
             typeof(Enumerable),
             typeof(Queryable));
-        GeneratorDriver generatorDriver = CSharpGeneratorDriver.Create(new ValueObjectGenerator());
+        GeneratorDriver generatorDriver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         generatorDriver.RunGeneratorsAndUpdateCompilation(compilation, out var generatedCompilation, out _);
 
         var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ValueObjectOrderingAnalyzer());
@@ -57,7 +57,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task QueryableThenBy_WithValueObjectKey_ReportsNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System.Linq;
 
@@ -73,7 +73,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Contains(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }
@@ -81,7 +81,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task Ordering_WithPrimitiveCast_DoesNotReportNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System.Collections.Generic;
             using System.Linq;
@@ -98,7 +98,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }
@@ -106,7 +106,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task Ordering_WithNullableValueObjectKey_ReportsNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System.Collections.Generic;
             using System.Linq;
@@ -123,7 +123,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Contains(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }
@@ -131,7 +131,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task Ordering_WithGenericComparableValueObject_DoesNotReportNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System;
             using System.Collections.Generic;
@@ -151,7 +151,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }
@@ -159,7 +159,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task Ordering_WithNonGenericComparableValueObject_DoesNotReportNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             using System;
             using System.Collections.Generic;
@@ -180,7 +180,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }
@@ -188,7 +188,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
     [Fact]
     public async Task UnrelatedOrderByMethod_DoesNotReportNOF015()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
 
             namespace Test;
@@ -205,7 +205,7 @@ public sealed class ValueObjectOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF015");
     }

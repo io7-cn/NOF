@@ -1,7 +1,7 @@
 @implements IDisposable
 @using NOF.Abstraction
-@using System.Security.Claims
 @inject IUserContext UserContext
+@inject IPermissionChecker Permissions
 
 @if (!_initialized)
 {
@@ -19,11 +19,15 @@ else
 @code {
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
     [Parameter] public string? Permission { get; set; }
+    /// <summary>Optional UI-owned policy; no UseCase binding or page Attribute lookup is performed.</summary>
+    [Parameter] public AuthorizationPolicy? Policy { get; set; }
     [Parameter] public RenderFragment? AuthorizingContent { get; set; }
     [Parameter] public RenderFragment? UnauthorizedContent { get; set; }
 
     private bool _initialized;
     private bool _isAuthorized;
+    private bool _disposed;
+    private CancellationTokenSource? _refresh;
 
     protected override void OnInitialized()
     {
@@ -37,37 +41,61 @@ else
 
     private async Task RefreshStateAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _refresh?.Cancel();
+        _refresh?.Dispose();
+        var refresh = _refresh = new();
         _initialized = false;
-        _isAuthorized = await IsAuthorizedAsync();
-        _initialized = true;
-    }
-
-    private Task<bool> IsAuthorizedAsync()
-    {
-        if (!UserContext.User.IsAuthenticated)
+        if (Policy is not null && Permission is not null)
         {
-            return Task.FromResult(false);
+            throw new InvalidOperationException("Specify Policy or Permission, not both.");
         }
-
-        if (string.IsNullOrWhiteSpace(Permission))
+        var policy = Policy ?? new AuthorizationPolicy(true,
+            string.IsNullOrWhiteSpace(Permission) ? [] : [new([Permission])]);
+        try
         {
-            return Task.FromResult(true);
+            var decision = await Permissions.CheckAsync(policy, UserContext.User, Context.Current, refresh.Token);
+            if (!_disposed && !refresh.IsCancellationRequested)
+            {
+                _isAuthorized = decision switch
+                {
+                    PermissionCheckResult.Granted => true,
+                    PermissionCheckResult.AuthenticationRequired => false,
+                    PermissionCheckResult.Denied => false,
+                    null => throw new InvalidOperationException("The permission checker returned an uninitialized decision.")
+                };
+                _initialized = true;
+            }
         }
-
-        return Task.FromResult(UserContext.User.HasPermission(Permission));
+        catch (OperationCanceledException) when (refresh.IsCancellationRequested)
+        {
+        }
     }
 
     private void HandleAuthorizationStateChanged()
     {
+        if (_disposed)
+        {
+            return;
+        }
         _ = InvokeAsync(async () =>
         {
             await RefreshStateAsync();
-            StateHasChanged();
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
         });
     }
 
     public void Dispose()
     {
+        _disposed = true;
+        _refresh?.Cancel();
+        _refresh?.Dispose();
         UserContext.StateChanged -= HandleAuthorizationStateChanged;
     }
 }

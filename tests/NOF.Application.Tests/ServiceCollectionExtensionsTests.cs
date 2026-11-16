@@ -18,30 +18,15 @@ public class ServiceCollectionExtensionsTests
             descriptor.ServiceType == typeof(MappingRegistry) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(CommandHandlerRegistry) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(NotificationHandlerRegistry) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(RpcServerRegistry) &&
+            descriptor.ServiceType == typeof(ApplicationServiceRegistry) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IMapper) &&
             descriptor.ImplementationType == typeof(ExpressionMapper) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IIdGenerator) &&
-            descriptor.ImplementationType == typeof(SnowflakeIdGenerator) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService) &&
-            descriptor.ImplementationType == typeof(MapperAmbientDaemonService) &&
-            descriptor.Lifetime == ServiceLifetime.Scoped);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService) &&
-            descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService) &&
-            descriptor.Lifetime == ServiceLifetime.Scoped);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
+
+
     }
 
     [Fact]
@@ -67,7 +52,7 @@ public class ServiceCollectionExtensionsTests
         using var provider = services.BuildServiceProvider();
         using (var scope = provider.CreateScope())
         {
-            scope.ServiceProvider.ResolveDaemonServices();
+            using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
 
             Assert.Same(scope.ServiceProvider.GetRequiredService<IMapper>(), Mapper.Current);
             Assert.Equal("mapped:5", new[] { 5 }.AsQueryable().ProjectTo<string>().Single());
@@ -98,17 +83,11 @@ public class ServiceCollectionExtensionsTests
         services.AddNOFApplication();
 
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(MappingRegistry));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(CommandHandlerRegistry));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(NotificationHandlerRegistry));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(RpcServerRegistry));
+        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ApplicationServiceRegistry));
         _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IMapper));
-        _ = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(IdGeneratorAmbientDaemonService));
-        _ = Assert.Single(services, descriptor =>
-            descriptor.ServiceType == typeof(IDaemonService)
-            && descriptor.ImplementationType == typeof(MapperAmbientDaemonService));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IIdGenerator));
+
+
     }
 
     [Fact]

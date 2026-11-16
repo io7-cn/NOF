@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Hosting;
+using NOF.Hosting;
 using NOF.Infrastructure;
 
 namespace System.Diagnostics;
@@ -7,14 +7,14 @@ public static class ActivityExtensions
 {
     extension(Activity activity)
     {
-        public void SetServiceDeploymentTags(IHostEnvironment hostEnvironment)
+        public void SetServiceDeploymentTags(DeploymentOptions deployment)
         {
             ArgumentNullException.ThrowIfNull(activity);
-            ArgumentNullException.ThrowIfNull(hostEnvironment);
+            ArgumentNullException.ThrowIfNull(deployment);
 
-            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.ServiceId, hostEnvironment.ServiceId);
-            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.ServiceName, hostEnvironment.ServiceName);
-            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.InstanceId, hostEnvironment.InstanceId);
+            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.ServiceId, deployment.ServiceId);
+            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.ServiceName, deployment.ServiceName);
+            activity.SetTag(NOFInfrastructureConstants.Deployment.Tags.InstanceId, deployment.InstanceId);
         }
 
         public string ToTraceParent()
@@ -27,7 +27,7 @@ public static class ActivityExtensions
 
     extension(ActivitySource source)
     {
-        public Activity? StartActivityWithParent(string name, ActivityKind kind, string? traceParent, IHostEnvironment? hostEnvironment = null)
+        public Activity? StartActivityWithParent(string name, ActivityKind kind, string? traceParent, DeploymentOptions? deployment = null)
         {
             ArgumentNullException.ThrowIfNull(source);
 
@@ -35,9 +35,9 @@ public static class ActivityExtensions
                 ActivityContext.TryParse(traceParent, null, out var parentContext))
             {
                 var activity = source.StartActivity(name, kind, parentContext);
-                if (hostEnvironment is not null)
+                if (deployment is not null)
                 {
-                    activity?.SetServiceDeploymentTags(hostEnvironment);
+                    activity?.SetServiceDeploymentTags(deployment);
                 }
 
                 return activity;
@@ -49,9 +49,9 @@ public static class ActivityExtensions
                 ActivityTraceFlags.Recorded,
                 isRemote: true);
             var startedActivity = source.StartActivity(name, kind, randomParent);
-            if (hostEnvironment is not null)
+            if (deployment is not null)
             {
-                startedActivity?.SetServiceDeploymentTags(hostEnvironment);
+                startedActivity?.SetServiceDeploymentTags(deployment);
             }
 
             return startedActivity;

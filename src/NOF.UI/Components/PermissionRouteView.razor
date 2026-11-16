@@ -1,26 +1,16 @@
-@using NOF.Contract
-@if (_requiredPermission is null)
-{
-    <RouteView RouteData="@RouteData" DefaultLayout="@DefaultLayout" />
-}
-else
-{
-    <AuthGuard Permission="@_requiredPermission" AuthorizingContent="@AuthorizingContent"
+@using NOF.Abstraction
+    <AuthGuard Policy="@Policy" AuthorizingContent="@AuthorizingContent"
                UnauthorizedContent="@UnauthorizedContent">
         <RouteView RouteData="@RouteData" DefaultLayout="@DefaultLayout" />
     </AuthGuard>
-}
 
 @code {
     [Parameter, EditorRequired] public RouteData RouteData { get; set; } = default!;
     [Parameter] public Type? DefaultLayout { get; set; }
     [Parameter] public RenderFragment? AuthorizingContent { get; set; }
     [Parameter] public RenderFragment? UnauthorizedContent { get; set; }
+    /// <summary>The explicit UI route policy; Contract declarations are not inspected.</summary>
+    [Parameter, EditorRequired] public AuthorizationPolicy Policy { get; set; } = default!;
 
-    private string? _requiredPermission;
-
-    protected override void OnParametersSet()
-    {
-        _requiredPermission = PermissionRouteViewMetadataResolver.ResolveRequiredPermission(RouteData.PageType);
-    }
+    protected override void OnParametersSet() => ArgumentNullException.ThrowIfNull(Policy);
 }

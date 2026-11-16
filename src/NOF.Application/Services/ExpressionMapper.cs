@@ -143,14 +143,14 @@ public sealed class ExpressionMapper : IMapper
     private sealed class MappingReferenceExpander(
         Func<MapKey, Expression, Expression> expand) : ExpressionVisitor
     {
-        private static readonly MethodInfo _mappingReferenceMethod = typeof(MappingReference)
+        private static readonly MethodInfo MappingReferenceMethod = typeof(MappingReference)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Single(method => method.Name == nameof(MappingReference.Map) && method.IsGenericMethodDefinition);
 
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
             if (!node.Method.IsGenericMethod
-                || node.Method.GetGenericMethodDefinition() != _mappingReferenceMethod)
+                || node.Method.GetGenericMethodDefinition() != MappingReferenceMethod)
             {
                 return base.VisitMethodCall(node);
             }

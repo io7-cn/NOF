@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
 using System.Runtime.CompilerServices;

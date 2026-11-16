@@ -12,9 +12,3 @@ public sealed class NHibernateConfigurationOptions
 
     public bool BuildSchemaOnInitialize { get; set; }
 }
-
-public enum TenantMode
-{
-    SharedDatabase = 0,
-    DatabasePerTenant = 1
-}

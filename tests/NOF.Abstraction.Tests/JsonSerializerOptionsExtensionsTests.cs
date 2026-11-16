@@ -16,7 +16,7 @@ public sealed class JsonSerializerOptionsExtensionsTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => options.GetRequiredTypeInfo<MissingJsonType>());
         Assert.Contains(typeof(MissingJsonType).FullName!, ex.Message);
-        Assert.Contains("ConfigureNOFJsonSerializerOptions", ex.Message);
+        Assert.Contains("JsonSerializerContext", ex.Message);
         Assert.IsType<NotSupportedException>(ex.InnerException);
     }
 

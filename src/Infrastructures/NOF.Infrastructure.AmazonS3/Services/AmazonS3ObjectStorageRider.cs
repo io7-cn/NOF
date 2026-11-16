@@ -34,7 +34,7 @@ public sealed class AmazonS3ObjectStorageRider : IObjectStorageRider
         => CreatePresignedRequestAsync(bucketName, objectKey, lifetime, Amazon.S3.HttpVerb.GET, null, cancellationToken);
 
     private async ValueTask<ObjectStoragePresignedRequest> CreatePresignedRequestAsync(
-        string bucketName, string objectKey, TimeSpan lifetime, Amazon.S3.HttpVerb verb,
+        string bucketName, string objectKey, TimeSpan lifetime, HttpVerb verb,
         ObjectStorageWriteOptions? options, CancellationToken cancellationToken)
     {
         ValidateLocation(bucketName, objectKey);
@@ -56,10 +56,10 @@ public sealed class AmazonS3ObjectStorageRider : IObjectStorageRider
             ContentType = options?.ContentType
         };
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        AddHeader("Content-Type", options?.ContentType);
-        AddHeader("Content-Encoding", options?.ContentEncoding);
-        AddHeader("Cache-Control", options?.CacheControl);
-        AddHeader("Content-Disposition", options?.ContentDisposition);
+        addHeader("Content-Type", options?.ContentType);
+        addHeader("Content-Encoding", options?.ContentEncoding);
+        addHeader("Cache-Control", options?.CacheControl);
+        addHeader("Content-Disposition", options?.ContentDisposition);
         if (options?.Metadata is not null)
         {
             foreach (var (key, value) in options.Metadata)
@@ -76,7 +76,7 @@ public sealed class AmazonS3ObjectStorageRider : IObjectStorageRider
         var url = await _client.GetPreSignedURLAsync(request).WaitAsync(cancellationToken);
         return new ObjectStoragePresignedRequest(url, verb.ToString(), expiresAt, headers);
 
-        void AddHeader(string name, string? value)
+        void addHeader(string name, string? value)
         {
             if (value is not null)
             {

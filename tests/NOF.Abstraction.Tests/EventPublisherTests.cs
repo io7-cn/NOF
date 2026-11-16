@@ -1,4 +1,4 @@
-using NOF.Contract;
+using NOF.Abstraction;
 using Xunit;
 
 namespace NOF.Abstraction.Tests;
@@ -127,7 +127,7 @@ public class EventPublisherTests
         }
     }
 
-    private sealed class RecordingHandler : InMemoryEventHandler<TestEvent>
+    private sealed class RecordingHandler : LocalEventHandler<TestEvent>
     {
         public TestEvent? LastEvent { get; private set; }
 
@@ -141,7 +141,7 @@ public class EventPublisherTests
         }
     }
 
-    private sealed class SecondaryEventPublishingHandler : InMemoryEventHandler<PrimaryEvent>
+    private sealed class SecondaryEventPublishingHandler : LocalEventHandler<PrimaryEvent>
     {
         public override Task HandleAsync(PrimaryEvent @event, Context context, CancellationToken cancellationToken)
         {
@@ -150,7 +150,7 @@ public class EventPublisherTests
         }
     }
 
-    private sealed class SecondaryEventRecordingHandler : InMemoryEventHandler<SecondaryEvent>
+    private sealed class SecondaryEventRecordingHandler : LocalEventHandler<SecondaryEvent>
     {
         public SecondaryEvent? LastEvent { get; private set; }
 

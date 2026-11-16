@@ -2,6 +2,8 @@ using Microsoft.JSInterop;
 
 namespace NOF.UI;
 
+// This adapter propagates JS failures (including failed writes) to the caller that owns recovery.
+#pragma warning disable BL0016
 public sealed class SessionStorage(IJSRuntime jsRuntime) : ISessionStorage
 {
     public ValueTask<string?> GetItemAsync(string key)
@@ -13,3 +15,4 @@ public sealed class SessionStorage(IJSRuntime jsRuntime) : ISessionStorage
     public ValueTask RemoveItemAsync(string key)
         => jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", key);
 }
+#pragma warning restore BL0016

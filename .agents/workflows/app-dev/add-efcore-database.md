@@ -46,31 +46,32 @@ String-backed value objects should declare `[ValueObjectLength]` in domain code.
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using NOF.Hosting;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .WithSoftDelete(true)
-    .MigrateOnInitialize();
+builder.UseDbContext<AppDbContext>((creation, ef) => ef.UseNpgsql(
+        DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("postgres")
+            ?? throw new InvalidOperationException("Connection string 'postgres' not found."), creation.TenantId)))
+    .ConfigureNOFDbContextOptions(nof =>
+    {
+        nof.TenantMode = TenantMode.DatabasePerTenant;
+        nof.SoftDeleteEnabled = true;
+    })
+    .MigrateOnStart();
 ```
 
-For database-per-tenant mode, the connection string may contain `{tenantId}`. The host database and every tenant database deliberately use the same model, migration chain, and schema. Tenant databases must accept tables used only by host-level features as a potentially empty schema superset; inbox and outbox tables may still contain tenant-scoped messages. Shared-database mode adds tenant shadow state and filters to every supported root entity. Soft delete is disabled by default; enable it explicitly with `WithSoftDelete(true)` for the context or `HasSoftDelete()` for an individual root entity.
+For database-per-tenant mode, the connection string may contain `{tenantId}`. The host database and every tenant database deliberately use the same model, migration chain, and schema. Tenant databases must accept tables used only by host-level features as a potentially empty schema superset; inbox and outbox tables may still contain tenant-scoped messages. Shared-database mode adds tenant shadow state and filters to every supported root entity. Soft delete is disabled by default; enable it explicitly with `ConfigureNOFDbContextOptions(nof => nof.SoftDeleteEnabled = true)` for the context or `HasSoftDelete()` for an individual root entity.
 
-When a static template is insufficient, use a resolver:
+When a static template is insufficient, resolve the connection in the native callback:
 
 ```csharp
-builder.UseDbContext<AppDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithConnectionStringResolver(context =>
-    {
-        var catalog = context.Services.GetRequiredService<ITenantDatabaseCatalog>();
-        return catalog.GetConnectionString(context.DbContextType, context.TenantId);
-    })
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+builder.UseDbContext<AppDbContext>((creation, ef) =>
+{
+    var catalog = creation.Services.GetRequiredService<ITenantDatabaseCatalog>();
+    ef.UseNpgsql(catalog.GetConnectionString(creation.DbContextType, creation.TenantId));
+})
+.ConfigureNOFDbContextOptions(nof => nof.TenantMode = TenantMode.DatabasePerTenant)
+.MigrateOnStart();
 ```
 
 The resolver runs once per context creation with the normalized tenant ID and current scoped services. Keep remote secret or catalog access cached because context creation is synchronous.
@@ -93,24 +94,24 @@ dotnet ef migrations add InitialCreate --project MyApp --startup-project MyApp -
 dotnet ef database update --project MyApp --startup-project MyApp --context AppDbContext
 ```
 
-`MigrateOnInitialize()` adds a host initialization step that applies migrations before later components such as OIDC client bootstrapping.
+`MigrateOnStart()` adds a host initialization step that applies migrations before later components such as OIDC client bootstrapping.
 
 ## Application-Layer Usage
 
 Application handlers inject `IDbContext` or `IRepository<T>`, not EF Core `DbContext`:
 
 ```csharp
-public sealed class CreateOrder(IDbContext dbContext) : OrderService.CreateOrder
+public sealed class CreateOrder(IOrderRepository orders, IUnitOfWork unitOfWork) : OrderService.CreateOrder
 {
-    public override async Task<Result> HandleAsync(
+    public override async Task<Empty> HandleAsync(
         CreateOrderRequest request,
         Context context,
         CancellationToken cancellationToken)
     {
-        var order = Order.Create(EmailAddress.Of(request.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return Result.Success();
+        var order = Order.Create(EmailAddress.From(request.CustomerEmail));
+        orders.Add(order);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Empty.Instance;
     }
 }
 ```

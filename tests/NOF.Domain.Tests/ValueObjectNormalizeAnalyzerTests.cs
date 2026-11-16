@@ -10,7 +10,7 @@ namespace NOF.SourceGenerator.Tests;
 
 public sealed class ValueObjectNormalizeAnalyzerTests
 {
-    private static readonly Type[] _refs =
+    private static readonly Type[] Refs =
     [
         typeof(IValueObject<>),
         typeof(NewableValueObjectAttribute),
@@ -19,7 +19,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
 
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source)
     {
-        var extraReferences = _refs.Select(t => t.ToMetadataReference()).ToArray();
+        var extraReferences = Refs.Select(t => t.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
 
         var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(new ValueObjectNormalizeAnalyzer());
@@ -28,26 +28,68 @@ public sealed class ValueObjectNormalizeAnalyzerTests
     }
 
     [Fact]
-    public async Task Normalize_CallingOf_ReportsNOF013()
+    public async Task SingleParameterIsValid_ReportsMigrationError()
     {
-        const string source = """
+        var diagnostics = await GetDiagnosticsAsync("""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static bool IsValid(string value) => true;
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF019" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public async Task LegacyValidate_ReportsMigrationError()
+    {
+        var diagnostics = await GetDiagnosticsAsync("""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static void Validate(string value) { }
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF019" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Theory]
+    [InlineData("From(value)")]
+    [InlineData("TryFrom(value, out _)")]
+    public async Task IsValid_CannotReenterConstruction(string call)
+    {
+        var diagnostics = await GetDiagnosticsAsync($$"""
+            using NOF.Domain;
+            public readonly partial struct Name : IValueObject<string>
+            {
+                public static bool IsValid(string value, out string? errorMessage) {
+                    errorMessage = null; {{call}}; return true; }
+            }
+            """);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "NOF013" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public async Task Normalize_CallingFrom_ReportsNOF013()
+    {
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
             public readonly partial struct TenantId : IValueObject<string>
             {
-                public static string Normalize(string value) => (string)Of(value);
+                public static string Normalize(string value) => (string)From(value);
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF013" && d.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
-    public async Task Normalize_CallingValidate_ReportsNOF014()
+    public async Task Normalize_CallingIsValid_ReportsNOF014()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -55,22 +97,22 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             {
                 public static string Normalize(string value)
                 {
-                    Validate(value);
+                    IsValid(value, out _);
                     return value.Trim();
                 }
 
-                public static void Validate(string value) { }
+                public static bool IsValid(string value, out string? errorMessage) { errorMessage = null; return true; }
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.Contains(diagnostics, d => d.Id == "NOF014" && d.Severity == DiagnosticSeverity.Warning);
     }
 
     [Fact]
     public async Task Normalize_WithPureNormalization_DoesNotReportDiagnostics()
     {
-        const string source = """
+        const string Source = """
             using NOF.Domain;
             namespace Test;
 
@@ -80,7 +122,7 @@ public sealed class ValueObjectNormalizeAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
         Assert.DoesNotContain(diagnostics, d => d.Id is "NOF013" or "NOF014");
     }
 }

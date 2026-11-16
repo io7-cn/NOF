@@ -1,0 +1,62 @@
+- name: "Architecture and migration"
+  href: index.md
+- name: "ADR 0001: Application execution core and transport adapters"
+  href: 0001-application-core-and-adapters.md
+- name: "Explicit ambient binding"
+  href: ambient-binding.md
+- name: "Application services and HTTP endpoint modules"
+  href: application-requests.md
+- name: "Contract authorization and dynamic permissions"
+  href: authorization.md
+- name: "Configuration node REST implementation"
+  href: configuration-rest.md
+- name: "Contract declarations and application execution"
+  href: contract-boundaries.md
+- name: "Native EF Core configuration and NOF policy"
+  href: efcore-configuration.md
+- name: "JSON execution context and durable delivery"
+  href: execution-context.md
+- name: "Declared expected failures"
+  href: expected-failures.md
+- name: "Framework boundaries and native platform APIs"
+  href: framework-simplification.md
+- name: "Handler registration"
+  href: handler-registration.md
+- name: "Host composition and identity ownership"
+  href: host-composition.md
+- name: "Native HTTP adaptation"
+  href: http-adaptation.md
+- name: "Host-selected invocation extensions"
+  href: invocation-extensions.md
+- name: "Expression-Based Mapping"
+  href: mapper.md
+- name: "Native host integration"
+  href: native-hosting.md
+- name: ".NET 11 migration and union types"
+  href: net11-migration.md
+- name: "Object storage boundaries"
+  href: object-storage.md
+- name: "One-way operations and direct message endpoints"
+  href: one-way-operations.md
+- name: "Aggregate repositories and native persistence"
+  href: persistence-boundaries.md
+- name: "Public programming model"
+  href: public-api.md
+- name: "RabbitMQ routing across two NOF services"
+  href: rabbitmq-sample.md
+- name: "Operation-specific result unions in NOF 12"
+  href: result-unions.md
+- name: "Interactive Sample capability workbench"
+  href: sample-workbench.md
+- name: "Source generator isolation"
+  href: source-generators.md
+- name: "Transactional Outbox and direct message endpoints"
+  href: transactional-outbox.md
+- name: "Unified operations, transport endpoints and aggregate collections"
+  href: unified-operations.md
+- name: "The NOF Value Object: Why There Is No `.Value`"
+  href: value-object.md
+- name: "Value object construction"
+  href: value-objects.md
+- name: HTTP contract documentation
+  href: http-contract-documentation.md

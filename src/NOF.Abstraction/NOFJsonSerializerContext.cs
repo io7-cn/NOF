@@ -8,6 +8,7 @@ namespace NOF.Abstraction;
 /// This context provides AOT-safe metadata for primitive types commonly wrapped by
 /// value objects, as well as types used internally by framework converters.
 /// </summary>
+[JsonSerializable(typeof(Failure))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(long))]

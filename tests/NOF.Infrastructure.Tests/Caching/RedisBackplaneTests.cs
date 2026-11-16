@@ -8,7 +8,7 @@ namespace NOF.Infrastructure.Tests.Caching;
 
 public sealed class RedisBackplaneTests
 {
-    private static readonly JsonObjectSerializer _serializer = new();
+    private static readonly JsonObjectSerializer Serializer = new(System.Text.Json.JsonSerializerOptions.CreateNOF());
 
     [Fact]
     public async Task PublishAsync_ShouldSerializeEnvelopeAndPublishToChannel()
@@ -30,7 +30,7 @@ public sealed class RedisBackplaneTests
                 Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("payload").GetString()));
             });
 
-        var backplane = new RedisBackplane(connectionMultiplexer.Object, _serializer);
+        var backplane = new RedisBackplane(connectionMultiplexer.Object, Serializer);
 
         await backplane.PublishAsync("stream-updates", new TestMessage("chunk-1"));
 
@@ -58,7 +58,7 @@ public sealed class RedisBackplaneTests
                 CommandFlags.None))
             .Returns(Task.CompletedTask);
 
-        var backplane = new RedisBackplane(connectionMultiplexer.Object, _serializer);
+        var backplane = new RedisBackplane(connectionMultiplexer.Object, Serializer);
         var received = new List<string>();
 
         await using var subscription = await backplane.SubscribeAsync<TestMessage>(
@@ -87,9 +87,9 @@ public sealed class RedisBackplaneTests
     private static byte[] CreateEnvelope<T>(T payload)
     {
         var runtimeType = payload!.GetType();
-        var payloadBytes = _serializer.Serialize(payload, runtimeType).ToArray();
+        var payloadBytes = Serializer.Serialize(payload, runtimeType).ToArray();
 
-        return _serializer.Serialize(new Envelope
+        return Serializer.Serialize(new Envelope
         {
             PayloadType = runtimeType.AssemblyQualifiedName ?? runtimeType.FullName ?? runtimeType.Name,
             Payload = payloadBytes

@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NOF.Infrastructure;
 using Xunit;
 
 namespace NOF.Hosting.AspNetCore.Tests;
@@ -8,27 +10,34 @@ namespace NOF.Hosting.AspNetCore.Tests;
 public sealed class HostEnvironmentRegistrationTests
 {
     [Fact]
-    public async Task BuildAsync_ShouldResolveBuilderEnvironmentFromServices()
+    public async Task Build_ShouldResolveBuilderEnvironmentFromServices()
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
-        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.WebHost.UseTestServer();
 
-        await using var app = await builder.BuildAsync();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
 
         var resolvedEnvironment = app.Services.GetRequiredService<IHostEnvironment>();
 
-        Assert.Same(builder.Environment, resolvedEnvironment);
+        Assert.Same(builder.Environment, app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>());
+        Assert.Equal(builder.Environment.ApplicationName, resolvedEnvironment.ApplicationName);
     }
 
     [Fact]
-    public async Task BuildAsync_InDevelopmentWithoutExplicitPersistence_ShouldSucceed()
+    public async Task Build_InDevelopmentWithoutExplicitPersistence_ShouldSucceed()
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.Environment.EnvironmentName = Environments.Development;
-        builder.WebApplicationBuilder.WebHost.UseTestServer();
+        builder.WebHost.UseTestServer();
 
-        await using var app = await builder.BuildAsync();
+        await using var app = builder.Build();
+        app.UseNOF();
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/alive");
 
-        Assert.NotNull(app.Services.GetRequiredService<Application.IDbContext>());
+        Assert.Null(app.Services.GetService<Application.IUnitOfWork>());
     }
 }

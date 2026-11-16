@@ -14,7 +14,7 @@ description: Add or modify a NOF Roslyn incremental generator/analyzer without d
 
 A generator may inspect only user-authored declarations and stable types from referenced runtime assemblies. It must not require another generator's emitted symbols, members, attributes, interfaces, or base types to appear in Roslyn input.
 
-Generated names and signatures may reference other generated artifacts only when both sides derive them independently from the same user-authored declaration. This is how RPC contract, HTTP client, server, auto-inject, and local-client generators remain order-independent.
+Generated names and signatures may reference other generated artifacts only when both sides derive them independently from the same user-authored declaration. This is how server operation, HTTP endpoint metadata, and auto-inject generators remain order-independent.
 
 ## 3. Wire the Parent Package
 
@@ -39,7 +39,6 @@ Keep the runtime package as the public NuGet boundary; generator projects are no
 - `NOF.Domain.SourceGenerator` -> `tests/NOF.Domain.Tests`
 - `NOF.Contract.SourceGenerator` -> `tests/NOF.Contract.Tests`
 - `NOF.Application.SourceGenerator` -> `tests/NOF.Application.Tests`
-- `NOF.Hosting.SourceGenerator` -> `tests/NOF.Hosting.Tests`
 - `NOF.Infrastructure.SourceGenerator` and the EF Core provider analyzers -> `tests/NOF.Infrastructure.Tests`
 
 Reuse `tests/Common/SourceGenerator/*`. Reference the generator project normally from the test project so tests can instantiate it.

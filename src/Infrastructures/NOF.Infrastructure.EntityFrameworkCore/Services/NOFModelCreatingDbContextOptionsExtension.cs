@@ -7,7 +7,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 
 public sealed class NOFModelCreatingDbContextOptionsExtension : IDbContextOptionsExtension
 {
-    public IReadOnlyList<IDbContextModelCreatingContributor> Contributors { get; init; } = [];
+    public IReadOnlyList<IEFCoreModelConfiguration> Contributors { get; init; } = [];
 
     public void ApplyServices(IServiceCollection services)
     {
@@ -21,10 +21,9 @@ public sealed class NOFModelCreatingDbContextOptionsExtension : IDbContextOption
 
     public void ApplyModelCreating(ModelBuilder modelBuilder)
     {
-        var adapter = new EfCoreModelBuilderAdapter(modelBuilder);
         foreach (var contributor in Contributors)
         {
-            contributor.Configure(adapter);
+            contributor.Configure(modelBuilder);
         }
     }
 

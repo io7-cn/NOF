@@ -1,0 +1,8 @@
+.standards/
+.dotnet/
+artifacts/
+**/bin/
+**/obj/
+_site/
+api/
+**/wwwroot/lib/

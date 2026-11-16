@@ -19,7 +19,7 @@ public sealed class ValueObjectInitializationAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor UseFactory = new(
         id: "NOF018",
         title: "Create value objects through their factory",
-        messageFormat: "Value object '{0}' cannot be initialized with {1}; use '{0}.Of(...)' or another generated factory",
+        messageFormat: "Value object '{0}' cannot be initialized with {1}; use '{0}.From(...)' or another generated factory",
         category: "ValueObject",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,

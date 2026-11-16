@@ -13,7 +13,7 @@ Use the existing providers as the template. A minimal provider generally looks l
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsAotCompatible>true</IsAotCompatible>
@@ -43,7 +43,7 @@ public static partial class NOFInfrastructureMyProviderExtensions
         public IServiceCollection AddMyProvider(Action<MyProviderOptions> configure)
         {
             services.Configure(configure);
-            services.ReplaceOrAddSingleton<IMyRuntime, MyRuntime>();
+            services.Replace(ServiceDescriptor.Singleton<IMyRuntime, MyRuntime>());
             return services;
         }
     }
@@ -52,11 +52,11 @@ public static partial class NOFInfrastructureMyProviderExtensions
 
 Use an `IHostApplicationBuilder` extension when registration needs environment data or returns a fluent selector, as the EF Core and NHibernate providers do.
 
-Use `ReplaceOrAdd*` when the provider intentionally replaces a NOF default. Use `TryAdd*` / `TryAddEnumerable` when user overrides or multiple implementations must be preserved.
+Use native `Replace(ServiceDescriptor...)` when the provider intentionally replaces a NOF default. Use `TryAdd*` / `TryAddEnumerable` when user overrides or multiple implementations must be preserved.
 
 ## 3. Add Initialization Only When Necessary
 
-If the provider must act after host construction, implement `IApplicationInitializationStep`, define ordering with `Compare(...)`, and register it through `services.AddInitializationStep(...)` or `TryAddInitializationStep(...)`. Do not recreate `IServiceRegistrationStep`, `IAfter<T>`, or `IBefore<T>`.
+Use native IHostedService/IHostedLifecycleService for startup work. Database migration uses StartingAsync before consumers and HTTP start. HTTP composition is explicit after Build(). Do not reintroduce the framework initialization graph/topology scheduler. Transport-specific native topology callbacks may use a provider-owned lifecycle; see docs/en/design/native-hosting.md.
 
 ## 4. Wire Repository Metadata
 

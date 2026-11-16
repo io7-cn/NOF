@@ -1,123 +1,192 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Routing;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
-using System.Globalization;
+using NOF.Infrastructure;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-JsonSerializerOptions.ConfigureNOFJsonSerializerOptions(static options =>
-    options.TypeInfoResolverChain.Add(SmokeJsonContext.Default));
-
-var builder = NOFWebApplicationBuilder.Create(args);
-builder.Services.AddRpcServer<OrderServer>();
-builder.Services.AddScoped<OrderServer.Update, UpdateOrderHandler>();
-builder.Services.AddScoped<OrderServer.Read, ReadOrderHandler>();
-builder.Services.AddScoped<OrderServer.ReadProtected, ReadProtectedOrderHandler>();
-builder.Services.AddScoped<OrderServer.Lookup, LookupOrderHandler>();
-
-await using var app = await builder.BuildAsync();
+var smokeJson = JsonSerializerOptions.CreateNOF();
+smokeJson.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default);
+expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
+expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
+expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
+    "Custom IsValid message was lost by TryFrom");
+var nameJson = JsonSerializer.Serialize(nodeName, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>());
+expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInfo<NOF.Sample.ConfigNodeName>()) == "node",
+    "Value-object From conversion did not round-trip without reflection");
+var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
+builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
+builder.Services.AddApplicationService<OrderServer>();
+builder.Services.AddApplicationService<PlainOrderService>();
+builder.Services.AddApplicationService<ExpectedOrderService>();
+builder.Services.AddMemoryMessaging(endpoints => endpoints.MapQueue<ReceiveOneWaySmoke>("one-way"));
+builder.Services.AddInvocationFilters(filters =>
+{
+    filters.Global.Use<ValidateReadOrder>();
+    filters.Service<IExpectedOrderService>().Exclude<ValidateReadOrder>();
+    filters.UseCase(ExpectedOrderService.Evaluate.Descriptor).Use<ValidateReadOrder>(5);
+});
+builder.Services.AddSingleton<SmokeOutboxStore>();
+builder.Services.AddSingleton<IOutboxStore>(provider => provider.GetRequiredService<SmokeOutboxStore>());
+builder.Services.AddOutbox();
+await using var app = builder.Build();
+app.UseNOF();
+SmokeEndpointModule.Map(app);
 app.MapOpenApi();
+using (var scope = app.Services.CreateScope())
+{
+    using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
+    var messageId = await scope.ServiceProvider.GetRequiredService<IOutbox>()
+        .EnqueueAsync(new SmokeIntent("typed"), Context.Empty.WithItem("correlation", "aot").WithItem("count", 3));
+    var record = app.Services.GetRequiredService<SmokeOutboxStore>().Record
+        ?? throw new InvalidOperationException("The outbox did not stage its snapshot");
+    expect(record.Id == messageId && record.MessageType == typeof(SmokeIntent).ToString(),
+        "Outbox identity or schema was lost");
+    var stagedHeaders = scope.ServiceProvider.GetRequiredService<IObjectSerializer>().Deserialize<Dictionary<string, string?>>(record.Headers)!;
+    var stagedContext = System.Text.Json.Nodes.JsonNode.Parse(stagedHeaders[NOFAbstractionConstants.Transport.Headers.Context]!)!.AsObject();
+    expect(stagedContext["count"]!.GetValue<int>() == 3, "The Outbox did not persist the complete JSON context");
+    await scope.ServiceProvider.GetRequiredService<OutboxRegistry>().Get(record.MessageType)
+        .Deliver(scope.ServiceProvider, record, new OutboxDeliveryContext
+        {
+            MessageId = record.Id,
+            Context = Context.Empty,
+            Attempt = 1,
+            Headers = new Dictionary<string, string?>()
+        }, CancellationToken.None);
+    expect(SmokeIntentHandler.Delivered == "typed", "The statically registered outbox handler did not run");
+}
 app.Urls.Add("http://127.0.0.1:0");
+using (var scope = app.Services.CreateScope())
+{
+    using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
+    var plan = scope.ServiceProvider.GetRequiredService<IInvocationPlanProvider>()
+        .Describe(OrderServer.Read.Descriptor, InvocationOrigin.Http);
+    expect(plan.FailureCases.Any(item => item.CaseType == typeof(ValidateReadOrder.InvalidPage)),
+        "Generated filter catalog was not captured without reflection");
+    expect(ValidateReadOrder.FailureCases.Single().Title == "order.page", "Filter error code was lost");
+    var preview = await OrderServer.Preview.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    expect(preview is OrderDto { Label: "preview" }, "Operations sharing request/response types lost their identity");
+    var plain = await PlainOrderService.Read.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    expect(plain is OrderDto { Label: "local" }, "Local invocation failed");
+    expect(await PlainOrderService.Find.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty) is null,
+        "Nullable local response was rejected");
+    var decision = await PlainOrderService.Decide.InvokeAsync(scope.ServiceProvider, new ReadOrderRequest { Id = Guid.Empty }, Context.Empty);
+    expect(InvocationResult.Value(decision) is Failure { Title: "order.missing" }, "Business union invocation failed");
+    var missing = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
+        new ReadOrderRequest { Id = Guid.Empty, Page = -1 }, Context.Empty);
+    expect(InvocationResult.Value(missing) is ExpectedOrderService.Evaluate.Missing, "Declared expected failure was lost");
+    var conflict = await ExpectedOrderService.Evaluate.InvokeAsync(scope.ServiceProvider,
+        new ReadOrderRequest { Id = Guid.Empty, Page = 0 }, Context.Empty);
+    expect(InvocationResult.Value(conflict) is ExpectedOrderService.Evaluate.Conflict { Error.Id: var conflictId } && conflictId == Guid.Empty,
+        "Typed expected failure data was lost");
+}
+var receiptId = Guid.NewGuid();
+var oneWayPayload = app.Services.GetRequiredService<IObjectSerializer>().Serialize(new SmokeIntent("one-way"), typeof(SmokeIntent));
+await app.Services.ExecuteMessageAsync(app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke)), oneWayPayload,
+    new Dictionary<string, string?>
+    {
+        [NOFAbstractionConstants.Transport.Headers.Context] = Context.Empty.WithItem("correlation", "aot").WithItem("count", 3).Items.ToJsonString()
+    }, default);
+expect(ReceiveOneWaySmoke.Completed.Task.IsCompleted, "The endpoint did not execute its handler directly");
 await app.StartAsync();
-
-using var http = new HttpClient(new InspectBodyHandler(new HttpClientHandler()))
-{
-    BaseAddress = new Uri(app.Urls.Single())
-};
-var client = new HttpOrderServiceClient(http);
+await ReceiveOneWaySmoke.Completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+var oneWayOperation = app.Services.GetRequiredService<ApplicationServiceRegistry>().GetOperation(typeof(ReceiveOneWaySmoke));
+expect(oneWayOperation.IsOneWay && oneWayOperation.ResultCases.Count == 0 && oneWayOperation.ContractType is null,
+    "One-way metadata exposed a business reply case");
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
 var id = Guid.NewGuid();
-var updated = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "shipped" }, Context.Empty);
-Expect(updated.IsSuccess && updated.Value == new OrderDto(id, "shipped", "default"), "Generated PUT did not bind the path and body");
-
-var read = await client.ReadAsync(new ReadOrderRequest { Id = id, Page = 7 }, Context.Empty);
-Expect(read.IsSuccess && read.Value == new OrderDto(id, "7", "read"), "Generated GET did not bind the path and query");
-
-using var raw = new HttpClient { BaseAddress = http.BaseAddress };
-using var forged = await raw.PutAsync($"/orders/{id}",
-    new StringContent($$"""{"id":"{{Guid.NewGuid()}}","state":"raw"}""", Encoding.UTF8, "application/json"));
-forged.EnsureSuccessStatusCode();
-var forgedResult = await JsonSerializer.DeserializeAsync(
-    await forged.Content.ReadAsStreamAsync(), JsonSerializerOptions.NOF.GetRequiredTypeInfo<Result<OrderDto>>());
-Expect(forgedResult?.Value == new OrderDto(id, "raw", "default"), "A JSON id changed the path ID");
-
-using var badPath = await raw.GetAsync("/orders/invalid");
-Expect(badPath.StatusCode == HttpStatusCode.BadRequest, "An invalid path value was accepted");
-
-var lookup = new LookupOrderRequest
+expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
+    "Inherited failure types changed Contract identity");
+expect(typeof(ExpectedOrderService.Evaluate.Result).Assembly == typeof(ExpectedOrderService).Assembly,
+    "Generated result is not owned by Application");
+expect(new ExpectedOrderService.Evaluate.Missing("factory").GetType() == typeof(ExpectedOrderService.Evaluate.Missing),
+    "Inherited constructor did not return the canonical failure type");
+var conflictData = new OrderConflict(id);
+expect(ReferenceEquals(conflictData, new ExpectedOrderService.Evaluate.Conflict(conflictData).Error),
+    "Inherited constructor replaced error data");
+expect(new ExpectedOrderService.Evaluate.Missing().Title == "404", "Inherited failure lost its declared Title");
+var savedJson = JsonSerializer.Serialize(Empty.Instance, smokeJson.GetRequiredTypeInfo<Empty>());
+expect(savedJson == "{}", "Payload-free success serialized metadata");
+expect(JsonSerializer.Deserialize(savedJson, smokeJson.GetRequiredTypeInfo<Empty>()) is Empty,
+    "Payload-free union did not round-trip without reflection");
+using var update = await http.PutAsync($"/native/orders/{id}", new StringContent(
+    $$"""{"id":"{{Guid.NewGuid()}}","state":"shipped"}""", Encoding.UTF8, "application/json"));
+update.EnsureSuccessStatusCode();
+var updated = await update.Content.ReadFromJsonAsync(smokeJson.GetRequiredTypeInfo<OrderDto>());
+expect(updated == new OrderDto(id, "shipped", "default"), "Path identity/body binding did not survive AOT");
+var read = await http.GetFromJsonAsync($"/native/orders/{id}?page=7", smokeJson.GetRequiredTypeInfo<OrderDto>());
+expect(read == new OrderDto(id, "7", "read"), "Query binding or plain resource serialization failed");
+using var nullable = await http.GetAsync($"/native/nullable/{id}");
+expect(nullable.StatusCode == HttpStatusCode.OK && await nullable.Content.ReadAsStringAsync() == "null", "Nullable resource did not map to JSON null");
+using var directNullable = await http.GetAsync($"/native/internal/{id}");
+expect(directNullable.StatusCode == HttpStatusCode.OK && await directNullable.Content.ReadAsStringAsync() == "null",
+    "Standalone nullable handler did not survive static discovery and trimming");
+using var decisionResponse = await http.GetAsync($"/native/decisions/{id}");
+expect(decisionResponse.StatusCode == HttpStatusCode.NotFound, "Business union did not map to ProblemDetails");
+var withMessage = await http.GetFromJsonAsync($"/native/messages/{id}", smokeJson.GetRequiredTypeInfo<OrderReadReceipt>());
+expect(withMessage!.Order.Id == id && withMessage.Message == "Read from cache", "Success message was lost");
+using var denied = await http.GetAsync($"/native/protected/{id}");
+expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count == 0,
+    "Application authorization must not invent an unconfigured authentication challenge");
+using var invalid = await http.GetAsync($"/native/orders/{id}?page=-1");
+expect(invalid.StatusCode == HttpStatusCode.BadRequest, "Inbound policy rejection was lost");
+using var problem = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
+expect(problem.RootElement.GetProperty("title").GetString() == "order.page", "Policy rejection details were lost");
+using var failure = await http.PutAsJsonAsync($"/native/orders/{id}", new UpdateBody { State = "fail" }, smokeJson.GetRequiredTypeInfo<UpdateBody>());
+expect(failure.StatusCode == HttpStatusCode.BadRequest, "Business failure was not mapped");
+using var badBody = await http.PutAsync($"/native/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
+expect(badBody.StatusCode == HttpStatusCode.BadRequest, "Required body member was omitted");
+using var badPath = await http.GetAsync("/native/orders/invalid");
+expect(badPath.StatusCode == HttpStatusCode.NotFound, "Guid route constraint was ignored");
+foreach (var path in new[] { "/Read", "/rpc", $"/orders/{id}" })
 {
-    Slug = "café #1?",
-    State = OrderState.Shipped,
-    Day = new DateOnly(2026, 4, 10),
-    Timestamp = new DateTime(2026, 4, 10, 9, 15, 0, DateTimeKind.Utc).AddTicks(1234),
-    Amount = 12.5m,
-    Warehouse = new WarehouseCode(17),
-    Legacy = new LegacyOrderNumber(45),
-    Price = new LegacyPrice(9.75m)
-};
-var culture = CultureInfo.CurrentCulture;
-try
-{
-    CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-    var result = await client.LookupAsync(lookup, Context.Empty);
-    Expect(result.IsSuccess && result.Value == "café #1?|Shipped|2026-04-10|2026-04-10T09:15:00.0001234Z|12.5|17|45|9.75",
-        "Generated GET did not round-trip scalar and custom path values");
+    using var missing = await http.GetAsync(path);
+    expect(missing.StatusCode == HttpStatusCode.NotFound, "An implicit legacy route was exposed");
 }
-finally
+using var expectedMissing = await http.GetAsync($"/native/expected/{id}?page=-1");
+expect(expectedMissing.StatusCode == HttpStatusCode.NotFound, "Declared missing case did not map to 404");
+using var expectedConflict = await http.GetAsync($"/native/expected/{id}?page=0");
+expect(expectedConflict.StatusCode == HttpStatusCode.Conflict, "Declared typed conflict did not map to 409");
+NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result deleteOutcome =
+    new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.HasChildren(new NOF.Sample.NodeHasChildrenError(42));
+var deleteJson = JsonSerializer.Serialize(deleteOutcome,
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+var restoredDelete = JsonSerializer.Deserialize(deleteJson,
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+expect(restoredDelete.Match(_ => 0L, _ => -1L, error => error.Error.NodeId) == 42,
+    "Source-generated expected-outcome metadata did not round-trip custom failure data without reflection");
+deleteOutcome = new NOF.Sample.Application.NOFSampleService.DeleteConfigNode.NotFound("Missing node");
+var missingJson = JsonSerializer.Serialize(deleteOutcome,
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+var restoredMissing = JsonSerializer.Deserialize(missingJson,
+    smokeJson.GetRequiredTypeInfo<NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result>());
+expect(restoredMissing.Match(_ => "success", error => error.Detail, _ => "children") == "Missing node",
+    "Source-generated expected-outcome metadata lost default Error data");
+using var openApi = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
+var put = openApi.RootElement.GetProperty("paths").GetProperty("/native/orders/{id}").GetProperty("put");
+var parameter = put.GetProperty("parameters").EnumerateArray().Single();
+expect(parameter.GetProperty("name").GetString() == "id", "OpenAPI omitted the path parameter");
+var schema = put.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema");
+if (schema.TryGetProperty("$ref", out var reference))
 {
-    CultureInfo.CurrentCulture = culture;
+    schema = openApi.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(reference.GetString()!.Split('/')[^1]);
 }
-
-using var lowercaseEnum = await raw.GetAsync("/orders/lookup/slug/shipped/2026-04-10/2026-04-10T09:15:00Z/12.5/w-17/45/9.75");
-lowercaseEnum.EnsureSuccessStatusCode();
-using var badEnum = await raw.GetAsync("/orders/lookup/slug/invalid/2026-04-10/2026-04-10T09:15:00Z/12.5/w-17/45/9.75");
-Expect(badEnum.StatusCode == HttpStatusCode.BadRequest, "An invalid enum path value was accepted");
-using var badLegacy = await raw.GetAsync("/orders/lookup/slug/shipped/2026-04-10/2026-04-10T09:15:00Z/12.5/w-17/invalid/9.75");
-Expect(badLegacy.StatusCode == HttpStatusCode.BadRequest, "An invalid static TryParse path value was accepted");
-
-foreach (var invalidSlug in new string?[] { null, "", ".", "..", "a/b", "a\\b" })
-{
-    try
-    {
-        await client.LookupAsync(lookup with { Slug = invalidSlug }, Context.Empty);
-        throw new InvalidOperationException("The generated client accepted an invalid path segment");
-    }
-    catch (ArgumentException exception) when (exception.ParamName == nameof(LookupOrderRequest.Slug))
-    {
-    }
-}
-
-using var badBody = await raw.PutAsync($"/orders/{id}", new StringContent("{}", Encoding.UTF8, "application/json"));
-Expect(badBody.StatusCode == HttpStatusCode.BadRequest, "A required body field was omitted");
-
-using var denied = await raw.GetAsync($"/orders/{id}/protected");
-Expect(denied.StatusCode == HttpStatusCode.Unauthorized && denied.Headers.WwwAuthenticate.Count > 0,
-    "Generated route did not preserve NOF authorization");
-
-var failure = await client.UpdateAsync(new UpdateOrderRequest { Id = id, Status = "fail" }, Context.Empty);
-Expect(!failure.IsSuccess && failure.ErrorCode == "order.rejected", "Generated route did not serialize the business failure");
-
-using var openApi = JsonDocument.Parse(await raw.GetStringAsync("/openapi/v1.json"));
-var put = openApi.RootElement.GetProperty("paths").GetProperty("/orders/{id}").GetProperty("put");
-var path = put.GetProperty("parameters").EnumerateArray().Single();
-Expect(path.GetProperty("name").GetString() == "id" && path.GetProperty("in").GetString() == "path",
-    "OpenAPI did not describe the path parameter");
-var properties = put.GetProperty("requestBody").GetProperty("content").GetProperty("application/json")
-    .GetProperty("schema").GetProperty("properties");
-Expect(properties.TryGetProperty("state", out _) && !properties.TryGetProperty("id", out _),
-    "OpenAPI did not describe the generated body");
-var lookupParameters = openApi.RootElement.GetProperty("paths")
-    .GetProperty("/orders/lookup/{slug}/{state}/{day}/{timestamp}/{amount}/{warehouse}/{legacy}/{price}")
-    .GetProperty("get").GetProperty("parameters");
-var warehouse = lookupParameters.EnumerateArray().Single(parameter => parameter.GetProperty("name").GetString() == "warehouse");
-Expect(warehouse.GetProperty("schema").GetProperty("type").GetString() == "string",
-    "OpenAPI did not describe the custom path value as text");
-
+var properties = schema.GetProperty("properties");
+expect(properties.TryGetProperty("state", out _) && !properties.TryGetProperty("id", out _), "OpenAPI leaked path identity into body");
 await app.StopAsync();
-Console.WriteLine("Generated HTTP route smoke test passed.");
+Console.WriteLine("Native HTTP endpoint module smoke test passed.");
 
-static void Expect(bool condition, string message)
+static void expect(bool condition, string message)
 {
     if (!condition)
     {
@@ -125,21 +194,26 @@ static void Expect(bool condition, string message)
     }
 }
 
-[TransportOverHttp(HttpRpcStyle.ControllerRpc, "/orders")]
-public interface IOrderService : IRpcService
+public sealed record UpdateBody
 {
-    [HttpEndpoint(HttpVerb.Put, "/{id}")]
-    Result<OrderDto> Update(UpdateOrderRequest request);
-
-    [HttpEndpoint(HttpVerb.Get, "/{id}")]
-    Result<OrderDto> Read(ReadOrderRequest request);
-
-    [HttpEndpoint(HttpVerb.Get, "/{id}/protected")]
+    public required string State { get; init; }
+}
+public interface IProtectedOrderAccess
+{
     [RequirePermission("order.read")]
-    Result<OrderDto> ReadProtected(ReadOrderRequest request);
+    PlainDecision ReadProtected(ReadOrderRequest request);
+}
 
-    [HttpEndpoint(HttpVerb.Get, "/lookup/{slug}/{state}/{day}/{timestamp}/{amount}/{warehouse}/{legacy}/{price}")]
-    Result<string> Lookup(LookupOrderRequest request);
+public interface IOrderService : IApplicationService, IProtectedOrderAccess
+{
+    PlainDecision Update(UpdateOrderRequest request);
+    PlainDecision Read(ReadOrderRequest request);
+    OrderDto ReadValue(ReadOrderRequest request);
+    OrderDto Preview(ReadOrderRequest request);
+    OrderDto? Find(ReadOrderRequest request);
+    PlainDecision Decide(ReadOrderRequest request);
+    OrderReceipt ReadWithMessage(ReadOrderRequest request);
+    new PlainDecision ReadProtected(ReadOrderRequest request);
 }
 
 public sealed class UpdateOrderRequest
@@ -159,129 +233,211 @@ public sealed class ReadOrderRequest
 }
 
 public sealed record OrderDto(Guid Id, string Status, string Label);
+public sealed record OrderReadReceipt(OrderDto Order, string Message);
 
-public sealed record LookupOrderRequest
-{
-    public required string? Slug { get; init; }
-    public required OrderState State { get; init; }
-    public required DateOnly Day { get; init; }
-    public required DateTime Timestamp { get; init; }
-    public required decimal Amount { get; init; }
-    public required WarehouseCode Warehouse { get; init; }
-    public required LegacyOrderNumber Legacy { get; init; }
-    public required LegacyPrice Price { get; init; }
-}
-
-public enum OrderState
-{
-    Pending,
-    Shipped
-}
-
-public readonly record struct WarehouseCode(int Value) : IParsable<WarehouseCode>
-{
-    static WarehouseCode IParsable<WarehouseCode>.Parse(string text, IFormatProvider? provider)
-        => text.StartsWith("w-", StringComparison.Ordinal)
-            ? new(int.Parse(text.AsSpan(2), NumberStyles.None, provider))
-            : throw new FormatException();
-
-    static bool IParsable<WarehouseCode>.TryParse(string? text, IFormatProvider? provider, out WarehouseCode result)
-    {
-        result = default;
-        if (text is null || !text.StartsWith("w-", StringComparison.Ordinal)
-            || !int.TryParse(text.AsSpan(2), NumberStyles.None, provider, out var number))
-        {
-            return false;
-        }
-
-        result = new(number);
-        return true;
-    }
-
-    public override string ToString() => FormattableString.Invariant($"w-{Value}");
-}
-
-public sealed record LegacyOrderNumber(int Value)
-{
-    public static bool TryParse(string text, out int result)
-        => int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out result);
-
-    public static bool TryParse(string text, out LegacyOrderNumber? result)
-    {
-        var success = TryParse(text, out int number);
-        result = success ? new(number) : null;
-        return success;
-    }
-
-    public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);
-}
-
-public readonly record struct LegacyPrice(decimal Value) : IFormattable
-{
-    public static bool TryParse(string text, out LegacyPrice result)
-        => TryParse(text, CultureInfo.GetCultureInfo("fr-FR"), out result);
-
-    public static bool TryParse(string text, IFormatProvider? provider, out LegacyPrice result)
-    {
-        var success = decimal.TryParse(text, NumberStyles.AllowDecimalPoint, provider, out var value);
-        result = new(value);
-        return success;
-    }
-
-    public string ToString(string? format, IFormatProvider? provider) => Value.ToString(format, provider);
-}
-
-public partial class OrderServer : RpcServer<IOrderService>;
+public partial class OrderServer : ApplicationService<IOrderService>;
 
 public sealed class UpdateOrderHandler : OrderServer.Update
 {
-    public override Task<Result<OrderDto>> HandleAsync(
-        UpdateOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult<Result<OrderDto>>(request.Status == "fail"
-            ? Result.Fail("order.rejected", "Order rejected")
-            : Result.Success(new OrderDto(request.Id, request.Status, request.Label)));
+    public override Task<PlainDecision> HandleAsync(
+        UpdateOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(request.Status == "fail"
+            ? new Failure("order.rejected", "Order rejected")
+            : new OrderDto(request.Id, request.Status, request.Label));
 }
 
 public sealed class ReadOrderHandler : OrderServer.Read
 {
-    public override Task<Result<OrderDto>> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read")));
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
+}
+
+public sealed class ReadOrderValue : OrderServer.ReadValue
+{
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, request.Page?.ToString() ?? "", "read"));
+}
+
+public sealed class PreviewOrder : OrderServer.Preview
+{
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, "preview", "preview"));
+}
+
+public sealed class FindOrder : OrderServer.Find
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
+}
+
+[FailureCase("InvalidPage", "order.page")]
+public sealed partial class ValidateReadOrder : IInvocationFilter
+{
+    public ValueTask<object?> InvokeAsync(InvocationContext context, object request, InvocationDelegate next, CancellationToken cancellationToken)
+    {
+        if (context.ServiceType == typeof(IOrderService)
+            && context.ServiceMethodInfo.Name is nameof(IOrderService.Read) or nameof(IOrderService.ReadValue)
+            && request is ReadOrderRequest { Page: < 0 })
+        {
+            return ValueTask.FromResult<object?>(new InvalidPage("Page must be nonnegative"));
+        }
+        return next(context, request, cancellationToken);
+    }
+}
+
+public interface IPlainOrderService : IApplicationService
+{
+    OrderDto Read(ReadOrderRequest request);
+    OrderDto? Find(ReadOrderRequest request);
+    PlainDecision Decide(ReadOrderRequest request);
+}
+
+public union PlainDecision(OrderDto, Failure);
+public partial class PlainOrderService : ApplicationService<IPlainOrderService>;
+
+public sealed class ReadPlainOrder : PlainOrderService.Read
+{
+    public override Task<OrderDto> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult(new OrderDto(request.Id, "read", "local"));
+}
+
+public sealed class FindPlainOrder : PlainOrderService.Find
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
+}
+
+public sealed class DecidePlainOrder : PlainOrderService.Decide
+{
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
+}
+
+public sealed class DecideOrder : OrderServer.Decide
+{
+    public override Task<PlainDecision> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<PlainDecision>(new Failure("order.missing", "Order not found"));
 }
 
 public sealed class ReadProtectedOrderHandler : OrderServer.ReadProtected
 {
-    public override Task<Result<OrderDto>> HandleAsync(
-        ReadOrderRequest request, Context context, CancellationToken cancellationToken)
+    public override Task<PlainDecision> HandleAsync(
+        ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
         => throw new InvalidOperationException("An anonymous request must not reach the protected handler");
 }
 
-public sealed class LookupOrderHandler : OrderServer.Lookup
+public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 {
-    public override Task<Result<string>> HandleAsync(
-        LookupOrderRequest request, Context context, CancellationToken cancellationToken)
-        => Task.FromResult(Result.Success(FormattableString.Invariant(
-            $"{request.Slug}|{request.State}|{request.Day:yyyy-MM-dd}|{request.Timestamp:O}|{request.Amount}|{request.Warehouse.Value}|{request.Legacy.Value}|{request.Price.Value}")));
+    public override Task<OrderReceipt> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderReceipt>(new OrderReadReceipt(new OrderDto(request.Id, "cached", "read"), "Read from cache"));
 }
 
-public sealed class InspectBodyHandler(HttpMessageHandler innerHandler) : DelegatingHandler(innerHandler)
-{
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        if (request.Method == HttpMethod.Put)
-        {
-            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
-            if (body.RootElement.TryGetProperty("id", out _) || !body.RootElement.TryGetProperty("state", out _))
-            {
-                throw new InvalidOperationException("The generated client sent an unexpected JSON body");
-            }
-        }
 
-        return await base.SendAsync(request, cancellationToken);
+[JsonSerializable(typeof(NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
+[JsonSerializable(typeof(Empty))]
+[JsonSerializable(typeof(SmokeIntent))]
+[JsonSerializable(typeof(NOF.Sample.ConfigNodeName))]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(OrderDto))]
+[JsonSerializable(typeof(UpdateBody))]
+[JsonSerializable(typeof(UpdateOrderRequest))]
+[JsonSerializable(typeof(ReadOrderRequest))]
+[JsonSerializable(typeof(OrderReadReceipt))]
+[JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
+public partial class SmokeJsonContext : JsonSerializerContext;
+
+public sealed record SmokeIntent(string Value);
+public sealed class SmokeIntentHandler : OutboxHandler<SmokeIntent>
+{
+    public static string? Delivered { get; private set; }
+    public override ValueTask HandleAsync(SmokeIntent message, OutboxDeliveryContext context, CancellationToken cancellationToken)
+    {
+        Delivered = message.Value;
+        return ValueTask.CompletedTask;
     }
 }
 
-[JsonSerializable(typeof(Result))]
-[JsonSerializable(typeof(Result<OrderDto>))]
-[JsonSerializable(typeof(Result<string>))]
-public partial class SmokeJsonContext : JsonSerializerContext;
+// This smoke exercises the codec and typed delivery delegate, without an AOT-incompatible memory ORM.
+public sealed class SmokeOutboxStore : IOutboxStore
+{
+    public NOFOutboxMessage? Record { get; private set; }
+    public void Stage(NOFOutboxMessage message) => Record = message;
+    public async IAsyncEnumerable<NOFOutboxMessage> AtomicClaimPendingMessagesAsync(int batchSize = 100,
+        TimeSpan? claimTimeout = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+    public ValueTask AtomicReleaseClaimsAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
+        => ValueTask.CompletedTask;
+    public ValueTask<int> AtomicMarkAsSentAsync(IEnumerable<NOFOutboxMessage> messages, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(0);
+    public ValueTask AtomicRecordDeliveryFailureAsync(NOFOutboxMessage message, string errorMessage, bool permanent = false,
+        CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    public Task<int> CleanupAsync(DateTime olderThan, CancellationToken cancellationToken)
+        => Task.FromResult(0);
+}
+
+public static class SmokeEndpointModule
+{
+    public static void Map(IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/native");
+        group.Response<ValidateReadOrder.InvalidPage>(400);
+        group.MapGet<OrderServer.ReadValue>("/orders/{id:guid}");
+        group.MapPut<OrderServer.Update>("/orders/{id:guid}")
+            .Response<Failure>(400);
+        group.MapGet<OrderServer.ReadProtected>("/protected/{id:guid}");
+        group.MapGet<PlainOrderService.Find>("/nullable/{id:guid}");
+        group.MapGet<FindPrivateOrder>("/internal/{id:guid}");
+        group.MapGet<PlainOrderService.Decide>("/decisions/{id:guid}")
+            .Response<Failure>(404);
+        group.MapGet<OrderServer.ReadWithMessage>("/messages/{id:guid}");
+        group.MapGet<ExpectedOrderService.Evaluate>("/expected/{id:guid}")
+            .Response<ExpectedOrderService.Evaluate.Missing>(404)
+.Response<ExpectedOrderService.Evaluate.Conflict>(409);
+    }
+}
+
+public union OrderReceipt(OrderReadReceipt, Failure);
+
+public sealed record OrderConflict(Guid Id);
+public interface IExpectedOrderService : IApplicationService
+{
+    [FailureCase("Missing", "404")]
+    [FailureCase("Conflict", "Conflict", typeof(OrderConflict))]
+    OrderDto Evaluate(ReadOrderRequest request);
+}
+public partial class ExpectedOrderService : ApplicationService<IExpectedOrderService>;
+public sealed class EvaluateOrder : ExpectedOrderService.Evaluate
+{
+    public override Task<Result> HandleAsync(
+        ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<Result>(request.Page switch
+        {
+            < 0 => new Missing("Order not found"),
+            0 => new Conflict(new OrderConflict(request.Id)),
+            _ => new OrderDto(request.Id, "evaluated", "expected")
+        });
+}
+
+public sealed class ReceiveOneWaySmoke : OperationHandler<SmokeIntent>
+{
+    public static TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public override Task HandleAsync(SmokeIntent request, InvocationContext context, CancellationToken cancellationToken)
+    {
+        if (request.Value != "one-way" || context.Context["correlation"]?.GetValue<string>() != "aot"
+            || context.Context["count"]?.GetValue<int>() != 3)
+        {
+            throw new InvalidOperationException("The one-way message payload changed.");
+        }
+        Completed.TrySetResult();
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class FindPrivateOrder : OperationHandler<ReadOrderRequest, OrderDto?>
+{
+    public override Task<OrderDto?> HandleAsync(ReadOrderRequest request, InvocationContext context, CancellationToken cancellationToken)
+        => Task.FromResult<OrderDto?>(null);
+}

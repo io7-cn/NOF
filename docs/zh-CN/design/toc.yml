@@ -1,0 +1,62 @@
+- name: "架构与迁移"
+  href: index.md
+- name: "ADR 0001：应用执行核心与传输适配器"
+  href: 0001-application-core-and-adapters.md
+- name: "显式 Ambient 绑定"
+  href: ambient-binding.md
+- name: "应用服务与 HTTP 端点模块"
+  href: application-requests.md
+- name: "契约授权与动态权限"
+  href: authorization.md
+- name: "配置节点 REST 完整实现"
+  href: configuration-rest.md
+- name: "Contract 声明与 Application 执行边界"
+  href: contract-boundaries.md
+- name: "原生 EF Core 配置与 NOF 策略"
+  href: efcore-configuration.md
+- name: "JSON 执行上下文与可靠投递"
+  href: execution-context.md
+- name: "声明式预期失败"
+  href: expected-failures.md
+- name: "框架边界与原生平台 API"
+  href: framework-simplification.md
+- name: "Handler 注册"
+  href: handler-registration.md
+- name: "宿主装配与身份职责"
+  href: host-composition.md
+- name: "原生 HTTP 适配"
+  href: http-adaptation.md
+- name: "宿主选择的调用扩展"
+  href: invocation-extensions.md
+- name: "基于表达式的映射"
+  href: mapper.md
+- name: "原生宿主集成"
+  href: native-hosting.md
+- name: ".NET 11 迁移与联合类型"
+  href: net11-migration.md
+- name: "对象存储边界"
+  href: object-storage.md
+- name: "单向操作与直接消息端点"
+  href: one-way-operations.md
+- name: "聚合仓储与原生持久化"
+  href: persistence-boundaries.md
+- name: "公开编程模型"
+  href: public-api.md
+- name: "两个 NOF 服务之间的 RabbitMQ 手动路由"
+  href: rabbitmq-sample.md
+- name: "NOF 12 操作专属结果 Union"
+  href: result-unions.md
+- name: "交互式 Sample 能力工作台"
+  href: sample-workbench.md
+- name: "代码生成器隔离"
+  href: source-generators.md
+- name: "事务性 Outbox 与直接消息端点"
+  href: transactional-outbox.md
+- name: "统一操作、消息绑定与聚合集合"
+  href: unified-operations.md
+- name: "值对象为何不提供 Value 属性"
+  href: value-object.md
+- name: "值对象构造"
+  href: value-objects.md
+- name: HTTP 契约文档
+  href: http-contract-documentation.md

@@ -1,29 +1,27 @@
-using NOF.Abstraction;
-using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
-namespace NOF.Contract;
+namespace NOF.Abstraction;
 
 /// <summary>
 /// Immutable execution context passed explicitly across NOF execution boundaries.
 /// </summary>
 /// <remarks>
-/// String item keys use ordinal, case-insensitive comparison so transported HTTP header names retain their protocol semantics.
-/// Non-string keys use their default equality semantics.
+/// Items have case-insensitive string keys and JSON scalar values. Snapshots never expose mutable owned nodes.
 /// </remarks>
 public class Context
 {
     private static readonly AsyncLocal<Context?> AmbientContext = new();
-    private static readonly IReadOnlyDictionary<object, object?> EmptyItems =
-        new ReadOnlyDictionary<object, object?>(CreateMutableItems());
+    private readonly JsonObject _items;
 
     protected Context()
-        : this(EmptyItems)
+        : this(new JsonObject())
     {
     }
 
-    protected Context(IReadOnlyDictionary<object, object?> items)
+    protected Context(JsonObject items)
     {
-        Items = CreateReadOnlyItems(items);
+        _items = Snapshot(items);
     }
 
     public static Context Empty { get; } = new();
@@ -33,35 +31,38 @@ public class Context
     /// </summary>
     public static Context Current => AmbientContext.Value ?? Empty;
 
-    public IReadOnlyDictionary<object, object?> Items { get; }
+    /// <summary>Gets a detached JSON object snapshot containing only JSON scalar values.</summary>
+    public JsonObject Items => (JsonObject)_items.DeepClone();
 
     /// <summary>
     /// Gets the normalized tenant identifier carried by this context.
     /// </summary>
     public string TenantId
-        => TryGetItem(NOFAbstractionConstants.Transport.Headers.TenantId, out var value)
-            && value is string tenantId
+        => _items.TryGetPropertyValue(NOFAbstractionConstants.Transport.Headers.TenantId, out var value)
+            && value is JsonValue json && json.TryGetValue<string>(out var tenantId)
                 ? NOFAbstractionConstants.Tenant.NormalizeTenantId(tenantId)
                 : NOFAbstractionConstants.Tenant.HostId;
 
-    public object? this[object key]
+    public JsonNode? this[string key]
         => TryGetItem(key, out var value)
             ? value
             : null;
 
-    public bool TryGetItem(object key, out object? value)
+    public bool TryGetItem(string key, out JsonNode? value)
     {
         ArgumentNullException.ThrowIfNull(key);
-        return Items.TryGetValue(key, out value);
+        var found = _items.TryGetPropertyValue(key, out var stored);
+        value = stored?.DeepClone();
+        return found;
     }
 
-    public Context WithItem(object key, object? value)
+    public Context WithItem(string key, JsonNode? value)
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        var items = CreateMutableItems(Items);
-        items[key] = value;
-        return Clone(CreateReadOnlyItems(items));
+        var items = Items;
+        items[key] = value?.DeepClone();
+        return Clone(items);
     }
 
     /// <summary>
@@ -88,7 +89,7 @@ public class Context
         return new AmbientContextScope(previous);
     }
 
-    public Context WithItems(IReadOnlyDictionary<object, object?> items)
+    public Context WithItems(JsonObject items)
     {
         ArgumentNullException.ThrowIfNull(items);
         if (items.Count == 0)
@@ -96,80 +97,45 @@ public class Context
             return this;
         }
 
-        var merged = CreateMutableItems(Items);
+        var merged = Items;
         foreach (var item in items)
         {
-            merged[item.Key] = item.Value;
+            merged[item.Key] = item.Value?.DeepClone();
         }
 
-        return Clone(CreateReadOnlyItems(merged));
+        return Clone(merged);
     }
 
-    public Context WithoutItem(object key)
+    public Context WithoutItem(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        if (!Items.ContainsKey(key))
+        if (!_items.ContainsKey(key))
         {
             return this;
         }
 
-        var items = CreateMutableItems(Items);
+        var items = Items;
         items.Remove(key);
-        return Clone(CreateReadOnlyItems(items));
+        return Clone(items);
     }
 
-    protected virtual Context Clone(IReadOnlyDictionary<object, object?> items)
+    protected virtual Context Clone(JsonObject items)
         => new(items);
 
-    private static IReadOnlyDictionary<object, object?> CreateReadOnlyItems(IReadOnlyDictionary<object, object?> items)
+    private static JsonObject Snapshot(JsonObject items)
     {
-        if (items.Count == 0)
-        {
-            return EmptyItems;
-        }
-
-        return new ReadOnlyDictionary<object, object?>(
-            CreateMutableItems(items));
-    }
-
-    private static Dictionary<object, object?> CreateMutableItems()
-        => new(ContextItemKeyComparer.Instance);
-
-    private static Dictionary<object, object?> CreateMutableItems(
-        IEnumerable<KeyValuePair<object, object?>> items)
-    {
-        var result = CreateMutableItems();
+        var result = new JsonObject(new JsonNodeOptions { PropertyNameCaseInsensitive = true });
         foreach (var item in items)
         {
-            result[item.Key] = item.Value;
+            if (item.Value is not null && (item.Value is not JsonValue
+                || item.Value.GetValueKind() is JsonValueKind.Object or JsonValueKind.Array))
+            {
+                throw new ArgumentException("Context items must be JSON strings, numbers, booleans or null.", nameof(items));
+            }
+            result.Add(item.Key, item.Value is null ? null : JsonNode.Parse(item.Value.ToJsonString()));
         }
 
         return result;
-    }
-
-    private sealed class ContextItemKeyComparer : IEqualityComparer<object>
-    {
-        public static ContextItemKeyComparer Instance { get; } = new();
-
-        public new bool Equals(object? x, object? y)
-        {
-            if (x is string xString && y is string yString)
-            {
-                return StringComparer.OrdinalIgnoreCase.Equals(xString, yString);
-            }
-
-            if (x is string || y is string)
-            {
-                return false;
-            }
-
-            return EqualityComparer<object>.Default.Equals(x, y);
-        }
-
-        public int GetHashCode(object obj)
-            => obj is string value
-                ? StringComparer.OrdinalIgnoreCase.GetHashCode(value)
-                : EqualityComparer<object>.Default.GetHashCode(obj);
     }
 
     private sealed class AmbientContextScope(Context? previous) : IDisposable

@@ -6,7 +6,7 @@ namespace NOF.Infrastructure.NHibernate;
 
 public static class NHibernateValueObjectLengthResolver
 {
-    private static readonly Type _valueObjectInterface = typeof(IValueObject<>);
+    private static readonly Type ValueObjectInterface = typeof(IValueObject<>);
 
     public static int? Resolve(Type entityType, PropertyInfo propertyInfo, int? configuredLength)
     {
@@ -35,6 +35,6 @@ public static class NHibernateValueObjectLengthResolver
     private static bool IsStringValueObject(Type type)
         => type.GetInterfaces().Any(@interface =>
             @interface.IsGenericType
-            && @interface.GetGenericTypeDefinition() == _valueObjectInterface
+            && @interface.GetGenericTypeDefinition() == ValueObjectInterface
             && @interface.GenericTypeArguments[0] == typeof(string));
 }

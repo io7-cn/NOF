@@ -16,7 +16,7 @@ public sealed class JsonObjectSerializerTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => serializer.Serialize(new MissingJsonType { Name = "demo" }));
         Assert.Contains(typeof(MissingJsonType).FullName!, ex.Message);
-        Assert.Contains("ConfigureNOFJsonSerializerOptions", ex.Message);
+        Assert.Contains("JsonSerializerContext", ex.Message);
         Assert.IsType<NotSupportedException>(ex.InnerException);
     }
 

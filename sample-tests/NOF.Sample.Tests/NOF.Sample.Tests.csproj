@@ -1,28 +1,79 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Test\NOF.Test.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Application\NOF.Sample.Application.csproj" />
+    <ProjectReference Include="..\..\sample\NOF.Sample.Notifications\NOF.Sample.Notifications.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
     <ProjectReference Include="..\..\sample\NOF.Sample.Domain\NOF.Sample.Domain.csproj" />
     <ProjectReference Include="..\..\src\NOF.Application.SourceGenerator\NOF.Application.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\NOF.Infrastructure.SourceGenerator\NOF.Infrastructure.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
-
+  <ItemGroup>
+    <Compile Include="..\..\tests\Common\Assertions\*.cs" Link="Assertions\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore\NOF.Hosting.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\sample\NOF.Sample.UI\NOF.Sample.UI.csproj" />
+    <ProjectReference Include="..\..\src\NOF.Abstraction.SourceGenerator\NOF.Abstraction.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <Compile Include="..\..\sample\NOF.Sample\Persistence\ConfigNodePersistence.cs" Link="Persistence\ConfigNodePersistence.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Endpoints\ConfigNodeEndpoints.cs" Link="Endpoints\ConfigNodeEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Endpoints\MoveConfigNodeBody.cs" Link="Endpoints\MoveConfigNodeBody.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Endpoints\MessageDispatchEndpoints.cs" Link="Endpoints\MessageDispatchEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Endpoints\PermissionDemoEndpoints.cs" Link="Endpoints\PermissionDemoEndpoints.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\*OutboxHandler.cs" Link="Services\%(Filename)%(Extension)" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\DemoDeliveryControl.cs" Link="Services\DemoDeliveryControl.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Identity\ExternalIdentity.cs" Link="Identity\ExternalIdentity.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\ServerSampleApi.cs" Link="Services\ServerSampleApi.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Services\ServerFailureMapping.cs" Link="Services\ServerFailureMapping.cs" />
+    <None Include="..\..\sample\NOF.Sample.Notifications\Persistence\UpgradeBusinessIdempotency.sql" Link="UpgradeBusinessIdempotency.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261115000000_SimplifyOutboxMetadata.cs" Link="Migrations\SimplifyOutboxMetadata.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261116000000_RemoveInbox.cs" Link="Migrations\RemoveInbox.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114200000_UseOpenIddict.cs" Link="Migrations\UseOpenIddict.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114170000_RemoveInboxClassification.cs" Link="Migrations\RemoveInboxClassification.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261113130000_GenericOutbox.cs" Link="Migrations\GenericOutbox.cs" />
+    <Compile Include="..\..\sample\NOF.Sample\Migrations\20261114090000_RemoveMessageOrdering.cs" Link="Migrations\RemoveMessageOrdering.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Infrastructures\NOF.Infrastructure.EntityFrameworkCore\NOF.Infrastructure.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NOF.Contract.SourceGenerator\NOF.Contract.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore.SourceGenerator\NOF.Hosting.AspNetCore.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.OpenApi.cs" Link="Endpoints/ConfigNodeEndpoints.OpenApi.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/DemoCapabilities.cs" Link="Endpoints/DemoCapabilities.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/DemoInput.cs" Link="Endpoints/DemoInput.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/Models/*.cs" Link="Endpoints/Models/%(Filename)%(Extension)" />
+    <Compile Include="../../sample/NOF.Sample/OpenApi/*.cs" Link="OpenApi/%(Filename)%(Extension)" />
+    <Compile Include="../../sample/NOF.Sample/Identity/IdentityStatusResponse.cs" Link="Identity/IdentityStatusResponse.cs" />
+    <Compile Include="../../sample/NOF.Sample/ConfigurationDbContext.cs" Link="ConfigurationDbContext.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoObservations.cs" Link="Services/DemoObservations.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoInvocation.cs" Link="Services/DemoInvocation.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoEvent.cs" Link="Services/DemoEvent.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/ObserveDemoEvent.cs" Link="Services/ObserveDemoEvent.cs" />
+  </ItemGroup>
 </Project>

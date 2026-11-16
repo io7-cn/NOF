@@ -13,11 +13,11 @@
     <link rel="stylesheet" href="@Assets["_content/NOF.Sample.UI/app.css"]" />
     <link rel="stylesheet" href="@Assets["NOF.Sample.styles.css"]" />
     <ImportMap />
-    <HeadOutlet @rendermode="RenderMode.InteractiveAuto" />
+    <HeadOutlet @rendermode="RenderMode.InteractiveServer" />
 </head>
 
 <body>
-    <Routes @rendermode="RenderMode.InteractiveAuto" />
+    <SampleSession @rendermode="RenderMode.InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>

@@ -18,295 +18,10 @@ namespace NOF.Sample.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("NOF.Hosting.AspNetCore.Extension.OidcServer.OAuthClient", b =>
-                {
-                    b.Property<string>("ClientId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("AccessTokenClaims")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AllowedGrantTypes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AllowedResponseTypes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AllowedScopes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ApplicationType")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<int>("ClientType")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("JsonWebKeySet")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("RedirectUris")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("RegistrationAccessTokenHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("RegistrationAccessTokenSalt")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("RegistrationMetadata")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("SecretHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SecretSalt")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("TokenEndpointAuthenticationMethod")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("ClientId");
-
-                    b.HasIndex("IsEnabled");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.ToTable("OAuthClient", (string)null);
-                });
-
-            modelBuilder.Entity("NOF.Hosting.AspNetCore.Extension.OidcServer.PersistedSigningKey", b =>
-                {
-                    b.Property<string>("Kid")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EncryptedPrivateKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("InvalidatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("PublicKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("Kid");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.HasIndex("Status", "CreatedAtUtc");
-
-                    b.HasIndex("Status", "InvalidatedAtUtc");
-
-                    b.ToTable("PersistedSigningKey", (string)null);
-                });
-
-            modelBuilder.Entity("NOF.Hosting.AspNetCore.Extension.OidcServer.RevokedRefreshToken", b =>
-                {
-                    b.Property<string>("TokenId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTime>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("TokenId");
-
-                    b.HasIndex("ExpiresAtUtc");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.ToTable("RevokedRefreshToken", (string)null);
-                });
-
-            modelBuilder.Entity("NOF.Infrastructure.NOFInboxMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Route")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<DateTime?>("ClaimExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ClaimedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("CompletesOrderKey")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<DateTime?>("FailedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Headers")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("MessageType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("OrderKey")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<byte[]>("Payload")
-                        .IsRequired()
-                        .HasColumnType("bytea");
-
-                    b.Property<DateTime?>("ProcessedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<long?>("Sequence")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("Id", "Route");
-
-                    b.HasIndex("ClaimedBy");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.HasIndex("Status", "ClaimExpiresAtUtc");
-
-                    b.HasIndex("Status", "CreatedAtUtc");
-
-                    b.HasIndex("Route", "OrderKey", "Sequence");
-
-                    b.ToTable("NOFInboxMessage", (string)null);
-                });
-
-            modelBuilder.Entity("NOF.Infrastructure.NOFInboxOrderState", b =>
-                {
-                    b.Property<string>("Route")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("OrderKey")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<long?>("BlockedSequence")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ClaimExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ClaimedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<long>("NextSequence")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("Route", "OrderKey");
-
-                    b.HasIndex("UpdatedAtUtc");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.HasIndex("ClaimedBy", "ClaimExpiresAtUtc");
-
-                    b.ToTable("NOFInboxOrderState", (string)null);
-                });
 
             modelBuilder.Entity("NOF.Infrastructure.NOFOutboxMessage", b =>
                 {
@@ -321,15 +36,8 @@ namespace NOF.Sample.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<bool>("CompletesOrderKey")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DispatchRoutes")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(2048)
@@ -342,12 +50,13 @@ namespace NOF.Sample.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("MessageType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("OrderKey")
+                    b.Property<string>("MessageType")
+                        .IsRequired()
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<byte[]>("Payload")
                         .IsRequired()
@@ -358,9 +67,6 @@ namespace NOF.Sample.Migrations
 
                     b.Property<DateTime?>("SentAtUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<long?>("Sequence")
-                        .HasColumnType("bigint");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -382,42 +88,13 @@ namespace NOF.Sample.Migrations
 
                     b.HasIndex("__DeletedAtUnixTime");
 
-                    b.HasIndex("OrderKey", "Sequence");
-
                     b.HasIndex("Status", "ClaimExpiresAtUtc");
 
                     b.HasIndex("Status", "CreatedAtUtc");
 
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
                     b.ToTable("NOFOutboxMessage", (string)null);
-                });
-
-            modelBuilder.Entity("NOF.Infrastructure.NOFOutboxOrderState", b =>
-                {
-                    b.Property<string>("OrderKey")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<long>("Sequence")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("CompletesOrderKey")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("__DeletedAtUnixTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasDefaultValue(0L);
-
-                    b.HasKey("OrderKey", "Sequence");
-
-                    b.HasIndex("CreatedAtUtc");
-
-                    b.HasIndex("__DeletedAtUnixTime");
-
-                    b.ToTable("NOFOutboxOrderState", (string)null);
                 });
 
             modelBuilder.Entity("NOF.Sample.Application.Entities.ConfigNodeChildren", b =>

@@ -90,6 +90,7 @@ public sealed class NOFModelCustomizer : ModelCustomizer
         }
 
         ValueObjectLengthModelConvention.Apply(modelBuilder.Model);
+        ReadOnlyCollectionModelConvention.Apply(modelBuilder.Model);
     }
 
     private static void ConfigureUniqueIndexes(IMutableEntityType entityType, EntityTypeBuilder entityBuilder)

@@ -10,6 +10,7 @@ public static partial class NOFUIExtensions
         public IServiceCollection AddNOFUI()
         {
             ArgumentNullException.ThrowIfNull(services);
+            services.AddNOFAbstraction();
 
             services.TryAddScoped<IBrowserInfoService, BrowserInfoService>();
             services.TryAddScoped<ILocalStorage, LocalStorage>();

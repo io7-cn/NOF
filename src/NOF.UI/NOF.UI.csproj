@@ -1,32 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
-
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-
     <IsAotCompatible>true</IsAotCompatible>
-
     <PackageId>NOF.UI</PackageId>
     <Description>Reusable UI primitives for the NOF Framework - authorization components, browser storage abstractions, and client-side cache services.</Description>
   </PropertyGroup>
-
   <ItemGroup>
     <SupportedPlatform Include="browser" />
   </ItemGroup>
-
   <ItemGroup>
     <InternalsVisibleTo Include="NOF.UI.Tests" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.JSInterop" />
     <PackageReference Include="Microsoft.AspNetCore.Components" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\NOF.Abstraction\NOF.Abstraction.csproj" />
-    <ProjectReference Include="..\NOF.Contract\NOF.Contract.csproj" />
   </ItemGroup>
-
 </Project>

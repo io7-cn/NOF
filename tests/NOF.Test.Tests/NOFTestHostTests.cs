@@ -12,11 +12,39 @@ namespace NOF.Test.Tests;
 public class NOFTestHostTests
 {
     [Fact]
-    public async Task BuildTestHostAsync_ShouldBuildHostWithDefaultContexts()
+    public async Task TestHost_DisposalStopsNativeServicesBeforeDisposingThem()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        var probe = new LifecycleProbe();
+        builder.Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(_ => probe);
+        var host = new NOFTestHost(builder.Build());
+        await host.Host.StartAsync();
+        await host.DisposeAsync();
+        Assert.Equal(["start", "stop", "dispose"], probe.Calls);
+    }
 
-        await using var host = await builder.BuildTestHostAsync();
+    public sealed class LifecycleProbe : Microsoft.Extensions.Hosting.IHostedService, IDisposable
+    {
+        public List<string> Calls { get; } = [];
+        public Task StartAsync(CancellationToken ct)
+        {
+            Calls.Add("start");
+            return Task.CompletedTask;
+        }
+        public Task StopAsync(CancellationToken ct)
+        {
+            Calls.Add("stop");
+            return Task.CompletedTask;
+        }
+        public void Dispose() => Calls.Add("dispose");
+    }
+
+    [Fact]
+    public async Task BuildTestHost_ShouldBuildHostWithDefaultContexts()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+
+        await using var host = builder.BuildTestHost();
 
         using var scope = host.CreateScope();
         Assert.NotNull(scope.GetRequiredService<IUserContext>());
@@ -26,20 +54,20 @@ public class NOFTestHostTests
     [Fact]
     public async Task Scope_ShouldAllowSettingTenantAndUser()
     {
-        var builder = NOFTestAppBuilder.Create();
-        const string traceId = "0123456789abcdef0123456789abcdef";
-        const string spanId = "0123456789abcdef";
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        const string TraceId = "0123456789abcdef0123456789abcdef";
+        const string SpanId = "0123456789abcdef";
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         scope.SetTenant("tenanta")
-            .SetTracing(traceId, spanId)
+            .SetTracing(TraceId, SpanId)
             .SetUser("user-1", "Alice", ["orders.read", "orders.write"]);
         Assert.Equal("tenanta", scope.Context.TenantId);
         Assert.NotNull(Activity.Current);
-        Assert.Equal(traceId, Activity.Current.TraceId.ToString());
-        Assert.Equal(spanId, Activity.Current.ParentSpanId.ToString());
+        Assert.Equal(TraceId, Activity.Current.TraceId.ToString());
+        Assert.Equal(SpanId, Activity.Current.ParentSpanId.ToString());
         Assert.Equal("user-1", scope.UserContext.User.Id);
         Assert.Equal("Alice", scope.UserContext.User.Name);
         Assert.Contains("orders.read", scope.UserContext.User.Permissions);
@@ -49,110 +77,88 @@ public class NOFTestHostTests
     [Fact]
     public async Task Scope_ShouldAllowSettingContextItems()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         scope.SetContextItem("case", "scope")
-            .SetContextItems(new Dictionary<object, object?> { ["step"] = 2 })
+            .SetContextItems(new System.Text.Json.Nodes.JsonObject { ["step"] = 2 })
             .RemoveContextItem("step");
 
-        Assert.Equal("scope", scope.Context["case"]);
+        Assert.Equal("scope", scope.Context["case"]?.GetValue<string>());
         Assert.False(scope.Context.TryGetItem("step", out _));
         Assert.Same(scope.Context, Context.Current);
     }
 
     [Fact]
-    public async Task SendAsync_Command_ShouldResolveCommandSenderFromScope()
+    public async Task EnqueueAsync_StagesThroughTheExistingScope()
     {
-        var builder = NOFTestAppBuilder.Create();
-        builder.Services.AddScoped<ICommandSender, FakeCommandSender>();
-
-        await using var host = await builder.BuildTestHostAsync();
-        Func<Task> act = () => host.SendAsync(new TestCommand("do-it"));
-
-        await Record.ExceptionAsync(act);
-    }
-
-    [Fact]
-    public async Task PublishAsync_ShouldResolveNotificationPublisherFromScope()
-    {
-        var builder = NOFTestAppBuilder.Create();
-        builder.Services.AddScoped<INotificationPublisher, FakeNotificationPublisher>();
-
-        await using var host = await builder.BuildTestHostAsync();
-        Func<Task> act = () => host.PublishAsync(new TestNotification("evt"));
-
-        await Record.ExceptionAsync(act);
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.Services.AddScoped<IOutbox, FakeOutbox>();
+        await using var host = builder.BuildTestHost();
+        using var scope = host.CreateScope();
+        Assert.Equal(FakeOutbox.Id, await scope.EnqueueAsync(new TestCommand("do-it")));
     }
 
     [Fact]
     public async Task ExecuteAsync_ShouldCreateScopeAndRunScenario()
     {
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         var result = await host.ExecuteAsync(scope =>
         {
             scope.SetTenant("tenant-b")
                 .SetUser("user-2")
                 .SetContextItem("flow", "execute");
 
-            return Task.FromResult(scope.Context["flow"]);
+            return Task.FromResult(scope.Context["flow"]?.GetValue<string>());
         });
 
         Assert.Equal("execute", result);
     }
 
     [Fact]
-    public async Task CallAsync_ShouldUseScopeContextAndConfiguredClient()
+    public async Task CallAsync_ShouldUseScopeContextAndServiceProvider()
     {
-        var builder = NOFTestAppBuilder.Create()
-            .AddLocalRpcClient<ITestClient, TestClient>();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.Services.AddScoped<ITestClient, TestClient>();
 
-        await using var host = await builder.BuildTestHostAsync();
-        var result = await host.CallAsync<ITestClient, string>(
-            (client, context, cancellationToken) => client.EchoAsync(context, cancellationToken),
+        await using var host = builder.BuildTestHost();
+        var result = await host.CallAsync(
+            (services, context, cancellationToken) => services.GetRequiredService<ITestClient>().EchoAsync(context, cancellationToken),
             configure: scope => scope.SetContextItem("case", "host-call"));
 
         Assert.Equal("host-call", result);
     }
 
     [Fact]
-    public async Task AddInMemoryPersistence_ShouldAllowPersistingAcrossScopes()
+    public async Task MessageUnitOfWork_ShouldStageAcrossHarnessScopes()
     {
-        var builder = NOFTestAppBuilder.Create()
-            .AddInMemoryPersistence();
-
-        await using var host = await builder.BuildTestHostAsync();
-
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
+        builder.Services.AddOutbox();
+        await using var host = builder.BuildTestHost();
+        var id = Guid.NewGuid();
         await host.ExecuteAsync(async scope =>
         {
-            var dbContext = scope.GetRequiredService<IDbContext>();
-            dbContext.Set<TestEntity>().Add(new TestEntity { Name = "persisted" });
-            await dbContext.SaveChangesAsync();
+            scope.GetRequiredService<IOutboxStore>().Stage(new NOFOutboxMessage
+            { Id = id, MessageType = "test", Payload = [], Headers = "{}" });
+            await scope.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
         });
-
-        var entity = await host.ExecuteAsync(async scope =>
-        {
-            return await scope.GetRequiredService<IDbContext>()
-                .Set<TestEntity>()
-                .FirstOrDefaultAsync(item => item.Name == "persisted");
-        });
-
-        Assert.NotNull(entity);
-        Assert.Equal("persisted", entity.Name);
+        var messages = await host.ExecuteAsync(async scope =>
+            await scope.GetRequiredService<IOutboxStore>().AtomicClaimPendingMessagesAsync().ToListAsync());
+        Assert.Equal(id, Assert.Single(messages).Id);
     }
 
     [Fact]
     public async Task CreateScope_ShouldResolveLazyServiceFromHostingDefaults()
     {
         LazyProbe.Reset();
-        var builder = NOFTestAppBuilder.Create();
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder().AddNOFTest();
         builder.Services.AddScoped<LazyProbe>();
 
-        await using var host = await builder.BuildTestHostAsync();
+        await using var host = builder.BuildTestHost();
         using var scope = host.CreateScope();
 
         var lazy = scope.GetRequiredService<Lazy<LazyProbe>>();
@@ -188,74 +194,29 @@ public class NOFTestHostTests
         public required string Name { get; set; }
     }
 
-    private sealed class FakeCommandSender : ICommandSender
+    private interface ITestMessages : IApplicationService { Empty Send(TestCommand request); }
+
+    private sealed class FakeOutbox : IOutbox
     {
-        public Task DeferSendAsync(object command, Type commandType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task DeferSendOrderedAsync(
-            object command,
-            Type commandType,
-            string orderKey,
-            Context context,
-            bool completesOrderKey = false,
-            CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task SendAsync(object command, Type commandType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class FakeNotificationPublisher : INotificationPublisher
-    {
-        public Task DeferPublishAsync(object notification, Type notificationType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task DeferPublishOrderedAsync(
-            object notification,
-            Type notificationType,
-            string orderKey,
-            Context context,
-            bool completesOrderKey = false,
-            CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
-
-        public Task PublishAsync(object notification, Type notificationType, Context context, CancellationToken cancellationToken = default)
-        {
-            _ = context;
-            return Task.CompletedTask;
-        }
+        public static readonly Guid Id = Guid.NewGuid();
+        public ValueTask<Guid> EnqueueAsync<T>(T message, Context context, IReadOnlyDictionary<string, string?>? headers = null,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(Id);
     }
 
     private sealed class LazyProbe
     {
-        private static int _createdCount;
+        private static int CreationCount;
 
         public LazyProbe()
         {
-            Interlocked.Increment(ref _createdCount);
+            Interlocked.Increment(ref CreationCount);
         }
 
-        public static int CreatedCount => _createdCount;
+        public static int CreatedCount => CreationCount;
 
         public static void Reset()
         {
-            Interlocked.Exchange(ref _createdCount, 0);
+            Interlocked.Exchange(ref CreationCount, 0);
         }
     }
 }

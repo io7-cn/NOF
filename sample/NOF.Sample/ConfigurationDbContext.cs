@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample.Application.Entities;
 
@@ -16,7 +17,6 @@ public class ConfigurationDbContext : NOFDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
         modelBuilder.Entity<ConfigNode>(entity =>
         {
             entity.ToTable("ConfigNode");

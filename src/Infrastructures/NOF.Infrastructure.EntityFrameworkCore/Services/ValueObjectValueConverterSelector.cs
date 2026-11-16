@@ -13,16 +13,16 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 /// <para>
 /// The value object must expose:
 /// <list type="bullet">
-///   <item>A static <c>Of(TPrimitive)</c> factory method.</item>
+///   <item>A static <c>From(TPrimitive)</c> factory method.</item>
 ///   <item>An explicit cast operator to <c>TPrimitive</c>.</item>
 /// </list>
 /// </para>
 /// </summary>
 public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
 {
-    private static readonly ConcurrentDictionary<Type, ValueConverterInfo?> _cache = new();
-    private static readonly Type _interfaceOpenType = typeof(IValueObject<>);
-    private static readonly string _ofMethodName = "Of";
+    private static readonly ConcurrentDictionary<Type, ValueConverterInfo?> Cache = new();
+    private static readonly Type InterfaceOpenType = typeof(IValueObject<>);
+    private static readonly string FromMethodName = "From";
 
     public ValueObjectValueConverterSelector(ValueConverterSelectorDependencies dependencies)
         : base(dependencies) { }
@@ -33,7 +33,7 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
 
         var underlyingType = Nullable.GetUnderlyingType(modelClrType) ?? modelClrType;
 
-        var info = _cache.GetOrAdd(underlyingType, BuildConverterInfo);
+        var info = Cache.GetOrAdd(underlyingType, BuildConverterInfo);
         if (info is null
             || (providerClrType is not null
                 && providerClrType != info.Value.ProviderClrType))
@@ -53,10 +53,10 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
             return null;
         }
 
-        var ofMethod = voType.GetMethod(_ofMethodName,
+        var fromMethod = voType.GetMethod(FromMethodName,
             BindingFlags.Public | BindingFlags.Static,
             null, [primitiveType], null);
-        if (ofMethod is null)
+        if (fromMethod is null)
         {
             return null;
         }
@@ -70,7 +70,7 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
         }
 
         var converterType = typeof(ValueObjectConverter<,>).MakeGenericType(voType, primitiveType);
-        var converterInstance = (ValueConverter)Activator.CreateInstance(converterType, ofMethod, castMethod)!;
+        var converterInstance = (ValueConverter)Activator.CreateInstance(converterType, fromMethod, castMethod)!;
 
         return new ValueConverterInfo(
             modelClrType: voType,
@@ -80,20 +80,7 @@ public sealed class ValueObjectValueConverterSelector : ValueConverterSelector
 
     private static Type? GetPrimitiveType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type voType)
         => voType.GetInterfaces()
-            .Where(iface => iface.IsGenericType && iface.GetGenericTypeDefinition() == _interfaceOpenType)
+            .Where(iface => iface.IsGenericType && iface.GetGenericTypeDefinition() == InterfaceOpenType)
             .Select(iface => iface.GenericTypeArguments[0])
             .FirstOrDefault();
-}
-
-/// <summary>
-/// Typed <see cref="ValueConverter{TModel,TProvider}"/> for a value object.
-/// </summary>
-public sealed class ValueObjectConverter<TValueObject, TPrimitive> : ValueConverter<TValueObject, TPrimitive>
-{
-    public ValueObjectConverter(MethodInfo ofMethod, MethodInfo castMethod)
-        : base(
-            vo => (TPrimitive)castMethod.Invoke(null, new object?[] { vo })!,
-            primitive => (TValueObject)ofMethod.Invoke(null, new object?[] { primitive })!)
-    {
-    }
 }

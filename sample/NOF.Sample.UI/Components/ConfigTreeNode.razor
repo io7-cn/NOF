@@ -1,0 +1,82 @@
+@inject ISampleApi NOFService
+@inject SampleMessageService Message
+
+<li>
+    <div class="sample-tree-row" draggable="true" @ondragstart="() => OnDrag.InvokeAsync(Node.Id)"
+         @ondragover:preventDefault @ondrop:stopPropagation @ondrop="() => OnDrop.InvokeAsync(Node.Id)">
+        <button type="button" class="sample-tree-toggle" aria-label="@($"展开 {Node.Name}")" aria-expanded="@_expanded" disabled="@_loading" @onclick="Toggle">@(_expanded ? "−" : "+")</button>
+        <button type="button" class="sample-tree-name @(SelectedId == Node.Id ? "sample-selected" : "")" @onclick="() => OnSelect.InvokeAsync(Node.Id)">@Node.Name</button>
+        <button type="button" aria-label="@($"为 {Node.Name} 添加子节点")" @onclick="() => OnAddChild.InvokeAsync(Node.Id)">添加子节点</button>
+        <button type="button" class="sample-danger" aria-label="@($"删除节点 {Node.Name}")" @onclick="() => OnDelete.InvokeAsync(Node.Id)">删除</button>
+    </div>
+    @if (_expanded)
+    {
+        @if (_children.Count == 0)
+        {
+            <p class="sample-muted">没有子节点</p>
+        }
+        else
+        {
+            <ul class="sample-tree">
+                @foreach (var child in _children)
+                {
+                    <ConfigTreeNode @key="child.Id" Node="child" SelectedId="SelectedId" OnSelect="OnSelect" OnAddChild="OnAddChild" OnDelete="OnDelete" OnDrag="OnDrag" OnDrop="OnDrop" />
+                }
+            </ul>
+        }
+    }
+</li>
+
+@code {
+    [Parameter, EditorRequired] public ConfigNodeDto Node { get; set; } = default!;
+    [Parameter] public long? SelectedId { get; set; }
+    [Parameter] public EventCallback<long> OnSelect { get; set; }
+    [Parameter] public EventCallback<long?> OnAddChild { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+    [Parameter] public EventCallback<long> OnDrag { get; set; }
+    [Parameter] public EventCallback<long?> OnDrop { get; set; }
+
+    private bool _expanded;
+    private bool _loading;
+    private List<ConfigNodeDto> _children = [];
+
+    private async Task Toggle()
+    {
+        if (_expanded)
+        {
+            _expanded = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var result = await NOFService.GetConfigNodeChildrenAsync(new GetConfigNodeChildrenRequest { Id = Node.Id }, Context.Empty);
+            var children = Message.UnwrapWithMessage(result);
+            if (children is null)
+            {
+                return;
+            }
+
+            _children = [];
+            foreach (var id in children.ChildrenIds)
+            {
+                var child = Message.UnwrapWithMessage(await NOFService.GetConfigNodeByIdAsync(new GetConfigNodeByIdRequest { Id = id }, Context.Empty));
+                if (child is not null)
+                {
+                    _children.Add(child.Node);
+                }
+            }
+
+            _expanded = true;
+        }
+        catch (Exception exception)
+        {
+            Message.Error(exception.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

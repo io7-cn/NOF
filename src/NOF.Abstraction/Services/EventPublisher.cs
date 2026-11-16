@@ -1,4 +1,3 @@
-using NOF.Contract;
 using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Abstraction;
@@ -12,30 +11,29 @@ namespace NOF.Abstraction;
 /// </remarks>
 public static class EventPublisher
 {
-    private static readonly AsyncLocal<IEventPublisher?> _currentPublisher = new();
+    private static readonly AsyncLocal<Func<IEventPublisher?>?> CurrentPublisher = new();
 
     /// <summary>
     /// Pushes an ambient <see cref="IEventPublisher"/> into the current async flow for convenience API usage.
     /// </summary>
-    public static IDisposable PushCurrent(IEventPublisher publisher)
-    {
-        ArgumentNullException.ThrowIfNull(publisher);
+    /// <remarks>A null publisher explicitly shadows the previous binding until disposal.</remarks>
+    public static IDisposable PushCurrent(IEventPublisher? publisher) => PushFactory(() => publisher);
 
-        var previous = _currentPublisher.Value;
-        _currentPublisher.Value = publisher;
+    private static IDisposable PushFactory(Func<IEventPublisher?> resolve)
+    {
+        var previous = CurrentPublisher.Value;
+        CurrentPublisher.Value = resolve;
         return new AmbientPublisherScope(previous);
     }
 
     /// <summary>
-    /// Resolves and pushes the current scope's <see cref="IEventPublisher"/> into the ambient async flow.
+    /// Lazily resolves the bound scope's <see cref="IEventPublisher"/> into the ambient async flow.
     /// </summary>
     public static IDisposable PushCurrent(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var publisher = services.GetService(typeof(IEventPublisher)) as IEventPublisher
-            ?? throw new InvalidOperationException($"No service of type '{typeof(IEventPublisher).FullName}' is registered.");
-        return PushCurrent(publisher);
+        return PushFactory(() => services.GetService(typeof(IEventPublisher)) as IEventPublisher);
     }
 
     /// <summary>
@@ -97,21 +95,19 @@ public static class EventPublisher
     internal static IDisposable PushPublisherIfNeeded(IEventPublisher publisher)
     {
         ArgumentNullException.ThrowIfNull(publisher);
-        return ReferenceEquals(_currentPublisher.Value, publisher)
-            ? EmptyScope.Instance
-            : PushCurrent(publisher);
+        return PushCurrent(publisher);
     }
 
     private static IEventPublisher GetCurrentPublisher()
-        => _currentPublisher.Value
+        => CurrentPublisher.Value?.Invoke()
             ?? throw new InvalidOperationException("No ambient IEventPublisher is available for the current async flow.");
 
     private sealed class AmbientPublisherScope : IDisposable
     {
-        private readonly IEventPublisher? _previous;
+        private readonly Func<IEventPublisher?>? _previous;
         private bool _disposed;
 
-        public AmbientPublisherScope(IEventPublisher? previous)
+        public AmbientPublisherScope(Func<IEventPublisher?>? previous)
         {
             _previous = previous;
         }
@@ -123,17 +119,9 @@ public static class EventPublisher
                 return;
             }
 
-            _currentPublisher.Value = _previous;
+            CurrentPublisher.Value = _previous;
             _disposed = true;
         }
     }
 
-    private sealed class EmptyScope : IDisposable
-    {
-        public static EmptyScope Instance { get; } = new();
-
-        public void Dispose()
-        {
-        }
-    }
 }

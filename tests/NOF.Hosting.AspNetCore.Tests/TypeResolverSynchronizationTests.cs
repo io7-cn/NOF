@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using NOF.Abstraction;
+using NOF.Hosting;
 using Xunit;
 
-[assembly: AssemblyInitialize<NOF.Hosting.AspNetCore.Tests.__TypeResolverSynchronizationAssemblyInitializer>]
+[assembly: AssemblyInitialize<NOF.Hosting.AspNetCore.Tests.TypeResolverSynchronizationAssemblyInitializer>]
 
 namespace NOF.Hosting.AspNetCore.Tests;
 
@@ -11,21 +13,22 @@ public sealed class TypeResolverSynchronizationTests
     [Fact]
     public void Create_ShouldRunAssemblyInitializerThatRegistersGeneratedServicesIntoServiceCollection()
     {
-        var builder = NOFWebApplicationBuilder.Create([]);
+        var builder = WebApplication.CreateBuilder([]).AddNOF();
+        builder.AddApplicationPart(typeof(TypeResolverSynchronizationProbe).Assembly);
 
         Assert.Contains(
             builder.Services,
-            descriptor => descriptor.ServiceType == typeof(__TypeResolverSynchronizationProbe)
-                && descriptor.ImplementationType == typeof(__TypeResolverSynchronizationProbe));
+            descriptor => descriptor.ServiceType == typeof(TypeResolverSynchronizationProbe)
+                && descriptor.ImplementationType == typeof(TypeResolverSynchronizationProbe));
     }
 }
 
-public sealed class __TypeResolverSynchronizationAssemblyInitializer : IAssemblyInitializer
+public sealed class TypeResolverSynchronizationAssemblyInitializer : IAssemblyInitializer
 {
-    public static void Initialize(Microsoft.Extensions.DependencyInjection.IServiceCollection services)
+    public static void Initialize(IServiceCollection services)
     {
-        services.AddSingleton<__TypeResolverSynchronizationProbe>();
+        services.AddSingleton<TypeResolverSynchronizationProbe>();
     }
 }
 
-public sealed class __TypeResolverSynchronizationProbe;
+public sealed class TypeResolverSynchronizationProbe;

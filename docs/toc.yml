@@ -1,6 +1,6 @@
-- name: Home
-  href: index.md
-- name: Design
-  href: design/
-- name: API Reference
-  href: api/
+- name: English
+  href: en/toc.yml
+- name: 简体中文
+  href: zh-CN/toc.yml
+- name: API
+  href: ../api/toc.yml

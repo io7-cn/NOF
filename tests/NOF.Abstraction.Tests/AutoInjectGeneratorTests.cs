@@ -14,7 +14,7 @@ public class AutoInjectGeneratorTests
     [Fact]
     public void GenerateInitializer_UsesOnlyCurrentAssemblyTypes()
     {
-        const string libSource = """
+        const string LibSource = """
             using Microsoft.Extensions.DependencyInjection;
             namespace App.Lib
             {
@@ -30,10 +30,10 @@ public class AutoInjectGeneratorTests
             typeof(AutoInjectAttribute).ToMetadataReference(),
             typeof(InitializedTypes).ToMetadataReference()
         };
-        var libComp = CSharpCompilation.CreateCompilation("App.Lib", libSource, isDll: true, depRefs);
+        var libComp = CSharpCompilation.CreateCompilation("App.Lib", LibSource, isDll: true, depRefs);
         var libRef = libComp.CreateMetadataReference();
 
-        const string mainSource = """
+        const string MainSource = """
             using Microsoft.Extensions.DependencyInjection;
             namespace App
             {
@@ -43,7 +43,7 @@ public class AutoInjectGeneratorTests
             }
             """;
 
-        var mainComp = CSharpCompilation.CreateCompilation("App", mainSource, isDll: true, [libRef, .. depRefs]);
+        var mainComp = CSharpCompilation.CreateCompilation("App", MainSource, isDll: true, [libRef, .. depRefs]);
 
         var result = new AutoInjectGenerator().GetResult(mainComp);
         var trees = result.GeneratedTrees;
@@ -63,7 +63,7 @@ public class AutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_ContainsAssemblyInitializerAttribute_AndRegistryRegistration()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.Extensions.DependencyInjection;
             namespace App
             {
@@ -79,17 +79,17 @@ public class AutoInjectGeneratorTests
             typeof(AutoInjectAttribute).ToMetadataReference(),
             typeof(InitializedTypes).ToMetadataReference()
         };
-        var result = new AutoInjectGenerator().GetResultPostGen(source, typeof(IServiceCollection), typeof(AutoInjectAttribute), typeof(InitializedTypes));
+        var result = new AutoInjectGenerator().GetResultPostGen(Source, typeof(IServiceCollection), typeof(AutoInjectAttribute), typeof(InitializedTypes));
         var trees = result.GeneratedTrees;
         Assert.Single(trees);
 
         var generatedCode = trees.Single().GetRoot().ToFullString();
-        const string scopedInterfaceDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IAppSvc), typeof(global::App.AppService), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped));";
+        const string ScopedInterfaceDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IAppSvc), typeof(global::App.AppService), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped));";
 
         Assert.Contains("using Microsoft.Extensions.DependencyInjection;", generatedCode);
         Assert.Contains("AssemblyInitializeAttribute<global::TestAssembly.__TestAssemblyAutoInjectAssemblyInitializer>", generatedCode);
         Assert.Contains("services.InitializedTypes.Add(typeof(__TestAssemblyAutoInjectAssemblyInitializer))", generatedCode);
-        Assert.Contains(scopedInterfaceDescriptor, generatedCode);
+        Assert.Contains(ScopedInterfaceDescriptor, generatedCode);
         Assert.DoesNotContain("AutoInjectServiceRegistration", generatedCode);
         Assert.DoesNotContain("ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.AppService))", generatedCode);
         Assert.DoesNotContain("ServiceDescriptor.Describe(typeof(global::App.AppService), typeof(global::App.AppService)", generatedCode);
@@ -99,7 +99,7 @@ public class AutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_DoesNotGenerateLegacyAddAutoInjectServicesMethod()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.Extensions.DependencyInjection;
             namespace App
             {
@@ -115,7 +115,7 @@ public class AutoInjectGeneratorTests
             typeof(AutoInjectAttribute).ToMetadataReference(),
             typeof(InitializedTypes).ToMetadataReference()
         };
-        var comp = CSharpCompilation.CreateCompilation("App", source, isDll: true, depRefs);
+        var comp = CSharpCompilation.CreateCompilation("App", Source, isDll: true, depRefs);
 
         var result = new AutoInjectGenerator().GetResult(comp);
         var generatedCode = result.GeneratedTrees.Single().GetRoot().ToFullString();
@@ -127,7 +127,7 @@ public class AutoInjectGeneratorTests
     [Fact]
     public void GeneratedCode_ExplicitRegisterTypes_ArePersistedInRegistryMetadata()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.Extensions.DependencyInjection;
             namespace App
             {
@@ -144,17 +144,17 @@ public class AutoInjectGeneratorTests
             typeof(AutoInjectAttribute).ToMetadataReference(),
             typeof(InitializedTypes).ToMetadataReference()
         };
-        var comp = CSharpCompilation.CreateCompilation("App", source, isDll: true, depRefs);
+        var comp = CSharpCompilation.CreateCompilation("App", Source, isDll: true, depRefs);
 
         var result = new AutoInjectGenerator().GetResult(comp);
         var generatedCode = result.GeneratedTrees.Single().GetRoot().ToFullString();
-        const string selfDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.FooBar), typeof(global::App.FooBar), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
-        const string fooFactoryDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IFoo), sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.FooBar)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
-        const string barFactoryDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IBar), sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.FooBar)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
+        const string SelfDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.FooBar), typeof(global::App.FooBar), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
+        const string FooFactoryDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IFoo), sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.FooBar)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
+        const string BarFactoryDescriptor = "services.Add(global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof(global::App.IBar), sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.FooBar)), global::Microsoft.Extensions.DependencyInjection.ServiceLifetime.Singleton));";
 
-        Assert.Contains(selfDescriptor, generatedCode);
-        Assert.Contains(fooFactoryDescriptor, generatedCode);
-        Assert.Contains(barFactoryDescriptor, generatedCode);
+        Assert.Contains(SelfDescriptor, generatedCode);
+        Assert.Contains(FooFactoryDescriptor, generatedCode);
+        Assert.Contains(BarFactoryDescriptor, generatedCode);
         Assert.DoesNotContain("AutoInjectServiceRegistration", generatedCode);
         Assert.Equal(3, CountOccurrences(generatedCode, "services.Add("));
         Assert.Equal(2, CountOccurrences(generatedCode, "ServiceProviderServiceExtensions.GetRequiredService(sp, typeof(global::App.FooBar))"));

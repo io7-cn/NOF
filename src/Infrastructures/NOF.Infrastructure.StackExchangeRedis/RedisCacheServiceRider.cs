@@ -197,7 +197,7 @@ public sealed class RedisCacheServiceRider : ICacheServiceRider
 
     public async ValueTask<bool> RenewLockAsync(string key, string lockId, TimeSpan expiration, CancellationToken cancellationToken = default)
     {
-        const string script = """
+        const string Script = """
                               if redis.call('get', KEYS[1]) == ARGV[1] then
                                   return redis.call('pexpire', KEYS[1], ARGV[2])
                               else
@@ -205,7 +205,7 @@ public sealed class RedisCacheServiceRider : ICacheServiceRider
                               end
                               """;
 
-        var result = await _database.ScriptEvaluateAsync(script, [key], [lockId, (long)expiration.TotalMilliseconds]);
+        var result = await _database.ScriptEvaluateAsync(Script, [key], [lockId, (long)expiration.TotalMilliseconds]);
         return (int)result == 1;
     }
 
@@ -323,7 +323,7 @@ public sealed class RedisCacheServiceRider : ICacheServiceRider
 
     public async ValueTask<bool> ReleaseLockAsync(string key, string lockId, CancellationToken cancellationToken = default)
     {
-        const string script = """
+        const string Script = """
                               if redis.call('get', KEYS[1]) == ARGV[1] then
                                   return redis.call('del', KEYS[1])
                               else
@@ -331,7 +331,7 @@ public sealed class RedisCacheServiceRider : ICacheServiceRider
                               end
                               """;
 
-        var result = await _database.ScriptEvaluateAsync(script, [key], [lockId]);
+        var result = await _database.ScriptEvaluateAsync(Script, [key], [lockId]);
         return (int)result == 1;
     }
 

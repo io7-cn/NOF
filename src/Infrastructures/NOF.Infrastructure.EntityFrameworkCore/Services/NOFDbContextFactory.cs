@@ -4,8 +4,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NOF.Abstraction;
 using NOF.Application;
 using NOF.Contract;
+using NOF.Infrastructure;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -17,7 +19,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 /// </summary>
 /// <typeparam name="TDbContext">The concrete NOF database context type.</typeparam>
 public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)] TDbContext>
-    : ITenantDbContextFactory<TDbContext>, IDbContextFactory
+    : ITenantDbContextFactory<TDbContext>
     where TDbContext : NOFDbContext
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> MigrationLocks = new(StringComparer.Ordinal);
@@ -30,8 +32,8 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     protected NOFDbContextFactory(IServiceProvider serviceProvider)
         : this(
             serviceProvider,
-            serviceProvider.GetRequiredService<IOptions<DbContextConfigurationOptions>>(),
-            serviceProvider.GetServices<IDbContextModelCreatingContributor>(),
+            serviceProvider.GetRequiredService<IOptions<NOFDbContextOptions>>(),
+            serviceProvider.GetServices<IEFCoreModelConfiguration>(),
             serviceProvider.GetRequiredService<ILogger<NOFDbContextFactory<TDbContext>>>())
     {
     }
@@ -40,13 +42,13 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     /// Initializes a tenant-aware database context factory.
     /// </summary>
     /// <param name="serviceProvider">The scoped service provider used to construct contexts.</param>
-    /// <param name="dbContextConfigurationOptions">The configured database context options.</param>
+    /// <param name="dbContextConfigurationOptions">The configured NOF tenant and soft-delete policy.</param>
     /// <param name="modelCreatingContributors">The registered model contributors.</param>
     /// <param name="logger">The factory logger.</param>
     public NOFDbContextFactory(
         IServiceProvider serviceProvider,
-        IOptions<DbContextConfigurationOptions> dbContextConfigurationOptions,
-        IEnumerable<IDbContextModelCreatingContributor> modelCreatingContributors,
+        IOptions<NOFDbContextOptions> dbContextConfigurationOptions,
+        IEnumerable<IEFCoreModelConfiguration> modelCreatingContributors,
         ILogger<NOFDbContextFactory<TDbContext>> logger)
     {
         ServiceProvider = serviceProvider;
@@ -61,14 +63,14 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
     protected IServiceProvider ServiceProvider { get; }
 
     /// <summary>
-    /// Gets the configured database context options.
+    /// Gets the configured NOF tenant and soft-delete policy.
     /// </summary>
-    protected DbContextConfigurationOptions ConfigurationOptions { get; }
+    protected NOFDbContextOptions ConfigurationOptions { get; }
 
     /// <summary>
     /// Gets the model contributors applied to created contexts.
     /// </summary>
-    protected IEnumerable<IDbContextModelCreatingContributor> ModelCreatingContributors { get; }
+    protected IEnumerable<IEFCoreModelConfiguration> ModelCreatingContributors { get; }
 
     /// <summary>
     /// Gets the factory logger.
@@ -102,24 +104,19 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
 
         var modelCreatingExtension = new NOFModelCreatingDbContextOptionsExtension
         {
-            Contributors = [.. ModelCreatingContributors]
+            Contributors = [.. ModelCreatingContributors,
+                .. (ServiceProvider.GetService<IServiceProviderIsService>()!.IsService(typeof(IOutboxStore))
+                    ? new IEFCoreModelConfiguration[] { new NOFOutboxMessageModelCreatingContributor() } : [])]
         };
         ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(modelCreatingExtension);
 
-        var resolutionContext = new DbContextConnectionStringResolutionContext(
-            ServiceProvider,
-            typeof(TDbContext),
-            tenantId,
-            ConfigurationOptions.TenantMode,
-            ConfigurationOptions.ConnectionStringTemplate);
-        var resolver = ConfigurationOptions.ConnectionStringResolver
-            ?? throw new InvalidOperationException("The database context connection-string resolver is not configured.");
-        var connectionString = resolver(resolutionContext)
-            ?? throw new InvalidOperationException(
-                $"The connection-string resolver returned null for DbContext '{typeof(TDbContext).FullName}' and tenant '{tenantId}'.");
-        ConfigurationOptions.Configure(optionsBuilder, connectionString);
         optionsBuilder.ReplaceService<IModelCustomizer, NOFModelCustomizer>();
         optionsBuilder.ReplaceService<IValueConverterSelector, ValueObjectValueConverterSelector>();
+        var creation = new DbContextCreationContext(ServiceProvider, typeof(TDbContext), tenantId, ConfigurationOptions.TenantMode);
+        foreach (var configure in ServiceProvider.GetServices<Action<DbContextCreationContext, DbContextOptionsBuilder<TDbContext>>>())
+        {
+            configure(creation, optionsBuilder);
+        }
 
         var dbContext = ActivatorUtilities.CreateInstance<TDbContext>(ServiceProvider, optionsBuilder.Options);
         EnsureSqliteInMemoryConnectionIsKeptAlive(dbContext);
@@ -138,11 +135,7 @@ public class NOFDbContextFactory<[DynamicallyAccessedMembers(DynamicallyAccessed
         return dbContext;
     }
 
-    IDbContext IDbContextFactory.CreateDbContext()
-        => new EfCoreDbContextAdapter(CreateDbContext());
 
-    IDbContext IDbContextFactory.CreateDbContext(string tenantId)
-        => new EfCoreDbContextAdapter(CreateDbContext(tenantId));
 
     private void EnsureSqliteSchemaInitialized(TDbContext dbContext, string contextType)
     {

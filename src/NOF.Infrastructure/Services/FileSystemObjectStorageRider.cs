@@ -86,8 +86,14 @@ public sealed class FileSystemObjectStorageRider : IObjectStorageRider
             stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
                 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
         }
-        catch (FileNotFoundException) { return Optional.None; }
-        catch (DirectoryNotFoundException) { return Optional.None; }
+        catch (FileNotFoundException)
+        {
+            return Optional.None;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Optional.None;
+        }
         try
         {
             var header = new byte[sizeof(int)];
@@ -140,9 +146,17 @@ public sealed class FileSystemObjectStorageRider : IObjectStorageRider
         cancellationToken.ThrowIfCancellationRequested();
         var tombstone = Path.Combine(Path.GetDirectoryName(path)!, $"{Guid.NewGuid():N}.tmp");
         try
-        { File.Move(path, tombstone); }
-        catch (FileNotFoundException) { return ValueTask.FromResult(false); }
-        catch (DirectoryNotFoundException) { return ValueTask.FromResult(false); }
+        {
+            File.Move(path, tombstone);
+        }
+        catch (FileNotFoundException)
+        {
+            return ValueTask.FromResult(false);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return ValueTask.FromResult(false);
+        }
         File.Delete(tombstone);
         return ValueTask.FromResult(true);
     }
@@ -204,9 +218,12 @@ public sealed class FileSystemObjectStorageRider : IObjectStorageRider
                 metadata = new byte[length];
                 await stream.ReadExactlyAsync(metadata, cancellationToken);
             }
-            catch (FileNotFoundException) { continue; }
+            catch (FileNotFoundException)
+            {
+                continue;
+            }
             var info = JsonSerializer.Deserialize(metadata, FileSystemObjectStorageJsonContext.Default.ObjectStorageObjectInfo)
-                ?? throw new InvalidDataException("Missing object metadata.");
+                            ?? throw new InvalidDataException("Missing object metadata.");
             if (info.BucketName == bucketName && info.ObjectKey.StartsWith(prefix ?? string.Empty, StringComparison.Ordinal))
             {
                 items.Add(info);
@@ -285,11 +302,19 @@ public sealed class FileSystemObjectStorageRider : IObjectStorageRider
         public override void Flush() { }
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        protected override void Dispose(bool disposing) { if (disposing) { inner.Dispose(); } base.Dispose(disposing); }
-        public override async ValueTask DisposeAsync() { await inner.DisposeAsync(); GC.SuppressFinalize(this); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync();
+            GC.SuppressFinalize(this);
+        }
     }
 }
-/// <summary>Provides generated JSON metadata for local object storage records.</summary>
-
-[JsonSerializable(typeof(ObjectStorageObjectInfo))]
-public partial class FileSystemObjectStorageJsonContext : JsonSerializerContext;

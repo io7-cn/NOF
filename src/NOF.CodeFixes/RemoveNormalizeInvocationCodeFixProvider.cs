@@ -28,9 +28,9 @@ public sealed class RemoveNormalizeInvocationCodeFixProvider : CodeFixProvider
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                "Remove invocation from Normalize",
+                "Remove invocation from value object hook",
                 cancellationToken => RemoveStatementAsync(context.Document, statement, cancellationToken),
-                equivalenceKey: "RemoveInvocationFromNormalize"),
+                equivalenceKey: "RemoveInvocationFromValueObjectHook"),
             diagnostic);
     }
 

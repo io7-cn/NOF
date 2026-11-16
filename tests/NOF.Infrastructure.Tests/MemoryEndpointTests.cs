@@ -1,0 +1,117 @@
+using Microsoft.Extensions.DependencyInjection;
+using NOF.Abstraction;
+using NOF.Application;
+using NOF.Contract;
+using Xunit;
+
+namespace NOF.Infrastructure.Tests;
+
+public sealed class MemoryEndpointTests
+{
+    [Fact]
+    public void EmptySuccessWithDeclaredFailures_CannotBeSubmittedOrBoundAsEmpty()
+    {
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        var reference = new OperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
+        Assert.False(OperationInspector.CanSubmit(reference));
+        // Even a manually forged success-only descriptor must not bypass the Contract declaration.
+        var descriptor = new OperationDescriptor<Message, Empty>(typeof(IService), nameof(IService.MayFail));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue<Reply>("invalid.v1"));
+        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription<Reply>("facts.v1", "invalid"));
+    }
+    private static OperationDescriptor<Message> First => new(typeof(IService), nameof(IService.First));
+    private static OperationDescriptor<Message> Second => new(typeof(IService), nameof(IService.Second));
+
+    [Fact]
+    public void SharedInput_DifferentOperationsAndSubscriptions_HaveIndependentIdentities()
+    {
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapQueue("first.v1", First);
+        bindings.MapQueue("second.v1", Second);
+        bindings.MapSubscription("facts.v1", "projection", First);
+        bindings.MapSubscription("facts.v1", "audit", Second);
+        Assert.Equal("first.v1", registry.Endpoints.Single(binding => binding.ConsumerId == "memory:queue:first.v1").Route);
+        Assert.Equal("second.v1", registry.Endpoints.Single(binding => binding.ConsumerId == "memory:queue:second.v1").Route);
+        Assert.Equal(First.Id, registry.Endpoints.Single(binding => binding.ConsumerId == "memory:subscription:projection").Operation.Id);
+        Assert.Equal(Second.Id, registry.Endpoints.Single(binding => binding.ConsumerId == "memory:subscription:audit").Operation.Id);
+        Assert.Throws<InvalidOperationException>(() => bindings.MapQueue("late.v1", First));
+    }
+
+    [Fact]
+    public void OneOperation_CanReceiveMultipleExplicitInboundQueues()
+    {
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapQueue("first.v1", First);
+        bindings.MapQueue("second.v1", First);
+        Assert.Equal(2, registry.Endpoints.Count);
+        Assert.All(registry.Endpoints, binding => Assert.Equal(First.Id, binding.Operation.Id));
+        Assert.Null(typeof(MemoryEndpointsBuilder).GetMethod("RouteToQueue"));
+        Assert.Null(typeof(MemoryEndpointsBuilder).GetMethod("Topic"));
+    }
+
+    [Fact]
+    public void AmbiguousConsumerIds_AreRejected()
+    {
+        var registry = new MemoryEndpointRegistry();
+        var bindings = new MemoryEndpointsBuilder(new ServiceCollection(), registry);
+        bindings.MapSubscription("facts.v1", "same", First);
+        Assert.Throws<InvalidOperationException>(() => bindings.MapSubscription("facts.v1", "same", Second));
+    }
+
+    [Fact]
+    public void HostRegistries_AreIsolated()
+    {
+        var first = new ServiceCollection().AddMemoryMessaging(bindings => bindings.MapQueue("one.v1", First));
+        var second = new ServiceCollection().AddMemoryMessaging(bindings => bindings.MapQueue("two.v1", First));
+        using var one = first.BuildServiceProvider();
+        using var two = second.BuildServiceProvider();
+        Assert.Equal("one.v1", one.GetRequiredService<MemoryEndpointRegistry>().Endpoints.Single().Route);
+        Assert.Equal("two.v1", two.GetRequiredService<MemoryEndpointRegistry>().Endpoints.Single().Route);
+    }
+
+    [Theory]
+    [InlineData(InvocationOrigin.Local)]
+    [InlineData(InvocationOrigin.Http)]
+    [InlineData(InvocationOrigin.Message)]
+    public async Task OperationPolicies_ApplyToEveryOrigin_BeforeHandlerConstruction(InvocationOrigin origin)
+    {
+        var services = new ServiceCollection().UseInMemoryInvocationPipeline();
+        var registry = services.GetOrAddSingleton<ApplicationServiceRegistry>();
+        var direct = new OperationDescriptor<Message>(typeof(Handler));
+        registry.AddOperation(new(typeof(Handler), typeof(Message), typeof(void)) { Descriptor = direct });
+        services.AddInvocationFilters(filters => filters.UseCase<Handler>().Use<Reject>());
+        services.AddScoped<Handler>(_ => throw new InvalidOperationException("Constructed a rejected handler"));
+        using var provider = services.BuildServiceProvider();
+        var executor = new OperationExecutor(provider, registry);
+        var result = await executor.ExecuteInScopeAsync(direct, new Message(), Context.Empty, origin);
+        Assert.Equal("403", Assert.IsType<Denied>(result).Title);
+    }
+
+    public interface IService : IApplicationService
+    {
+        void First(Message input);
+        void Second(Message input);
+        [FailureCase("Rejected")]
+        Empty MayFail(Message input);
+    }
+    public abstract class Reply : OperationHandler<Message, Empty>
+    {
+    }
+    public sealed record Message;
+    public sealed record Denied(string Title) : IFailure { public string Detail => "Denied"; }
+    public sealed class Reject : IInvocationFilter
+    {
+        public static IReadOnlyList<InvocationFailureCase> FailureCases => [new("deny", typeof(Denied), typeof(Denied), "403", value => value, _ => "Denied")];
+        public ValueTask<object?> InvokeAsync(InvocationContext context, object input, InvocationDelegate next, CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult<object?>(new Denied("403"));
+        }
+    }
+    public sealed class Handler : OperationHandler<Message>
+    {
+        public override Task HandleAsync(Message input, InvocationContext context, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+}

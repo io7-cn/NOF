@@ -1,48 +1,7 @@
 # NOF.Infrastructure.NHibernate
 
-NHibernate persistence package for the [NOF Framework](https://github.com/XmmShp/NOF).
+Native NHibernate persistence and Outbox integration.
 
-## Overview
+[English guide](https://github.com/io7-cn/NOF/blob/main/docs/en/packages/nhibernate.md) · [简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/packages/nhibernate.md)
 
-`NOF.Infrastructure.NHibernate` provides an NHibernate-based implementation of the NOF persistence abstractions.
-
-Current scope:
-
-- `UseNHibernate()`
-- NHibernate-backed `IDbContext` and `IDbContextFactory`
-- contributor-based entity mapping through `IDbContextModelCreatingContributor`
-- tenant-aware connection-string resolution for `TenantMode.DatabasePerTenant`
-
-Current limitations:
-
-- `TenantMode.SharedDatabase` is not supported yet
-- `AsNoTracking()` currently returns the same LINQ query shape without a dedicated no-tracking session
-- schema management is limited to NHibernate `SchemaUpdate`
-
-In `DatabasePerTenant` mode, the host database and all tenant databases use the same model and
-therefore the same schema. Tenant databases must accept tables used only by host-level features as
-an intentional, potentially empty schema superset. This avoids separate host and tenant model,
-schema-update, provider, and deployment paths.
-
-## Usage
-
-```csharp
-using NHibernate.Dialect;
-using NHibernate.Driver;
-using NOF.Infrastructure.NHibernate;
-
-var builder = NOFWebApplicationBuilder.Create(args);
-
-builder.UseNHibernate()
-    .WithConnectionString("Data Source=nof-{tenantId}.db")
-    .WithOptions((configuration, connectionString) =>
-    {
-        configuration.DataBaseIntegration(db =>
-        {
-            db.ConnectionString = connectionString;
-            db.Dialect<SQLiteDialect>();
-            db.Driver<SQLite20Driver>();
-        });
-    })
-    .BuildSchemaOnInitialize();
-```
+Part of [NOF](https://github.com/io7-cn/NOF), licensed under Apache-2.0.

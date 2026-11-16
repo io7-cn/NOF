@@ -7,7 +7,7 @@ namespace NOF.Infrastructure.EntityFrameworkCore;
 
 public static class ValueObjectLengthModelConvention
 {
-    private static readonly Type _valueObjectInterface = typeof(IValueObject<>);
+    private static readonly Type ValueObjectInterface = typeof(IValueObject<>);
 
     public static void Apply(IMutableModel model)
     {
@@ -47,6 +47,6 @@ public static class ValueObjectLengthModelConvention
     private static bool IsStringValueObject(Type type)
         => type.GetInterfaces().Any(@interface =>
             @interface.IsGenericType
-            && @interface.GetGenericTypeDefinition() == _valueObjectInterface
+            && @interface.GetGenericTypeDefinition() == ValueObjectInterface
             && @interface.GenericTypeArguments[0] == typeof(string));
 }

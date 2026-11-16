@@ -168,7 +168,7 @@ public class AutoInjectGenerator : IIncrementalGenerator
             .Select(i => i.ToDisplayString(typeFormat))
             .ToList();
 
-        void Emit(string serviceTypeName, bool useFactory)
+        void emit(string serviceTypeName, bool useFactory)
         {
             var descriptor = useFactory
                 ? $"global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor.Describe(typeof({serviceTypeName}), sp => global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService(sp, typeof({implementationTypeName})), {lifetime})"
@@ -182,14 +182,14 @@ public class AutoInjectGenerator : IIncrementalGenerator
             var typesToRegister = hasExplicitRegisterTypes ? explicitNonSelfTypes : defaultInterfaceTypes;
             if (typesToRegister.Count == 1)
             {
-                Emit(typesToRegister[0], useFactory: false);
+                emit(typesToRegister[0], useFactory: false);
             }
             else
             {
-                Emit(implementationTypeName, useFactory: false);
+                emit(implementationTypeName, useFactory: false);
                 foreach (var serviceType in typesToRegister)
                 {
-                    Emit(serviceType, useFactory: true);
+                    emit(serviceType, useFactory: true);
                 }
             }
         }
@@ -199,19 +199,19 @@ public class AutoInjectGenerator : IIncrementalGenerator
             {
                 foreach (var serviceType in explicitAllTypes)
                 {
-                    Emit(serviceType, useFactory: false);
+                    emit(serviceType, useFactory: false);
                 }
             }
             else if (defaultInterfaceTypes.Count > 0)
             {
                 foreach (var serviceType in defaultInterfaceTypes)
                 {
-                    Emit(serviceType, useFactory: false);
+                    emit(serviceType, useFactory: false);
                 }
             }
             else
             {
-                Emit(implementationTypeName, useFactory: false);
+                emit(implementationTypeName, useFactory: false);
             }
         }
     }

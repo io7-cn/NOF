@@ -3,14 +3,6 @@ using System.Linq.Expressions;
 namespace NOF.Application;
 
 /// <summary>
-/// Identifies a mapping by its closed source type, destination type, and optional name.
-/// </summary>
-/// <param name="Source">The source type.</param>
-/// <param name="Destination">The destination type.</param>
-/// <param name="Name">Optional mapping name. <see langword="null"/> = default (unnamed) mapping.</param>
-public sealed record MapKey(Type Source, Type Destination, string? Name = null);
-
-/// <summary>
 /// Registers the expression that defines one mapping.
 /// The same expression is used for query projection and in-memory mapping.
 /// </summary>

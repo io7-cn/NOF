@@ -6,7 +6,7 @@ description: Add in-process event handlers and transactional outbox dispatch to 
 
 NOF has two separate mechanisms:
 
-- in-process, current-scope events through `IEventPublisher` and `InMemoryEventHandler<T>`
+- in-process, current-scope events through `IEventPublisher` and `LocalEventHandler<T>`
 - cross-boundary commands/notifications, optionally staged in the transactional outbox
 
 ## 1. Define and Handle an In-Process Event
@@ -14,7 +14,7 @@ NOF has two separate mechanisms:
 ```csharp
 public sealed record ProjectionRebuilt(string TenantId);
 
-public sealed class ProjectionRebuiltHandler : InMemoryEventHandler<ProjectionRebuilt>
+public sealed class ProjectionRebuiltHandler : LocalEventHandler<ProjectionRebuilt>
 {
     public override Task HandleAsync(
         ProjectionRebuilt @event,
@@ -37,32 +37,12 @@ await eventPublisher.PublishAsync(
 
 Domain methods may instead call `payload.PublishAsEvent()`. At a NOF handler/event boundary, the ambient publisher carries the current `Context` into nested in-memory events.
 
-## 3. Stage a Transactional Notification
+## 3. Stage a Transactional Intent
 
 ```csharp
-public sealed class CreateOrderHandler(
-    IDbContext dbContext,
-    INotificationPublisher publisher)
-    : CommandHandler<CreateOrderCommand>
-{
-    public override async Task HandleAsync(
-        CreateOrderCommand command,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        var order = Order.Create(EmailAddress.Of(command.CustomerEmail));
-        dbContext.Set<Order>().Add(order);
-
-        await publisher.DeferPublishAsync(
-            new OrderCreatedNotification(order.Id),
-            context,
-            cancellationToken);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-}
+await outbox.EnqueueAsync(new OrderCreatedNotification(order.Id), invocation.Context,
+    cancellationToken: cancellationToken);
+await unitOfWork.SaveChangesAsync(cancellationToken);
 ```
 
-`DeferPublishAsync(...)` and `DeferSendAsync(...)` add an outbox entity to the current `IDbContext`; saving that same context commits it with application data. Immediate `PublishAsync(...)` / `SendAsync(...)` bypass the outbox.
-
-For ordered streams, use `DeferPublishOrderedAsync(...)` or `DeferSendOrderedAsync(...)` with a stable order key. Set `completesOrderKey` only on the final message, and ensure every participating consumer sees an unbroken stream.
+Inject IOutbox in the Application operation. The host adds the application part containing an OutboxHandler<T> with stable schema constants and explicitly enables AddOutbox(); the adapter calls a concrete client. Enqueue snapshots without sending or saving. Pass optional generic Headers for durable explicit metadata. NOF does not guarantee ordering; infrastructure owns its scheduling and consumer coordination. See docs/en/design/transactional-outbox.md.

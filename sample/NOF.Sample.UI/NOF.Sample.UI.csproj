@@ -1,23 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
-
-	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<SupportedPlatform Include="browser" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="AntDesign" />
-		<PackageReference Include="Microsoft.AspNetCore.Components.Web" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<ProjectReference Include="..\..\src\NOF.UI\NOF.UI.csproj" />
-		<ProjectReference Include="..\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
-	</ItemGroup>
-
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NOF.UI\NOF.UI.csproj" />
+    <ProjectReference Include="..\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
+  </ItemGroup>
 </Project>

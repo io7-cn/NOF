@@ -8,20 +8,22 @@ using Microsoft.EntityFrameworkCore;
 using NOF.CodeFixes;
 using NOF.Domain;
 using NOF.Infrastructure;
+using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Infrastructure.EntityFrameworkCore.SourceGenerator;
-using NOF.Infrastructure.SourceGenerator;
 using System.Collections.Immutable;
 using Xunit;
+using ValueObjectLengthConfigurationAnalyzer = NOF.Infrastructure.EntityFrameworkCore.SourceGenerator.EfCoreValueObjectLengthConfigurationAnalyzer;
 
 namespace NOF.SourceGenerator.Tests;
 
 public sealed class ValueObjectLengthConfigurationAnalyzerTests
 {
-    private static readonly Type[] _refs =
+    private static readonly Type[] Refs =
     [
         typeof(IValueObject<>),
         typeof(ValueObjectLengthAttribute),
-        typeof(IDbModelBuilder),
+        typeof(ModelBuilder),
+        typeof(IEFCoreModelConfiguration),
         typeof(DbContext),
     ];
 
@@ -181,13 +183,14 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
     [Fact]
     public async Task CodeFix_MovesMissingLengthAcrossProjects()
     {
-        const string domainSource = """
+        const string DomainSource = """
             using NOF.Domain;
             namespace Test;
             public readonly struct Name : IValueObject<string> { }
             """;
-        const string infrastructureSource = """
-            using NOF.Infrastructure;
+        const string InfrastructureSource = """
+            using NOF.Infrastructure.EntityFrameworkCore;
+            using Microsoft.EntityFrameworkCore;
             namespace Test;
 
             public sealed class Entity
@@ -195,9 +198,9 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 public Name Value { get; set; }
             }
 
-            public sealed class Contributor : IDbContextModelCreatingContributor
+            public sealed class Contributor : IEFCoreModelConfiguration
             {
-                public void Configure(IDbModelBuilder modelBuilder)
+                public void Configure(ModelBuilder modelBuilder)
                 {
                     modelBuilder.Entity<Entity>(entity =>
                         entity.Property(item => item.Value).HasMaxLength(100));
@@ -216,12 +219,12 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
             .AddProject(domainProjectId, "Domain", "Domain", LanguageNames.CSharp)
             .WithProjectCompilationOptions(domainProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(domainProjectId, references)
-            .AddDocument(domainDocumentId, "Name.cs", SourceText.From(domainSource))
+            .AddDocument(domainDocumentId, "Name.cs", SourceText.From(DomainSource))
             .AddProject(infrastructureProjectId, "Infrastructure", "Infrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(infrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(infrastructureProjectId, references)
             .AddProjectReference(infrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(infrastructureDocumentId, "Mapping.cs", SourceText.From(infrastructureSource));
+            .AddDocument(infrastructureDocumentId, "Mapping.cs", SourceText.From(InfrastructureSource));
         Assert.True(workspace.TryApplyChanges(solution));
 
         var infrastructureDocument = workspace.CurrentSolution.GetDocument(infrastructureDocumentId)!;
@@ -250,14 +253,15 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
     [Fact]
     public async Task FixAllInSolution_MovesEachLengthOnceAndRemovesAllConfigurations()
     {
-        const string domainSource = """
+        const string DomainSource = """
             using NOF.Domain;
             namespace Test;
             public readonly struct Name : IValueObject<string> { }
             public readonly struct Code : IValueObject<string> { }
             """;
-        const string firstInfrastructureSource = """
-            using NOF.Infrastructure;
+        const string FirstInfrastructureSource = """
+            using NOF.Infrastructure.EntityFrameworkCore;
+            using Microsoft.EntityFrameworkCore;
             namespace Test;
 
             public sealed class FirstEntity
@@ -270,9 +274,9 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 public Name Value { get; set; }
             }
 
-            public sealed class Contributor : IDbContextModelCreatingContributor
+            public sealed class Contributor : IEFCoreModelConfiguration
             {
-                public void Configure(IDbModelBuilder modelBuilder)
+                public void Configure(ModelBuilder modelBuilder)
                 {
                     modelBuilder.Entity<FirstEntity>(entity =>
                         entity.Property(item => item.Value).HasMaxLength(100));
@@ -281,8 +285,9 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 }
             }
             """;
-        const string secondInfrastructureSource = """
-            using NOF.Infrastructure;
+        const string SecondInfrastructureSource = """
+            using NOF.Infrastructure.EntityFrameworkCore;
+            using Microsoft.EntityFrameworkCore;
             namespace Test;
 
             public sealed class CodeEntity
@@ -290,9 +295,9 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 public Code Value { get; set; }
             }
 
-            public sealed class Contributor : IDbContextModelCreatingContributor
+            public sealed class Contributor : IEFCoreModelConfiguration
             {
-                public void Configure(IDbModelBuilder modelBuilder)
+                public void Configure(ModelBuilder modelBuilder)
                 {
                     modelBuilder.Entity<CodeEntity>(entity =>
                         entity.Property(item => item.Value).HasMaxLength(50));
@@ -313,17 +318,17 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
             .AddProject(domainProjectId, "Domain", "Domain", LanguageNames.CSharp)
             .WithProjectCompilationOptions(domainProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(domainProjectId, references)
-            .AddDocument(domainDocumentId, "ValueObjects.cs", SourceText.From(domainSource))
+            .AddDocument(domainDocumentId, "ValueObjects.cs", SourceText.From(DomainSource))
             .AddProject(firstInfrastructureProjectId, "FirstInfrastructure", "FirstInfrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(firstInfrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(firstInfrastructureProjectId, references)
             .AddProjectReference(firstInfrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(firstInfrastructureDocumentId, "FirstMapping.cs", SourceText.From(firstInfrastructureSource))
+            .AddDocument(firstInfrastructureDocumentId, "FirstMapping.cs", SourceText.From(FirstInfrastructureSource))
             .AddProject(secondInfrastructureProjectId, "SecondInfrastructure", "SecondInfrastructure", LanguageNames.CSharp)
             .WithProjectCompilationOptions(secondInfrastructureProjectId, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
             .AddMetadataReferences(secondInfrastructureProjectId, references)
             .AddProjectReference(secondInfrastructureProjectId, new ProjectReference(domainProjectId))
-            .AddDocument(secondInfrastructureDocumentId, "SecondMapping.cs", SourceText.From(secondInfrastructureSource));
+            .AddDocument(secondInfrastructureDocumentId, "SecondMapping.cs", SourceText.From(SecondInfrastructureSource));
         Assert.True(workspace.TryApplyChanges(solution));
 
         var diagnosticsByProject = ImmutableDictionary.CreateBuilder<ProjectId, ImmutableArray<Diagnostic>>();
@@ -411,11 +416,9 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
 
     private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(string source, bool useEfCore)
     {
-        var extraReferences = _refs.Select(type => type.ToMetadataReference()).ToArray();
+        var extraReferences = Refs.Select(type => type.ToMetadataReference()).ToArray();
         var compilation = CSharpCompilation.CreateCompilation("TestAssembly", source, true, extraReferences);
-        var analyzer = useEfCore
-            ? (DiagnosticAnalyzer)new EfCoreValueObjectLengthConfigurationAnalyzer()
-            : new ValueObjectLengthConfigurationAnalyzer();
+        DiagnosticAnalyzer analyzer = new ValueObjectLengthConfigurationAnalyzer();
 
         return await compilation.WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync();
     }
@@ -449,7 +452,8 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                 """
             : $$"""
                 using NOF.Domain;
-                using NOF.Infrastructure;
+                using NOF.Infrastructure.EntityFrameworkCore;
+                using Microsoft.EntityFrameworkCore;
 
                 namespace Test;
 
@@ -461,11 +465,11 @@ public sealed class ValueObjectLengthConfigurationAnalyzerTests
                     public Name Value { get; set; }
                 }
 
-                public sealed class Contributor : IDbContextModelCreatingContributor
+                public sealed class Contributor : IEFCoreModelConfiguration
                 {
                     {{constantDeclaration}}
 
-                    public void Configure(IDbModelBuilder modelBuilder)
+                    public void Configure(ModelBuilder modelBuilder)
                     {
                         modelBuilder.Entity<Entity>(entity =>
                             entity.Property(item => item.Value).HasMaxLength({{configuredLength}}));

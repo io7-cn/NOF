@@ -1,0 +1,134 @@
+{
+  "realm": "nof",
+  "enabled": true,
+  "displayName": "NOF Local Identity",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@nof.local",
+      "firstName": "Alice",
+      "lastName": "Demo",
+      "attributes": {
+        "entitlements": [
+          "sample.permissions.read",
+          "sample.permissions.manage"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "AliceDemo!2026",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@nof.local",
+      "firstName": "Bob",
+      "lastName": "Demo",
+      "attributes": {
+        "entitlements": [
+          "sample.permissions.read"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "BobDemo!2026",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "charlie",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "charlie@nof.local",
+      "firstName": "Charlie",
+      "lastName": "Demo",
+      "attributes": {
+        "entitlements": []
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "CharlieDemo!2026",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "nof-sample-web",
+      "name": "NOF Sample",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "nof-local-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:55892/signin-oidc"
+      ],
+      "webOrigins": [
+        "http://localhost:55892"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:55892/*",
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "protocolMappers": [
+        {
+          "name": "sample-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "nof-sample",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "permissions",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "entitlements",
+            "claim.name": "entitlements",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "nof.tenant_id",
+            "claim.value": "host",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

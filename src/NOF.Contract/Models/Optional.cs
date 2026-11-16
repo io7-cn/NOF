@@ -22,12 +22,6 @@ public readonly struct Optional
 }
 
 /// <summary>
-/// A marker type representing the absence of a value in an <see cref="Optional{T}"/>.
-/// This type has no members and exists solely to enable implicit conversion to <see cref="Optional{T}"/>.
-/// </summary>
-public readonly struct NoneOptional;
-
-/// <summary>
 /// Represents a value that may or may not be present.
 /// This struct provides a type-safe alternative to using <c>null</c> for reference types,
 /// and enables explicit handling of missing values for value types.
@@ -43,11 +37,9 @@ public readonly struct Optional<T>
     }
 
     /// <summary>
-    /// Gets the contained value.
+    /// Gets the contained value. Read it only when <see cref="HasValue"/> is true;
+    /// an absent optional exposes the default value rather than throwing.
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="HasValue"/> is <c>false</c>, indicating no value is present.
-    /// </exception>
     [JsonInclude]
     public T Value { get; }
 

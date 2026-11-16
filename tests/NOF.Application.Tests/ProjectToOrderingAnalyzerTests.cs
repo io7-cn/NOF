@@ -62,7 +62,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task PredicateTerminalAfterProjection_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -78,7 +78,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         var diagnostic = Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
         Assert.Contains("FirstOrDefault", diagnostic.GetMessage());
@@ -87,7 +87,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task EfAsyncPredicateTerminalAfterProjection_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.EntityFrameworkCore;
             using NOF.Application;
             using System.Linq;
@@ -107,7 +107,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         var diagnostic = Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
         Assert.Contains("AnyAsync", diagnostic.GetMessage());
@@ -116,7 +116,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task LocalVariableAndAliasAfterProjection_ReportNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -136,7 +136,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -144,7 +144,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task StaticQueryableCallAfterProjection_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -160,7 +160,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -168,7 +168,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task ProjectionUsedAsSecondSetOperand_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -186,7 +186,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -194,7 +194,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task TransparentAsQueryableBeforeShaping_StillReportsNOF025Once()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -210,7 +210,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         var diagnostic = Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
         Assert.Contains("Where", diagnostic.GetMessage());
@@ -219,7 +219,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task ExplicitAndNamedProjectionOverload_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -235,7 +235,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -273,7 +273,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task PassingOrReturningProjectedQuery_DoesNotReportNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -294,7 +294,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -302,7 +302,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task EfAsyncMaterialization_DoesNotReportNOF025()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.EntityFrameworkCore;
             using NOF.Application;
             using System.Collections.Generic;
@@ -322,7 +322,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -330,7 +330,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task SelfReassignmentAfterProjection_ReportsNOF025()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -350,7 +350,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.Single(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -358,7 +358,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task ReassignedLocal_DoesNotReportBecauseOriginIsAmbiguous()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -380,7 +380,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -388,7 +388,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task ConditionalOrigin_DoesNotReportBecauseNotEveryPathIsProjected()
     {
-        const string source = """
+        const string Source = """
             using NOF.Application;
             using System.Linq;
 
@@ -412,7 +412,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -420,7 +420,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task QueryTagAfterProjection_DoesNotReportNOF025()
     {
-        const string source = """
+        const string Source = """
             using Microsoft.EntityFrameworkCore;
             using NOF.Application;
             using System.Linq;
@@ -437,7 +437,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }
@@ -445,7 +445,7 @@ public sealed class ProjectToOrderingAnalyzerTests
     [Fact]
     public async Task UnrelatedProjectToMethod_DoesNotReportNOF025()
     {
-        const string source = """
+        const string Source = """
             using System.Linq;
 
             namespace Test;
@@ -466,7 +466,7 @@ public sealed class ProjectToOrderingAnalyzerTests
             }
             """;
 
-        var diagnostics = await GetDiagnosticsAsync(source);
+        var diagnostics = await GetDiagnosticsAsync(Source);
 
         Assert.DoesNotContain(diagnostics, static diagnostic => diagnostic.Id == "NOF025");
     }

@@ -1,87 +1,69 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
-
-    <PropertyGroup>
-        <!-- MAUI workload is only available on Windows/macOS; produce an empty stub on Linux so the solution still builds -->
-        <_HasMauiWorkload>false</_HasMauiWorkload>
-        <_HasMauiWorkload Condition="$([MSBuild]::IsOSPlatform('windows')) OR $([MSBuild]::IsOSPlatform('osx'))">true</_HasMauiWorkload>
-
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-android;net10.0-ios;net10.0-maccatalyst;net10.0-windows10.0.19041.0</TargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-        <TargetFrameworks Condition="'$(_HasMauiWorkload)' != 'true'">net10.0</TargetFrameworks>
-
-        <UseMaui Condition="'$(_HasMauiWorkload)' == 'true'">true</UseMaui>
-        <SingleProject Condition="'$(_HasMauiWorkload)' == 'true'">true</SingleProject>
-
-        <OutputType Condition="'$(_HasMauiWorkload)' == 'true'">Exe</OutputType>
-        <RootNamespace>NOF.Sample.Maui</RootNamespace>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <EnableDefaultCssItems Condition="'$(_HasMauiWorkload)' == 'true'">false</EnableDefaultCssItems>
-        <Nullable>enable</Nullable>
-
-        <MauiXamlInflator Condition="'$(_HasMauiWorkload)' == 'true'">SourceGen</MauiXamlInflator>
-
-        <ApplicationTitle Condition="'$(_HasMauiWorkload)' == 'true'">NOF.Sample.Maui</ApplicationTitle>
-        <ApplicationId Condition="'$(_HasMauiWorkload)' == 'true'">com.companyname.nof.sample.maui</ApplicationId>
-        <ApplicationDisplayVersion Condition="'$(_HasMauiWorkload)' == 'true'">1.0</ApplicationDisplayVersion>
-        <ApplicationVersion Condition="'$(_HasMauiWorkload)' == 'true'">1</ApplicationVersion>
-        <WindowsPackageType Condition="'$(_HasMauiWorkload)' == 'true'">None</WindowsPackageType>
-
-        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
-        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-        <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-    </PropertyGroup>
-
-    <ItemGroup Condition="'$(_HasMauiWorkload)' == 'true'">
-        <!-- App Icon -->
-        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
-
-        <!-- Splash Screen -->
-        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
-
-        <!-- Images -->
-        <MauiImage Include="Resources\Images\*" />
-        <MauiImage Update="Resources\Images\dotnet_bot.svg" BaseSize="168,208" />
-
-        <!-- Custom Fonts -->
-        <MauiFont Include="Resources\Fonts\*" />
-
-        <!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-        <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  <PropertyGroup>
+    <!-- MAUI workload is only available on Windows/macOS; produce an empty stub on Linux so the solution still builds -->
+    <_HasMauiWorkload>false</_HasMauiWorkload>
+    <_HasMauiWorkload Condition="$([MSBuild]::IsOSPlatform('windows')) OR $([MSBuild]::IsOSPlatform('osx'))">true</_HasMauiWorkload>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net11.0-android;net11.0-ios;net11.0-maccatalyst;net11.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net11.0-android;net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="'$(_HasMauiWorkload)' != 'true'">net11.0</TargetFrameworks>
+    <RuntimeIdentifiers Condition="'$(TargetFramework)' == 'net11.0-maccatalyst'">maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
+    <UseMaui Condition="'$(_HasMauiWorkload)' == 'true'">true</UseMaui>
+    <SingleProject Condition="'$(_HasMauiWorkload)' == 'true'">true</SingleProject>
+    <OutputType Condition="'$(_HasMauiWorkload)' == 'true'">Exe</OutputType>
+    <RootNamespace>NOF.Sample.Maui</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCssItems Condition="'$(_HasMauiWorkload)' == 'true'">false</EnableDefaultCssItems>
+    <Nullable>enable</Nullable>
+    <MauiXamlInflator Condition="'$(_HasMauiWorkload)' == 'true'">SourceGen</MauiXamlInflator>
+    <ApplicationTitle Condition="'$(_HasMauiWorkload)' == 'true'">NOF.Sample.Maui</ApplicationTitle>
+    <ApplicationId Condition="'$(_HasMauiWorkload)' == 'true'">com.companyname.nof.sample.maui</ApplicationId>
+    <ApplicationDisplayVersion Condition="'$(_HasMauiWorkload)' == 'true'">1.0</ApplicationDisplayVersion>
+    <ApplicationVersion Condition="'$(_HasMauiWorkload)' == 'true'">1</ApplicationVersion>
+    <WindowsPackageType Condition="'$(_HasMauiWorkload)' == 'true'">None</WindowsPackageType>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_HasMauiWorkload)' == 'true'">
+    <!-- App Icon -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+    <!-- Splash Screen -->
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+    <!-- Images -->
+    <MauiImage Include="Resources\Images\*" />
+    <MauiImage Update="Resources\Images\dotnet_bot.svg" BaseSize="168,208" />
+    <!-- Custom Fonts -->
+    <MauiFont Include="Resources\Fonts\*" />
+    <!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(_HasMauiWorkload)' == 'true'">
+    <PackageReference Include="Microsoft.Maui.Controls" VersionOverride="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" VersionOverride="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+  </ItemGroup>
+  <ItemGroup>
     </ItemGroup>
-
-    <ItemGroup Condition="'$(_HasMauiWorkload)' == 'true'">
-        <PackageReference Include="AntDesign" />
-        <PackageReference Include="Microsoft.Maui.Controls" VersionOverride="$(MauiVersion)" />
-        <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" VersionOverride="$(MauiVersion)" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\..\src\NOF.Hosting.SourceGenerator\NOF.Hosting.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.Maui\NOF.Hosting.Maui.csproj" />
-        <ProjectReference Include="..\..\src\NOF.Hosting\NOF.Hosting.csproj" />
-        <ProjectReference Include="..\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
-        <ProjectReference Include="..\NOF.Sample.UI\NOF.Sample.UI.csproj" />
-    </ItemGroup>
-
-    <!-- On Linux (no MAUI workload), exclude all source files to produce an empty assembly -->
-    <ItemGroup Condition="'$(_HasMauiWorkload)' != 'true'">
-        <Compile Remove="**/*.cs" />
-        <Content Remove="**/*" />
-        <EmbeddedResource Remove="**/*" />
-        <None Remove="**/*" />
-        <Page Remove="**/*" />
-        <ApplicationDefinition Remove="**/*" />
-        <Resource Remove="**/*" />
-        <MauiImage Remove="**/*" />
-        <MauiIcon Remove="**/*" />
-        <MauiSplashScreen Remove="**/*" />
-        <MauiFont Remove="**/*" />
-    </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.Maui\NOF.Hosting.Maui.csproj" />
+    <ProjectReference Include="..\..\src\NOF.Hosting\NOF.Hosting.csproj" />
+    <ProjectReference Include="..\NOF.Sample.Contract\NOF.Sample.Contract.csproj" />
+    <ProjectReference Include="..\NOF.Sample.UI\NOF.Sample.UI.csproj" />
+  </ItemGroup>
+  <!-- On Linux (no MAUI workload), exclude all source files to produce an empty assembly -->
+  <ItemGroup Condition="'$(_HasMauiWorkload)' != 'true'">
+    <Compile Remove="**/*.cs" />
+    <Content Remove="**/*" />
+    <EmbeddedResource Remove="**/*" />
+    <None Remove="**/*" />
+    <Page Remove="**/*" />
+    <ApplicationDefinition Remove="**/*" />
+    <Resource Remove="**/*" />
+    <MauiImage Remove="**/*" />
+    <MauiIcon Remove="**/*" />
+    <MauiSplashScreen Remove="**/*" />
+    <MauiFont Remove="**/*" />
+  </ItemGroup>
 </Project>

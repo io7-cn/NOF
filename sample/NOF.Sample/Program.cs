@@ -1,73 +1,124 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NOF.Hosting;
 using NOF.Hosting.AspNetCore;
-using NOF.Hosting.AspNetCore.Extension.OidcServer;
+using NOF.Infrastructure;
 using NOF.Infrastructure.EntityFrameworkCore;
 using NOF.Sample;
 using NOF.Sample.Application;
+using NOF.Sample.Endpoints;
+using NOF.Sample.Identity;
 using NOF.Sample.Services;
+using NOF.Sample.UI.Services;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
-var builder = NOFWebApplicationBuilder.Create(args);
-var sampleOrigin = ResolveSampleOrigin(builder.Configuration);
-var sampleIssuer = $"{sampleOrigin}/oauth2";
+var builder = WebApplication.CreateBuilder(args).AddNOF();
 
+builder.Services.AddNOFUI();
+
+builder.AddApplicationPart(typeof(ConfigNodeEndpoints).Assembly);
 builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
-builder.AddRpcServer<NOFSampleService>();
-builder.AddRpcServer<OAuthChainDemoService>();
-builder.AddRpcServer<DemoDownstreamService>();
+builder.AddApplicationService<NOFSampleService>();
+builder.AddApplicationService<MessageDispatchService>();
+builder.AddApplicationService<PermissionDemoService>();
 
-builder.Services.AddRedisCache(builder.Configuration.GetConnectionString("redis"));
-
-builder.AddOidcServer(o =>
+builder.Services.AddOutbox();
+builder.Services.Configure<OutboxOptions>(options =>
 {
-    o.Issuer = sampleIssuer;
-    o.AccessTokenAudience = "nof-sample";
-    o.SigningKeyEncryptionKey = builder.Configuration["NOF:OidcServer:SigningKeyEncryptionKey"]
-        ?? throw new InvalidOperationException("Configuration value 'NOF:OidcServer:SigningKeyEncryptionKey' not found.");
-})
-.AddPublicClient(
-    "nof-sample-ui",
-    ["openid", "profile", "email", "sample.read", "sample.write"],
-    displayName: "NOF Sample UI",
-    redirectUris: [$"{sampleOrigin}/oauth/callback", "https://client.local/oauth/callback"]);
-
-builder.Services.AddAuthenticationResourceServer(o =>
-{
-    o.ExpectedIssuer = sampleIssuer;
-    o.Audience = "nof-sample";
-    o.RequireHttpsMetadata = false;
-    o.AuthorizationServerIssuer = sampleIssuer;
+    options.PollingInterval = TimeSpan.FromSeconds(1);
+    options.RetryDelay = TimeSpan.FromSeconds(5);
+    options.MaxRetryCount = 20;
 });
+
+builder.Services.AddIdGenerator()
+    .AddSnowflakeIdGenerator();
+builder.Services.AddObjectStorage()
+    .AddFileSystemObjectStorage();
+builder.Services.AddCacheService()
+    .ConfigureCacheServiceOptions(options => options.KeyPrefix = "nof-sample:{tenantId}:")
+    .AddRedisCache(
+        builder.Configuration.GetConnectionString("redis")
+            ?? throw new InvalidOperationException("Connection string 'redis' is required."));
+
+builder.UseDbContext<ConfigurationDbContext>((creation, ef) => ef.UseNpgsql(
+        DbConnectionStringTemplateResolver.ResolveTenantId(builder.Configuration.GetConnectionString("postgres")
+            ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."), creation.TenantId)))
+    .ConfigureNOFDbContextOptions(options =>
+    {
+        options.TenantMode = TenantMode.DatabasePerTenant;
+        options.SoftDeleteEnabled = true;
+    })
+    .MigrateOnStart();
 
 builder.Services.AddRabbitMQ(options =>
 {
-    options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq");
+    options.Uri = new Uri(builder.Configuration.GetConnectionString("rabbitmq") ?? throw new InvalidOperationException("Connection string 'rabbitmq' is required."));
 });
 
-builder.UseDbContext<ConfigurationDbContext>()
-    .WithTenantMode(TenantMode.DatabasePerTenant)
-    .WithSoftDelete(true)
-    .WithConnectionString(builder.Configuration.GetConnectionString("postgres")
-        ?? throw new InvalidOperationException("Connection string 'postgres' not found in configuration."))
-    .WithOptions(static (optionsBuilder, connectionString) => optionsBuilder.UseNpgsql(connectionString))
-    .MigrateOnInitialize();
+// Telemetry belongs to the native host: NOF supplies only ActivitySource and Meter instrumentation.
+builder.Logging.AddOpenTelemetry(options =>
+{
+    options.IncludeFormattedMessage = true;
+    options.IncludeScopes = true;
+});
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddSource(NOFInfrastructureConstants.InboundPipeline.ActivitySourceName, NOFInfrastructureConstants.OutboundPipeline.ActivitySourceName)
+        .AddAspNetCoreInstrumentation().AddHttpClientInstrumentation())
+    .WithMetrics(metrics => metrics
+        .AddMeter(NOFInfrastructureConstants.InboundPipeline.MeterName)
+        .AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddRuntimeInstrumentation());
+if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+{
+    builder.Services.AddOpenTelemetry().UseOtlpExporter();
+}
 
-builder.Services.ReplaceOrAddScoped<INOFSampleServiceClient, LocalNOFSampleServiceClient>();
-builder.Services.ReplaceOrAddScoped<IOAuthChainDemoServiceClient, LocalOAuthChainDemoServiceClient>();
-builder.Services.AddScoped<IOAuthAuthorizeEndpoint, SampleOAuthAuthorizeEndpoint>();
-builder.Services.AddScoped<IOAuthSubjectService, SampleOAuthSubjectService>();
-builder.Services.AddHttpClient<OAuthChainDemoBackend>(client => client.BaseAddress = new Uri(sampleOrigin));
-builder.Services.AddRequestOutboundMiddleware<OAuthChainDemoAccessTokenOutboundMiddleware>();
-builder.Services.AddHttpClient<IDemoDownstreamServiceClient, HttpDemoDownstreamServiceClient>(client => client.BaseAddress = new Uri(sampleOrigin));
-
-builder.Services.AddAntDesign();
+builder.Services.AddSampleIdentity(builder.Configuration, builder.Environment);
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<NOF.Sample.OpenApi.SampleOpenApiDocumentTransformer>()
+        .AddOperationTransformer<NOF.Sample.OpenApi.SampleOpenApiOperationTransformer>();
+    options.AddSchemaTransformer<NOF.Sample.OpenApi.SampleOpenApiSchemaTransformer>();
+});
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectNullableAnnotations = true);
+builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = ExternalIdentity.AntiforgeryHeaderName;
+    options.Cookie.Name = ExternalIdentity.AntiforgeryCookieName;
+});
+builder.Services.AddSingleton<DemoDeliveryControl>();
+builder.Services.AddSingleton<DemoObservations>();
+builder.Services.AddInvocationFilter<DemoInvocationFilter>();
+builder.Services.AddHttpClient("notifications", client => client.BaseAddress = new Uri(
+    builder.Configuration["Notifications:BaseUrl"] ?? "http://localhost:55893"));
+builder.Services.Replace(ServiceDescriptor.Scoped<ISampleApi, ServerSampleApi>());
+builder.Services.AddScoped<SampleMessageService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
 
-var app = await builder.BuildAsync();
+var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseNOF();
+app.MapConfigNodeEndpoints();
+app.MapMessageDispatchEndpoints();
+app.MapPermissionDemoEndpoints();
+app.MapSampleIdentity();
+app.MapDemoCapabilities();
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/alive");
 
+app.UseStatusCodePages(async status => await Results.Problem(statusCode: status.HttpContext.Response.StatusCode)
+    .ExecuteAsync(status.HttpContext));
 app.MapOpenApi();
 app.UseAntiforgery();
 
@@ -80,20 +131,3 @@ app.MapRazorComponents<App>()
         typeof(NOF.Sample.Wasm.WasmMarker).Assembly);
 
 await app.RunAsync();
-
-static string ResolveSampleOrigin(IConfiguration configuration)
-{
-    var urls = configuration["ASPNETCORE_URLS"];
-    if (!string.IsNullOrWhiteSpace(urls))
-    {
-        var candidate = urls
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
-        if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
-        {
-            return $"{uri.Scheme}://{uri.Authority}";
-        }
-    }
-
-    return "http://localhost";
-}

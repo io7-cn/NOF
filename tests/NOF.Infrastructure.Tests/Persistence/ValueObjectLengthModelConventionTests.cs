@@ -63,7 +63,7 @@ public sealed class ValueObjectLengthModelConventionTests
             _value = value;
         }
 
-        public static LimitedName Of(string value) => new(value);
+        public static LimitedName From(string value) => new(value);
 
         public static explicit operator string(LimitedName value) => value._value;
     }
