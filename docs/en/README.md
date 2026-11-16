@@ -38,47 +38,15 @@ documented manual workflow. Existing published versions, including `v11.0.0`, ar
 immutable. Future protected release tags require verified signatures. No tag or
 stable release is created merely to validate a topic branch.
 
-See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [architecture](../design/index.md),
+See [contributing](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md), [architecture](design/index.md),
 [security reporting](https://github.com/io7-cn/NOF/blob/main/SECURITY.md), and the [Apache 2.0 license](https://github.com/io7-cn/NOF/blob/main/LICENSE).
 
-- [Result Union migration](design/result-unions.md)
-- [Application core and adapters (ADR 0001)](design/0001-application-core-and-adapters.md)
-- [Application request implementation guide](design/application-requests.md)
 
-- [Configuration node REST implementation](design/configuration-rest.md)
+## Guides
 
-- [Declared expected failures](design/expected-failures.md)
-
-- [Value object construction](design/value-objects.md)
-
-- [Invocation extensions](design/invocation-extensions.md)
-
-- [Native host integration](design/native-hosting.md)
-
-- [Persistence boundaries](design/persistence-boundaries.md)
-
-- [Unified operations and collections](design/unified-operations.md)
-
-- [Contract declaration and execution boundaries](design/contract-boundaries.md)
-
-- [Generic transactional outbox](design/transactional-outbox.md)
-
-- [HTTP adaptation](design/http-adaptation.md)
-
-- [Ambient binding](design/ambient-binding.md)
-
-- [RabbitMQ two-service routing sample](design/rabbitmq-sample.md)
-
-The shared Sample UI uses native Blazor event binding and HTML controls, with no third-party component library. Configuration editing, streaming and permission components use interactive server rendering with the external identity principal. The browser workbench exposes live cache, storage, events, IDs, Outbox and cross-service delivery controls. Start the AppHost as described in the [RabbitMQ sample](design/rabbitmq-sample.md).
-
-- [Host composition and identity ownership](design/host-composition.md)
-
-- [Contract authorization and dynamic permissions](design/authorization.md)
-
-- [Framework boundaries and native platform APIs](design/framework-simplification.md)
-
-- [One-way operations and uniform Inbox](design/one-way-operations.md)
-- [JSON execution context and durable delivery](design/execution-context.md)
-- [Native EF Core configuration and NOF policy](design/efcore-configuration.md)
-
-- [Interactive Sample capability workbench](design/sample-workbench.md)
+- [Framework overview](overview.md)
+- [Contributing](contributing.md)
+- [Code and documentation organization](development/code-organization.md)
+- [Architecture and migration guides](design/index.md)
+- [Package guides](packages/index.md)
+- [Interactive Sample](design/sample-workbench.md)

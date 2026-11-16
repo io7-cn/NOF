@@ -31,9 +31,15 @@
     "content": [
       {
         "files": [
-          "api/**.yml",
-          "api/index.md"
+          "api/**.yml"
         ]
+      },
+      {
+        "files": [
+          "index.md"
+        ],
+        "src": "docs/api",
+        "dest": "api"
       },
       {
         "files": [
@@ -67,10 +73,17 @@
           "NOTICE",
           "AGENTS.md",
           ".ci/*.py",
-          "templates/repository/**"
+          "templates/repository/**",
+          "templates/repository/.editorconfig",
+          "templates/repository/.prettierrc.json"
         ],
         "src": ".standards",
         "dest": "standards"
+      },
+      {
+        "files": [
+          "LICENSE"
+        ]
       }
     ],
     "output": "_site",

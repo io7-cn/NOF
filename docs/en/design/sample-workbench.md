@@ -1,5 +1,7 @@
 # Interactive Sample capability workbench
 
+Owner: NOF maintainers (XmmShp). Reviewed: 2026-11-16.
+
 [简体中文](../../zh-CN/design/sample-workbench.md) · [RabbitMQ routing](rabbitmq-sample.md) · [Authorization](authorization.md)
 
 The Sample is a local capability demonstration, not an identity server. AppHost runs the producer, Notifications receiver, Keycloak, RabbitMQ, PostgreSQL and Garnet. The workbench calls real endpoints and displays stored delivery state and receiver projections. It sends no real email.

@@ -30,47 +30,15 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 版本标签或已记录的手动工作流触发。既有已发布版本（包括 `v11.0.0`）不可变，
 后续受保护发布标签必须具有可验证签名。主题分支验证不创建标签或稳定版。
 
-另见[贡献说明](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md)、[架构](../design/index.md)、
+另见[贡献说明](https://github.com/io7-cn/NOF/blob/main/CONTRIBUTING.md)、[架构](design/index.md)、
 [安全报告](https://github.com/io7-cn/NOF/blob/main/SECURITY.md)和 [Apache 2.0 许可证](https://github.com/io7-cn/NOF/blob/main/LICENSE)。
 
-- [Result 联合类型迁移](design/result-unions.md)
-- [应用执行核心与适配器（ADR 0001）](design/0001-application-core-and-adapters.md)
-- [应用请求实现指南](design/application-requests.md)
 
-- [配置节点 REST 实现](design/configuration-rest.md)
+## 指南
 
-- [声明可预期失败](design/expected-failures.md)
-
-- [值对象构造](design/value-objects.md)
-
-- [统一调用扩展](design/invocation-extensions.md)
-
-- [原生宿主集成](design/native-hosting.md)
-
-- [持久化边界收窄](design/persistence-boundaries.md)
-
-- [统一操作与聚合集合](design/unified-operations.md)
-
-- [Contract 声明与执行边界](design/contract-boundaries.md)
-
-- [通用事务性发件箱](design/transactional-outbox.md)
-
-- [HTTP 适配](design/http-adaptation.md)
-
-- [Ambient 绑定](design/ambient-binding.md)
-
-- [RabbitMQ 双服务手动路由示例](design/rabbitmq-sample.md)
-
-共享 Sample UI 使用原生 Blazor 事件绑定和 HTML 控件，不依赖第三方组件库。配置编辑、流式响应和权限组件使用交互式服务端渲染与外部身份；能力工作台提供缓存、存储、事件、ID、Outbox 和跨服务投递的实际操作入口。按 [RabbitMQ 示例](design/rabbitmq-sample.md)中的说明启动 AppHost。
-
-- [宿主装配与身份职责](design/host-composition.md)
-
-- [契约授权与动态权限](design/authorization.md)
-
-- [框架边界与原生平台 API](design/framework-simplification.md)
-
-- [单向操作与统一 Inbox](design/one-way-operations.md)
-- [JSON 执行上下文与可靠投递](design/execution-context.md)
-- [原生 EF Core 配置与 NOF 策略](design/efcore-configuration.md)
-
-- [交互式 Sample 能力工作台](design/sample-workbench.md)
+- [框架概览](overview.md)
+- [贡献指南](contributing.md)
+- [代码与文档组织](development/code-organization.md)
+- [架构与迁移指南](design/index.md)
+- [包使用指南](packages/index.md)
+- [交互式 Sample](design/sample-workbench.md)

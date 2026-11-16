@@ -1,30 +1,7 @@
 # NOF.Hosting.AspNetCore
 
-Native ASP.NET Core operation binding, explicit feature mapping and runtime OpenAPI.
+Native HTTP operation binding and OpenAPI.
 
-```csharp
-var orders = app.MapGroup("/orders");
-orders.MapGet<OrderService.Find>("/{id}")
-    .Response<OrderService.Find.NotFound>(404);
-```
+[English guide](https://github.com/io7-cn/NOF/blob/main/docs/en/packages/aspnetcore.md) · [简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/packages/aspnetcore.md)
 
-Operation descriptors retain static type arguments through IOperationDescriptorVisitor; registered generated bases and standalone OperationHandler classes can both be mapped. Typed Request/Response
-rules replace complete exact-type mappings on native groups/endpoints; no endpoint-module registration or
-client generation is required. AddNOF registers JSON, ProblemDetails and OpenAPI services.
-Call UseNOF, ordinary feature extensions, native health checks and host-owned identity endpoints
-and MapOpenApi explicitly. Native middleware and protocols remain host responsibilities.
-
-Failure cases implement IFailure with Title/Detail, optionally typed Error. Map concrete
-case types to HTTP statuses; never inspect display text. Context transfers explicit semantic
-inputs only and does not flow back from business execution. Runtime execution and OpenAPI
-read the same immutable binding without inspecting or executing user callbacks.
-
-See the [English guide](../../../docs/en/design/http-adaptation.md),
-[简体中文](../../../docs/zh-CN/design/http-adaptation.md) and
-[complete CRUD example](../../../docs/en/design/configuration-rest.md).
-
-## License
-
-Apache-2.0
-
-Generic operation response mappings accept reply-producing contracts only. Void operations require a native durable-acceptance endpoint with a transport acknowledgement, without returning consumer business results. See [one-way semantics](../../../docs/en/design/one-way-operations.md).
+Part of [NOF](https://github.com/io7-cn/NOF), licensed under Apache-2.0.

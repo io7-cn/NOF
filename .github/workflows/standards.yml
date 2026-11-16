@@ -24,3 +24,13 @@ jobs:
         run: python3 .standards/.ci/check-adoption.py
       - name: Verify contribution policy
         run: python3 .ci/check-contribution.py
+      - name: Verify bilingual documentation
+        run: python3 .ci/check-documentation.py
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Verify maintained frontend formatting
+        run: |
+          npm ci --ignore-scripts
+          npm run check:frontend

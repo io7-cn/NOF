@@ -1,36 +1,7 @@
 # NOF.Infrastructure.StackExchangeRedis
 
-Redis caching infrastructure package for the [NOF Framework](https://github.com/XmmShp/NOF).
+Redis cache and transient broadcast providers.
 
-## Overview
+[English guide](https://github.com/io7-cn/NOF/blob/main/docs/en/packages/redis.md) · [简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/packages/redis.md)
 
-Provides Redis-backed infrastructure for NOF using StackExchange.Redis, including `ICacheService` and `IBackplane` implementations.
-
-## Usage
-
-```csharp
-var builder = WebApplication.CreateBuilder(args).AddNOF();
-
-builder.Services.AddCacheService().AddRedisCache(builder.Configuration.GetConnectionString("redis")
-    ?? throw new InvalidOperationException("Connection string 'redis' not found."));
-
-builder.Services.AddBackplane().AddRedisBackplane(builder.Configuration.GetConnectionString("redis")
-    ?? throw new InvalidOperationException("Connection string 'redis' not found."));
-```
-
-Redis connection settings are typically resolved from your application configuration using the `redis` connection string.
-
-## Dependencies
-
-- [`NOF.Infrastructure`](https://www.nuget.org/packages/NOF.Infrastructure)
-- [`StackExchange.Redis`](https://www.nuget.org/packages/StackExchange.Redis)
-
-## Installation
-
-```shell
-dotnet add package NOF.Infrastructure.StackExchangeRedis
-```
-
-## License
-
-Apache-2.0
+Part of [NOF](https://github.com/io7-cn/NOF), licensed under Apache-2.0.

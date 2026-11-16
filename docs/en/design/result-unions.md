@@ -7,7 +7,7 @@ Result or Result<T>, their factories, or ResultJsonTypeClassifier. Success and
 Success<T> wrappers are also removed. Upgrade contracts, implementations and callers
 together; no compatibility aliases are shipped.
 
-Declare the successful business value and expected failures on a partial service:
+Declare the successful business value and expected failures on a service Contract and a partial Application container:
 
 ```csharp
 public interface IOrderService : IApplicationService
@@ -25,7 +25,7 @@ public sealed class GetOrder : OrderService.Get
 }
 ```
 
-Here Result is the inherited IOrderService.GetOperation.Result, not a shared generic
+Here Result is the inherited OrderService.Get.Result, not a shared generic
 result. It contains OrderDto and the operation's own NotFound case. Handlers directly
 return DTOs, Empty.Instance or generated failure cases. Page<T> and IAsyncEnumerable<T>
 are ordinary business values. Successful messages belong to business DTOs.
@@ -33,15 +33,15 @@ are ordinary business values. Successful messages belong to business DTOs.
 For operations without declared failures, return the DTO, nullable value, Empty or
 an application-owned union directly. Protocol service interfaces outside the
 IApplicationService model can declare concrete native unions in their owning package;
-OAuth token, client and device services do this. There is no generic replacement
+Such unions belong to their owning application or integration. There is no generic replacement
 Result in another framework layer. The sample UI owns its separate UiResponse port.
-OAuth application contracts use FailureCase just like other application services.
+NOF hosts consume external identity providers rather than implementing OAuth protocol services.
 
 C# checks native union switch expressions; NOF adds no expected-outcome marker or
-checked-result analyzer. Generated Match remains an optional convenience. Default
+checked-result analyzer. Default
 union contents remain invalid at the invocation boundary.
 
-Generated failure JSON uses the branch Name in $failure and carries errorCode/message
+Generated failure JSON uses the branch Name in $failure and carries title/detail
 or custom error data. Native HTTP adapters explicitly map results to resources and
 ProblemDetails; there is no mandatory wire envelope. Consumers own JSON metadata.
 See the declared-failure guide for source generation and AOT constraints.

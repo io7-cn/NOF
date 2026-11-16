@@ -1,6 +1,6 @@
 # 值对象构造
 
-[English](../../en/design/value-objects.md) · [领域设计](../../design/value-object.md)
+[English](../../en/design/value-objects.md) · [领域设计](value-object.md)
 
 用户只提供规范化和布尔校验，由 NOF 生成构造逻辑：
 

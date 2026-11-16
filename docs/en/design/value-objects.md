@@ -1,6 +1,6 @@
 # Value object construction
 
-[简体中文](../../zh-CN/design/value-objects.md) · [Domain design](../../design/value-object.md)
+[简体中文](../../zh-CN/design/value-objects.md) · [Domain design](value-object.md)
 
 Implement normalization and a boolean predicate; leave construction to NOF:
 

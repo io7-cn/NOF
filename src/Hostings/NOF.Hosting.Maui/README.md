@@ -1,13 +1,7 @@
 # NOF.Hosting.Maui
 
-Client registration extensions for native MauiAppBuilder.
+Client UI registration for MauiAppBuilder.
 
-```csharp
-var builder = MauiApp.CreateBuilder().AddNOF();
-builder.UseMauiApp<App>();
-return builder.Build();
-```
+[English guide](https://github.com/io7-cn/NOF/blob/main/docs/en/packages/maui.md) · [简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/packages/maui.md)
 
-Registers NOF UI services only; the platform owns application lifetime. No IHost adapter,
-synchronous async-build bridge or server background services are installed.
-See [native hosting](../../../docs/en/design/native-hosting.md).
+Part of [NOF](https://github.com/io7-cn/NOF), licensed under Apache-2.0.

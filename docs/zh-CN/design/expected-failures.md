@@ -35,4 +35,4 @@ partial Filter 也可以声明 FailureCase，生成静态 FailureCases 目录，
 
 可选的 union JSON 使用保留的 $failure Name 判别字段、title/detail 及可选 error。先编译 Application，再在消费宿主的 JsonSerializerContext 注册 Service.Operation.Result；JSON 生成器不能读取同一次编译中另一个生成器的输出。HTTP 也可以直接序列化已声明的 DTO/ProblemDetails。关闭反射的冒烟测试覆盖这两种路径。
 
-迁移时将 ErrorCode/Code 改为 Title、Message 改为 Detail，自定义属性改为 `(name, title, typeof(Error))`，同步升级序列化器与消费端。按独立 CLR 分支判断失败。OAuth 客户端仓储、注册准入端口返回 OAuthClientNotFound/OAuthClientConflict 等闭合分支，使用类型模式；远程适配器用 HttpTransportFailure 的真实 HttpStatusCode。OAuth 标准协议错误字符串继续作为协议数据，由 HTTP 边界显式映射。
+迁移时将 ErrorCode/Code 改为 Title、Message 改为 Detail，自定义属性改为 `(name, title, typeof(Error))`，同步升级序列化器与消费端。按独立 CLR 分支判断失败。身份协议失败由外部提供者与原生 ASP.NET Core 认证处理器负责，NOF 应用操作只声明自身的业务失败。

@@ -326,3 +326,9 @@ sample/NOF.Sample.Notifications/notifications.db*
 
 # Repository frontend formatting tools
 /node_modules/
+
+# Maintained package guides are source, not restored NuGet packages
+!docs/en/packages/
+!docs/en/packages/**
+!docs/zh-CN/packages/
+!docs/zh-CN/packages/**

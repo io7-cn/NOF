@@ -1,11 +1,7 @@
 # NOF.Hosting.BlazorWebAssembly
 
-Client registration extensions for the native WebAssemblyHostBuilder.
+Client UI registration for WebAssemblyHostBuilder.
 
-```csharp
-var builder = WebAssemblyHostBuilder.CreateDefault(args).AddNOF();
-await builder.Build().RunAsync();
-```
+[English guide](https://github.com/io7-cn/NOF/blob/main/docs/en/packages/blazor-webassembly.md) · [简体中文](https://github.com/io7-cn/NOF/blob/main/docs/zh-CN/packages/blazor-webassembly.md)
 
-Registers NOF UI services only. There is no second IHost or server background-service loop.
-See [native hosting](../../../docs/en/design/native-hosting.md).
+Part of [NOF](https://github.com/io7-cn/NOF), licensed under Apache-2.0.

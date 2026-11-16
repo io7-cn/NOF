@@ -1,5 +1,7 @@
 # The NOF Value Object: Why There Is No `.Value`
 
+[简体中文](../../zh-CN/design/value-object.md)
+
 ## The Shape of a Value Object
 
 A value object in NOF is a `readonly partial struct` that implements `IValueObject<T>`:
@@ -178,4 +180,4 @@ The generator never looks for `.Value`. It uses the same explicit cast that hand
 
 The value object is a type, not a box. Treat it as one.
 
-The current [factory contract and migration](../en/design/value-objects.md) uses From/TryFrom, removes Validate and propagates user-hook exceptions.
+The current [factory contract and migration](value-objects.md) uses From/TryFrom, removes Validate and propagates user-hook exceptions.

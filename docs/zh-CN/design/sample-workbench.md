@@ -1,5 +1,7 @@
 # 交互式 Sample 能力工作台
 
+责任人：NOF 维护者（XmmShp）。审查日期：2026-11-16。
+
 [English](../../en/design/sample-workbench.md) · [RabbitMQ 路由](rabbitmq-sample.md) · [鉴权](authorization.md)
 
 Sample 演示业务框架能力，不提供身份服务器。AppHost 启动生产者、Notifications 接收服务、Keycloak、RabbitMQ、PostgreSQL 和 Garnet。页面调用真实端点，展示持久化发件状态与接收端业务投影，不发送真实邮件。

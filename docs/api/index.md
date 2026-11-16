@@ -1,3 +1,1 @@
-# API Reference
-
-This section contains the auto-generated API documentation from the NOF framework source code.
+[English API guide](../en/api-reference.md) · [API 使用指南](../zh-CN/api-reference.md)

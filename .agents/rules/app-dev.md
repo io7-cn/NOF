@@ -26,7 +26,7 @@ Typical dependency direction is `Host -> Application`, `Application -> Domain + 
 - In-process events: `LocalEventHandler<T>`, `IEventPublisher`, `PublishAsEvent()`.
 - Persistence: domain-owned aggregate repositories, Application DTO query ports and IUnitOfWork; explicit transactions use ITransactionManager/ITransaction. Core generic ORM/query contracts are removed; see docs/en/design/persistence-boundaries.md.
 - Caching and mapping: `ICacheService`, `CacheKey<T>`, `IMapper`, `ProjectTo<TDestination>()`.
-- Match the successful `T` itself or shared `NOF.Abstraction.Failure`. Payload-free Result is union(Empty, Failure). Success/Success<T> and WithMessage are removed; successful messages belong to explicit business DTOs. Do not use removed `IsSuccess`, `Extra` or reflective result projections. See `docs/en/design/result-unions.md`.
+- Match the declared business success or the Application-generated concrete failure branches. A reply with no payload uses Empty; there is no shared generic Result. Success/Success<T> and WithMessage are removed; successful messages belong to explicit business DTOs. Do not use removed `IsSuccess`, `Extra` or reflective result projections. See `docs/en/design/result-unions.md`.
 - Responses: plain business values, Empty, Optional<T>, or FailureCase-generated operation-specific Result unions. Generic Contract Result types are removed.
 
 Message payloads are plain objects; consumer entry points are ordinary ApplicationService operations selected by host-owned bindings.
@@ -70,7 +70,7 @@ app.MapOpenApi();
 await app.RunAsync();
 ```
 
-Add Redis and RabbitMQ through `builder.Services.AddCacheService().AddRedisCache(...)` and `builder.Services.AddRabbitMQ(...)`. `WebApplication.CreateBuilder(args).AddNOF()` already registers the default in-memory persistence, cache, command rider, and notification rider; explicit providers replace those defaults.
+Add Redis and RabbitMQ through `builder.Services.AddCacheService().AddRedisCache(...)` and `builder.Services.AddRabbitMQ(...)`. `WebApplication.CreateBuilder(args).AddNOF()` registers execution only; optional cache, storage, messaging and Outbox are selected explicitly.
 
 ## Persistence Convention
 
@@ -86,9 +86,9 @@ await unitOfWork.SaveChangesAsync(cancellationToken);
 ## Authentication
 
 - Select native OpenIddict or an external OAuth/OIDC authority in the host; NOF supplies no OIDC protocol or storage package.
-- Register JWT validation with `builder.Services.AddAuthenticationResourceServer(...)`, configuring `AuthorizationServerIssuer`, `ExpectedIssuer`, and optional `Audience`.
+- Register native `AddAuthentication().AddJwtBearer(...)` with Authority/Audience and native middleware; NOF copies the verified HttpContext.User.
 - Read identity through `IUserContext`; read the normalized current tenant from the handler's explicit `Context.TenantId`.
-- OIDC persistence uses the configured infrastructure session, so configure a durable provider and migrations for production.
+- The external identity provider owns its storage and lifecycle. The Sample AppHost runs Keycloak; configure native Cookie/OpenIdConnect/JwtBearer consumers in the application.
 
 ## Source Generators and Conventions
 
