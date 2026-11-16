@@ -258,6 +258,10 @@ jobs:
         {
           Write-Host "Packing: $projectPath"
           dotnet pack $projectPath --configuration ${{ env.CONFIGURATION }} --no-build --output ./artifacts /p:PackageVersion=$VERSION
+          if ($LASTEXITCODE -ne 0)
+          {
+            exit $LASTEXITCODE
+          }
         }
 
     - name: Sign in to NuGet.org with Trusted Publishing

@@ -193,4 +193,3 @@ namespace NOF.Sample.Migrations
         }
     }
 }
-
