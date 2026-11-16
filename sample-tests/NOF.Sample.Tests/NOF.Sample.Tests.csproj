@@ -16,6 +16,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\NOF.Test\NOF.Test.csproj" />
@@ -61,5 +62,18 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hostings\NOF.Hosting.AspNetCore.SourceGenerator\NOF.Hosting.AspNetCore.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../sample/NOF.Sample/Endpoints/ConfigNodeEndpoints.OpenApi.cs" Link="Endpoints/ConfigNodeEndpoints.OpenApi.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/DemoCapabilities.cs" Link="Endpoints/DemoCapabilities.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/DemoInput.cs" Link="Endpoints/DemoInput.cs" />
+    <Compile Include="../../sample/NOF.Sample/Endpoints/Models/*.cs" Link="Endpoints/Models/%(Filename)%(Extension)" />
+    <Compile Include="../../sample/NOF.Sample/OpenApi/*.cs" Link="OpenApi/%(Filename)%(Extension)" />
+    <Compile Include="../../sample/NOF.Sample/Identity/IdentityStatusResponse.cs" Link="Identity/IdentityStatusResponse.cs" />
+    <Compile Include="../../sample/NOF.Sample/ConfigurationDbContext.cs" Link="ConfigurationDbContext.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoObservations.cs" Link="Services/DemoObservations.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoInvocation.cs" Link="Services/DemoInvocation.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/DemoEvent.cs" Link="Services/DemoEvent.cs" />
+    <Compile Include="../../sample/NOF.Sample/Services/ObserveDemoEvent.cs" Link="Services/ObserveDemoEvent.cs" />
   </ItemGroup>
 </Project>

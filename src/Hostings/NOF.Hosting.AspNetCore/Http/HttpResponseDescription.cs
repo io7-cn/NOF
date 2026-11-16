@@ -8,4 +8,4 @@ using System.Diagnostics.CodeAnalysis;
 namespace NOF.Hosting.AspNetCore;
 
 /// <summary>One actual response shape, after inheritance and projection.</summary>
-public sealed record HttpResponseDescription(Type SourceType, int StatusCode, Type? BodyType, string? ContentType);
+public sealed record HttpResponseDescription(Type SourceType, int StatusCode, Type? BodyType, string? ContentType, string? Description = null);

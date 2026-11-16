@@ -25,6 +25,9 @@ public sealed class HttpRequestBuilder<[DynamicallyAccessedMembers(DynamicallyAc
     /// <summary>Gets whether this declaration explicitly switches construction modes.</summary>
     public bool ResetsConstruction { get; private set; }
 
+    /// <summary>Gets whether the built-in JSON reader owns the body and its 400/415 failures.</summary>
+    public bool ReadsJsonBody { get; private set; }
+
     /// <summary>Selects a request member without compiling an expression.</summary>
     public HttpRequestMemberBuilder<T, TValue> Member<TValue>(Expression<Func<T, TValue>> member)
     {
@@ -49,6 +52,7 @@ public sealed class HttpRequestBuilder<[DynamicallyAccessedMembers(DynamicallyAc
         Members.Clear();
         Inputs.Clear();
         BodyDescription = null;
+        ReadsJsonBody = false;
         ResetsConstruction = true;
         return this;
     }
@@ -82,6 +86,7 @@ public sealed class HttpRequestBuilder<[DynamicallyAccessedMembers(DynamicallyAc
     {
         SetConstructor(read => constructor(read.Http, read.Http.RequestAborted));
         BodyDescription = body;
+        ReadsJsonBody = false;
         Inputs.AddRange(inputs);
         return this;
     }
@@ -107,11 +112,12 @@ public sealed class HttpRequestBuilder<[DynamicallyAccessedMembers(DynamicallyAc
         }
 
         BodyDescription = new(type);
+        ReadsJsonBody = true;
     }
 
     private HttpRequestSourceBuilder<T, TValue> Source<TValue>(HttpInputLocation source, string name)
     {
-        Inputs.Add(new(name, source, typeof(TValue), true));
+        Inputs.Add(new(name, source, typeof(TValue), true, AllowsNull: Nullable.GetUnderlyingType(typeof(TValue)) is not null));
         return new(this, read => read.Value<TValue>(source, name));
     }
 }

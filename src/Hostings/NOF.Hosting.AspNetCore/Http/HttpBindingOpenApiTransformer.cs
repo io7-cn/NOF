@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using NOF.Abstraction;
+using NOF.Contract;
+using System.ComponentModel;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -20,10 +23,13 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             return;
         }
 
+        operation.OperationId ??= $"{binding.Operation.Id}:{context.Description.HttpMethod}:{context.Description.RelativePath}";
+        operation.Summary ??= binding.Operation.MethodInfo.GetCustomAttribute<SummaryAttribute>()?.Summary;
+        operation.Description ??= binding.Operation.MethodInfo.GetCustomAttribute<DescriptionAttribute>()?.Description;
         operation.Parameters = [];
         foreach (var input in binding.Inputs.Where(item => item.Location is HttpInputLocation.Route or HttpInputLocation.Query or HttpInputLocation.Header))
         {
-            var schema = await context.GetOrCreateSchemaAsync(input.ValueType, cancellationToken: cancellationToken);
+            var schema = await inputSchemaAsync(input);
             if (input.DefaultValue is not null)
             {
                 var json = context.ApplicationServices.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
@@ -57,7 +63,7 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
                 };
                 foreach (var input in bodyMembers)
                 {
-                    schema.Properties[input.Name] = await context.GetOrCreateSchemaAsync(input.ValueType, cancellationToken: cancellationToken);
+                    schema.Properties[input.Name] = await inputSchemaAsync(input);
                     if (input.Required)
                     {
                         schema.Required.Add(input.Name);
@@ -86,7 +92,7 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             var sources = binding.Responses.Where(item => item.StatusCode == status).ToArray();
             var response = new OpenApiResponse
             {
-                Description = $"HTTP {status}",
+                Description = string.Join("; ", sources.Select(item => item.Description).Where(item => item is not null).Distinct()) is { Length: > 0 } description ? description : $"HTTP {status}",
                 Content = new Dictionary<string, IOpenApiMediaType>(),
                 Headers = new Dictionary<string, IOpenApiHeader>()
             };
@@ -114,6 +120,13 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             }
 
             operation.Responses[status.ToString(System.Globalization.CultureInfo.InvariantCulture)] = response;
+        }
+
+        async Task<IOpenApiSchema> inputSchemaAsync(HttpInputDescription input)
+        {
+            var schema = await context.GetOrCreateSchemaAsync(input.ValueType, cancellationToken: cancellationToken);
+            // Wrap references instead of mutating the shared component or conflating presence with nullability.
+            return input.AllowsNull ? new OpenApiSchema { AnyOf = [schema, new OpenApiSchema { Type = JsonSchemaType.Null }] } : schema;
         }
     }
 }

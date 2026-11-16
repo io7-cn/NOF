@@ -58,3 +58,5 @@
   href: value-object.md
 - name: "值对象构造"
   href: value-objects.md
+- name: HTTP 契约文档
+  href: http-contract-documentation.md

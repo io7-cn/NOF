@@ -48,3 +48,5 @@ Execution and runtime OpenAPI use the final frozen selection. Known TypedResults
 Replace Response<T>(r => r.StatusCode(404)) with Response<T>(404). Replace body/header/Problem DSL with one typed native result lambda or an ordinary endpoint. Remove ConfigureProblem, Filter HTTP views, response variants/selectors and HttpOutputContext. Parent mappings are replaced as a whole. Keep Request configuration, generic operation maps, native middleware and the shared invocation policy boundary. Update JSON/OpenAPI metadata and consumers together. No compatibility layer is retained.
 
 Void operations have no business reply; generic HTTP operation mappings reject them at configuration. Use a native endpoint that authorizes and durably accepts work before returning an acceptance acknowledgement. See [one-way operations](one-way-operations.md).
+
+[HTTP contract documentation](http-contract-documentation.md)

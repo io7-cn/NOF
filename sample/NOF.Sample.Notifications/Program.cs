@@ -23,7 +23,7 @@ builder.Services.AddScoped<INotificationReceipts, NotificationReceipts>();
 
 var app = builder.Build();
 app.UseNOF();
-app.MapGet<MessageDemoService.GetReceipts>("/api/messages/receipts");
+app.MapGet<MessageDemoService.GetReceipts>("/api/messages/receipts").WithTags("Messages").WithSummary("Read persisted business projections, optionally by order ID");
 app.MapHealthChecks("/health");
 app.MapOpenApi();
 await app.RunAsync();

@@ -4,11 +4,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.OpenApi;
 using NOF.Abstraction;
 using System.Security.Claims;
 
@@ -17,6 +19,9 @@ namespace NOF.Sample.Identity;
 /// <summary>Consumes an external identity provider; this application implements no identity protocol endpoints.</summary>
 public static class ExternalIdentity
 {
+    public const string SessionCookieName = "nof.sample.session";
+    public const string AntiforgeryHeaderName = "X-CSRF-TOKEN";
+    public const string AntiforgeryCookieName = "nof.sample.antiforgery";
     public static IServiceCollection AddSampleIdentity(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var authority = configuration["Authentication:Authority"] ?? "http://localhost:18080/realms/nof";
@@ -29,7 +34,7 @@ public static class ExternalIdentity
                 ? JwtBearerDefaults.AuthenticationScheme : CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {
-                options.Cookie.Name = "nof.sample.session";
+                options.Cookie.Name = SessionCookieName;
                 options.LoginPath = "/auth/login";
                 options.Events.OnRedirectToLogin = context =>
                 {
@@ -81,30 +86,38 @@ public static class ExternalIdentity
     public static void MapSampleIdentity(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/auth/login", (string? returnUrl) => Results.Challenge(
-            new AuthenticationProperties { RedirectUri = LocalReturnUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme]));
+            new AuthenticationProperties { RedirectUri = LocalReturnUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme]))
+            .WithName("Login").WithTags("Identity").WithSummary("Start the external OIDC authorization-code login")
+            .WithDescription("Browser navigation: redirects to the configured authority; the native OIDC middleware handles /signin-oidc. returnUrl must be local, otherwise /demo.html is used.")
+            .Produces(302).AddOpenApiOperationTransformer(DescribeRedirectAsync);
         endpoints.MapPost("/auth/logout", () => Results.SignOut(new AuthenticationProperties { RedirectUri = "/demo.html" },
             [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]))
+            .WithName("Logout").WithTags("Identity").WithSummary("Sign out the local session and external OIDC session")
+            .WithDescription("Requires the antiforgery token and cookie from /api/demo/security-token. Redirects through the provider and back to /demo.html.")
+            .Produces(302).ProducesProblem(400).AddOpenApiOperationTransformer(DescribeRedirectAsync)
+            .WithMetadata(new Microsoft.AspNetCore.Antiforgery.RequireAntiforgeryTokenAttribute())
             .AddEndpointFilter(async (context, next) =>
             {
-                try
+                if (context.HttpContext.Features.Get<Microsoft.AspNetCore.Antiforgery.IAntiforgeryValidationFeature>() is not { IsValid: true })
                 {
-                    await context.HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
-                        .ValidateRequestAsync(context.HttpContext);
-                }
-                catch (Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException)
-                {
-                    return Results.BadRequest("Refresh the page and try again.");
+                    return Results.Problem("Refresh the page and try again.", statusCode: 400);
                 }
                 return await next(context);
             });
-        endpoints.MapGet("/auth/status", (HttpContext http, IConfiguration configuration) => Results.Ok(new
-        {
-            authenticated = http.User.Identity?.IsAuthenticated == true,
-            name = http.User.Identity?.Name,
-            subject = http.User.FindFirst("sub")?.Value,
-            permissions = http.User.FindAll(ClaimTypes.Permission).Select(claim => claim.Value).ToArray(),
-            authority = configuration["Authentication:Authority"] ?? "http://localhost:18080/realms/nof"
-        }));
+        endpoints.MapGet("/auth/status", (HttpContext http, IConfiguration configuration) => Results.Ok(new IdentityStatusResponse(
+            http.User.Identity?.IsAuthenticated == true, http.User.Identity?.Name, http.User.FindFirst("sub")?.Value,
+            http.User.FindAll(ClaimTypes.Permission).Select(claim => claim.Value).ToArray(),
+            configuration["Authentication:Authority"] ?? "http://localhost:18080/realms/nof")))
+            .WithName("GetIdentityStatus").WithTags("Identity").WithSummary("Inspect the current cookie or bearer identity")
+            .Produces<IdentityStatusResponse>();
+    }
+
+    private static Task DescribeRedirectAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken ct)
+    {
+        var response = (OpenApiResponse)operation.Responses!["302"];
+        response.Headers ??= new Dictionary<string, IOpenApiHeader>();
+        response.Headers["Location"] = new OpenApiHeader { Description = "Browser redirect to the external identity provider or local return path.", Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" } };
+        return Task.CompletedTask;
     }
 
     public static string LocalReturnUrl(string? value)

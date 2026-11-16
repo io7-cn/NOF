@@ -31,3 +31,5 @@
 - [Unified operations, transport endpoints and aggregate collections](unified-operations.md)
 - [The NOF Value Object: Why There Is No `.Value`](value-object.md)
 - [Value object construction](value-objects.md)
+
+- [HTTP contract documentation](http-contract-documentation.md)

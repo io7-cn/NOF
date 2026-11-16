@@ -31,3 +31,5 @@
 - [统一操作、消息绑定与聚合集合](unified-operations.md)
 - [值对象为何不提供 Value 属性](value-object.md)
 - [值对象构造](value-objects.md)
+
+- [HTTP 契约文档](http-contract-documentation.md)

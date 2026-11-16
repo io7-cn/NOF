@@ -5,11 +5,12 @@ using NOF.Abstraction;
 using NOF.Contract;
 using NOF.Hosting.AspNetCore;
 using NOF.Sample.Application;
+using NOF.Sample.Endpoints.Models;
 
 namespace NOF.Sample.Endpoints;
 
 /// <summary>Explicit native routes and declarative HTTP adaptation for configuration use cases.</summary>
-public static class ConfigNodeEndpoints
+public static partial class ConfigNodeEndpoints
 {
     public const string GetNodeRoute = "GetConfigNode";
     public static RouteGroupBuilder MapConfigNodeEndpoints(this IEndpointRouteBuilder endpoints)
@@ -21,7 +22,8 @@ public static class ConfigNodeEndpoints
             .WithSummary("Create a configuration node")
             .Response((CreatedConfigNode value) => TypedResults.CreatedAtRoute(value: value, routeName: GetNodeRoute, routeValues: new { id = value.Id }))
             .Response<NOFSampleService.CreateConfigNode.NameConflict>(409)
-            .Response<NOFSampleService.CreateConfigNode.InvalidInput>(400);
+            .Response<NOFSampleService.CreateConfigNode.InvalidInput>(400).NativeBuilder
+            .AddOpenApiOperationTransformer(DescribeCreatedNodeAsync);
         nodes.MapGet<NOFSampleService.GetRootConfigNodes>("");
         nodes.MapGet<NOFSampleService.GetConfigNodeById>("/{id:long}")
             .WithName(GetNodeRoute)
@@ -35,24 +37,38 @@ public static class ConfigNodeEndpoints
             .Response<NOFSampleService.UpdateConfigNodeParent.ParentCycle>(409);
         nodes.MapDelete<NOFSampleService.DeleteConfigNode>("/{id:long}")
             .Response<NOFSampleService.DeleteConfigNode.NotFound>(404)
-            .Response<NOFSampleService.DeleteConfigNode.HasChildren>(409);
+            .Response((NOFSampleService.DeleteConfigNode.HasChildren failure) => TypedResults.Problem(new NodeHasChildrenProblem
+            {
+                Status = 409,
+                Type = NodeHasChildrenProblem.ProblemType,
+                Title = failure.Title,
+                Detail = string.IsNullOrEmpty(failure.Detail) ? failure.Error.Message : failure.Detail,
+                Error = failure.Error
+            })).NativeBuilder.Produces<NodeHasChildrenProblem>(409, "application/problem+json")
+            .AddOpenApiOperationTransformer(DescribeDeleteConflictAsync);
         nodes.MapPut<NOFSampleService.AddOrUpdateConfigFile>("/{id:long}/files/{fileName}")
             .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
             .Response<NOFSampleService.AddOrUpdateConfigFile.NotFound>(404)
-            .Response<NOFSampleService.AddOrUpdateConfigFile.InvalidInput>(400);
+            .Response<NOFSampleService.AddOrUpdateConfigFile.InvalidInput>(400).NativeBuilder
+            .AddOpenApiOperationTransformer(DescribeFileAsync);
         nodes.MapDelete<NOFSampleService.RemoveConfigFile>("/{id:long}/files/{fileName}")
             .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
             .Response<NOFSampleService.RemoveConfigFile.NotFound>(404)
-            .Response<NOFSampleService.RemoveConfigFile.InvalidInput>(400);
+            .Response<NOFSampleService.RemoveConfigFile.InvalidInput>(400).NativeBuilder
+            .AddOpenApiOperationTransformer(DescribeFileAsync);
         nodes.MapPut<NOFSampleService.SetActiveFile>("/{id:long}/active-file")
             .Request(request => request.Member(value => value.NodeId).FromRoute("id"))
             .Response<NOFSampleService.SetActiveFile.NotFound>(404)
-            .Response<NOFSampleService.SetActiveFile.InvalidInput>(400);
-        api.MapGet<NOFSampleService.GetConfiguration>("/configuration").WithTags("Configuration")
+            .Response<NOFSampleService.SetActiveFile.InvalidInput>(400).NativeBuilder
+            .AddOpenApiOperationTransformer(DescribeActiveFileAsync);
+        api.MapGet<NOFSampleService.GetConfiguration>("/configuration").WithTags("Configuration").WithSummary("Read the active configuration for a node path")
             .Response<NOFSampleService.GetConfiguration.NotFound>(404)
             .Response<NOFSampleService.GetConfiguration.InvalidInput>(400);
         api.MapGet("/sample-events", WatchAsync).WithTags("Streaming")
-            .Produces<SampleStreamEvent>(contentType: "text/event-stream").ProducesProblem(400);
+            .WithName("WatchSampleEvents").WithSummary("Stream JSON events over SSE")
+            .WithDescription("Emits started, count tick events, then completed. Count is clamped to 1–20 and intervalMilliseconds to 100–5000; out-of-range values are not rejected. An empty topic uses the default. Cancellation or connection loss can interrupt the stream after headers are sent.")
+            .Produces<SampleStreamEvent>(contentType: "text/event-stream").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(422)
+            .AddOpenApiOperationTransformer(DescribeStreamAsync);
         return nodes;
     }
     private static async Task<IResult> WatchAsync(HttpContext http, CancellationToken ct,

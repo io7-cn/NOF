@@ -79,8 +79,16 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 }
 
 builder.Services.AddSampleIdentity(builder.Configuration, builder.Environment);
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<NOF.Sample.OpenApi.SampleOpenApiDocumentTransformer>()
+    .AddOperationTransformer<NOF.Sample.OpenApi.SampleOpenApiOperationTransformer>());
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectNullableAnnotations = true);
+builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = ExternalIdentity.AntiforgeryHeaderName;
+    options.Cookie.Name = ExternalIdentity.AntiforgeryCookieName;
+});
 builder.Services.AddSingleton<DemoDeliveryControl>();
 builder.Services.AddSingleton<DemoObservations>();
 builder.Services.AddInvocationFilter<DemoInvocationFilter>();
@@ -105,7 +113,8 @@ app.MapDemoCapabilities();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/alive");
 
-app.UseStatusCodePages();
+app.UseStatusCodePages(async status => await Results.Problem(statusCode: status.HttpContext.Response.StatusCode)
+    .ExecuteAsync(status.HttpContext));
 app.MapOpenApi();
 app.UseAntiforgery();
 

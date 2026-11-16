@@ -37,6 +37,11 @@ public sealed class ConfigNodeRestTests
 
         using var blockedDelete = await http.DeleteAsync($"/api/config-nodes/{parent}");
         Assert.Equal(HttpStatusCode.Conflict, blockedDelete.StatusCode);
+        using (var problem = JsonDocument.Parse(await blockedDelete.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(parent, problem.RootElement.GetProperty("error").GetProperty("nodeId").GetInt64());
+            Assert.Equal("urn:nof:sample:config-node:has-children", problem.RootElement.GetProperty("type").GetString());
+        }
         using var move = await http.PatchAsJsonAsync($"/api/config-nodes/{child}/parent", new { parentId = (long?)null, nodeId = parent });
         Assert.Equal(HttpStatusCode.NoContent, move.StatusCode);
         var roots = await http.GetFromJsonAsync<List<ConfigNodeDto>>("/api/config-nodes");
@@ -216,16 +221,22 @@ public sealed class ConfigNodeRestTests
         Assert.Equal(code, problem.RootElement.GetProperty("title").GetString());
     }
 
-    private static async Task<WebApplication> CreateAppAsync()
+    public static async Task<WebApplication> CreateAppAsync()
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
+        builder.Services.AddOpenApi(options =>
+        {
+            options.AddDocumentTransformer<OpenApi.SampleOpenApiDocumentTransformer>();
+            options.AddOperationTransformer<OpenApi.SampleOpenApiOperationTransformer>();
+        });
         builder.Services.AddCacheService().AddMemoryCacheService();
         builder.Services.AddIdGenerator().AddSnowflakeIdGenerator();
         builder.AddApplicationPart(typeof(NOFSampleService).Assembly);
         builder.AddApplicationPart(typeof(ConfigNodeRestTests).Assembly);
         builder.AddApplicationPart(typeof(Persistence.ConfigNodePersistence).Assembly);
         builder.AddApplicationService<NOFSampleService>();
+        builder.AddApplicationService<PermissionDemoService>();
         builder.AddApplicationService<PolicyProbeService>();
         builder.Services.AddSingleton<PolicyProbe>();
         builder.Services.Configure<CacheServiceOptions>(options => options.KeyPrefix = "rest-test:{tenantId}:");
@@ -235,6 +246,7 @@ public sealed class ConfigNodeRestTests
         var app = builder.Build();
         app.UseNOF();
         app.MapConfigNodeEndpoints();
+        app.MapPermissionDemoEndpoints();
         app.MapGet("/policy-probe", PolicyProbeService.Read.Descriptor);
         app.UseStatusCodePages();
         app.MapOpenApi();

@@ -23,6 +23,23 @@ public sealed class HttpBindingTests
     private static readonly OperationDescriptor<SearchInput, UpdateReply> Search = new(typeof(IService), nameof(IService.Search));
     private static readonly OperationDescriptor<UpdateInput, UpdateReply> Denied = new(typeof(IService), nameof(IService.Denied));
     [Fact]
+    public async Task OperationIds_KeepNativeNamesAndDistinguishMultipleBindingsOfOneOperation()
+    {
+        await using var app = CreateApp();
+        app.MapPut("/named/{id:long}", Update).WithName("update-item");
+        app.MapPut("/first/{id:long}", Update);
+        app.MapPut("/second/{id:long}", Update);
+        app.MapOpenApi();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var spec = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var paths = spec.RootElement.GetProperty("paths");
+        Assert.Equal("update-item", paths.GetProperty("/named/{id}").GetProperty("put").GetProperty("operationId").GetString());
+        var ids = paths.EnumerateObject().Select(path => path.Value.GetProperty("put").GetProperty("operationId").GetString()).ToArray();
+        Assert.Equal(3, ids.Distinct().Count());
+    }
+
+    [Fact]
     public async Task ConventionBinding_ProtectsRouteIdentity_AndNativeProjectionMatchesOpenApi()
     {
         await using var app = CreateApp();
@@ -127,6 +144,10 @@ public sealed class HttpBindingTests
             using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
             var responses = document.RootElement.GetProperty("paths").GetProperty("/api/{id}").GetProperty("put").GetProperty("responses");
             Assert.Equal(!exclude, responses.TryGetProperty("429", out _));
+            if (!exclude)
+            {
+                Assert.Contains("rate: 000429", responses.GetProperty("429").GetProperty("description").GetString());
+            }
         }
     }
 
@@ -161,10 +182,17 @@ public sealed class HttpBindingTests
     {
         await using var app = CreateApp();
         app.MapPut("/items/{id:long}", Update);
+        app.MapOpenApi();
         await app.StartAsync();
         using var client = app.GetTestClient();
         using var response = await client.PutAsync("/items/1", new StringContent(body, Encoding.UTF8, media));
         Assert.Equal(expected, (int)response.StatusCode);
+        Assert.Equal(0, app.Services.GetRequiredService<Probe>().Constructed);
+        using var spec = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var responses = spec.RootElement.GetProperty("paths").GetProperty("/items/{id}").GetProperty("put").GetProperty("responses");
+        Assert.True(responses.TryGetProperty("400", out _));
+        Assert.True(responses.TryGetProperty("415", out _));
+        Assert.Contains("Invalid request", responses.GetProperty("400").GetProperty("description").GetString());
         Assert.Equal(0, app.Services.GetRequiredService<Probe>().Constructed);
     }
 
@@ -235,6 +263,7 @@ public sealed class HttpBindingTests
         using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
         var media = document.RootElement.GetProperty("paths").GetProperty("/text").GetProperty("put").GetProperty("requestBody").GetProperty("content");
         Assert.True(media.TryGetProperty("text/plain", out _));
+        Assert.False(document.RootElement.GetProperty("paths").GetProperty("/text").GetProperty("put").GetProperty("responses").TryGetProperty("415", out _));
         await Assert.ThrowsAsync<ArgumentException>(() => client.PutAsJsonAsync("/broken", new { name = "a" }));
     }
 

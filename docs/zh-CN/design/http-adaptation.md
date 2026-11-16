@@ -48,3 +48,5 @@ Context 来源继续显式配置：已认证租户 Claim、租户意图 Header�
 Response<T>(r => r.StatusCode(404)) 改成 Response<T>(404)。Body/Header/Problem DSL 改成一条完整原生结果委托或普通端点。删除 ConfigureProblem、HTTP Filter 视图、命名变体/Selector 和 HttpOutputContext；父级映射整体替换。保留 Request 配置、泛型操作映射、原生中间件和统一调用策略。同步升级 JSON/OpenAPI 元数据和消费端，不保留兼容层。
 
 void 操作没有业务回信，泛型 HTTP 操作映射在配置时拒绝它。需要接收单向工作时，由原生端点完成授权并可靠接收，再返回接收确认。见[单向操作](one-way-operations.md)。
+
+[HTTP 契约文档](http-contract-documentation.md)

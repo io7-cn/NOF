@@ -58,3 +58,5 @@
   href: value-object.md
 - name: "Value object construction"
   href: value-objects.md
+- name: HTTP contract documentation
+  href: http-contract-documentation.md

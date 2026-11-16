@@ -64,6 +64,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         var constructors = endpoint.Metadata.OfType<HttpRequestBuilder<TRequest>>().ToArray();
         Func<HttpRequestReadContext, ValueTask<TRequest>>? constructor = null;
         HttpBodyDescription? bodyDescription = null;
+        var readsJsonBody = false;
         var overrides = new Dictionary<string, HttpRequestMember>();
         var inputs = new List<HttpInputDescription>();
         foreach (var configuration in constructors)
@@ -72,6 +73,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
             {
                 constructor = configuration.Constructor;
                 bodyDescription = configuration.BodyDescription;
+                readsJsonBody = configuration.ReadsJsonBody;
                 inputs.Clear();
                 inputs.AddRange(configuration.Inputs);
                 if (constructor is not null)
@@ -127,7 +129,7 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
                 members.Add(new(property.Name, jsonName, property.PropertyType, source, sourceName, required, metadata.IsSetNullable, hasDefault, defaultValue));
                 if (source != HttpInputLocation.Body)
                 {
-                    inputs.Add(new(sourceName, source, property.PropertyType, source == HttpInputLocation.Route || required && !hasDefault, defaultValue));
+                    inputs.Add(new(sourceName, source, property.PropertyType, source == HttpInputLocation.Route || required && !hasDefault, defaultValue, AllowsNull: metadata.IsSetNullable));
                 }
             }
 
@@ -185,7 +187,17 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
         }
         var selected = cases.ToFrozenDictionary(type => type, type => mappings.LastOrDefault(item => item.SourceType == type)
             ?? new HttpResponseMapping(type, null, null, null, false));
-        var responses = selected.Values.SelectMany(mapping => mapping.DescribeResponses(services)).ToList();
+        var declaredFailures = operation.MethodInfo.GetCustomAttributes<FailureCaseAttribute>().ToArray();
+        var responses = selected.Values.SelectMany(mapping => mapping.DescribeResponses(services)).Select(response =>
+        {
+            var business = operation.ResultCases.FirstOrDefault(item => item.CaseType == response.SourceType);
+            var filter = plan.FailureCases.FirstOrDefault(item => item.CaseType == response.SourceType);
+            var name = business?.Name ?? filter?.Id ?? response.SourceType.Name;
+            var title = declaredFailures.FirstOrDefault(item => item.Name == business?.Name)?.Title ?? filter?.Title;
+            return typeof(IFailure).IsAssignableFrom(response.SourceType)
+                ? response with { Description = $"{name}{(title is null ? "" : $": {title}")}" }
+                : response;
+        }).ToList();
         // Explicit native Produces metadata describes opaque/custom results without probing their delegates.
         responses.AddRange(endpoint.Metadata.OfType<IProducesResponseTypeMetadata>().Where(item => item.StatusCode >= 200)
             .SelectMany(item => item.ContentTypes.DefaultIfEmpty(null!).Select(content => new HttpResponseDescription(typeof(object), item.StatusCode,
@@ -201,9 +213,18 @@ public sealed class HttpEndpointExecutor<[DynamicallyAccessedMembers(Dynamically
 
         foreach (var member in members.Where(item => item.Source == HttpInputLocation.Body))
         {
-            inputs.Add(new(member.SourceName, HttpInputLocation.Body, member.ValueType, member.Required && !member.HasDefault, member.DefaultValue));
+            inputs.Add(new(member.SourceName, HttpInputLocation.Body, member.ValueType, member.Required && !member.HasDefault, member.DefaultValue, AllowsNull: member.AllowsNull));
         }
 
+        if (members.Count > 0 || constructor is not null && (readsJsonBody || inputs.Any(item => item.Location is HttpInputLocation.Route or HttpInputLocation.Query or HttpInputLocation.Header)))
+        {
+            responses.Add(new(typeof(BadHttpRequestException), 400, typeof(ProblemDetails), "application/problem+json",
+                "Invalid request: malformed JSON, missing required input, null or incompatible input value."));
+        }
+        if (members.Any(item => item.Source == HttpInputLocation.Body) || readsJsonBody)
+        {
+            responses.Add(new(typeof(BadHttpRequestException), 415, typeof(ProblemDetails), "application/problem+json", "Unsupported request content type: expected JSON."));
+        }
         var binding = new HttpEndpointBinding(operation, Array.AsReadOnly(inputs.DistinctBy(item => (item.Name, item.Location)).ToArray()), Array.AsReadOnly(responses.ToArray()), Array.AsReadOnly(plan.FailureCases.Select(item => item.CaseType).ToArray()));
         return new(json, constructor, members.AsReadOnly(), items, tenant, selected, plan, binding, queryComparison, routeComparison);
     }
