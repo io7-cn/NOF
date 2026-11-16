@@ -40,3 +40,15 @@ SSE 使用 OpenAPI 3.2 itemSchema 描述单个事件对象，其 data 字符串�
 参见 [HTTP 适配](http-adaptation.md)、[配置 CRUD](configuration-rest.md)和[能力工作台](sample-workbench.md)。原生元数据遵循 [ASP.NET Core OpenAPI](https://learn.microsoft.com/aspnet/core/fundamentals/openapi/include-metadata)，流格式遵循 [OpenAPI 3.2 SSE](https://spec.openapis.org/oas/v3.2.0.html#special-considerations-for-server-sent-events)。
 
 业务专属的原生操作 Transformer 直接附在所属端点上，不通过全局 Transformer 比较路由字符串来选取。
+
+## 业务选择与 Schema 边界
+
+允许在文件尚不存在时提前指定活跃文件名。设置合法名称会保存选择；配置合并在文件内容添加前忽略该节点的缺失文件。fileName 为 null、缺省或空字符串时清除选择。HTTP 说明遵循已有行为，不额外引入文件必须存在的业务规则。
+
+Outbox 视图使用真实的 OutboxMessageStatus 枚举，并只在此属性上配置字符串序列化；当前为 Pending、Sent、Failed。保留已有 JSON 字符串，不全局改变枚举格式。Headers 是字符串键到字符串或 null 的对象。回执 kind 继续使用数字：0 = Mail、1 = OrderAudit、2 = OrderMetrics；Sample 宿主从 Contract 枚举生成其文档。消费者应显示未知的未来状态/种类，而不是把它解释成某个已知状态。Contract 显式固定数值，保持持久化与传输身份。
+
+名称验证继续使用 .NET string.Length，即 UTF-16 单元数，并拒绝纯空白。JSON Schema minLength/maxLength 按 Unicode 码点计数，因此 1–100 是必要边界，不能表达所有应用约束。50 个补充平面 emoji 占 100 个 UTF-16 单元，可以接受；60 个占 120 个，会被拒绝，尽管码点数未达到 100。说明明确这个额外规则，不改变领域行为，也不引入自定义正则方言来伪装两种计数等价。参见 [JSON Schema 字符串长度](https://json-schema.org/draft/2020-12/json-schema-validation#name-maxlength)。
+
+可读的失败说明不等于机器可判别的失败标识。统一展示可以继续使用通用 ProblemDetails；需要机器决策的端点显式选定稳定 Problem URI 和结构化数据，如删除冲突。不要求新增全局 CLR 类型到 URI 的目录，也不要求每个失败都增加一份 DTO。
+
+原生 SSE 端点通过既有 HTTP 默认映射，从有效调用计划生成 Filter 失败说明。默认匿名策略不声明不可达的 401/403/422；宿主启用严格租户规则时再纳入实际的 401/403。声明的流失败与原生查询绑定仍贡献 400。文档跟随宿主策略，不硬编码状态全集。

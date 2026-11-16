@@ -79,8 +79,12 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 }
 
 builder.Services.AddSampleIdentity(builder.Configuration, builder.Environment);
-builder.Services.AddOpenApi(options => options.AddDocumentTransformer<NOF.Sample.OpenApi.SampleOpenApiDocumentTransformer>()
-    .AddOperationTransformer<NOF.Sample.OpenApi.SampleOpenApiOperationTransformer>());
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<NOF.Sample.OpenApi.SampleOpenApiDocumentTransformer>()
+        .AddOperationTransformer<NOF.Sample.OpenApi.SampleOpenApiOperationTransformer>();
+    options.AddSchemaTransformer<NOF.Sample.OpenApi.SampleOpenApiSchemaTransformer>();
+});
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectNullableAnnotations = true);
 builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);

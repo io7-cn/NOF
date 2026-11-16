@@ -28,6 +28,54 @@ namespace NOF.Sample.Tests;
 public sealed class SampleOpenApiTests
 {
     [Fact]
+    public async Task WorkbenchSchemas_PreserveKnownStatusesNumericKindsAndNullableStringHeaders()
+    {
+        await using var app = CreateHost();
+        app.MapGet("/receipt-schema", () => TypedResults.Ok(new MessageReceiptsResponse([]))).WithName("ReceiptSchema");
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var components = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var entry = components.GetProperty(nameof(DemoOutboxEntry));
+        var status = resolve(entry.GetProperty("properties").GetProperty("status"));
+        Assert.Equal(["Pending", "Sent", "Failed"], status.GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        var headers = resolve(entry.GetProperty("properties").GetProperty("headers"));
+        Assert.Equal("object", headers.GetProperty("type").GetString());
+        Assert.Contains("string", headers.GetProperty("additionalProperties").GetRawText());
+        Assert.Contains("null", headers.GetProperty("additionalProperties").GetRawText());
+        var kind = components.GetProperty(nameof(MessageReceiptKind));
+        Assert.Equal([0, 1, 2], kind.GetProperty("enum").EnumerateArray().Select(value => value.GetInt32()));
+        Assert.Contains("1 = OrderAudit", kind.GetProperty("description").GetString());
+        foreach (var value in Enum.GetValues<OutboxMessageStatus>())
+        {
+            var dto = new DemoOutboxEntry(Guid.Empty, "sample", value, 0, null, DateTime.UtcNow, null, null,
+                new Dictionary<string, string?> { ["empty"] = null, ["correlation"] = "abc" });
+            using var wire = JsonDocument.Parse(JsonSerializer.Serialize(dto, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            Assert.Equal(value.ToString(), wire.RootElement.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, wire.RootElement.GetProperty("headers").GetProperty("empty").ValueKind);
+        }
+
+        JsonElement resolve(JsonElement schema) => schema.TryGetProperty("$ref", out var reference)
+            ? components.GetProperty(reference.GetString()!.Split('/')[^1]) : schema;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StreamMetadata_UsesTheEffectiveTenantPolicy(bool requireTenant)
+    {
+        await using var app = await ConfigNodeRestTests.CreateAppAsync(requireTenant);
+        using var client = app.GetTestClient();
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/api/sample-events").GetProperty("get").GetProperty("responses");
+        Assert.Equal(requireTenant, responses.TryGetProperty("401", out _));
+        Assert.Equal(requireTenant, responses.TryGetProperty("403", out _));
+        Assert.False(responses.TryGetProperty("422", out _));
+        using var response = await client.GetAsync("/api/sample-events?count=1&intervalMilliseconds=100");
+        Assert.Equal(requireTenant ? HttpStatusCode.Unauthorized : HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ConfigurationSchema_MatchesNullableInput_BindingFailures_AndActualStructuredProblem()
     {
         await using var app = await ConfigNodeRestTests.CreateAppAsync();
@@ -152,6 +200,7 @@ public sealed class SampleOpenApiTests
         builder.Services.AddHttpClient("notifications", client => client.BaseAddress = new Uri("https://notifications.example")).ConfigurePrimaryHttpMessageHandler(() => new UnavailableNotifications());
         builder.Services.AddOpenApi(options =>
         {
+            options.AddSchemaTransformer<OpenApi.SampleOpenApiSchemaTransformer>();
             options.AddDocumentTransformer<OpenApi.SampleOpenApiDocumentTransformer>();
             options.AddOperationTransformer<OpenApi.SampleOpenApiOperationTransformer>();
         });

@@ -67,7 +67,7 @@ public static partial class ConfigNodeEndpoints
         api.MapGet("/sample-events", WatchAsync).WithTags("Streaming")
             .WithName("WatchSampleEvents").WithSummary("Stream JSON events over SSE")
             .WithDescription("Emits started, count tick events, then completed. Count is clamped to 1–20 and intervalMilliseconds to 100–5000; out-of-range values are not rejected. An empty topic uses the default. Cancellation or connection loss can interrupt the stream after headers are sent.")
-            .Produces<SampleStreamEvent>(contentType: "text/event-stream").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(422)
+            .Produces<SampleStreamEvent>(contentType: "text/event-stream").ProducesProblem(400)
             .AddOpenApiOperationTransformer(DescribeStreamAsync);
         return nodes;
     }

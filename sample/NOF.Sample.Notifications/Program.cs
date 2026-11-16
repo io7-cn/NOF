@@ -7,6 +7,21 @@ using NOF.Sample.Notifications;
 using NOF.Sample.Notifications.Persistence;
 
 var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddSchemaTransformer((schema, context, ct) =>
+    {
+        if (context.JsonTypeInfo.Type == typeof(NOF.Sample.MessageReceiptKind))
+        {
+            schema.Enum = Enum.GetValues<NOF.Sample.MessageReceiptKind>()
+                .Select(kind => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create((int)kind)!).ToList();
+            schema.Description = "Known business projections: " + string.Join(", ",
+                Enum.GetValues<NOF.Sample.MessageReceiptKind>().Select(kind => $"{(int)kind} = {kind}"))
+                + ". Future consumers should display an unknown numeric kind without reinterpreting it.";
+        }
+        return Task.CompletedTask;
+    });
+});
 
 builder.AddApplicationPart(typeof(MessageDemoService).Assembly);
 builder.AddApplicationService<MessageDemoService>();

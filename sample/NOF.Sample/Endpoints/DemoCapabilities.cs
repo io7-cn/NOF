@@ -50,7 +50,7 @@ public static class DemoCapabilities
         group.MapGet("/outbox", async (ConfigurationDbContext db, DemoDeliveryControl control, Guid? orderId, CancellationToken ct) =>
         {
             var records = await db.Set<NOFOutboxMessage>().AsNoTracking().OrderByDescending(row => row.CreatedAtUtc).Take(100).ToListAsync(ct);
-            var rows = records.Select(row => new DemoOutboxEntry(row.Id, row.MessageType, row.Status.ToString(), row.RetryCount,
+            var rows = records.Select(row => new DemoOutboxEntry(row.Id, row.MessageType, row.Status, row.RetryCount,
                 row.ErrorMessage, row.CreatedAtUtc, row.NextAttemptAtUtc, ReadOrderId(row.Payload), ReadHeaders(row.Headers)))
                 .Where(row => orderId is null || row.OrderId == orderId).ToArray();
             return Results.Ok(new DemoOutboxOverview(control.Paused, rows));
@@ -186,11 +186,9 @@ public static class DemoCapabilities
         return Task.CompletedTask;
     }
 
-    private static System.Text.Json.JsonElement ReadHeaders(string headers)
-    {
-        using var json = System.Text.Json.JsonDocument.Parse(headers);
-        return json.RootElement.Clone();
-    }
+    private static IReadOnlyDictionary<string, string?> ReadHeaders(string headers)
+        => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(headers)
+            ?? throw new System.Text.Json.JsonException("Outbox headers must be a JSON object.");
 
     private static Guid? ReadOrderId(byte[] payload)
     {

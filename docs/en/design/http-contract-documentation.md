@@ -40,3 +40,15 @@ Contract tests generate the document and make real TestServer requests: nullable
 See [HTTP adaptation](http-adaptation.md), [configuration CRUD](configuration-rest.md) and [Sample workbench](sample-workbench.md). Native metadata follows [ASP.NET Core OpenAPI](https://learn.microsoft.com/aspnet/core/fundamentals/openapi/include-metadata); stream representation follows [OpenAPI 3.2 SSE](https://spec.openapis.org/oas/v3.2.0.html#special-considerations-for-server-sent-events).
 
 Business-specific native operation transformers are attached to the owning endpoint, rather than selected by route-string matching in the global transformer.
+
+## Business choices and schema limits
+
+An active file name may be selected before that file exists. Selecting a valid name stores it; configuration merging ignores this node's missing file until its content is added. Null, omitted or empty fileName clears the selection. The HTTP description follows this established behavior; it does not introduce a new existence requirement.
+
+The Outbox view uses the real OutboxMessageStatus enum with property-scoped string serialization: current states are Pending, Sent and Failed. This preserves the existing JSON strings without globally changing enum serialization. Headers is an object mapping string keys to string-or-null values. Receipt kind remains numeric (0 = Mail, 1 = OrderAudit, 2 = OrderMetrics); Sample hosts document these identities from the Contract enum. Consumers should keep an unknown future status/kind visible instead of assigning it a known meaning. Contract values are explicitly numbered to preserve persisted/wire identity.
+
+Name validation retains .NET string.Length (UTF-16 units) and rejects whitespace-only text. JSON Schema minLength/maxLength count Unicode code points, so the 1–100 bounds are necessary but do not describe every application constraint. Fifty supplementary emoji occupy 100 UTF-16 units and are accepted; sixty occupy 120 and are rejected even though their code-point count is below 100. The description states this additional rule; no domain behavior or custom regex dialect is introduced to make these counts appear equivalent. See [JSON Schema string length](https://json-schema.org/draft/2020-12/json-schema-validation#name-maxlength).
+
+Human-readable failure descriptions do not create a machine failure discriminator. Keep generic ProblemDetails for common display; endpoints that need machine decisions explicitly select stable problem URIs and structured data, as the delete conflict does. A global CLR-type-to-URI registry and per-failure DTO family are not required.
+
+The native SSE endpoint derives Filter failures from its effective invocation plan using the existing HTTP default mappings. Its default anonymous policy does not advertise unreachable 401/403/422 responses; enabling strict tenant trust adds the actual 401/403 cases. The declared stream failure and native query binding still contribute 400. Documentation follows host policy rather than a hard-coded superset.

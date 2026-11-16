@@ -23,6 +23,41 @@ namespace NOF.Sample.Tests;
 public sealed class ConfigNodeRestTests
 {
     [Fact]
+    public async Task ActiveFile_MayBeSelectedBeforeCreation_AndContributesOnlyAfterCreation()
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var id = await CreateAsync(http, "preselected-file");
+        using var selected = await http.PutAsJsonAsync($"/api/config-nodes/{id}/active-file", new { fileName = "future.json" });
+        Assert.Equal(HttpStatusCode.NoContent, selected.StatusCode);
+        var node = await http.GetFromJsonAsync<ConfigNodeDto>($"/api/config-nodes/{id}");
+        Assert.Equal("future.json", node!.ActiveFileName);
+        Assert.Empty(node.ConfigFiles);
+        var before = await http.GetFromJsonAsync<GetConfigurationResponse>("/api/configuration?appName=preselected-file");
+        using (var configuration = JsonDocument.Parse(before!.Content))
+        {
+            Assert.Empty(configuration.RootElement.EnumerateObject());
+        }
+        using var added = await http.PutAsJsonAsync($"/api/config-nodes/{id}/files/future.json", new { content = "{\"enabled\":true}" });
+        Assert.Equal(HttpStatusCode.NoContent, added.StatusCode);
+        var after = await http.GetFromJsonAsync<GetConfigurationResponse>("/api/configuration?appName=preselected-file");
+        using var merged = JsonDocument.Parse(after!.Content);
+        Assert.True(merged.RootElement.GetProperty("enabled").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(50, 201)]
+    [InlineData(60, 400)]
+    public async Task NodeNames_UseUtf16LengthAndDoNotTreatSchemaBoundsAsCompleteValidation(int emojiCount, int status)
+    {
+        await using var app = await CreateAppAsync();
+        using var http = app.GetTestClient();
+        var name = string.Concat(Enumerable.Repeat("\U0001F600", emojiCount));
+        using var response = await http.PostAsJsonAsync("/api/config-nodes", new { name });
+        Assert.Equal(status, (int)response.StatusCode);
+    }
+
+    [Fact]
     public async Task NativeModule_ShouldCreateReadMoveAndDeleteRealNodes()
     {
         await using var app = await CreateAppAsync();
@@ -221,10 +256,11 @@ public sealed class ConfigNodeRestTests
         Assert.Equal(code, problem.RootElement.GetProperty("title").GetString());
     }
 
-    public static async Task<WebApplication> CreateAppAsync()
+    public static async Task<WebApplication> CreateAppAsync(bool requireAuthenticatedTenant = false)
     {
         var builder = WebApplication.CreateBuilder([]).AddNOF();
         builder.WebHost.UseTestServer();
+        builder.Services.Configure<TenantAuthorizationOptions>(options => options.RequireAuthenticatedTenant = requireAuthenticatedTenant);
         builder.Services.AddOpenApi(options =>
         {
             options.AddDocumentTransformer<OpenApi.SampleOpenApiDocumentTransformer>();
