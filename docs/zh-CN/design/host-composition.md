@@ -84,6 +84,27 @@ JsonSerializerOptions.CreateNOF() 获得新实例，不影响 DI 或其他宿主
 用于字节与 JSON 元数据边界以及禁用反射的执行。应用负载应注册源生成上下文，并插入到反射回退之前；只有运行时明确开启
 反射时才默认提供反射回退。
 
+### 可选的 long 与 enum 字符串传输
+
+默认行为不变：`long` 与 enum 使用数字 JSON。两个能力可以独立启用，在构建宿主前配置：
+
+```csharp
+var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.ConfigureNOFJson(json => json
+    .UseStringInt64()
+    .UseStringEnums());
+```
+
+`ConfigureNOFJson` 把同一回调应用到 NOF 负载选项和原生 HTTP JSON 选项，也可用于注册应用的 JSON 上下文。HTTP 请求体、响应、路由/查询/Header 绑定和 OpenAPI 使用 HTTP 选项；缓存、Backplane 和 Outbox 负载使用 NOF 选项。需要不同策略时，仍可分别使用 `AddNOFJson` 和 `ConfigureHttpJsonOptions`。独立代码可在 `JsonSerializerOptions.CreateNOF()` 上调用这些扩展。
+
+`UseStringInt64()` 仅将有符号 `long` 写为不受区域设置影响的十进制字符串，包括可空值、集合元素以及生成的 long 值对象。例如 `9223372036854775807` 写为 `"9223372036854775807"`，避免 JavaScript 丢失精度。读取同时接受 Int64 范围内的十进制字符串和整数 token；小数、指数字符串和溢出值会失败。包括 `ulong` 在内的其他数字类型不变。OpenAPI 描述字符串表示并移除整数格式；生成的值对象通过转换器的底层类型元数据获得相同描述。
+
+`UseStringEnums(namingPolicy: null, allowIntegerValues: false)` 使用原生枚举名称、`JsonStringEnumMemberName` 特性和 Flags 处理。传入 `JsonNamingPolicy.CamelCase` 等命名策略可调整名称。默认拒绝数字值和未命名的枚举值，包括路由/查询/Header 中的数字文本；契约确实需要数字回退时显式设置 `allowIntegerValues: true`。OpenAPI 使用原生枚举元数据，保留传输名称和可空/集合结构，不根据 CLR 成员重新拼接名称。
+
+Native AOT 应为每种枚举调用 `UseStringEnums<OrderState>()` 替代全局调用，并为应用负载及底层枚举注册源生成 JSON 元数据。全局重载需要运行时代码生成；泛型重载和 `UseStringInt64()` 不需要。也可通过原生 System.Text.Json API 使用上下文本身的字符串枚举策略。
+
+启用字符串传输会改变传输契约，应同步更新消费者，尤其是已有缓存和持久化负载的读取方。long 读取器兼容旧数字负载；严格的字符串枚举读取器拒绝旧数字枚举负载，除非显式启用数字回退。这两个选项不改变 CLR 类型或数据库存储。
+
 ## OIDC：接入外部身份提供者
 
 NOF 提供业务鉴权，不承担身份协议和用户存储。Sample AppHost 运行官方 Keycloak 容器并导入 `Realms/nof-realm.json`。应用通过原生 ASP.NET Core Cookie/OpenIdConnect 完成浏览器登录，通过 JwtBearer 接受 API Bearer 令牌。Issuer、Audience、签名和有效期由原生认证处理器验证；Development 之外必须使用 HTTPS 元数据。

@@ -359,6 +359,25 @@ public class ValueObjectGeneratorTests
     }
 
     [Fact]
+    public void LongValueObjectUsesHostStringTransportAndDescribesPrimitiveWithoutReflection()
+    {
+        const string Source = """
+            using NOF.Domain;
+            namespace Test;
+            public readonly partial struct Identifier : IValueObject<long>;
+            """;
+        var assembly = CompileGeneratedAssembly(Source);
+        var type = assembly.GetType("Test.Identifier")!;
+        var value = type.GetMethod("From", [typeof(long)])!.Invoke(null, [long.MaxValue]);
+        var options = JsonSerializerOptions.CreateNOF().UseStringInt64();
+        var metadata = options.GetRequiredTypeInfo(type);
+        Assert.Equal(typeof(long), Assert.IsAssignableFrom<IJsonPrimitiveConverter>(metadata.Converter).PrimitiveType);
+        var json = JsonSerializer.Serialize(value, metadata);
+        Assert.Equal("\"9223372036854775807\"", json);
+        Assert.Equal(value, JsonSerializer.Deserialize(json, metadata));
+    }
+
+    [Fact]
     public void DefaultValueObject_CannotMasqueradeAsValidatedValue_OrExposePrimitive()
     {
         const string Source = """
