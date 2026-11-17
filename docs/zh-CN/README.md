@@ -22,7 +22,7 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 授权精确候选版本，并取得 [REV-02](https://github.com/io7-cn/standards/blob/d719e4fecda60102c81d8266e3456b836417c455/docs/zh-CN/01-governance/review-standards.md)
 要求的独立审批；破坏性 API 和授权更新需两个独立合格审核主体，其中包括领域
 所有者。GitHub 已对 `main`（包括管理员）启用保护：要求 Windows/Linux 检查、
-`Standards and contribution policy`、两份审批、最新推送后的审批、解决全部评审讨论，
+`Standards and contribution policy`、一份独立审批、最新推送后的审批、解决全部评审讨论，
 并保持分支最新；禁止强制推送和删除，合并角色限制为 XmmShp。
 审批身份仍必须满足 REV-02，仅达到审批数量不足以证明评审人具备对应领域资格。
 
