@@ -6,6 +6,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 using NOF.Abstraction;
+using NOF.Infrastructure;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
@@ -15,6 +16,17 @@ namespace NOF.Hosting.AspNetCore;
 public static class WebApplicationExtensions
 {
     private static readonly object RegistrationKey = new();
+
+    /// <summary>Applies the same JSON configuration to NOF payloads and native HTTP JSON, including OpenAPI schemas.</summary>
+    /// <remarks>Call before building the host. Callbacks follow the native registration order for each options pipeline.</remarks>
+    public static WebApplicationBuilder ConfigureNOFJson(this WebApplicationBuilder builder, Action<JsonSerializerOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        builder.Services.AddNOFJson(configure);
+        builder.Services.ConfigureHttpJsonOptions(options => configure(options.SerializerOptions));
+        return builder;
+    }
+
     /// <summary>Registers execution and HTTP adapter prerequisites, including JSON, ProblemDetails and OpenAPI, without building or starting the application.</summary>
     // OpenAPI 3.11 uses this type as a new()-constrained generic argument even when no reference is constructed.
     [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor, typeof(OpenApiReferenceWithDescriptionAndSummary))]
@@ -34,7 +46,9 @@ public static class WebApplicationExtensions
         builder.Services.AddProblemDetails();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, NOFHttpJsonContext.Default));
-        builder.Services.AddOpenApi(options => options.AddOperationTransformer<HttpBindingOpenApiTransformer>());
+        builder.Services.AddOpenApi(options => options
+            .AddSchemaTransformer<JsonTransportOpenApiTransformer>()
+            .AddOperationTransformer<HttpBindingOpenApiTransformer>());
         return builder;
     }
 

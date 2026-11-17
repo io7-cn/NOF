@@ -6,6 +6,7 @@ Neat Opinionated Framework: business operations, declared failures, authorizatio
 
 - [Package guide](docs/en/packages/index.md)
 - [Interactive Sample](docs/en/design/sample-workbench.md)
+- [Optional long and enum string transport](docs/en/design/host-composition.md#optional-string-transport-for-long-and-enum)
 - [Contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md)
 - [Development standards](docs/en/README.md)
 

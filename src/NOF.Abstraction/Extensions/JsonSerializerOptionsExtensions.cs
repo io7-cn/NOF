@@ -1,4 +1,5 @@
 using NOF.Abstraction;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
@@ -11,6 +12,35 @@ public static partial class NOFAbstractionExtensions
 {
     extension(JsonSerializerOptions options)
     {
+        /// <summary>Writes long values, including nullable and collection elements, as decimal strings.</summary>
+        /// <remarks>Integer tokens remain accepted on input. Other numeric types are unchanged. Configure before first use.</remarks>
+        public JsonSerializerOptions UseStringInt64()
+        {
+            if (!options.Converters.Any(converter => converter is JsonStringInt64Converter))
+            {
+                options.Converters.Insert(0, new JsonStringInt64Converter());
+            }
+            return options;
+        }
+
+        /// <summary>Writes all enums as strings using native enum names, attributes and optional naming policy.</summary>
+        /// <remarks>Numeric enum values are rejected by default. For Native AOT, use the generic overload for each enum.</remarks>
+        [RequiresDynamicCode("Global enum conversion requires runtime generic code. Use UseStringEnums<TEnum> for Native AOT.")]
+        public JsonSerializerOptions UseStringEnums(JsonNamingPolicy? namingPolicy = null, bool allowIntegerValues = false)
+        {
+            options.Converters.Insert(0, new JsonStringEnumConverter(namingPolicy, allowIntegerValues));
+            return options;
+        }
+
+        /// <summary>Enables native string conversion for one enum without requiring runtime code generation.</summary>
+        /// <remarks>Numeric enum values are rejected by default. Configure before first use.</remarks>
+        public JsonSerializerOptions UseStringEnums<TEnum>(JsonNamingPolicy? namingPolicy = null, bool allowIntegerValues = false)
+            where TEnum : struct, Enum
+        {
+            options.Converters.Insert(0, new JsonStringEnumConverter<TEnum>(namingPolicy, allowIntegerValues));
+            return options;
+        }
+
         /// <summary>Creates independent JSON options with framework primitive metadata.</summary>
         public static JsonSerializerOptions CreateNOF()
         {
