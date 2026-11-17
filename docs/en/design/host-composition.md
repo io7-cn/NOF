@@ -66,6 +66,27 @@ Framework payload serialization uses host-owned IOptions<JsonSerializerOptions>.
 
 JsonSerializerOptions.NOF and ConfigureNOFJsonSerializerOptions are removed. Standalone code can create independent defaults with JsonSerializerOptions.CreateNOF(). This factory does not configure DI or another host. IObjectSerializer remains a narrow byte/JSON-metadata boundary used by cache and durable payloads, including reflection-disabled execution. Supply generated contexts for application payloads; reflection fallback is only included when the runtime explicitly enables it. Insert generated contexts ahead of any fallback resolver.
 
+### Optional string transport for long and enum
+
+Defaults remain unchanged: `long` and enums use numeric JSON. Enable either capability independently before building the host:
+
+```csharp
+var builder = WebApplication.CreateBuilder(args).AddNOF();
+builder.ConfigureNOFJson(json => json
+    .UseStringInt64()
+    .UseStringEnums());
+```
+
+`ConfigureNOFJson` applies the callback to both NOF payload options and native HTTP JSON options. It also supports registering application JSON contexts. HTTP bodies, responses, route/query/header bindings and OpenAPI use the HTTP options; cache, backplane and Outbox payloads use the NOF options. For separate policies, keep using `AddNOFJson` and `ConfigureHttpJsonOptions` individually. Standalone code can call these extensions on `JsonSerializerOptions.CreateNOF()`.
+
+`UseStringInt64()` writes only signed `long` values as invariant decimal strings, including nullable values, collection elements and generated long-backed value objects. For example, `9223372036854775807` becomes `"9223372036854775807"`, preserving precision in JavaScript. Readers accept decimal strings and integer tokens within the Int64 range; fractions, exponent strings and overflow fail. Other numeric types, including `ulong`, are unchanged. OpenAPI describes the string representation without an integer format, including generated value objects through their primitive converter metadata.
+
+`UseStringEnums(namingPolicy: null, allowIntegerValues: false)` uses native enum names, `JsonStringEnumMemberName` attributes and flags handling. Pass a naming policy such as `JsonNamingPolicy.CamelCase` to change names. Numeric values and unnamed enum values are rejected by default, including textual numeric route/query/header values. Set `allowIntegerValues: true` explicitly when numeric fallback is part of the contract. OpenAPI uses native enum metadata, preserving wire names and nullable/collection shapes rather than rebuilding names from CLR members.
+
+For Native AOT, replace the global enum call with `UseStringEnums<OrderState>()` for every enum type, and register source-generated JSON metadata for application payloads and enum primitives. The global overload requires runtime code generation; the generic overload and `UseStringInt64()` do not. A context's own string-enum policy can also be used through the native System.Text.Json APIs.
+
+Enabling string transport changes the wire contract. Update consumers together, particularly readers of existing cache and durable payloads. The long reader accepts older numeric payloads; the strict string-enum reader rejects older numeric enum payloads unless numeric fallback is explicitly enabled. Neither option changes the CLR types or database storage.
+
 ## OIDC: consume an external identity provider
 
 NOF supplies business authorization, not identity protocols or user storage. The Sample AppHost runs an official Keycloak container and imports `Realms/nof-realm.json`. The application uses native ASP.NET Core Cookie/OpenIdConnect for browser sign-in and JwtBearer for bearer API calls. Issuer, audience, signature and lifetime validation belong to these native handlers. HTTPS metadata is required outside Development.

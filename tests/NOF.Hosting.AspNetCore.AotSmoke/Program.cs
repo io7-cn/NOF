@@ -14,7 +14,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var smokeJson = JsonSerializerOptions.CreateNOF();
+smokeJson.UseStringInt64().UseStringEnums<SmokeWireState>();
 smokeJson.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default);
+var wire = new SmokeWirePayload(long.MaxValue, SmokeWireState.Ready, NOF.Sample.ConfigNodeId.From(long.MaxValue));
+var wireJson = JsonSerializer.Serialize(wire, smokeJson.GetRequiredTypeInfo<SmokeWirePayload>());
+expect(wireJson.Contains("\"9223372036854775807\"", StringComparison.Ordinal)
+    && wireJson.Contains("\"Ready\"", StringComparison.Ordinal), "String transport lost primitive representations");
+expect(JsonSerializer.Deserialize(wireJson, smokeJson.GetRequiredTypeInfo<SmokeWirePayload>()) == wire,
+    "String transport did not round-trip without reflection");
 expect(NOF.Sample.ConfigNodeName.TryFrom("node", out var nodeName), "Valid value object was rejected");
 expect(!NOF.Sample.ConfigNodeName.TryFrom(new string('x', 101), out _), "Length rule was skipped by TryFrom");
 expect(!NOF.Sample.ConfigNodeName.TryFrom(" ", out _, out var nameError) && nameError == "Node name cannot be blank.",
@@ -25,6 +32,7 @@ expect((string)JsonSerializer.Deserialize(nameJson, smokeJson.GetRequiredTypeInf
 var builder = WebApplication.CreateBuilder(args).AddNOF();
 builder.Services.AddNOFJson(options => options.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, SmokeJsonContext.Default));
+builder.ConfigureNOFJson(json => json.UseStringInt64().UseStringEnums<SmokeWireState>());
 builder.AddApplicationPart(typeof(SmokeEndpointModule).Assembly);
 builder.Services.AddApplicationService<OrderServer>();
 builder.Services.AddApplicationService<PlainOrderService>();
@@ -43,6 +51,7 @@ await using var app = builder.Build();
 app.UseNOF();
 SmokeEndpointModule.Map(app);
 app.MapOpenApi();
+app.MapPost("/wire", (SmokeWirePayload payload) => Microsoft.AspNetCore.Http.TypedResults.Ok(payload));
 using (var scope = app.Services.CreateScope())
 {
     using var binding = scope.ServiceProvider.BindNOF(Context.Empty);
@@ -104,6 +113,10 @@ var oneWayOperation = app.Services.GetRequiredService<ApplicationServiceRegistry
 expect(oneWayOperation.IsOneWay && oneWayOperation.ResultCases.Count == 0 && oneWayOperation.ContractType is null,
     "One-way metadata exposed a business reply case");
 using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+using var wireResponse = await http.PostAsync("/wire", new StringContent(wireJson, Encoding.UTF8, "application/json"));
+expect(wireResponse.IsSuccessStatusCode, "String transport HTTP input failed without reflection");
+expect(JsonSerializer.Deserialize(await wireResponse.Content.ReadAsStringAsync(), smokeJson.GetRequiredTypeInfo<SmokeWirePayload>()) == wire,
+    "String transport HTTP response changed without reflection");
 var id = Guid.NewGuid();
 expect(typeof(ExpectedOrderService.Evaluate.Missing).DeclaringType == typeof(ExpectedOrderService.Evaluate),
     "Inherited failure types changed Contract identity");
@@ -336,6 +349,8 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 [JsonSerializable(typeof(NOF.Sample.Application.NOFSampleService.DeleteConfigNode.Result), TypeInfoPropertyName = "DeleteConfigNodeResult")]
 [JsonSerializable(typeof(Empty))]
 [JsonSerializable(typeof(SmokeIntent))]
+[JsonSerializable(typeof(SmokeWirePayload))]
+[JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(NOF.Sample.ConfigNodeName))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(OrderDto))]
@@ -345,6 +360,9 @@ public sealed class ReadOrderWithMessageHandler : OrderServer.ReadWithMessage
 [JsonSerializable(typeof(OrderReadReceipt))]
 [JsonSerializable(typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))]
 public partial class SmokeJsonContext : JsonSerializerContext;
+
+public enum SmokeWireState { Ready }
+public sealed record SmokeWirePayload(long Id, SmokeWireState State, NOF.Sample.ConfigNodeId ValueId);
 
 public sealed record SmokeIntent(string Value);
 public sealed class SmokeIntentHandler : OutboxHandler<SmokeIntent>

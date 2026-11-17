@@ -116,9 +116,32 @@ public sealed class HttpRequestReadContext(HttpContext http, JsonSerializerOptio
             return null;
         }
 
+        if (json.GetRequiredTypeInfo(type).Converter is IJsonPrimitiveConverter primitive)
+        {
+            return Scalar(value, primitive.PrimitiveType, json);
+        }
+
         if (type.IsEnum)
         {
-            return JsonSerializer.SerializeToNode(Enum.Parse(type, value, true), json.GetRequiredTypeInfo(type));
+            var metadata = json.GetRequiredTypeInfo(type);
+            var node = JsonValue.Create(value);
+            try
+            {
+                // Honor wire names and integer rejection from the host's enum converter.
+                node.Deserialize(metadata);
+                return node;
+            }
+            catch (JsonException)
+            {
+                var parsed = Enum.Parse(type, value, true);
+                var serialized = JsonSerializer.SerializeToNode(parsed, metadata);
+                // Numeric default enums still accept CLR names in textual HTTP sources.
+                if (serialized?.GetValueKind() == JsonValueKind.Number)
+                {
+                    return serialized;
+                }
+                throw;
+            }
         }
 
         if (type == typeof(bool))

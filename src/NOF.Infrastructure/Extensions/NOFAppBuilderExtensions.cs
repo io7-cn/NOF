@@ -29,6 +29,7 @@ public static partial class NOFInfrastructureExtensions
             builder.Properties[InfrastructureConfiguredKey] = true;
             builder.AddNOFHosting();
             builder.Services.AddNOFApplication();
+            builder.Services.TryAddSingleton<TimeProvider>(TimeProvider.System);
             builder.Services.TryAddScoped<IInboundAuthorizationHandler, DefaultInboundAuthorizationHandler>();
             builder.Services.TryAddScoped<OperationExecutor>();
             builder.Services.TryAddScoped<IOperationExecutor>(services => services.GetRequiredService<OperationExecutor>());

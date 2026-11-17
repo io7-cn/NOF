@@ -445,8 +445,9 @@ public class ValueObjectGenerator : IIncrementalGenerator
 
         // Nested JsonConverter
         sb.AppendLine("        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
-        sb.AppendLine($"        public sealed class __JsonConverter : global::System.Text.Json.Serialization.JsonConverter<{info.TypeName}>");
+        sb.AppendLine($"        public sealed class __JsonConverter : global::System.Text.Json.Serialization.JsonConverter<{info.TypeName}>, global::NOF.Abstraction.IJsonPrimitiveConverter");
         sb.AppendLine("        {");
+        sb.AppendLine($"            public global::System.Type PrimitiveType => typeof({info.PrimitiveFullName});");
         sb.AppendLine($"            private static global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{info.PrimitiveFullName}> __GetPrimitiveJsonTypeInfo(global::System.Text.Json.JsonSerializerOptions options)");
         sb.AppendLine("            {");
         sb.AppendLine("                try");
