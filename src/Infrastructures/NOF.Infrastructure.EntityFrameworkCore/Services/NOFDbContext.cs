@@ -179,7 +179,7 @@ public class NOFDbContext : DbContext
         foreach (var entry in ChangeTracker.Entries()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
-            if (entry.Metadata.IsOwned())
+            if (entry.Metadata.IsOwned() || TenantModelHelper.IsHostOnlyEntity(entry.Metadata))
             {
                 continue;
             }
@@ -351,7 +351,12 @@ public class NOFDbContext : DbContext
         }
 
         var entityType = Model.FindEntityType(entityClrType);
-        var primaryKey = entityType?.FindPrimaryKey();
+        if (entityType is null || TenantModelHelper.IsHostOnlyEntity(entityType))
+        {
+            return keyValues;
+        }
+
+        var primaryKey = entityType.FindPrimaryKey();
         if (primaryKey is null
             || primaryKey.Properties.Count != keyValues.Length + 1
             || primaryKey.Properties[^1].Name != TenantModelHelper.TenantIdPropertyName)

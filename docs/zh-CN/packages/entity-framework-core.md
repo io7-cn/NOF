@@ -22,6 +22,18 @@ ITenantProvider 属于 Infrastructure，替代旧 ITransactionalMessageTenantPro
 
 后台迁移跳过宿主和重复的规范化 ID，单个租户失败会记录日志并继续，目录枚举失败则结束该次迁移，关闭宿主会取消。这是每次启动一次的迁移过程，不是持续的租户开通系统。
 
+## 宿主专用实体
+
+在 `OnModelCreating` 或 `IEFCoreModelConfiguration` 中为根实体调用 `IsHostOnly()`。扩展方法位于 `Microsoft.EntityFrameworkCore.Metadata.Builders`。
+
+```csharp
+modelBuilder.Entity<HostSetting>().IsHostOnly();
+```
+
+在 `SharedDatabase` 模式下，NOF 会为标记的实体继承层次跳过自动 `TenantId` 映射、租户查询过滤、保存时写入租户 ID 以及按租户划分的索引。显式 EF 映射和软删除约定仍然生效。共享库中的租户上下文也能通过 EF 查询这张表，应用必须在自己的访问边界限制对宿主数据的访问。
+
+如果共享库中的现有表已有 `TenantId` 列或按租户划分的索引，请先审查生成的迁移。将唯一索引调整为全表唯一之前，先确认哪些数据应保留在宿主表里，并处理重复值。`DatabasePerTenant` 模式仍为宿主和各租户使用同一模型和迁移链，标记过的实体表也会在租户库中创建。
+
 ## 共享会话与原生配置
 
 同一作用域中的 AppDbContext、NOFDbContext、DbContext、IUnitOfWork 和已启用的消息存储使用同一个原生上下文；原生 SQL 可以参与 ITransactionManager 建立的事务。工厂创建的上下文独立，需要调用者按所有权释放。必须在解析作用域持久化服务之前选定租户。

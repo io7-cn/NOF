@@ -438,6 +438,46 @@ public class SqliteInMemoryPersistenceTests
         Assert.Null(secondDb.Model.FindEntityType(typeof(FirstDynamicEntry)));
     }
 
+    [Theory]
+    [InlineData(TenantMode.SharedDatabase)]
+    [InlineData(TenantMode.DatabasePerTenant)]
+    public async Task IsHostOnly_ShouldSkipTenantConventionsAndKeepSoftDelete(TenantMode tenantMode)
+    {
+        using var services = BuildServiceProviderWithModelCreating(new HostOnlyEntryContributor(), tenantMode);
+        using var scope = services.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<ITenantDbContextFactory<NOFDbContext>>();
+        await using var host = factory.CreateDbContext(NOFAbstractionConstants.Tenant.HostId);
+        await using var tenant = factory.CreateDbContext("tenanta");
+
+        Assert.Same(host.Model, tenant.Model);
+        var hostOnly = host.Model.FindEntityType(typeof(DynamicAuditEntry));
+        Assert.NotNull(hostOnly);
+        Assert.Equal(true, hostOnly.FindAnnotation(TenantModelHelper.HostOnlyAnnotationName)?.Value);
+        Assert.Null(hostOnly.FindProperty(TenantModelHelper.TenantIdPropertyName));
+        Assert.Contains(hostOnly.GetIndexes(), index => index.IsUnique && index.Properties.Select(property => property.Name)
+            .SequenceEqual([nameof(DynamicAuditEntry.Message), "__DeletedAtUnixTime"]));
+
+        var audit = new DynamicAuditEntry { Id = 1, Message = "host record" };
+        host.Add(audit);
+        var manuallyMapped = host.Entry(new FirstDynamicEntry { Id = 2 });
+        manuallyMapped.Property(TenantModelHelper.TenantIdPropertyName).CurrentValue = "catalog-owner";
+        manuallyMapped.State = EntityState.Added;
+        await host.SaveChangesAsync();
+        host.ChangeTracker.Clear();
+
+        var persisted = await host.Set<DynamicAuditEntry>().SingleAsync();
+        Assert.Equal(tenantMode == TenantMode.SharedDatabase, await tenant.Set<DynamicAuditEntry>().AnyAsync());
+        var customKeyRecord = await host.FindAsync<FirstDynamicEntry>([2L, "catalog-owner"]);
+        Assert.NotNull(customKeyRecord);
+        await Assert.ThrowsAsync<ArgumentException>(async () => await host.FindAsync<FirstDynamicEntry>([2L]));
+
+        host.Remove(persisted);
+        await host.SaveChangesAsync();
+
+        Assert.Empty(await host.Set<DynamicAuditEntry>().ToListAsync());
+        Assert.Single(await host.Set<DynamicAuditEntry>().IgnoreQueryFilters().ToListAsync());
+    }
+
     [Fact]
     public void SharedDatabase_ShouldTenantScopeBuiltInEntities()
     {
@@ -1847,7 +1887,9 @@ public class SqliteInMemoryPersistenceTests
         });
     }
 
-    private static ServiceProvider BuildServiceProviderWithModelCreating(IEFCoreModelConfiguration contributor)
+    private static ServiceProvider BuildServiceProviderWithModelCreating(
+        IEFCoreModelConfiguration contributor,
+        TenantMode tenantMode = TenantMode.DatabasePerTenant)
     {
         var builder = new TestServiceRegistrationContext();
         builder.Services.AddSingleton<IIdGenerator>(new TestIdGenerator());
@@ -1857,8 +1899,13 @@ public class SqliteInMemoryPersistenceTests
         builder.AddNOFHosting();
         builder.AddNOF();
         builder.Services.AddOutbox();
-        ConfigureSqliteInMemory<NOFDbContext>(builder, $"nof-tests-{Guid.NewGuid():N}")
-                .ConfigureNOFDbContextOptions(options => options.TenantMode = TenantMode.DatabasePerTenant);
+        var databaseName = $"nof-tests-{Guid.NewGuid():N}";
+        builder.UseDbContext<NOFDbContext>((creation, ef) =>
+        {
+            var databaseSuffix = tenantMode == TenantMode.SharedDatabase ? "shared" : creation.TenantId;
+            ef.UseSqlite($"Data Source={databaseName}-{databaseSuffix};Mode=Memory;Cache=Shared");
+        })
+            .ConfigureNOFDbContextOptions(options => options.TenantMode = tenantMode);
 
         return BuildServiceProvider(builder);
     }
@@ -2063,6 +2110,23 @@ public class SqliteInMemoryPersistenceTests
     {
         public void Configure(ModelBuilder modelBuilder)
             => ConfigureDynamicAuditEntry(modelBuilder);
+    }
+
+    public sealed class HostOnlyEntryContributor : IEFCoreModelConfiguration
+    {
+        public void Configure(ModelBuilder modelBuilder)
+        {
+            ConfigureDynamicAuditEntry(modelBuilder);
+            modelBuilder.Entity<DynamicAuditEntry>()
+                .IsHostOnly()
+                .HasSoftDelete()
+                .HasIndex(entry => entry.Message)
+                .IsUnique();
+
+            var manuallyMapped = modelBuilder.Entity(typeof(FirstDynamicEntry)).IsHostOnly();
+            manuallyMapped.Property<string>(TenantModelHelper.TenantIdPropertyName);
+            manuallyMapped.HasKey(nameof(FirstDynamicEntry.Id), TenantModelHelper.TenantIdPropertyName);
+        }
     }
 
     private sealed class FirstDynamicEntryContributor : IEFCoreModelConfiguration
