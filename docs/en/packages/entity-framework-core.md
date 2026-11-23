@@ -48,6 +48,19 @@ until their migrations complete. Use the explicit tenant migration API below for
 or to retry failures without restarting. Application-specific provisioning status and backfills remain
 the application's responsibility.
 
+### Host-only entities
+
+Call `IsHostOnly()` on a root entity in `OnModelCreating` or in an `IEFCoreModelConfiguration`.
+The extension is in `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+
+```csharp
+modelBuilder.Entity<HostSetting>().IsHostOnly();
+```
+
+In `SharedDatabase` mode, NOF skips its automatic `TenantId` mapping, query filter, write stamping and tenant-scoped indexes for the marked entity hierarchy. Explicit EF mappings and soft-delete conventions still apply. In a shared database, tenant contexts can also query the table through EF. The application must restrict access to host-only data at its own access boundary.
+
+If an existing shared-database table already uses a `TenantId` column or tenant-scoped indexes, review the generated migration before applying it. Decide which rows belong in the host table and resolve duplicate values before removing tenant scoping from unique indexes.
+
 ### Database-per-tenant schema policy
 
 NOF uses one `DbContext` model and one migration chain for the host database and every tenant

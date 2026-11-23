@@ -51,17 +51,7 @@ public sealed class NOFModelCustomizer : ModelCustomizer
                     SoftDeleteModelHelper.BuildSoftDeleteFilter(entityType.ClrType));
             }
 
-            if (!shouldConfigureTenantBehavior)
-            {
-                if (shouldConfigureSoftDelete)
-                {
-                    ConfigureSoftDeleteUniqueIndexes(entityType, entityBuilder);
-                }
-
-                continue;
-            }
-
-            if (!useTenantDiscriminator)
+            if (!shouldConfigureTenantBehavior || !useTenantDiscriminator || TenantModelHelper.IsHostOnlyEntity(entityType))
             {
                 if (shouldConfigureSoftDelete)
                 {

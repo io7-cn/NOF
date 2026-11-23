@@ -10,11 +10,17 @@ public static class TenantModelHelper
 {
     public const string TenantIdPropertyName = "TenantId";
     public const int TenantIdMaxLength = 256;
+    /// <summary>Identifies the model annotation set by the host-only entity mapping.</summary>
+    public const string HostOnlyAnnotationName = "NOF:HostOnly";
 
     public static bool ShouldConfigureTenantBehavior(IMutableEntityType entityType)
         => entityType.BaseType is null
             && !entityType.IsOwned()
             && entityType.ClrType != typeof(Dictionary<string, object>);
+
+    /// <summary>Determines whether the root of the entity hierarchy is marked as host-only.</summary>
+    public static bool IsHostOnlyEntity(IReadOnlyEntityType entityType)
+        => entityType.GetRootType().FindAnnotation(HostOnlyAnnotationName)?.Value is true;
 
     [RequiresDynamicCode("Calls System.Linq.Expressions.Expression.Lambda(Expression, params ParameterExpression[])")]
     [RequiresUnreferencedCode("Calls System.Linq.Expressions.Expression.Property(Expression, String)")]
