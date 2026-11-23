@@ -8,6 +8,7 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 
 namespace NOF.Hosting.AspNetCore;
 
@@ -86,9 +87,11 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             };
         }
 
+        var nativeResponses = operation.Responses;
         operation.Responses = new OpenApiResponses();
         foreach (var status in binding.Responses.Select(item => item.StatusCode).Distinct().Order())
         {
+            var statusKey = status.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var sources = binding.Responses.Where(item => item.StatusCode == status).ToArray();
             var response = new OpenApiResponse
             {
@@ -99,14 +102,32 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             foreach (var media in sources.Where(item => item.BodyType is not null).GroupBy(item => item.ContentType!))
             {
                 var schemas = new List<IOpenApiSchema>();
-                foreach (var shape in media.DistinctBy(item => item.BodyType))
+                var shapes = media.DistinctBy(item => item.BodyType).ToArray();
+                foreach (var shape in shapes)
                 {
-                    IOpenApiSchema schema = shape.SourceType == typeof(void) && shape.BodyType == typeof(object) ? new OpenApiSchema
+                    IOpenApiSchema schema;
+                    if (shape.SourceType == typeof(void) && shape.BodyType == typeof(object))
                     {
-                        Type = JsonSchemaType.Null
+                        schema = new OpenApiSchema { Type = JsonSchemaType.Null };
                     }
-
-                    : await context.GetOrCreateSchemaAsync(shape.BodyType!, cancellationToken: cancellationToken);
+                    else if (shapes.Length == 1
+                        && context.Description.SupportedResponseTypes.Any(item => item.StatusCode == status && item.Type == shape.BodyType)
+                        && nativeResponses?.TryGetValue(statusKey, out var nativeResponse) == true
+                        && nativeResponse.Content?.TryGetValue(media.Key, out var nativeMedia) == true
+                        && nativeMedia.Schema is { } nativeSchema)
+                    {
+                        // Native generation has already resolved component references and nullable-property wrappers.
+                        schema = nativeSchema;
+                    }
+                    else
+                    {
+                        // Additional bodies sharing a status may not have native ApiExplorer schemas.
+                        // GetOrCreateSchemaAsync returns an unresolved graph; preserve nullability on this new graph only.
+                        var generated = await context.GetOrCreateSchemaAsync(shape.BodyType!, cancellationToken: cancellationToken);
+                        var json = context.ApplicationServices.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
+                        PreserveResponseNullability(generated, json.GetRequiredTypeInfo(shape.BodyType!));
+                        schema = generated;
+                    }
                     schemas.Add(schema);
                 }
 
@@ -119,7 +140,7 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
                 };
             }
 
-            operation.Responses[status.ToString(System.Globalization.CultureInfo.InvariantCulture)] = response;
+            operation.Responses[statusKey] = response;
         }
 
         async Task<IOpenApiSchema> inputSchemaAsync(HttpInputDescription input)
@@ -127,6 +148,46 @@ public sealed class HttpBindingOpenApiTransformer : IOpenApiOperationTransformer
             var schema = await context.GetOrCreateSchemaAsync(input.ValueType, cancellationToken: cancellationToken);
             // Wrap references instead of mutating the shared component or conflating presence with nullability.
             return input.AllowsNull ? new OpenApiSchema { AnyOf = [schema, new OpenApiSchema { Type = JsonSchemaType.Null }] } : schema;
+        }
+    }
+
+    private static void PreserveResponseNullability(IOpenApiSchema schema, JsonTypeInfo typeInfo)
+    {
+        // Never traverse reference targets: their component definitions can also serve non-nullable responses.
+        if (schema is not OpenApiSchema generated)
+        {
+            return;
+        }
+        if (typeInfo.ElementType is { } elementType)
+        {
+            var elementInfo = typeInfo.Options.GetRequiredTypeInfo(elementType);
+            if (generated.Items is { } items)
+            {
+                PreserveResponseNullability(items, elementInfo);
+            }
+            if (generated.AdditionalProperties is { } additionalProperties)
+            {
+                PreserveResponseNullability(additionalProperties, elementInfo);
+            }
+        }
+        if (generated.Properties is null)
+        {
+            return;
+        }
+        foreach (var property in typeInfo.Properties)
+        {
+            if (!generated.Properties.TryGetValue(property.Name, out var propertySchema))
+            {
+                continue;
+            }
+            PreserveResponseNullability(propertySchema, typeInfo.Options.GetRequiredTypeInfo(property.PropertyType));
+            if (property.IsGetNullable && (propertySchema.Type.GetValueOrDefault() & JsonSchemaType.Null) == 0)
+            {
+                generated.Properties[property.Name] = new OpenApiSchema
+                {
+                    AnyOf = [propertySchema, new OpenApiSchema { Type = JsonSchemaType.Null }]
+                };
+            }
         }
     }
 }
