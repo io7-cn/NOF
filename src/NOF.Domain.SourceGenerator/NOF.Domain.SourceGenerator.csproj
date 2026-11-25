@@ -16,5 +16,6 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Common" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+    <Compile Include="..\SourceGenerator.Shared\NotNullWhenAttribute.cs" Link="Shared\NotNullWhenAttribute.cs" />
   </ItemGroup>
 </Project>

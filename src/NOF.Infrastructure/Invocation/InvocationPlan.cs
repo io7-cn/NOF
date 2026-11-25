@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Application;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace NOF.Infrastructure;
@@ -36,9 +37,9 @@ public sealed class InvocationPlan
     /// <summary>Gets the operation's statically known business results.</summary>
     public IReadOnlyList<OperationResultCase> BusinessCases => Operation.ResultCases;
     /// <summary>Validates an open result without translating expected failures into exceptions.</summary>
+    [return: NotNullIfNotNull(nameof(result))]
     public object? Validate(object? result)
     {
-        InvocationResult.ValidateInitialization(result);
         var branch = InvocationResult.Value(result);
         if (branch is IFailure && !BusinessCases.Any(item => item.CaseType == branch.GetType())
             && !(typeof(IUnion).IsAssignableFrom(Operation.ResponseType) && Operation.ResponseType.IsInstanceOfType(result)))

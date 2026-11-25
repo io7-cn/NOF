@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using NOF.Abstraction;
 using NOF.Application;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Infrastructure;
 
@@ -133,7 +134,7 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
             {
                 if (Owned(message, out var row))
                 {
-                    row!.RetryCount--;
+                    row.RetryCount--;
                     row.ClaimedBy = null;
                     row.ClaimExpiresAtUtc = null;
                 }
@@ -152,7 +153,7 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
             {
                 if (Owned(message, out var row))
                 {
-                    row!.Status = OutboxMessageStatus.Sent;
+                    row.Status = OutboxMessageStatus.Sent;
                     row.SentAtUtc = DateTime.UtcNow;
                     row.NextAttemptAtUtc = null;
                     row.ClaimedBy = null;
@@ -163,7 +164,7 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
         }
         return ValueTask.FromResult(count);
     }
-    private bool Owned(NOFOutboxMessage message, out NOFOutboxMessage? row)
+    private bool Owned(NOFOutboxMessage message, [NotNullWhen(true)] out NOFOutboxMessage? row)
         => _state.Outbox.TryGetValue(message.Id, out row) && row.Status == OutboxMessageStatus.Pending && message.ClaimedBy is not null && message.ClaimedBy == row.ClaimedBy;
     /// <inheritdoc />
     public ValueTask AtomicRecordDeliveryFailureAsync(NOFOutboxMessage message, string errorMessage, bool permanent = false, CancellationToken cancellationToken = default)
@@ -175,7 +176,7 @@ public sealed class InMemoryMessagePersistence(InMemoryMessageDatabase database,
             {
                 var now = DateTime.UtcNow;
                 var terminal = permanent || message.RetryCount >= options.Value.MaxRetryCount;
-                row!.Status = terminal ? OutboxMessageStatus.Failed : OutboxMessageStatus.Pending;
+                row.Status = terminal ? OutboxMessageStatus.Failed : OutboxMessageStatus.Pending;
                 row.ErrorMessage = errorMessage[..Math.Min(errorMessage.Length, 2048)];
                 row.FailedAtUtc = now;
                 row.NextAttemptAtUtc = terminal ? null : now.Add(options.Value.RetryDelay);

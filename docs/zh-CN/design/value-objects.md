@@ -49,6 +49,8 @@ NOF013 禁止在同一值对象的钩子中回调 From/TryFrom；NOF014 提醒 N
 失败时允许省略消息内容（返回 null 或空白），生成的工厂会提供默认文案。
 TryFrom(value, out result, out message) 失败时给出非空消息，成功时清空为 null；
 便利重载可以忽略消息。null、规范化结果为 null、长度不符也会给出对应消息。
+任一 `TryFrom` 重载成功时，编译器都能确认可空输入为非 null。对于可空值类型输入，
+`From` 返回值的空状态与输入一致。
 From 使用相同消息构造 ArgumentException（null 输入为 ArgumentNullException）。
 DomainException 和 DomainValidationException 均已删除；Tracing 不再将带码领域异常
 自动转为业务拒绝，业务失败应返回 FailureCase。NOF019 同时拒绝旧 Validate 和单参数 IsValid。

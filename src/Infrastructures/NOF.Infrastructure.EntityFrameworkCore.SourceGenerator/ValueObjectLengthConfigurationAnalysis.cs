@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 
@@ -113,7 +114,7 @@ public static class ValueObjectLengthConfigurationAnalysis
 
     private static bool TryGetPropertyType(
         ITypeSymbol? builderType,
-        out ITypeSymbol propertyType)
+        [NotNullWhen(true)] out ITypeSymbol? propertyType)
     {
         if (builderType is INamedTypeSymbol namedBuilderType)
         {
@@ -131,7 +132,7 @@ public static class ValueObjectLengthConfigurationAnalysis
             }
         }
 
-        propertyType = null!;
+        propertyType = null;
         return false;
     }
 
@@ -149,7 +150,7 @@ public static class ValueObjectLengthConfigurationAnalysis
 
     private static bool TryGetStringValueObject(
         ITypeSymbol propertyType,
-        out INamedTypeSymbol valueObjectType)
+        [NotNullWhen(true)] out INamedTypeSymbol? valueObjectType)
     {
         if (propertyType is INamedTypeSymbol
             {
@@ -162,7 +163,7 @@ public static class ValueObjectLengthConfigurationAnalysis
 
         if (propertyType is not INamedTypeSymbol namedPropertyType)
         {
-            valueObjectType = null!;
+            valueObjectType = null;
             return false;
         }
 
@@ -171,7 +172,7 @@ public static class ValueObjectLengthConfigurationAnalysis
             && @interface.OriginalDefinition.ToDisplayString() == ValueObjectInterfaceMetadataName);
         if (valueObjectInterface?.TypeArguments[0].SpecialType != SpecialType.System_String)
         {
-            valueObjectType = null!;
+            valueObjectType = null;
             return false;
         }
 

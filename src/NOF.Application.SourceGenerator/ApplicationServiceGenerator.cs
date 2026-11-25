@@ -37,7 +37,7 @@ public sealed class ApplicationServiceGenerator : IIncrementalGenerator
 
     private static void GenerateForClass(SourceProductionContext context, INamedTypeSymbol classSymbol)
     {
-        if (!ApplicationServiceSymbolHelper.TryGetServiceInterface(classSymbol, out var serviceInterface) || serviceInterface is null)
+        if (!ApplicationServiceSymbolHelper.TryGetServiceInterface(classSymbol, out var serviceInterface))
         {
             return;
         }

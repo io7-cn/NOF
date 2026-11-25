@@ -1,5 +1,6 @@
 using NOF.Abstraction;
 using NOF.Domain;
+using System.Diagnostics.CodeAnalysis;
 
 namespace NOF.Infrastructure;
 
@@ -13,7 +14,7 @@ public readonly partial struct TenantId : IValueObject<string>
         return NOFAbstractionConstants.Tenant.NormalizeTenantId(tenantId).Trim();
     }
 
-    public static bool IsValid(string value, out string? errorMessage)
+    public static bool IsValid(string value, [NotNullWhen(false)] out string? errorMessage)
     {
         errorMessage = null;
         if (string.IsNullOrWhiteSpace(value) || value[0] is < 'a' or > 'z')

@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -239,7 +240,7 @@ public sealed class MoveValueObjectLengthToDomainCodeFixProvider : CodeFixProvid
 
     private static bool TryGetLengthDiagnostic(
         Diagnostic diagnostic,
-        out LengthDiagnostic lengthDiagnostic)
+        [NotNullWhen(true)] out LengthDiagnostic? lengthDiagnostic)
     {
         if (diagnostic.Id == "NOF308"
             && diagnostic.Properties.TryGetValue("ValueObjectType", out var valueObjectType)
@@ -252,7 +253,7 @@ public sealed class MoveValueObjectLengthToDomainCodeFixProvider : CodeFixProvid
             return true;
         }
 
-        lengthDiagnostic = null!;
+        lengthDiagnostic = null;
         return false;
     }
 
