@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace NOF.Application.SourceGenerator;
@@ -12,7 +13,7 @@ public static class ApplicationServiceSymbolHelper
     public static bool ImplementsApplicationService(INamedTypeSymbol classSymbol)
         => TryGetServiceInterface(classSymbol, out _);
 
-    public static bool TryGetServiceInterface(INamedTypeSymbol classSymbol, out INamedTypeSymbol? serviceInterface)
+    public static bool TryGetServiceInterface(INamedTypeSymbol classSymbol, [NotNullWhen(true)] out INamedTypeSymbol? serviceInterface)
     {
         serviceInterface = null;
 
@@ -41,7 +42,7 @@ public static class ApplicationServiceSymbolHelper
     public static bool TryGetGeneratedServiceOperationBaseName(
         ClassDeclarationSyntax classDeclaration,
         SemanticModel semanticModel,
-        out string? handlerBaseTypeName)
+        [NotNullWhen(true)] out string? handlerBaseTypeName)
     {
         handlerBaseTypeName = null;
 
@@ -49,8 +50,7 @@ public static class ApplicationServiceSymbolHelper
         {
             if (baseType.Type is not QualifiedNameSyntax qualifiedName
                 || TryGetNamedTypeSymbol(semanticModel, qualifiedName.Left) is not { } serverType
-                || !TryGetServiceInterface(serverType, out var serviceInterface)
-                || serviceInterface is null)
+                || !TryGetServiceInterface(serverType, out var serviceInterface))
             {
                 continue;
             }

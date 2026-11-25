@@ -1,4 +1,5 @@
 using NOF.Domain;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -6,7 +7,7 @@ namespace NOF.Sample;
 
 public readonly partial struct ConfigContent : IValueObject<string>
 {
-    public static bool IsValid(string input, out string? errorMessage)
+    public static bool IsValid(string input, [NotNullWhen(false)] out string? errorMessage)
     {
         errorMessage = null;
         if (string.IsNullOrWhiteSpace(input))

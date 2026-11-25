@@ -32,8 +32,7 @@ public sealed class ApplicationServiceAutoInjectGenerator : IIncrementalGenerato
                     if (!ApplicationServiceSymbolHelper.TryGetGeneratedServiceOperationBaseName(
                             classDeclaration,
                             ctx.SemanticModel,
-                            out var handlerBaseTypeName)
-                        || handlerBaseTypeName is null)
+                            out var handlerBaseTypeName))
                     {
                         for (var current = classSymbol.BaseType; current is not null; current = current.BaseType)
                         {

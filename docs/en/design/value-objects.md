@@ -57,6 +57,8 @@ no one-parameter validation hook. A null/blank failure message is allowed: the g
 factory supplies a useful fallback. The detailed TryFrom(value, out result, out message)
 returns a non-null message on false and clears it to null on success; a convenience
 overload discards the message. Null/normalization/length failures also produce messages.
+When either `TryFrom` overload succeeds, the compiler can treat a nullable input as
+non-null. For nullable value-type inputs, `From` preserves the input's null state on return.
 From uses the same message in ArgumentException (ArgumentNullException for null input).
 Both DomainException and DomainValidationException are deleted. Tracing no longer
 converts coded domain exceptions to business rejection; use returned FailureCase values.

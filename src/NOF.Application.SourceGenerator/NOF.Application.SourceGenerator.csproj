@@ -25,5 +25,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\SourceGenerator.Shared\FailureBranchEmitter.cs" Link="Shared\FailureBranchEmitter.cs" />
+    <Compile Include="..\SourceGenerator.Shared\NotNullWhenAttribute.cs" Link="Shared\NotNullWhenAttribute.cs" />
   </ItemGroup>
 </Project>

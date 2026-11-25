@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace NOF.Domain.SourceGenerator;
@@ -71,8 +72,8 @@ public sealed class ValueObjectOrderingAnalyzer : DiagnosticAnalyzer
 
     private static bool TryGetValueObject(
         ITypeSymbol keyType,
-        out INamedTypeSymbol valueObjectType,
-        out ITypeSymbol primitiveType,
+        [NotNullWhen(true)] out INamedTypeSymbol? valueObjectType,
+        [NotNullWhen(true)] out ITypeSymbol? primitiveType,
         out bool nullableKey)
     {
         nullableKey = false;
@@ -88,8 +89,8 @@ public sealed class ValueObjectOrderingAnalyzer : DiagnosticAnalyzer
 
         if (keyType is not INamedTypeSymbol namedType)
         {
-            valueObjectType = null!;
-            primitiveType = null!;
+            valueObjectType = null;
+            primitiveType = null;
             nullableKey = false;
             return false;
         }
@@ -102,8 +103,8 @@ public sealed class ValueObjectOrderingAnalyzer : DiagnosticAnalyzer
                     && @interface.OriginalDefinition.ToDisplayString() == ValueObjectInterfaceMetadataName);
         if (valueObjectInterface is null)
         {
-            valueObjectType = null!;
-            primitiveType = null!;
+            valueObjectType = null;
+            primitiveType = null;
             nullableKey = false;
             return false;
         }

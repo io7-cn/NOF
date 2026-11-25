@@ -34,13 +34,17 @@ public class ValueObjectGeneratorTests
             .Select(t => t.GetText().ToString())
             .Single();
 
-    private static Assembly CompileGeneratedAssembly(string source)
+    private static Assembly CompileGeneratedAssembly(string source, bool treatWarningsAsErrors = false)
     {
         var compilation = CSharpCompilation.CreateCompilation(
             $"ValueObjectRuntimeTests_{Guid.NewGuid():N}",
             source,
             true,
             ExtraRefs);
+        if (treatWarningsAsErrors)
+        {
+            compilation = compilation.WithOptions(compilation.Options.WithGeneralDiagnosticOption(ReportDiagnostic.Error));
+        }
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ValueObjectGenerator().AsSourceGenerator()], parseOptions: (CSharpParseOptions)compilation.SyntaxTrees.First().Options);
         driver.RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out _);
 
@@ -227,6 +231,39 @@ public class ValueObjectGeneratorTests
             }
             """);
         Assert.True((bool)assembly.GetType("Probe")!.GetMethod("Run")!.Invoke(null, null)!);
+    }
+
+    [Fact]
+    public void Factories_ExposeNullabilityToCallers()
+    {
+        CompileGeneratedAssembly("""
+            #nullable enable
+            using NOF.Domain;
+
+            public readonly partial struct Name : IValueObject<string>;
+            public readonly partial struct Count : IValueObject<int>;
+
+            public static class Probe
+            {
+                public static int Check(string? name, int? count)
+                {
+                    if (!Name.TryFrom(name, out _, out var nameError))
+                    {
+                        return nameError.Length;
+                    }
+                    if (!Count.TryFrom(count, out _, out var countError))
+                    {
+                        return countError.Length;
+                    }
+                    return name.Length + (int)Count.From(count).Value;
+                }
+
+                public static int CheckWithoutMessages(string? name, int? count)
+                    => Name.TryFrom(name, out _) && Count.TryFrom(count, out _)
+                        ? name.Length + count.Value
+                        : 0;
+            }
+            """, treatWarningsAsErrors: true);
     }
 
     [Fact]

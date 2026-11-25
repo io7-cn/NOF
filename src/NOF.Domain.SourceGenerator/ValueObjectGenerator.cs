@@ -273,7 +273,10 @@ public class ValueObjectGenerator : IIncrementalGenerator
 
         // Both factories share validation and error messages; user exceptions propagate unchanged.
         var invalidMessage = $"Invalid value for value object '{info.TypeName}'.";
-        var tryPrimitive = info.PrimitiveFullName + (info.PrimitiveRequiresNullCheck ? "?" : "");
+        const string NotNullWhenTrue = "[global::System.Diagnostics.CodeAnalysis.NotNullWhen(true)] ";
+        var tryPrimitive = info.PrimitiveRequiresNullCheck
+            ? $"{NotNullWhenTrue}{info.PrimitiveFullName}?"
+            : info.PrimitiveFullName;
         sb.AppendLine("        /// <summary>Normalizes and constructs a valid value, throwing with the validation message on failure.</summary>");
         sb.AppendLine("        /// <exception cref=\"global::System.ArgumentException\">The value is invalid.</exception>");
         sb.AppendLine($"        public static {info.TypeName} From({info.PrimitiveFullName} value)");
@@ -342,14 +345,15 @@ public class ValueObjectGenerator : IIncrementalGenerator
         if (info.PrimitiveIsValueType)
         {
             sb.AppendLine("        /// <summary>Constructs a nullable value object, preserving an absent input.</summary>");
+            sb.AppendLine("        [return: global::System.Diagnostics.CodeAnalysis.NotNullIfNotNull(nameof(value))]");
             sb.AppendLine($"        public static {info.TypeName}? From({info.PrimitiveFullName}? value)");
             sb.AppendLine("            => value.HasValue ? From(value.Value) : null;");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Returns false for an absent or invalid nullable primitive.</summary>");
-            sb.AppendLine($"        public static bool TryFrom({info.PrimitiveFullName}? value, out {info.TypeName} result) => TryFrom(value, out result, out _);");
+            sb.AppendLine($"        public static bool TryFrom({NotNullWhenTrue}{info.PrimitiveFullName}? value, out {info.TypeName} result) => TryFrom(value, out result, out _);");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Returns false with a message for an absent or invalid nullable primitive.</summary>");
-            sb.AppendLine($"        public static bool TryFrom({info.PrimitiveFullName}? value, out {info.TypeName} result, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? errorMessage)");
+            sb.AppendLine($"        public static bool TryFrom({NotNullWhenTrue}{info.PrimitiveFullName}? value, out {info.TypeName} result, [global::System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? errorMessage)");
             sb.AppendLine("        {");
             sb.AppendLine("            result = default;");
             EmitInvalidGuard(sb, "!value.HasValue", "Value cannot be null.");
