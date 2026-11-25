@@ -13,18 +13,17 @@ NOF 由仓库维护者负责，当前维护者及验收责任人为 XmmShp。维
 `python .standards/.ci/check-adoption.py`。
 
 工作开始前创建关联工作项，使用 `feature/2-result-unions` 这样的全小写主题分支。
-刷新 `main`，保留已有主题工作，通过拉取请求（供独立审查的拟议变更）合入 `main`。
+刷新 `main`，保留已有主题工作，通过拉取请求合入 `main`。
 普通变更压缩为符合 Conventional Commits（约定式提交格式）的提交。破坏性更新
 须在变更请求和最终提交正文说明兼容影响及迁移方法。
 
 必过检查包含规范与贡献检查、Windows/Linux 构建及测试。Linux 另外执行格式检查
-和 Native AOT（编译为原生可执行文件）验证。检查通过不等于获准合并。维护者须
-授权精确候选版本，并取得 [REV-02](https://github.com/io7-cn/standards/blob/d719e4fecda60102c81d8266e3456b836417c455/docs/zh-CN/01-governance/review-standards.md)
-要求的独立审批；破坏性 API 和授权更新需两个独立合格审核主体，其中包括领域
-所有者。GitHub 已对 `main`（包括管理员）启用保护：要求 Windows/Linux 检查、
-`Standards and contribution policy`、一份独立审批、最新推送后的审批、解决全部评审讨论，
-并保持分支最新；禁止强制推送和删除，合并角色限制为 XmmShp。
-审批身份仍必须满足 REV-02，仅达到审批数量不足以证明评审人具备对应领域资格。
+和 Native AOT（编译为原生可执行文件）验证。维护者结合验证结果和
+[REV-02](https://github.com/io7-cn/standards/blob/415e8f1c2acde55062a42bcd6757d87f71b7a57c/docs/zh-CN/01-governance/review-standards.md)
+建议的独立本地审查，授权精确候选版本。高风险变更应征求领域所有者的意见，
+并深入审查失败与恢复路径。GitHub 对 `main` 的保护包括管理员，要求 Windows/Linux 检查、
+`Standards and contribution policy`、解决评审讨论并保持分支最新。按照 REV-04，平台要求的
+审批数量为 0。禁止强制推送和删除，合并角色限制为 XmmShp。
 
 现有 `main` 交付工作流在验证后发布唯一版本的 nightly NuGet 包。稳定版由明确的
 版本标签或已记录的手动工作流触发。既有已发布版本（包括 `v11.0.0`）不可变，

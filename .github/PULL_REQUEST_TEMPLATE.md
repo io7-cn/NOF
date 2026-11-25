@@ -4,7 +4,7 @@
 
 ## Related Issues
 
-<!-- Link related issues: Refs: #123. Close only when the agreed delivery condition is met. -->
+<!-- Reference related issues with Refs: #123 or an issue link. Use a closing directive such as Closes #123 when merge satisfies the agreed acceptance criteria. -->
 
 ## Type of Change
 
@@ -47,6 +47,6 @@
 - [ ] Breaking impact and migration examples are documented where applicable
 - [ ] Verification evidence identifies the exact candidate and any unverified scope
 - [ ] Rollout and rollback implications are recorded
-- [ ] Required independent approvals and maintainer merge authorization refer to the current candidate
+- [ ] Local review findings, when available, and maintainer merge authorization refer to the current candidate
 
-<!-- Breaking API, authorization and other high-risk changes require two independent qualified reviewers under REV-02. Checks alone do not authorize merging. -->
+<!-- Seek relevant domain-owner input for high-risk changes under REV-02 and review failure and recovery paths. The maintainer authorizes the merge after considering review and verification. -->

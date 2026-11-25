@@ -16,21 +16,20 @@ or run `git submodule update --init --recursive`, then run
 
 Work starts in an issue and a lowercase topic branch such as
 `feature/2-result-unions`. Refresh `main`, preserve existing topic work and submit
-a pull request (a proposed change for independent review) to `main`. Ordinary
+a pull request to `main`. Ordinary
 changes use a Conventional Commit squash message. Breaking changes document
 compatibility and migration in the change request and final commit body.
 
 Required checks are the standards/contribution check and the Windows/Linux build
 and test jobs. Linux also verifies formatting and Native AOT (compilation to a
-native executable). Passing checks do not authorize a merge. The maintainer must
-authorize the exact candidate and obtain the independent approvals required by
-[REV-02](https://github.com/io7-cn/standards/blob/d719e4fecda60102c81d8266e3456b836417c455/docs/en/01-governance/review-standards.md); breaking API and
-authorization changes require two independent qualified reviewers, including a
-domain owner. GitHub protects `main`, including administrators: it requires both OS checks,
-`Standards and contribution policy`, one independent approval, approval after the latest push,
-resolved conversations and an up-to-date branch. Force pushes and deletion are
-disabled; merging is restricted to XmmShp. Approval identities must still satisfy
-REV-02; the numeric approval count alone does not establish reviewer qualification.
+native executable). The maintainer authorizes the exact candidate after considering
+verification and the independent local review recommended by
+[REV-02](https://github.com/io7-cn/standards/blob/415e8f1c2acde55062a42bcd6757d87f71b7a57c/docs/en/01-governance/review-standards.md#standards).
+Seek domain-owner input for high-risk changes and review failure and recovery paths.
+GitHub protects `main`, including administrators, and requires both OS checks,
+`Standards and contribution policy`, resolved conversations and an up-to-date branch.
+The required review count is zero under REV-04. Force pushes and deletion are disabled,
+and merging is restricted to XmmShp.
 
 The existing `main` delivery workflow publishes uniquely versioned nightly NuGet
 packages after validation. Stable releases use explicit version tags or the
