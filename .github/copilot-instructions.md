@@ -34,7 +34,7 @@ tests/                        - unit and integration tests
 
 Follow the pinned [shared standards](../.standards/docs/en/README.md), the root
 [AGENTS.md](../AGENTS.md), and the [Result migration guide](../docs/en/design/result-unions.md).
-Use lowercase issue-linked topic branches and submit changes to `main` for required independent review.
+Use lowercase issue-linked topic branches and submit pull requests to `main`. Seek independent local review before merge and pass the required technical checks.
 
 ## Key Patterns
 
