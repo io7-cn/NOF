@@ -8,7 +8,7 @@ Owner: NOF maintainers (XmmShp). Read the exact [adopted standards](../../.stand
 
 Clone with submodules, use global.json and install applicable MAUI/Android workloads. On this repository's designated Windows development machine, dotnet commands run elevated. Frontend formatting uses Node 22 and the locked Prettier dependency; use npm ci --ignore-scripts.
 
-Inspect the working tree, refresh main and create/reuse a lowercase topic branch such as refactor/4-code-layout. Preserve unrelated changes. Never edit, commit or push directly to protected branches. Link an issue, use a Conventional Commit subject, and describe breaking changes and migration. Push the topic branch and open a pull request (PR) against main. Keep broad format-only cleanup separately reviewable from behavior changes.
+Inspect the working tree, refresh main and create/reuse a lowercase topic branch such as refactor/4-code-layout. Preserve unrelated changes. Never edit, commit or push directly to protected branches. Link the issue with a reference or a GitHub closing directive when merge satisfies its acceptance criteria. Use a Conventional Commit subject and describe breaking changes and migration. Push the topic branch and open a pull request (PR) against main. Keep broad format-only cleanup separately reviewable from behavior changes.
 
 ## Code and documentation
 
@@ -36,4 +36,4 @@ Set Configuration=Release for formatting. Run relevant native persistence tests 
 
 ## Review and delivery
 
-Use the approved contributor identity and a Conventional Commit squash message. Required Windows/Linux CI, standards checks and independent reviews precede merge; passing local tests or administrative access do not waive them. The repository requires two qualified independent approvals for breaking/auth changes and renewed review after material updates. Keep nightly/stable publication to the authorized workflow; do not rewrite published versions. Reviewers should be able to assess the final problem, behavior, migration and verification without reading a chat.
+Use the approved contributor identity and a Conventional Commit squash message. Pass the required Windows/Linux CI and standards checks and resolve blocking discussions before merge. Seek independent local review, request relevant domain-owner input for high-risk changes and follow up after material updates. Record findings and verification against the reviewed candidate in the PR. The maintainer considers that evidence and authorizes the merge. Use the authorized nightly and stable publication workflows and preserve published versions. Reviewers should be able to assess the problem, behavior, migration and verification from the PR.

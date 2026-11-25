@@ -8,7 +8,7 @@
 
 克隆时包含子模块，使用 global.json 并安装适用的 MAUI/Android 工作负载。本仓指定的 Windows 开发机器执行 dotnet 命令时需要提权。前端格式工具使用 Node 22 与锁定的 Prettier，安装命令为 npm ci --ignore-scripts。
 
-检查工作区，刷新 main，创建或复用小写主题分支，例如 refactor/4-code-layout，保留无关改动。禁止直接在受保护分支编辑、提交或推送。关联 Issue，使用 Conventional Commit 标题，说明破坏性变化与迁移；推送主题分支后向 main 提交拉取请求（PR）。大范围纯格式整理应与行为变化分开审查。
+检查工作区，刷新 main，创建或复用小写主题分支，例如 refactor/4-code-layout，保留无关改动。禁止直接在受保护分支编辑、提交或推送。用普通引用关联 Issue，合并即可满足验收条件时可用 GitHub 支持的关闭指令。使用 Conventional Commit 标题并说明破坏性变化与迁移。推送主题分支后向 main 提交拉取请求（PR）。大范围纯格式整理应与行为变化分开审查。
 
 ## 代码与文档
 
@@ -36,4 +36,4 @@ python .ci/check-contribution.py
 
 ## 审查与交付
 
-使用批准的贡献者身份与 Conventional Commit squash 消息。合并前满足 Windows/Linux 持续集成、标准检查和独立审查；本地测试通过或管理员权限都不能豁免。破坏性/授权变化需要两名合格独立审查者，重大更新后重新审查。Nightly/正式发布使用授权工作流，不改写已发布版本。审查者应能直接理解最终问题、行为、迁移和验证，而不需要阅读会话历史。
+使用批准的贡献者身份与 Conventional Commit squash 消息。合并前通过必需的 Windows/Linux 持续集成与规范检查，并解决阻塞讨论。建议进行独立本地审查，高风险变更征求相关领域所有者的意见，重大更新后进行复查。在 PR 中记录针对当前候选版本的审查结论和验证证据，由维护者据此授权合并。Nightly 和正式发布使用授权工作流，保留已发布版本。审查者应能通过 PR 了解问题、行为、迁移和验证结果。
