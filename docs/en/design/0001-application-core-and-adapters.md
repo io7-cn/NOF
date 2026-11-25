@@ -39,7 +39,7 @@ Outbox snapshots the complete scalar JSON Context and explicit headers with stab
 
 The public framework surface is smaller and business code is less transport-dependent. Hosts explicitly select providers and own endpoint/topology modules and remote integrations. This requires native integration testing and deliberate consumer idempotency; it does not claim exactly-once external effects. UI permissions never replace server enforcement, and durable messages do not serialize a live principal or dependency-injection scope.
 
-Update Contract, Application, native adapters and callers together. Preserve payload names and wire data unless a reviewed migration explicitly changes them. Resolve legacy Inbox work before removal, back up affected databases and review native schema/identity transitions. Restore matching binaries and backups for rollback. Merge only through required checks and independent approvals; this decision does not authorize a release.
+Update Contract, Application, native adapters and callers together. Preserve payload names and wire data unless a reviewed migration explicitly changes them. Resolve legacy Inbox work before removal, back up affected databases and review native schema/identity transitions. Restore matching binaries and backups for rollback. Follow the [project's merge and review requirements](../README.md) and obtain separate release authorization.
 
 ## Maintained implementation guides
 

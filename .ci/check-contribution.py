@@ -22,7 +22,7 @@ def main():
     if pull:
         branch = pull["head"]["ref"]
         message = pull["title"]
-        body = pull.get("body") or ""
+        body = re.sub(r"<!--.*?(?:-->|$)", "", pull.get("body") or "", flags=re.DOTALL)
         if not re.fullmatch(r"(?:feature|fix|hotfix|refactor|docs|test|chore|spike)/[a-z0-9]+(?:-[a-z0-9]+)*", branch):
             raise ValueError(f"Noncompliant topic branch: {branch}")
         if not re.fullmatch(r"(?:feat|fix|refactor|perf|style|docs|test|build|ci|chore|revert)(?:\([a-z0-9-]+\))?!?: [^\n.].*[^.]", message):

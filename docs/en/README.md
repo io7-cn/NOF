@@ -16,8 +16,8 @@ or run `git submodule update --init --recursive`, then run
 
 Work starts in an issue and a lowercase topic branch such as
 `feature/2-result-unions`. Refresh `main`, preserve existing topic work and submit
-a pull request to `main`. Ordinary
-changes use a Conventional Commit squash message. Breaking changes document
+a pull request to `main`. Ordinary changes use a Conventional Commit squash
+message. Breaking changes document
 compatibility and migration in the change request and final commit body.
 
 Required checks are the standards/contribution check and the Windows/Linux build
